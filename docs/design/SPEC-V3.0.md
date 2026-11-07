@@ -877,6 +877,114 @@ python3 tools/spec_lint.py --no-construction
 
 ---
 
+## 10. 项目配置（冻结）
+
+> 本节冻结项目声明的**唯一规范形态**、**允许的别名**与**缺省值/优先级**。
+> 起因：盲测 #3 的 16 个项目由三位独立出题人写成三种形态（扁平 schema／
+> `[project]`+`root_tex`／`[project]`+`sections`），实现只认第一种，16 个项目
+> 全部 exit 2——这是契约缺口，不是判据缺口。规范没写死的写法，实现不许猜；
+> 写在这里，实现与夹具同表。
+
+### 10.1 唯一规范形态
+
+项目声明文件名固定为 `factscribe.toml`（兼容旧名 `paperkit.toml`，同解析）。
+规范形态＝**一张 `[project]` 表**：
+
+```toml
+[project]
+name = "demo"
+root_tex = "sections/main.tex"
+facts = "facts"
+bib = "refs.bib"
+level = "l1"
+number_locale = "dot"
+```
+
+| 字段 | 必需 | 类型 | 缺省 | 说明 |
+|---|---|---|---|---|
+| `name` | 否 | string | `""` | 项目名（别名 `title`；两者都给时 `name` 赢） |
+| `root_tex` | **二选一** | 项目内相对路径 | — | 审计闭包起点；闭包＝该文件＋`\input/\include/\subfile` 递归 |
+| `sections` | **二选一** | string[]（显式清单） | 由 `root_tex` 推导 | 与 `root_tex` 二选一；给了数组就逐个展开闭包，**不许 glob** |
+| `facts` | 否 | glob 或目录名 | `facts`（＝`facts/*.toml`） | 事实账文件 |
+| `bib` | 否 | 项目内相对路径 | `refs.bib` | 参考文献（别名 `refs`） |
+| `output` | 否 | 项目内相对路径 | `main.pdf` | 最终 PDF（PDF 回检用） |
+| `level` | 否 | `l0`\|`l1`\|`l2` | `l1` | 只选层，不降级红（见 §10.3） |
+| `number_locale` | 否 | `period`\|`comma` | `period` | 小数点约定（别名见 §10.2） |
+| `signing_mode` | 否 | `offline_manifest`\|`local_key` | `offline_manifest` | S-02 |
+| `approver_keys_file` | 否 | 项目外路径 | `""`（不检查） | 审批公钥登记（§2.4） |
+| `release_keys_file` | 否 | 项目外路径 | `""`（不检查） | 发布公钥登记（§2.4） |
+| `numeric_macro_allow` | 否 | 表数组或字符串数组 | `[]` | S-08；两种形态都认 |
+| `frac_allow` | 否 | string[] | `[]` | P-06 的 `\frac` 登记 |
+| `inline_images_allow` | 否 | string[] | `[]` | P-06 的行内小图登记 |
+| `image_budget_extra` | 否 | 非负整数 | `0` | 图片预算宽限（人签） |
+| `authors` | 否 | string[] | `[]` | 仅展示 |
+
+**必需字段只有一个**：闭包起点（`root_tex` 或 `sections`）。两者都缺 →
+`RED(CONFIG)`，exit 2，错误信息必须**同时点名 `root_tex` 与 `sections`**。
+其余字段缺失一律取上表缺省值，不报错。
+
+### 10.2 允许的别名（逐条，闭集）
+
+| 规范名 | 允许的别名/写法 | 归一化结果 |
+|---|---|---|
+| 顶层 `schema` | `paperkit-project/3.x`、`factscribe/3.x` | 视为同一套 v3 声明 |
+| fact 文件 `schema` | `paperkit-fact/3.x`、`factscribe-fact/3.x` | 同上 |
+| （无 schema） | `[project]` + `root_tex`／`[project]` + `sections` | 隐式 v3，schema 补为 `paperkit-project/3.0` |
+| `root_tex` | 与 `sections` 二选一；两者都给时 `root_tex` 优先 | `sections` 置空并记 `CONFIG_ALIAS` 告警 |
+| `sections` | 数组或单个字符串 | 数组→显式清单；单字符串→单文件 |
+| `bib` | `refs` | 同值 |
+| `name` | `title` | 同值 |
+| `number_locale` | `period`、`dot`、`point`、`comma` | `dot`/`point`→`period`；`comma`→`comma` |
+| `level` | `l0`/`l1`/`l2`（大小写不敏感）、`0`/`1`/`2` | 小写 `l0`/`l1`/`l2` |
+| `facts` | glob 或目录名 | 目录名→`<dir>/*.toml` |
+
+**v1 兼容（不改）**：`[project]` 里 `sections` 是**字符串 glob** 且配了 `facts`
+＝ v1，`root_tex` 被忽略，行为与 V2.2 完全一致。v3 的 `sections` 不允许 glob。
+
+### 10.3 形态判定（自上而下，先命中先用）
+
+1. 顶层有 `schema` → 形态 A（扁平 schema）；不是 v3 前缀 → exit 2。
+2. `[project].sections` 是数组 → 形态 C（project + sections）。
+3. `[project].root_tex` 非空且没配 `facts` → 形态 B（project + root_tex）。
+4. `[project].sections` 是 glob 字符串且有 `facts` → v1（行为不变）。
+5. 其余带 v3 标记键的 `[project]` → 形态 B/C（字段校验，缺起点 exit 2）。
+6. 顶层出现 `root_tex`/`sections`/`output`/`signing_mode`/`number_locale`/`level`
+   → 形态 A（schema 缺省）。
+7. 什么都没有 → `缺少 [project] 段`（v1 的旧报错）。
+
+缺省推导写死：`sections` 缺省＝从 `root_tex` 展开闭包；只给 `sections` 时
+`root_tex` 取 `sections[0]`（供报告与 PDF 回检指代）。`level` 缺省 `l1`。
+`level` 只决定跑哪些层（l0/l1＝源层，l2＝＋PDF/stamp），**不降级任何红**；
+level<l2 且无红无黄时的 verdict 按 §2.5 记 `UNVERIFIED`（默认模式 exit 0；
+`--gate` exit 8）。
+
+### 10.4 未知字段：忽略但绝不静默
+
+不在 §10.1／§10.2 字段表里的键一律**忽略**（不参与判据、不改退出码），但
+必须在 `--json` 的配置面列出告警：
+
+- `config.warnings[]`：`{code: CONFIG_UNKNOWN_FIELD|CONFIG_ALIAS|CONFIG_SCHEMA_IMPLICIT,
+  severity: "info", message, field, location}`；
+- `config_warnings[]`：同上列表的顶层副本，方便只读一个键的消费者；
+- 人读输出同步一行「配置告警 N 条」。
+
+`warnings`（check/audit 的顶层键）**继续是黄项列表**，不复用——复用会把
+「配置归一化提示」混进判据面，破坏「黄项驱动 exit 3」的语义。
+
+### 10.5 最小可复制示例（8 行）
+
+```toml
+[project]
+name = "demo"
+root_tex = "sections/main.tex"
+facts = "facts"
+bib = "refs.bib"
+level = "l1"
+number_locale = "dot"
+```
+
+---
+
 ## 附录 A｜V2.2 → V3.0 差异速查
 
 | 主题 | V2.2 | V3.0 |

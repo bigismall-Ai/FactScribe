@@ -13,8 +13,8 @@ from .config import (ConfigError, load_config, load_facts, load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .pdfgate import verify_pdf
-from .report import (PREAMBLE_TEXT, _emit, _human_audit, _human_check,
-                     _payload, _severity_of, render_matrix)
+from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
+                     _human_check, _payload, _severity_of, render_matrix)
 
 # --------------------------------------------------------------------------
 # build
@@ -82,11 +82,16 @@ def cmd_check(args) -> int:
     issues, warnings, conflicts, summary = run_check(cfg, facts)
     code = _aggregate_exit(issues, warnings, getattr(args, "strict", False))
     text = _human_check(cfg, facts, issues, warnings, conflicts, summary, code)
-    _emit(_payload("check", _severity_of(code), code,
-                   summary=summary,
-                   issues=[i.as_dict() for i in issues],
-                   warnings=[i.as_dict() for i in warnings],
-                   hints=[], conflicts=conflicts), text, args.json)
+    if cfg.warnings:
+        text += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
+    payload = _payload("check", _severity_of(code), code,
+                       summary=summary,
+                       issues=[i.as_dict() for i in issues],
+                       warnings=[i.as_dict() for i in warnings],
+                       hints=[], conflicts=conflicts)
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, text, args.json)
     return code
 
 
@@ -99,15 +104,20 @@ def cmd_audit(args) -> int:
     code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
                            integrity_first=cfg.is_v3)
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    if cfg.warnings:
+        text += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
     findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
-    _emit(_payload("audit", _severity_of(code), code,
-                   summary=summary,
-                   findings=findings,
-                   issues=[i.as_dict() for i in red],
-                   warnings=[i.as_dict() for i in yellow],
-                   hints=[h.as_dict() for h in hints],
-                   coverage=summary.get("coverage", {}),
-                   resolved=unresolved), text, args.json)
+    payload = _payload("audit", _severity_of(code), code,
+                       summary=summary,
+                       findings=findings,
+                       issues=[i.as_dict() for i in red],
+                       warnings=[i.as_dict() for i in yellow],
+                       hints=[h.as_dict() for h in hints],
+                       coverage=summary.get("coverage", {}),
+                       resolved=unresolved)
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, text, args.json)
     return code
 
 
@@ -134,8 +144,11 @@ def cmd_matrix(args) -> int:
     out.write_text(text, encoding="utf-8")
     human = "== paperkit matrix ==\n写盘：%s\n行数：%d（每行一条 fact）\n%s" % (
         out, len(rows), text)
-    _emit(_payload("matrix", "ok", EXIT_OK, path=str(out), rows=rows,
-                   facts=len(rows)), human, args.json)
+    payload = _payload("matrix", "ok", EXIT_OK, path=str(out), rows=rows,
+                       facts=len(rows))
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, human, args.json)
     return EXIT_OK
 
 
@@ -145,15 +158,21 @@ def cmd_preamble(args) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(PREAMBLE_TEXT, encoding="utf-8")
     human = "== paperkit preamble ==\n写盘：%s\n%s" % (out, PREAMBLE_TEXT)
-    _emit(_payload("preamble", "ok", EXIT_OK, path=str(out)), human, args.json)
+    payload = _payload("preamble", "ok", EXIT_OK, path=str(out))
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, human, args.json)
     return EXIT_OK
 
 
 def cmd_build(args) -> int:
     cfg = load_config(Path(args.project))
     code, out = run_build(cfg)
-    _emit(_payload("build", "ok" if code == EXIT_OK else "violation", code,
-                   build=cfg.build, output=out), "== paperkit build ==\n" + out, args.json)
+    payload = _payload("build", "ok" if code == EXIT_OK else "violation", code,
+                       build=cfg.build, output=out)
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, "== paperkit build ==\n" + out, args.json)
     return code
 
 

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .facts import Fact, canon_text, fact_value_keys
+from .constants import SEV_INFO
 
 # --------------------------------------------------------------------------
 # TOML 读写（3.11+ 用 tomllib；3.10 用内置极简解析器兜底）
@@ -178,6 +179,10 @@ class Config:
     schema: str = ""
     name: str = ""
     root_tex: str = ""           # V3：审计闭包起点（非空即「从 root 文件展开」）
+    section_files: list = field(default_factory=list)  # V3：显式章节清单（与 root_tex 二选一）
+    level: str = "l1"            # V3：审计层 l0|l1|l2（默认 l1＝只跑源层）
+    config_shape: str = ""       # 归一化来源形态：flat-schema|project-root|project-sections|v1
+    warnings: list = field(default_factory=list)  # 配置归一化告警（未知字段/别名），非阻断
     output: str = "main.pdf"     # V3：最终 PDF（PDF 回检用）
     signing_mode: str = ""       # V3：offline_manifest | local_key
     number_locale: str = "period"  # V3：period | comma
@@ -293,7 +298,7 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
         name = item.get("name") if isinstance(item, dict) else item
         if str(name or "").strip():
             macro_allow.append(str(name).strip().lstrip("\\"))
-    return Config(
+    cfg = Config(
         root=root,
         title=str(proj.get("title") or ""),
         authors=[str(a) for a in authors],
@@ -304,7 +309,11 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
         source_root=str(proj.get("source_root") or ""),
         numeric_macro_allow=macro_allow,
+        config_shape="v1",
     )
+    # v1 的未知字段同样不静默（判据仍不看它们，行为不变）。
+    _unknown_field_warnings(cfg, proj, V1_KNOWN_FIELDS, path, "[project]")
+    return cfg
 
 
 def _v3_get(data: dict, key: str, default=None):
@@ -360,17 +369,132 @@ def _v3_macro_rules(data: dict, path: Path) -> tuple[list[str], list[dict]]:
     return names, rules
 
 
-def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
-    """V3.0 扁平声明：顶层 schema/name/root_tex/output/...（无 [project] 段）。
+# --------------------------------------------------------------------------
+# V3.0 项目声明的三种写法与允许的别名（SPEC-V3.0 §10「项目配置（冻结）」）
+# --------------------------------------------------------------------------
 
-    兼容两种布局：
-    - 规范正文的扁平布局（顶层字段 + 顶层 `[[numeric_macro_allow]]`）；
-    - 盲测工单的混合布局（`root_tex/facts/refs` 在顶层，其余在 `[project]`）。
+# 形态 A（扁平 schema）/ B（[project] + root_tex）/ C（[project] + sections）
+# 共用同一张字段表；这里列的是「认识的键」，其余键忽略但记一条告警。
+V3_KNOWN_FIELDS = {
+    "schema", "name", "title", "root_tex", "sections", "facts", "bib", "refs",
+    "output", "level", "number_locale", "signing_mode", "approver_keys_file",
+    "release_keys_file", "image_budget_extra", "frac_allow", "inline_images_allow",
+    "numeric_macro_allow", "authors", "build", "manifest", "source_root",
+}
+
+# `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
+# （错误信息照旧点名 project.sections，不改老项目的报错）。
+V3_MARKER_FIELDS = {
+    "root_tex", "sections", "output", "signing_mode", "number_locale", "level",
+    "approver_keys_file", "release_keys_file", "image_budget_extra",
+    "frac_allow", "inline_images_allow",
+}
+
+# v1 认识的键（行为不变；root_tex 是 V3 键，v1 里出现按「忽略」处理但不告警，
+# 因为 v1 的判据从来不看它）。
+V1_KNOWN_FIELDS = {
+    "title", "authors", "sections", "facts", "bib", "build", "manifest",
+    "source_root", "numeric_macro_allow", "root_tex",
+}
+
+LEVELS = ("l0", "l1", "l2")
+LEVEL_ALIASES = {"l0": "l0", "0": "l0", "l1": "l1", "1": "l1",
+                 "l2": "l2", "2": "l2"}
+
+
+def _config_warn(cfg: Config, code: str, message: str, field: str = "",
+                 location: str = "") -> None:
+    """记一条非阻断的配置告警（只在 --json 的 config_warnings 里出现）。"""
+    item = {"code": code, "severity": SEV_INFO, "message": message}
+    if field:
+        item["field"] = field
+    if location:
+        item["location"] = location
+    cfg.warnings.append(item)
+
+
+def _unknown_field_warnings(cfg: Config, table: dict, known: set, path: Path,
+                            where: str) -> None:
+    for key in table:
+        if key in known:
+            continue
+        _config_warn(
+            cfg, "CONFIG_UNKNOWN_FIELD",
+            "%s 的字段 %r 不在冻结契约里——已忽略（也不参与任何判据）" % (where, key),
+            field=str(key), location=str(path))
+
+
+def _v3_sections(raw, path: Path) -> list[str]:
+    """`sections`：字符串数组（或单个字符串）＝显式章节清单。"""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raise ConfigError(
+            "%s 的 sections 必须是字符串数组（显式 .tex 清单），现在是 %r"
+            % (path, raw))
+    out: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError("%s 的 sections 里有非字符串条目：%r" % (path, item))
+        if any(ch in item for ch in "*?["):
+            raise ConfigError(
+                "%s 的 sections 里不允许 glob（%r）——显式清单请逐个列文件；"
+                "要用通配请写 v1 形态（sections = \"sections/*.tex\" 且配 facts）"
+                % (path, item))
+        out.append(_v3_rel_path(item.strip(), "sections", path))
+    return out
+
+
+def _load_v3_config(root: Path, path: Path, data: dict,
+                    shape: str = "flat-schema") -> Config:
+    """V3.0 项目声明归一化：三种写法 → 同一个 Config。
+
+    - 形态 A `flat-schema`：顶层 `schema/name/root_tex/...`；
+    - 形态 B `project-root`：`[project]` 表里有 `root_tex`；
+    - 形态 C `project-sections`：`[project]` 表里有 `sections = [...]`。
+
+    属性可以写在顶层或 `[project]` 表里（顶层优先）；未知字段忽略并记告警；
+    闭包起点（root_tex 或 sections）缺一不可，缺了 exit 2 并点名。
     """
     schema = str(data.get("schema") or "").strip()
-    root_tex = _v3_str({"root_tex": _v3_get(data, "root_tex")}, "root_tex", path,
-                       required=True)
-    root_tex = _v3_rel_path(root_tex, "root_tex", path)
+    if not schema:
+        # 形态 B/C 没有顶层 schema：这是同一套 v3 声明的简写，按规范默认值补齐。
+        schema = V3_PROJECT_SCHEMA_PREFIX + "0"
+
+    raw_root = _v3_get(data, "root_tex")
+    raw_sections = _v3_get(data, "sections")
+    section_files: list[str] = []
+    if isinstance(raw_sections, list):
+        section_files = _v3_sections(raw_sections, path)
+    elif isinstance(raw_sections, str) and raw_sections.strip():
+        section_files = _v3_sections([raw_sections], path)
+    elif raw_sections is not None and not isinstance(raw_sections, str):
+        raise ConfigError(
+            "%s 的 sections 必须是字符串数组（显式 .tex 清单），现在是 %r"
+            % (path, raw_sections))
+
+    root_tex = ""
+    if raw_root is not None:
+        root_tex = _v3_str({"root_tex": raw_root}, "root_tex", path)
+        if root_tex:
+            root_tex = _v3_rel_path(root_tex, "root_tex", path)
+    if root_tex and section_files:
+        # 两种写法都给＝两份闭包起点。按规范 §10：root_tex 优先，
+        # 但必须说得清是哪一个，不许静默丢掉另一份。
+        cfg_warn_text = ("root_tex=%r 与 sections 同时给出，按 §10.2 root_tex 优先，"
+                         "sections 已忽略" % root_tex)
+        section_files = []
+    else:
+        cfg_warn_text = ""
+    if not root_tex and section_files:
+        root_tex = section_files[0]      # §10 冻结推导：sections 首个文件当起点
+    if not root_tex:
+        raise ConfigError(
+            "%s 缺少闭包起点：必须给 root_tex（推荐）或 sections（显式 .tex 清单）"
+            "——两者都缺，没法知道从哪展开审计闭包" % path)
+
     output = _v3_str({"output": _v3_get(data, "output")}, "output", path,
                      default="main.pdf")
     if output:
@@ -383,11 +507,18 @@ def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
             % (path, signing_mode, " / ".join(SIGNING_MODES)))
     raw_locale = _v3_str({"number_locale": _v3_get(data, "number_locale")},
                          "number_locale", path, default="period")
-    number_locale = NUMBER_LOCALE_ALIASES.get(raw_locale)
+    number_locale = NUMBER_LOCALE_ALIASES.get(raw_locale.strip().lower())
     if number_locale is None:
         raise ConfigError(
             "%s 的 number_locale=%r 不认识（只允许 %s）"
             % (path, raw_locale, " / ".join(sorted(NUMBER_LOCALE_ALIASES))))
+    raw_level = _v3_str({"level": _v3_get(data, "level")}, "level", path,
+                        default="l1")
+    level = LEVEL_ALIASES.get(raw_level.strip().lower())
+    if level is None:
+        raise ConfigError(
+            "%s 的 level=%r 不认识（只允许 %s）"
+            % (path, raw_level, " / ".join(LEVELS)))
     budget = _v3_get(data, "image_budget_extra", 0)
     if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
         raise ConfigError(
@@ -396,7 +527,7 @@ def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
                    "name", path)
     proj = data.get("project") if isinstance(data.get("project"), dict) else {}
     macro_names, macro_rules = _v3_macro_rules(data, path)
-    return Config(
+    cfg = Config(
         root=root,
         title=name,
         authors=[str(a) for a in (proj.get("authors") or [])],
@@ -427,7 +558,35 @@ def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
         numeric_macro_rules=macro_rules,
         facts_dirs=not any(ch in str(_v3_get(data, "facts", "facts"))
                            for ch in "*?["),
+        section_files=section_files,
+        level=level,
+        config_shape=shape,
     )
+    # 未知字段：允许忽略，但绝不静默（进 --json 的 config.warnings）。
+    # 形态 A 的声明在顶层；B/C 在 [project] 表里。两处都查，免得换个写法
+    # 就把打错的字段名吞掉。
+    _unknown_field_warnings(cfg, proj, V3_KNOWN_FIELDS, path, "[project]")
+    _unknown_field_warnings(
+        cfg, {k: v for k, v in data.items() if k != "project"},
+        V3_KNOWN_FIELDS, path, "顶层")
+    if not _v3_get(data, "name") and _v3_get(data, "title"):
+        _config_warn(cfg, "CONFIG_ALIAS", "name 缺省，按别名 title 取值",
+                     field="title", location=str(path))
+    if _v3_get(data, "refs") is not None:
+        _config_warn(cfg, "CONFIG_ALIAS", "参考文献用别名 refs（等价于 bib）",
+                     field="refs", location=str(path))
+    if raw_locale.strip().lower() != number_locale:
+        _config_warn(cfg, "CONFIG_ALIAS",
+                     "number_locale=%r 归一化为 %r" % (raw_locale, number_locale),
+                     field="number_locale", location=str(path))
+    if cfg_warn_text:
+        _config_warn(cfg, "CONFIG_ALIAS", cfg_warn_text,
+                     field="sections", location=str(path))
+    if not data.get("schema"):
+        _config_warn(cfg, "CONFIG_SCHEMA_IMPLICIT",
+                     "没写顶层 schema，按 %s 简写形态读取（%s）"
+                     % (schema, shape), field="schema", location=str(path))
+    return cfg
 
 
 def load_config(root: Path) -> Config:
@@ -438,8 +597,14 @@ def load_config(root: Path) -> Config:
         raise ConfigError("找不到项目声明 %s（缺 paperkit.toml 不敢跑）" % path)
     data = load_toml(path)
 
-    # schema 自动识别：有顶层 schema 就只认 V3 的扁平声明（两个字面量别名）；
-    # 没写 schema 的走 v1（[project] 表，行为不变）。未知版本明确报错，不猜。
+    # ---- 形态判定（SPEC-V3.0 §10 冻结顺序，自上而下，先命中先用）----
+    # 1) 顶层 schema            -> 形态 A（扁平 schema）
+    # 2) [project].sections 数组 -> 形态 C（project + sections）
+    # 3) [project].root_tex 且没配 facts -> 形态 B（project + root_tex）
+    # 4) [project].sections 是 glob 且有 facts -> v1（行为不变）
+    # 5) 其余 [project]           -> 形态 B（字段校验，缺起点 exit 2 点名）
+    # 6) 顶层有 v3 标记键         -> 形态 A（schema 缺省）
+    # 7) 什么都没有               -> 老错误「缺少 [project] 段」
     if "schema" in data:
         schema = data.get("schema")
         if not isinstance(schema, str) or not schema.strip():
@@ -450,7 +615,31 @@ def load_config(root: Path) -> Config:
                 "%s 的 schema=%r 不认识——本工具只认 %s 的扁平声明；"
                 "旧版配置请去掉顶层 schema、改用 [project] 表"
                 % (path, schema, " / ".join(p + "x" for p in V3_PROJECT_SCHEMA_PREFIXES)))
-        return _load_v3_config(root, path, data)
+        return _load_v3_config(root, path, data, shape="flat-schema")
+
+    proj = data.get("project")
+    if isinstance(proj, dict):
+        sections = proj.get("sections")
+        raw_root = proj.get("root_tex")
+        has_root = isinstance(raw_root, str) and bool(raw_root.strip())
+        if isinstance(sections, list):
+            return _load_v3_config(root, path, data, shape="project-sections")
+        if has_root and not proj.get("facts"):
+            return _load_v3_config(root, path, data, shape="project-root")
+        if (isinstance(sections, str)
+                and any(ch in sections for ch in "*?[")
+                and proj.get("facts")):
+            return _load_v1_config(root, path, data)
+        if any(k in proj for k in V3_MARKER_FIELDS):
+            return _load_v3_config(root, path, data,
+                                   shape="project-root" if has_root
+                                   else "project-sections")
+        # 没有任何 v3 标记的 [project]：仍是 v1，错误信息照旧点名 project.sections
+        return _load_v1_config(root, path, data)
+
+    if any(k in data for k in ("root_tex", "sections", "output", "signing_mode",
+                               "number_locale", "level")):
+        return _load_v3_config(root, path, data, shape="flat-schema")
 
     return _load_v1_config(root, path, data)
 
@@ -639,7 +828,17 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     文件边界不是句子边界（R-02）；这里只负责把「会被编译进 PDF 的文本文件」
     收齐，拼流与切句交给 texscan。
     """
-    if cfg.root_tex:
+    if cfg.section_files:
+        # V3 形态 C：显式章节清单（不是 glob）。闭包仍从这些文件各自的
+        # `\input` 展开，但不会把目录里同名的无关 main.tex 也卷进来。
+        found = {}
+        for rel in cfg.section_files:
+            p = cfg.root / rel
+            if not p.is_file():
+                raise ConfigError(
+                    "sections 指向的 %s 不存在——没有起点就无法展开审计闭包" % rel)
+            found[rel] = p
+    elif cfg.root_tex:
         # V3：闭包从 root_tex 这个文件出发（不是 glob），避免递归把子目录里
         # 同名的 main.tex 也卷进来。
         root_file = cfg.root / cfg.root_tex

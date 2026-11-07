@@ -149,11 +149,13 @@ def _v3_source_issues(cfg: Config, facts: list[Fact],
     from .v3 import (_load_json, approval_issues, approval_report_issues,
                      assertion_issues, bu_index, key_trust_issues,
                      numeric_macro_issues)
+    from .livetext import live_text_issues
 
     out: list[Issue] = []
     out += key_trust_issues(cfg)
     out += numeric_macro_issues(cfg)
     out += assertion_issues(facts, bu_index(sections))
+    out += live_text_issues(cfg, facts, sections)
     # display 也是审批对象的一部分（S-03 的 approve_target 含 display）：
     # 追加一个与 value 不等价的显示形，就是断言漂移。
     for f in facts:
@@ -309,11 +311,19 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "MISSING_SOURCE_SHA256",
                     "fact %r 缺 source_sha256——没有内容锚定，账就无法证明「从签过那刻起没被改」"
                     % f.id, location=loc, token=f.id))
-        elif f.source_sha256 != digest:
+        elif f.source_sha256.removeprefix("sha256:").strip() != digest:
             red.append(Issue(
                 "SOURCE_SHA256_MISMATCH",
                 "fact %r 的 source_sha256 与现算不符（声明 %s…，实际 %s…）——产物被改过"
                 % (f.id, f.source_sha256[:12], digest[:12]), location=loc, token=f.id))
+            if cfg.is_v3:
+                # S-03：source_sha256 是 approve_target 的字段。它比现算值旧，
+                # 就等于「被签的审批对象已经不是磁盘上这一份」。
+                red.append(Issue(
+                    "APPROVAL_STALE",
+                    "fact %r 的 source_sha256 与磁盘现算值不符——审批对象（S-03 的 "
+                    "approve_target）已过期，必须重签" % f.id,
+                    location=loc, token=f.id))
 
         # value 回查：非派生 claim 的数字必须字面出现在 source 里（B6 的内容锚）
         if not f.is_derived and f.kind == "claim" and src in texts:

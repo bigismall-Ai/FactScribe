@@ -175,6 +175,22 @@ def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
 # CLI
 # --------------------------------------------------------------------------
 
+def _config_block(cfg: Config) -> dict:
+    """配置归一化的机器可读面：来源形态 + 告警（未知字段/别名）。
+
+    与判据面的 `warnings`（check/audit 里是黄项列表）分开：这里只讲
+    「配置是怎么读进来的」，不参与退出码，也不许静默吞掉打错的字段名。
+    """
+    block = {"shape": cfg.config_shape or "v1",
+             "schema": cfg.schema,
+             "file": "factscribe.toml",
+             "warnings": list(cfg.warnings)}
+    cfg_path = cfg.root / "paperkit.toml"
+    if cfg_path.is_file() and not (cfg.root / "factscribe.toml").is_file():
+        block["file"] = "paperkit.toml"
+    return block
+
+
 def _emit(payload: dict, text: str, as_json: bool) -> None:
     if as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

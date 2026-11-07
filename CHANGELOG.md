@@ -23,6 +23,19 @@ and will not change without a major version bump.
   forward markers (`\fact{ID}10/16`) bind the following token.
 - `tests/test_v3_evidence.py` (22 positive/negative criterion tests) and
   `docs/implementation/BLIND-PASS.md` (blind-pass record).
+- SPEC §10「项目配置（冻结）」: one canonical `[project]` shape, a closed alias
+  table (flat `schema` / `[project]+root_tex` / `[project]+sections`, `dot`→
+  `period`, `refs`→`bib`, `title`→`name`), frozen defaults (`level=l1`,
+  `sections` derived from `root_tex`), and unknown-field warnings in
+  `config_warnings` (`docs/implementation/CONFIG-CONTRACT.md`).
+- `factscribe/livetext.py`: source-layer "is the signed assertion actually
+  live?" rules — markers hidden in macro bodies, in discarded macro arguments
+  (`\newcommand{\ignore}[1]{}`), in `\iffalse` blocks, sentences with a marker
+  but no literal number, and results relocated into `\appendix` are all
+  `ASSERTION_DRIFT`; quantitative facts with no live marker also get
+  `APPROVAL_MISSING_ASSERTIONS`.
+- `source_sha256` accepts the canonical `sha256:` prefix; in V3 a mismatch also
+  reports `APPROVAL_STALE` (S-03: it is part of `approve_target`).
 
 ## [1.1.0] — 2026-11-07
 

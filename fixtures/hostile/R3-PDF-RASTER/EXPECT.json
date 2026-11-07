@@ -1,0 +1,17 @@
+{
+  "id": "R3-PDF-RASTER",
+  "kind": "hostile",
+  "round": "R3",
+  "attack_family": "PDF_RASTER",
+  "criteria": [
+    "V3.0 P-02 / P-03"
+  ],
+  "command": "verify-pdf",
+  "exit": 5,
+  "codes": [
+    "PDF_PAGE_NO_TEXT",
+    "PDF_PAGE_RASTERIZED"
+  ],
+  "expected_verdict": "RED",
+  "note": "整页被一张图片替代，文本层为空"
+}

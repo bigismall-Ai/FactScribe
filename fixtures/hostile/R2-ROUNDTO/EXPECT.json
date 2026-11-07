@@ -1,0 +1,16 @@
+{
+  "id": "R2-ROUNDTO",
+  "kind": "hostile",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-04（2-B2 display round_to 后门）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "DISPLAY_INCONSISTENT"
+  ],
+  "expected_verdict": "RED",
+  "note": "display 声明 0.9/round_to=1 与 value 0.91 不等价，必须判红"
+}

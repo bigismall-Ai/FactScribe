@@ -1,0 +1,41 @@
+\section{Identifier map}
+\label{app:codes}
+
+The experiments used short identifiers for facts, arms and invariants. They are kept here for traceability; the body uses the natural-language terms in the middle column instead. Invariant definitions are in \texttt{sihankor/core/mathematical-model/context.toml}; batch reports are under \texttt{experiments/ctx-compiler-redblue/}; fact files are under \texttt{facts/}.
+
+{\footnotesize
+\pkignore{%
+\begin{tabular}{@{}p{1.5cm}p{7.6cm}p{4.4cm}@{}}
+\toprule
+Identifier & Natural-language term & Record \\
+\midrule
+CTX-03 & drop-logging invariant: a dropped section must be logged & context.toml; Section~\ref{sec:threats} \\
+CTX-05 & query-justification invariant: inclusion needs a resolvable query and a match & context.toml \\
+CTX-15 & typed-section invariant: every section declares a kind & context.toml \\
+CTX-16 & pointer-substitution invariant: an over-cap unit becomes a resolvable pointer & context.toml \\
+CTX-17 & payload-hash invariant: the recorded hash is the delivered payload's hash & context.toml \\
+E1 & baseline arm: card assembled but not delivered, no gate & e\_gates.toml; BATCH17 \\
+E2 & repeated-read deduplication arm & e\_gates.toml; BATCH17 \\
+E3 & enlarged read-share arm & e\_gates.toml; BATCH17 \\
+E4 & raised session-token-ceiling arm & e\_gates.toml; BATCH17 \\
+E5 & prompt-level-constraint arm & e\_gates.toml; BATCH17 \\
+E6 & delivered-card arm & e\_gates.toml; BATCH17 \\
+E7 & turn-level reminder arm & e\_gates.toml; BATCH17 \\
+E8 & two-version close-out arm & e\_gates.toml; BATCH17 \\
+E9 & request-body search for the locator card & e\_gates.toml; BATCH17 \\
+D1 & real-bill accounting & d\_cost.toml; BATCH31 \\
+D2 & output-token measurement & d\_cost.toml; BATCH31 \\
+D3 & fresh-input measurement & d\_cost.toml; BATCH31 \\
+D4 & reasoning-effort probe & d\_cost.toml; BATCH31 \\
+D5 & arithmetic saving projection & d\_cost.toml; BATCH31 \\
+D6 & spend concentration in failures & d\_cost.toml; BATCH31 \\
+A1--A13 & main comparison: subset size, resolved counts, paired outcomes, difficulty strata, token and call means & a\_swebench.toml; BATCH23 \\
+B1--B3 & six-task pilot: resolved counts, token means, the one differing instance & b\_pilot.toml; BATCH20 \\
+C1--C7 & cross-scaffold comparison: mcode under two step caps, our arm, token split, wall time, differing success sets & c\_crossmodel.toml; BATCH25/26 \\
+F1--F4 & tool-and-policy benchmark: retail and mock rewards, token cost, reference sample & f\_tau2.toml; BATCH30/28 \\
+G1, G2, G4 & container benchmark, environment audit: tasks reached, oracle passes, timing & g\_terminalbench.toml; BATCH29C \\
+H1--H3 & conflicting-accounting reminders: uncached ratio, cross-batch means, mcode step caps & h\_conflicts.toml \\
+\bottomrule
+\end{tabular}
+}
+}

@@ -1,0 +1,7 @@
+[[fact]]
+id = "A2"
+claim = "headline"
+value = "91.4%"
+source = "results/run.log"
+source_sha256 = "e46b750c468590f72fba10599473ec5b36fb2ecfc9abcbdefc4a2a38ce034189"
+confidence = "high"

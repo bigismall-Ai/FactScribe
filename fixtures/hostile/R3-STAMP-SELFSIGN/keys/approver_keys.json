@@ -1,0 +1,13 @@
+{
+  "keys": [
+    {
+      "key_id": "ed25519:OWNER-FIXTURE",
+      "alg": "ed25519",
+      "public_key": "base64:ij4bfu8Vp7jz7sJ8+15IxFLSg5Xy6rytvv3r/rVPlOQ=",
+      "owner_label": "fixture owner",
+      "registered_at": "2026-11-01T00:00:00Z",
+      "registered_by": "ed25519:BOOTSTRAP",
+      "origin": "offline"
+    }
+  ]
+}

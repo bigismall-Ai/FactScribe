@@ -16,3 +16,9 @@ audit/
 
 # 例外：红队夹具的原始产物是测试输入，必须入库（否则干净克隆跑不出同一读数）
 !tests/fixtures/**/results/*.log
+
+# 批 45 / A 阶段夹具：PDF、原始 run 日志与审计输入是夹具本体，必须入库
+!fixtures/**/*.pdf
+!fixtures/**/results/*.log
+!fixtures/**/audit/
+!fixtures/**/audit/**

@@ -1,0 +1,157 @@
+\section{Mechanisms}
+
+The four mechanisms answer four different questions: where to look, what the
+failure means, when to stop, and what the run cost. Each is stated with the
+observation that would falsify it, because the parts that were easiest to
+describe were the parts most likely to be doing nothing.
+
+\subsection{The locator card}
+\label{sec:locator}
+
+\paragraph{Motivation.} The long-horizon runs did not fail for lack of
+information; they failed while reading. In the baseline the agent reopened the
+same file repeatedly, never wrote a patch, and exhausted its rounds. It lacked
+position: the failing test names a module, the seeded frame names a function
+that merely calls the culprit, and the function to edit sits a short distance
+away in the module's reference graph.
+
+\paragraph{Approach.} Preflight yields the frames of the failing test with no
+model call. One-hop entries are the symbols those frames name; two-hop entries
+come from a breadth-first walk over a graph built from the module's abstract
+syntax tree, with top-level functions, classes and module-level assignments as
+nodes and name references inside bodies as edges. Candidates are ranked by task
+words in the symbol name, then match strength, hop count and definition line.
+The first three become cards carrying path, symbol, line span and a reason from
+a closed set.
+
+\begin{verbatim}
+entries  <- symbols named by the failing frames
+frontier <- entries
+repeat at most twice:
+    add top-level symbols referenced from frontier (in-module AST)
+rank by (-task words in name, match tier, hop, line)
+emit the first three entries as cards
+\end{verbatim}
+
+\paragraph{Criterion.} The card is judged by the first read. When it was first
+delivered, the first read landed in the golden region on 4 of 4\fact{E6}
+instances, and 1 of 4\fact{E6} resolved --- a mechanism check on four instances
+of one task. The card names locations and never assertions: no test name, no
+expected value, so it can point at the right function without handing over the
+answer.
+
+\paragraph{Failure modes.} The walk stays inside one module: cross-file calls
+are not chased, types are not resolved, dynamic dispatch is invisible, and a
+culprit reachable only through a package alias degrades the ranking to
+structural order. The sharpest failure is delivery: for a sequence of arms the
+card was computed and scheduled, yet a search of the stored request bodies for
+the symbol it named found nothing\fact{E9}. A correct card that never
+arrives is indistinguishable, from the outside, from a wrong one.
+
+\subsection{Failure-test evidence}
+
+\paragraph{Motivation.} An issue report describes a symptom; a test states a
+contract. For the tabulate formatting issue the contract is a literal expected
+string in which whitespace and quoting are part of the specification, so a patch
+that satisfies the prose can still fail the assertion. Passing the whole test
+file is the wrong repair: the window fills with unrelated cases, and the
+editable file invites fixing the test instead of the code.
+
+\paragraph{Approach.} The raw runner output is parsed for the innermost
+test-side frame, and that line is mapped with the parser to the enclosing test
+function, so the unit is the full definition rather than a fixed window. The
+failure excerpt from the error block is appended and bounded. The result enters
+as one ordinary tool-result section under the existing share: no extra budget,
+no new kind. The ledger keeps the path, the
+symbol, the span and an artifact reference; the text stays in the object store.
+If preflight is green nothing is emitted, and the section reaches the model only
+if the assembler placed it, so a section evicted by the share disappears from
+the request rather than only from the ledger.
+
+\paragraph{Criterion.} Containment. On the real instance the unit held the
+failing function and its assertion excerpt and none of the other tests in the
+same file; a unit test asserts their absence from both fields, and a switch
+disables the injection for a separate measurement.
+
+\paragraph{Failure modes.} Import and collection errors carry no assertion, so
+only the frame survives. The culprit may be a helper one call below the test:
+the locator reaches it, the evidence section does not, and the two mechanisms
+disagree. A patch can be fitted to the literal and still regress tests
+elsewhere, which is why acceptance is node-level. And the excerpt is raw runner
+text, so a format change yields an empty payload that looks exactly like a task
+with nothing to inject.
+
+\subsection{Mechanical gates}
+
+\paragraph{Motivation.} The gates answer a different question from context: not
+what the model knows, but when the episode ends. Given the card and the failing
+test, the agent often had what it needed and still did not stop. Instructions we
+could write down were about behavior, and behavior is what a prompt is worst at
+changing.
+
+\paragraph{Prompt versus mechanism.} We first wrote the required process as six
+constraints --- deliver a patch early, do not re-read a span, note a conclusion
+before acting, stay in scope, hand in rather than test, keep output short ---
+and assembled them as resident project-rule sections, ordered after the charter
+and before the task, rendered into the system message. This is the obvious
+implementation, and it did nothing: 0/3\fact{E5}. Per-turn output grew rather
+than shrank, as though the rules had been read as a description of the
+situation rather than a procedure.
+
+Moving the same requirement into the loop changed behavior but not outcome.
+From the seventh round, if no patch had been submitted, the runtime appended a
+user-message reminder on every turn; patches appeared, but the model revised
+instead of submitting: 0/2\fact{E7}.
+
+Only when the runtime took the decision away did the task resolve. The step
+allows at most two patch versions; on the second it closes, the last version
+goes to the verifier, and the model is not asked whether it is done. Same task,
+same model: 5/5\fact{E8}.
+
+\paragraph{The symptom trap.} The pattern is not specific to rules. Removing
+visible symptoms one at a time did not move the outcome: deduplicating repeated
+reads 0/3\fact{E2}, enlarging the share available to file reads 0/3\fact{E3},
+raising the token ceiling 0/2\fact{E4}. Each cut tidied the transcript and left
+an episode that could not terminate; the starting point, with neither card nor
+gate, was 0/3\fact{E1}.
+
+\paragraph{Criterion.} The gate is judged by termination, not compliance: did
+the episode close with a decision the verifier could judge. Compliance is
+unobservable in a transcript the model writes; termination is an event in the
+ledger, with a timestamp and a patch attached.
+
+\paragraph{Failure modes.} The two-version cap can end an episode whose first
+direction was wrong; in this sample it did not, but it is a designed way to
+fail. The gate does nothing for a model that already converges: the DeepSeek
+runs submit early enough that the reminder never fires.
+
+\subsection{Cost accounting}
+
+\paragraph{Motivation.} The ledger used to record one number per call: total
+tokens. Providers bill three things differently --- fresh input, cached input,
+and output, mostly invisible thinking --- and one total makes the cheap part
+and the expensive part indistinguishable. Two agents with different caching
+then look comparable when they are not.
+
+\paragraph{Approach.} We record the provider's usage fields verbatim: prompt,
+completion, cached prompt, reasoning. Absent fields are recorded as zero, never
+inferred; the old total keeps its meaning, so earlier ledgers replay. Because
+the rendered request body is stored per call, we can also replay the bodies with
+a minimal output cap, read the real prompt size and cache hit of every turn, and
+subtract to recover completion.
+
+\paragraph{What the attribution shows.} The gap is in output, not in input:
+average output is 73,051\fact{D2} tokens against 12,495\fact{D2} for mcode,
+while fresh input is 21,941\fact{D3} against 52,996\fact{D3}. On the same six
+tasks with the same model and endpoint the real bill is \$0.0486\fact{D1} per
+task against \$0.0292\fact{D1}, a ratio of 1.66\fact{D1}. The familiar claim
+that we are 3\fact{H1} times more expensive is the uncached accounting, which
+charges every input token as fresh; failures also concentrate the spend, with
+successful tasks averaging 78,844\fact{D6} tokens and two failed tasks
+accounting for 70.9\%\fact{D6} of all output.
+
+\paragraph{Criterion.} A cost claim must be recomputable from the ledger and a
+public price list; when two conventions disagree, both are printed next to the
+claim. The lever that follows is stopping, not compressing.
+
+% FACTS-USED: E1, E2, E3, E4, E5, E6, E7, E8, E9, D1, D2, D3, D6, H1

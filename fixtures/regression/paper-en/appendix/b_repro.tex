@@ -1,0 +1,5 @@
+\section{Reproduction}
+
+All runs used the same harness build, with the arm selected by a single configuration flag. The environment was macOS without containers; the judge was the test selector shipped with each instance, run outside the model loop. Model identifiers and batch dates are recorded in the fact ledger, but weights and serving versions were not pinned, so a rerun may not reproduce the same completions.
+
+The raw artifacts are the recorded request bodies, the per-instance judge outputs and the batch reports cited in the fact ledger. Every number in this paper is recomputable from the ledger and a public price list for the cost figures; the tables are generated from the batch data rather than hand-copied. The audit tool checks internal consistency of ledger, sources and text, not the truth of the underlying experiment.

@@ -1,0 +1,14 @@
+{
+  "id": "R2-CONCAT",
+  "kind": "benign",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-01A（token 拼接 9+1.4→91.4）"
+  ],
+  "command": "audit",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "同内容合法近邻；必须 exit 0"
+}

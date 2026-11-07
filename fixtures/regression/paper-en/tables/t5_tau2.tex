@@ -1,0 +1,18 @@
+% 生成件：勿手改。整表进 \pkignore 显式豁免区（见正文 \input 附近的 \fact 复述）。
+\pkignore{%
+\begin{table}[t]
+\centering
+\caption{Tool-and-policy benchmark ($\tau^2$-bench): reward and token cost.}
+\label{tab:tau2}
+\begin{tabular}{lrrrr}
+\toprule
+Domain & \sys{} reward & Reference reward & \sys{} tokens & Reference tokens \\
+\midrule
+retail (10 tasks) & 0.900 & 0.800 & 133,558 & 113,602 \\
+mock (5 tasks) & 0.600 & 1.000 & -- & -- \\
+\bottomrule
+\end{tabular}
+
+\par\smallskip\footnotesize Single trial per task; differences of this size are within noise.
+\end{table}
+}

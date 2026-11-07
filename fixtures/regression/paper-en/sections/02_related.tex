@@ -1,0 +1,29 @@
+\section{Related Work}
+
+Long-horizon software benchmarks moved evaluation from function-level synthesis to repository-level repair.
+SWE-bench collected real GitHub issues together with the tests that decide whether a patch resolves them \citep{jimenez2024swebench}; SWE-agent argued that the agent-computer interface, and not only the model, determines what an agent can accomplish inside such a repository \citep{yang2024sweagent}; OpenHands packaged the same workflow as an extensible platform \citep{wang2024openhands}.
+Adjacent lines extend the environment rather than the repository: WebArena and OSWorld place agents in front of realistic web and desktop state \citep{zhou2023webarena,xie2024osworld}, while AgentBench compares agents across a set of interactive environments \citep{liu2023agentbench}.
+These benchmarks report end-to-end success and treat the scaffold as a design choice to be optimized.
+A parallel engineering literature builds harnesses that search, edit and test in a loop; such systems are usually evaluated as end products, with the context policy treated as an implementation detail.
+What reaches the prompt at each step, and whether it arrived at all, is rarely the object of measurement.
+Our setting differs in two ways: we hold the scaffold fixed and vary only the assembled context, and we verify delivery against the recorded request body rather than against the assembler's own log.
+
+A second line studies what a model can do with the context it is handed.
+LongBench assembles long inputs across tasks and languages to measure comprehension at length \citep{bai2023longbench}, and RULER shows that the effective context of current models falls short of the advertised window \citep{hsieh2024ruler}.
+The engineering response has been to keep more and retrieve better: summarize or compact earlier turns, rank candidate files by similarity to the issue, and re-inject whatever looks relevant.
+These methods optimize the quantity and the relevance of material.
+The failures we observed had a different shape: the file was present and the direction was missing---the agent read the failing test and edited a neighbouring function.
+We therefore spend a fixed budget on evidence (a locator card naming the failing test and the region to read, together with the failure output) and on structure (typed sections with share caps, so that one kind cannot evict another), and we audit the rendered prompt rather than the ranker's output.
+Compilation, in this sense, is a budgeting problem rather than a retrieval problem.
+Retrieval is usually scored by whether the right span appears somewhere in the window, a criterion that our locator experiment separates from whether the agent then acted on it.
+
+A third line concerns tool use and adherence to instructions.
+ReAct interleaves reasoning with actions \citep{yao2022react}; Toolformer has models learn when to call APIs \citep{schick2023toolformer}; the $\tau$-bench family evaluates tool--agent--user interaction in domains that come with written policies and scores whether the agent follows them \citep{yao2024taubench}.
+The lever in this literature is usually training or prompting: better exemplars, better reasoning traces, explicit rules in the system message.
+Instruction-following benchmarks make a related assumption from the other side: they ask whether a model restates or obeys a stated rule, not whether the environment makes violation impossible.
+In our runs the prompting lever was measurably weak.
+Six process constraints written into the system prompt left the resolve count at 0/3\fact{E5}, while enforcement inside the harness---a turn-level mechanical reminder, then a cap on how many patch versions could be submitted---changed behaviour within one run.
+That is the difference we press: compliance is an interface property, not an instruction.
+A policy that cannot be violated is not the same object as a policy that has been stated, and only the former survived our ablations.
+
+% FACTS-USED: E5

@@ -1,0 +1,9 @@
+step,resolved,on_attempts,tokens_k
+baseline,0,3,305
++delta read,0,3,305
++share 45%,0,3,302
++token cap,0,2,516
++constraints (system),0,3,546
++card rendered,1,4,530
++turn nudge,0,2,340
++mech. hand-in,5,5,153

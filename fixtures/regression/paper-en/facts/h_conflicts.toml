@@ -1,0 +1,46 @@
+# H. 冲突与待核 —— 不合并，各立一条
+# 来源 FACTS.md §H。H 段条目写 kind = "config"：它们是「口径提醒」而不是论文结论，
+# 不进全局数字值域（不能当数字白名单用），但照样要 source/sha 与 note 说明与谁冲突。
+
+# H1 与 D1 共用 metric=cost-per-task、scope=real-bill：两条同时在账上且值不同，
+# paperkit 会把它们作为 LEDGER_CONFLICT 列出来（黄），提醒写作代理不许只报一个。
+[[fact]]
+id = "H1"
+claim = "成本口径冲突：我们比 mcode 贵 3 倍（旧口径）vs 1.66 倍（真实账单）"
+value = "3×"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "结论先行"
+confidence = "med"
+kind = "config"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+metric = "cost-per-task"
+scope = "real-bill"
+note = "与 D1 冲突：3× 是「不计缓存」的记账口径（全部输入按新鲜 token 计价）；D1 是按公开价目换算的真实账单 1.66×。正文若用 3×，必须同一句同时给出 D1 的 1.66× 与口径差别。"
+
+# H2：不同题目集合的两个 token 均值，禁止混用/平均；靠 scope 分开（swb6 vs swb16）。
+[[fact]]
+id = "H2"
+claim = "BATCH23 token 均值 vs BATCH20：不同题目集合，不可混用"
+value = "97.3k（6 题）vs 90,431（16 题）"
+source = "experiments/ctx-compiler-redblue/BATCH20-SWB-RUN.md"
+locator = "§二 汇总"
+confidence = "high"
+kind = "config"
+source_sha256 = "5c5829c0022b0be34de8c8f68850495af4ded0b6a0e1624ee64df5ccd0854a15"
+metric = "token-budget-ctx-on"
+scope = "cross-batch-caveat"
+note = "与 A11、B2 相关：A11＝BATCH23 全 16 题 90,431，B2＝BATCH20 6 题 97.3k。两个均值分母不同，禁止相加、平均或互相印证；比较只能在同题集内做。"
+
+# H3：mcode 两个设置；C1 已把两口径写进同一条 value，这里单列提醒必须点明步数上限。
+[[fact]]
+id = "H3"
+claim = "mcode 24 步 vs 60 步：3/6 与 5/6 是两个设置"
+value = "3/6 vs 5/6"
+source = "experiments/ctx-compiler-redblue/BATCH25-MCODE.md"
+locator = "§一 / §二"
+confidence = "high"
+kind = "config"
+source_sha256 = "af816b2daecd537c5bf6435e9a95e80e3b428a9aaab8035ccd3ea86855602d84"
+metric = "mcode-resolved"
+scope = "step-limit-caveat"
+note = "与 C1 相关：3/6 是协议臂（--max-steps 24），5/6 是放宽到 60 步的补跑口径。报 mcode 分数必须点明步数上限，不得只报一个数。"

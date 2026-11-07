@@ -1,0 +1,16 @@
+{
+  "id": "R2-NUMEXPR",
+  "kind": "hostile",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-01A（\\numexpr 派生数）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "ARITH_IN_BODY"
+  ],
+  "expected_verdict": "RED",
+  "note": "渲染出 10，扫描面里只有 9 与 1"
+}

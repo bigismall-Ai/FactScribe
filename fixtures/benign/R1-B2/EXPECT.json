@@ -1,0 +1,14 @@
+{
+  "id": "R1-B2",
+  "kind": "benign",
+  "round": "R1",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-03 / R-04（内部 B2 值域白名单）"
+  ],
+  "command": "audit",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "同内容合法近邻；必须 exit 0"
+}

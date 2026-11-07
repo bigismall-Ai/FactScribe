@@ -1,0 +1,16 @@
+{
+  "id": "R1-B1",
+  "kind": "hostile",
+  "round": "R1",
+  "attack_family": "COVERAGE_INPUT",
+  "criteria": [
+    "V2.2 R-05 / R-06（内部 B1 \\tableinput 隧道）"
+  ],
+  "command": "audit",
+  "exit": 5,
+  "codes": [
+    "TABLE_UNBOUND"
+  ],
+  "expected_verdict": "RED",
+  "note": "包装宏 \\tableinput 不在 \\input 闭包里，124 个表格数字整体绕开审计"
+}

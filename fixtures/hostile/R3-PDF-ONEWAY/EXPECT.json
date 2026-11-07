@@ -1,0 +1,16 @@
+{
+  "id": "R3-PDF-ONEWAY",
+  "kind": "hostile",
+  "round": "R3",
+  "attack_family": "PDF_LEDGER_GAP",
+  "criteria": [
+    "V3.0 P-04 / P-05（双向多重集）"
+  ],
+  "command": "verify-pdf",
+  "exit": 5,
+  "codes": [
+    "PDF_LEDGER_TOKEN_MISSING"
+  ],
+  "expected_verdict": "RED",
+  "note": "单向包含 PDF⊆ledger 时，PDF 少印 5/16 也放行"
+}

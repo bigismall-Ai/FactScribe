@@ -1,0 +1,13 @@
+\section{Conclusion}
+
+Three findings held, each with a scope we can state.
+
+Direction beats volume: delivering the failing test and a pointer to the region changed the paired outcomes from 5/16\fact{A3} to 10/16\fact{A2}, and every discordant instance moved the same way\fact{A7}.
+
+Stated rules are weak, mechanical ones are not: the same model stayed at 0/3\fact{E5} with six process constraints in its system prompt, and closed at 5/5\fact{E8} once the harness stopped asking whether it was done. What changed was not the instruction but the location of the decision.
+
+Cost sits in output: 73,051\fact{D2} output tokens per task against 12,495\fact{D2} for the official CLI. On the bill the ratio is 1.66$\times$\fact{D1}; the 3$\times$\fact{H1} figure is the uncached accounting, which charges every input token as fresh.
+
+The practical advice follows from the middle finding: instrument what was delivered before adding more of it, and make stopping a property of the harness rather than a request to the model. The next test is a second model family under a containerized judge, where the baseline-red instances can be judged and the effect repeated.
+
+% FACTS-USED: A2, A3, A7, D1, D2, E5, E8, H1

@@ -1,0 +1,14 @@
+{
+  "id": "R3-STAMP-SELFSIGN",
+  "kind": "benign",
+  "round": "R3",
+  "attack_family": "STAMP_FORGERY",
+  "criteria": [
+    "V3.0 P-08 / S-01"
+  ],
+  "command": "verify-pdf",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "同一签名，但公钥位于项目之外（fixtures/trust/）"
+}

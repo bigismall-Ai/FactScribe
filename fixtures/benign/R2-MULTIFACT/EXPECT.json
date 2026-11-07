@@ -1,0 +1,14 @@
+{
+  "id": "R2-MULTIFACT",
+  "kind": "benign",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-02（2-S1/R2 句级多 fact 归属）"
+  ],
+  "command": "audit",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "同内容合法近邻；必须 exit 0"
+}

@@ -1,0 +1,7 @@
+[project]
+title = "R3-STAMP-SELFSIGN hostile"
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+build = ""
+manifest = "results/MANIFEST.toml"

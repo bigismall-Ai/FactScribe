@@ -1,0 +1,8 @@
+[project]
+title = "R3-STAMP-SELFSIGN benign"
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+build = ""
+approver_keys_file = "../../trust/approver_keys.json"
+manifest = "results/MANIFEST.toml"

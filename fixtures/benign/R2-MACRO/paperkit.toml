@@ -1,0 +1,7 @@
+[project]
+title = "R2-MACRO benign"
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+build = ""
+manifest = "results/MANIFEST.toml"

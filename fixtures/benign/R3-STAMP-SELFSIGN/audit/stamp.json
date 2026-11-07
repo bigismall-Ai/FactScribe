@@ -1,0 +1,29 @@
+{
+  "payload": {
+    "assertions_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "compiled": {
+      "jobname": "main",
+      "latexmk_inputs": [
+        {
+          "path": "sections/body.tex",
+          "sha256": "sha256:5a877c53089e92def69eb0258723b27e3feb268231b2029077c80a37f1789a5f"
+        }
+      ],
+      "pdf_bytes": 635,
+      "pdf_pages": 1,
+      "pdf_sha256": "sha256:4d42fca8909eb1f21d15589e12e2e171f970e2766e257e02b5e85877b9ead772",
+      "root_sha256": "sha256:5a877c53089e92def69eb0258723b27e3feb268231b2029077c80a37f1789a5f",
+      "root_tex": "sections/body.tex"
+    },
+    "input_set_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "nonce": "base64:AAECAwQFBgcICQoLDA0ODw==",
+    "report_sha256": "sha256:fec4ff1c062aab43dbe87f261041f4b4a7b3a44504e0aaabbe193f034fd9dcff",
+    "rules_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "schema": "paperkit-stamp/3.0",
+    "signed_at": "2026-11-08T00:00:00Z",
+    "signer_key_id": "ed25519:OWNER-FIXTURE",
+    "tool_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "signature": "base64:OCT56cctthpGIE5B72B+n7ELB6osJsrsvOG04buLw6mBfG95VBZJDsOg0wAS+w6813ub4oxRHdCj7abTUfH5BQ==",
+  "signer_key_id": "ed25519:OWNER-FIXTURE"
+}

@@ -1,0 +1,10 @@
+[project]
+title = "Deliver the Evidence, Not the Rules: Context Compilation for Long-Horizon Coding Agents"
+authors = ["TBD"]
+sections = "*/[0-9a-d]*.tex"   # sections/ 与 appendix/ 进闭包；audit/ 与 tables/ 不进（表由 \input 拉入）
+facts = "facts/*.toml"
+bib = "refs.bib"
+build = "tectonic main.tex"
+manifest = "results/MANIFEST.toml"
+# 原始产物解析根：source 写相对它的路径，产物不必搬进 paper/（批 36 D3）
+source_root = "../../../.."

@@ -1,0 +1,55 @@
+\documentclass[11pt]{article}
+
+% ---- 预印本用最朴素的 arXiv 风格；投 workshop 时再换 sty ----
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{xcolor}
+\usepackage{multirow}
+\usepackage{siunitx}
+
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+
+% ---- paperkit 绑定宏（等价于 \input{audit/preamble}；内联以保证 clean clone 也能编） ----
+\providecommand{\fact}[1]{}          % \fact{ID}：数字审计用，排版不产生字符
+\providecommand{\pkignore}[1]{#1}    % 显式豁免区：内容照排，不进数字审计
+
+\newcommand{\sys}{\textsc{Sih}}
+
+% 草稿批注宏：终稿恒为空宏；待办统一收集在 human_todo.md
+\newcommand{\todoq}[1]{}
+
+\title{Deliver the Evidence, Not the Rules:\\
+\large Context Compilation for Long-Horizon Coding Agents}
+\author{Anonymous}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\input{sections/00_abstract}
+
+\input{sections/01_intro}
+\input{sections/02_related}
+\input{sections/03_system}
+\input{sections/04_mechanisms}
+\input{sections/05_eval}
+\input{sections/06_ablation}
+\input{sections/07_threats}
+\input{sections/08_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+
+\appendix
+\input{appendix/a_tasks}
+\input{appendix/b_repro}
+\input{appendix/c_debuglog}
+\input{appendix/d_codes}
+
+\end{document}

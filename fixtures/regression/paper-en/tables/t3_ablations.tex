@@ -1,0 +1,24 @@
+% 生成件：勿手改。整表进 \pkignore 显式豁免区（见正文 \input 附近的 \fact 复述）。
+\pkignore{%
+\begin{table}[t]
+\centering
+\caption{Incremental ablation on MiniMax-M3.1-Flash, tabulate \#408. Each row adds one mechanism to the previous one.}
+\label{tab:ablation}
+\begin{tabular}{llr}
+\toprule
+Configuration & Resolved & Tokens/run \\
+\midrule
+Baseline (card not delivered) & 0/3 & 305k \\
+Repeated-read delta & 0/3 & 305k \\
+Tool-result share 45\% & 0/3 & 302k \\
+Session token cap 600k & 0/2 & 516k \\
+Constraints in system prompt & 0/3 & 546k \\
+Locator card actually rendered & 1/4 & 530k \\
+Mechanical turn nudge & 0/2 & 340k \\
+Mechanical hand-in (2 patches) & 5/5 & 153k \\
+\bottomrule
+\end{tabular}
+
+\par\smallskip\footnotesize Numbers transcribed from the fact ledger; no re-computation.
+\end{table}
+}

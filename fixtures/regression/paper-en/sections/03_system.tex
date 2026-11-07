@@ -1,0 +1,112 @@
+\section{System}
+
+\subsection{The assembly surface}
+
+We treat the context window as a compilation target, not a transcript buffer.
+Every turn the runtime assembles an ordered set of typed sections and hashes the
+result before the model sees it. The code does not decide what belongs in the
+window; a signed data file does.
+
+That file declares fifteen kinds of section: charter, task, intent, tool
+definitions and results, skills, project rules, repository map, locator card,
+snippets, history summaries, memory, handoff material, progress document and
+intent history. Each kind declares its source, loading mode, trust level, share
+of the turn budget, drop policy, verification, the largest unit it may inline,
+pointer preview, and the tool that expands a pointer.
+
+Two properties do the work. First, the budget has three levels: a per-turn
+total, a share per kind, a cap per unit. Exceeding the unit cap does not
+truncate text; it replaces the text with a pointer into an object store, and
+the pointer must resolve. Exceeding the share drops the section and writes the
+drop to the ledger. A task profile may re-weight shares, but they must still
+sum to at most the total; the loader refuses the registry otherwise.
+
+Second, the loading mode carries the argument. Resident kinds --- charter, task,
+intent --- are always present. Search and lazy kinds enter only when a query
+resolves and hits. Summary kinds carry references back to the original. Derived
+kinds are recomputed at assembly time from this turn's evidence and compared
+with the recorded derivation, so a card cannot be inherited from an earlier
+turn and passed off as fresh.
+
+Before the writer's first token, a preflight step runs the failing selector with
+no model call and records the frames, the failing test function and the failure
+excerpt, leaving the tree unchanged. Its purpose is not speed: the first
+evidence in the window is produced and recorded by the runtime, so the model
+cannot be shown a tool result the ledger lacks.
+
+\subsection{Invariants, and what they stop}
+
+The register names twenty-one invariants over the assembly, evaluated at the
+entry and fail-closed: a violation rejects the turn rather than degrading it.
+Five carry the delivery argument.
+
+The typed-section invariant requires every section to have a declared kind and rejects an
+unknown one at the entry. It stops a new category of text --- a pasted log, a
+stack trace --- from entering the window because some code path found it
+convenient. Without it the share budget is arithmetic over an open set: correct
+as arithmetic, hollow as a guarantee.
+
+The query-justification invariant requires inclusion to be justified by a resolvable query and
+a match. It stops ``just in case'' context, and it makes inclusion falsifiable:
+every section has an answer to the question of why it is there.
+
+The pointer-substitution invariant turns a unit that exceeds its cap into a pointer with a
+resolvable reference inside the object store. It stops one file from owning the
+window, and it made the ablation legible: a runaway read could no longer
+quietly consume the evidence budget, because eviction became a logged drop.
+
+The drop-logging invariant requires a dropped section to be logged. It stops silent
+truncation, the failure that would make the arm label false: a context-on arm
+can decay into ``context on for the first few turns'' while still being called
+context-on.
+
+The payload-hash invariant requires the hash recorded for a turn to be the hash of the
+payload the model actually received. It stops post-hoc reconstruction, and it
+later exposed a delivery bug: the locator card was written and scheduled, but
+never reached the request body (Section~\ref{sec:locator}).
+
+These five are not enforced with equal strength: some are checked structurally,
+against the shape of a derivation, some semantically, against whether its
+entries hold. We report the difference rather than rounding it away, because an
+invariant documented as stronger than it is behaves like no invariant at all.
+
+\subsection{Task classes}
+
+The first runtime knew one kind of work: fix this bug, run the tests, accept or
+reject. A task class is now a row in a data file with three fields. The plan
+gives the step order and the prompts. The profile gives the budget shares;
+long-horizon work moves budget from the repository map and the skill
+descriptions into tool results, because there the bottleneck is remembering
+what was read, not learning what tools exist. The gate is looked up
+in a small registry: tests pass on the model's own report, node-level pass over
+an externally supplied selector, or a command whose exit status decides and
+whose output summary enters the evidence.
+
+The point is not configurability: the SWE-bench runs are graded by node, with
+the selector taken from the dataset. A new class costs a row, not a branch. The
+loader refuses unknown fields, plans, profiles and gates, and an absent table
+falls back to old behavior, so the abstraction cannot quietly change the
+control arm. Our tool-and-policy experiments reuse the assembly surface through
+a separate adapter that does not run the plan engine; we state that boundary
+rather than paper over it.
+
+\subsection{The accounting surface}
+
+Every assembled turn has a canonical form and a hash; the rendered body is kept
+in an object store, and the ledger keeps the hash and the reference, not the
+text. The ledger therefore records what was delivered, not what was intended. A
+turn that was assembled but never delivered appears as a gap, not a
+plausible-looking row.
+
+The execution layer adds epochs. The table of tool plates --- which tools exist,
+with declared effect and risk --- is hashed into an epoch; reports carry the
+epoch, and counts are never summed across epochs. Changing one line of that
+table yields a new epoch, which guards against a measurement improving because
+the thing measured changed underneath it.
+
+For the experiments the consequence is narrow. The two arms differ by a single
+switch; preflight, the gate, the close-out rule and the accounting are common
+to both. The accounting surface is what lets us assert that without relying on
+our memory of the runs.
+
+% FACTS-USED: E9 (locator card never reached the request body)

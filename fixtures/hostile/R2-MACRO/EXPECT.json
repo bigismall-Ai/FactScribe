@@ -1,0 +1,16 @@
+{
+  "id": "R2-MACRO",
+  "kind": "hostile",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-01A（2-B1 宏体数字逃逸）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "NUMERIC_IN_MACRO"
+  ],
+  "expected_verdict": "RED",
+  "note": "宏体拼接出 91.4%，扫描面里只有 9 与 1.4"
+}

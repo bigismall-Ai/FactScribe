@@ -1,0 +1,7 @@
+[[fact]]
+id = "A2"
+claim = "ours resolved"
+value = "10/16"
+source = "results/run.log"
+source_sha256 = "7d89a07e4310863e06bb838042561116b14aa324d6f6e3aa9b548690789d96a7"
+confidence = "high"

@@ -1,0 +1,3 @@
+scaffold,input_k,output_k
+ours,96.961,98.267
+mcode,52.996,12.495

@@ -1,0 +1,16 @@
+{
+  "id": "R2-MULTIFACT",
+  "kind": "hostile",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-02（2-S1/R2 句级多 fact 归属）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "BINDING_ATTRIBUTION"
+  ],
+  "expected_verdict": "RED",
+  "note": "一句两 fact 按出现顺序一一归属；A/B 对调必红"
+}

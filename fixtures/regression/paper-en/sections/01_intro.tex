@@ -1,0 +1,50 @@
+\section{Introduction}
+
+Long-horizon coding tasks ask an agent to enter an unfamiliar repository, find the cause of a failure, edit, and verify, often across dozens of tool calls.
+The default response to failure is capacity: enlarge the window, retrieve more files, compact earlier turns less aggressively, let the agent search for longer.
+Each of these assumes that the agent fails because the right material is missing from its prompt or too far away to keep.
+That assumption held only partly in our runs.
+More material helped, but not in proportion to how much we added, and several failures occurred with the relevant file already in the window: the agent read the failing test, then edited a different function.
+The bottleneck we could measure was not how much context the model held, but whether the evidence it needed---where to look, what broke, and when to stop---reached it intact and in a form it could act on.
+
+Our first observation is that direction beats volume.
+We ran a paired comparison on a subset of SWE-bench Verified sized at 16 instances\fact{A1}, using DeepSeek V4.1 Flash and a single flag that turns context assembly on or off; task statements were copied verbatim, and the two arms differed in nothing else.
+The assembly arm resolved 10/16\fact{A2}; the plain arm resolved 5/16\fact{A3}.
+Two instances fail even with the gold patch here, so we also report the set without them: 10/14\fact{A4} against 5/14\fact{A5}, and 10/14\fact{A6} fail-to-pass tests repaired against 6/14\fact{A6}.
+The paired outcomes are one-sided: all 5\fact{A7} discordant instances favored assembly and 0\fact{A7} favored the plain arm.
+The gain is not uniform across difficulty: in the easiest stratum the two arms resolved 7/7\fact{A8} and 4/7\fact{A8}, in the middle stratum 2/5\fact{A9} and 1/5\fact{A9}, and in the hardest 1/2\fact{A10} and 0/2\fact{A10}.
+Nor did it buy its result with volume: mean tokens per instance were 90,431\fact{A11} with assembly and 96,184\fact{A12} without, and because the per-instance pairs are mixed we read this as ``not more expensive'' rather than as a saving.
+
+A second observation concerns instrumentation.
+In an earlier ablation on one long task, the locator card was assembled, counted against its budget, and reported as delivered; it had never reached the model.
+The renderer dropped the section, and a search of the recorded request bodies for the card's first line found nothing\fact{E9}.
+Once the card was actually rendered, first reads landed in the gold region on 4/4\fact{E6} attempts, but only 1/4\fact{E6} resolved.
+Knowing where to look is necessary and not sufficient.
+We therefore stopped trusting the assembler's own log: every claim below about what the model saw is checked against the request body.
+
+The third observation concerns stopping.
+On the same long task with MiniMax-M3.1-Flash, six process constraints written into the system prompt left the resolve count at 0/3\fact{E5}, and per-round output grew rather than shrank.
+Prose in the prompt was read and not followed.
+Replacing it with a mechanical turn-level reminder produced a different failure: the agent began writing patches but kept producing new versions without declaring one final, 0/2\fact{E7}.
+Only a harness rule that made a third revision impossible---at most two patch versions, then submit---closed the task at 5/5\fact{E8}.
+Repairs aimed at capacity behaved the same way: evicting repeated reads still gave 0/3\fact{E2}, enlarging the per-kind share 0/3\fact{E3}, and raising the session token ceiling 0/2\fact{E4}.
+
+The fourth observation concerns cost.
+Replaying the recorded request bodies of both arms on the same six tasks with MiniMax-M3.1-Flash, we attributed every token.
+Our arm emitted 73,051\fact{D2} output tokens per task against 12,495\fact{D2} for the official mcode CLI, while consuming 21,941\fact{D3} fresh input tokens against 52,996\fact{D3}.
+The input side is cheaper for us and the output side is not, which reverses the intuition that a context-heavy harness pays for input.
+The two cost accountings disagree, and we report both: if every input token is priced as fresh, our arm looks 3$\times$\fact{H1} more expensive, whereas on the actual bill the ratio is 1.66$\times$\fact{D1} (\$0.0486\fact{D1} against \$0.0292\fact{D1} per task).
+Spend also concentrates in failure: successful tasks averaged 78,844\fact{D6} tokens, while two failing tasks contributed 70.9\%\fact{D6} of all output.
+A single probe that lowered reasoning effort from high to low cut thinking tokens from 941\fact{D4} to 243\fact{D4}, which suggests that the output spend is a knob rather than a property of the task.
+
+The effect is not peculiar to one model family.
+On the same six tasks with MiniMax-M3.1-Flash our arm resolved 3/6\fact{C4}; the official CLI resolved 3/6\fact{C1} under its default cap of 24\fact{C1} steps, and 5/6\fact{C1} when that cap was raised to 60\fact{C1} steps.
+The two did not solve the same tasks: ours repaired the pytest instance, the CLI the pylint one\fact{C7}.
+What we press is narrower and, we think, more useful: the differences we can measure track what reached the model and when it was allowed to stop.
+
+Three contributions follow.
+First, a context compiler: the prompt is built rather than concatenated, with typed sections under per-kind share budgets, evidence cards generated from the failing test and the repository graph, and a ledger that records what was rendered.
+Second, a controlled measurement of delivery: 10/16\fact{A2} against 5/16\fact{A3} in a paired run, and a cut-by-cut ablation in which prompt rules moved nothing while a mechanical gate moved the same model to 5/5\fact{E8}.
+Third, a cost attribution on replayed requests: output rather than input tokens, failure rather than success, and a ratio we report under both accountings, 3$\times$\fact{H1} when all input is priced as fresh and 1.66$\times$\fact{D1} on the bill.
+
+% FACTS-USED: A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, C1, C4, C7, D1, D2, D3, D4, D6, E2, E3, E4, E5, E6, E7, E8, E9, H1

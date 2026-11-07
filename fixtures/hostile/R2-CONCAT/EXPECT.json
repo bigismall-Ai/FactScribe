@@ -1,0 +1,16 @@
+{
+  "id": "R2-CONCAT",
+  "kind": "hostile",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-01A（token 拼接 9+1.4→91.4）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "NUM_AFTER_GROUP"
+  ],
+  "expected_verdict": "RED",
+  "note": "空组把两个 token 拼成渲染后的 91.4，91.4 从来不是 token"
+}

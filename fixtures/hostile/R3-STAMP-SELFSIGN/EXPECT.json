@@ -1,0 +1,16 @@
+{
+  "id": "R3-STAMP-SELFSIGN",
+  "kind": "hostile",
+  "round": "R3",
+  "attack_family": "STAMP_FORGERY",
+  "criteria": [
+    "V3.0 P-08 / S-01（项目外 key）"
+  ],
+  "command": "verify-pdf",
+  "exit": 5,
+  "codes": [
+    "STAMP_KEY_UNTRUSTED"
+  ],
+  "expected_verdict": "RED",
+  "note": "公钥就放在项目内 keys/，签名自洽但不是项目外信任根"
+}

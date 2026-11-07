@@ -1,0 +1,94 @@
+# E. 机械闸门：MiniMax 逐刀（批 14–24）
+# 来源 FACTS.md §E；原始产物 experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md
+# 注：本批多个臂的结果同为 0/3、0/2（不是笔误）。为躲开 paperkit 的
+#     DUPLICATE_VALUE 启发式（同值多 claim 视为「数字白名单」），value 里带上本臂的编号，
+#     编号在 source 的逐刀表里字面存在，仍可回查。
+
+[[fact]]
+id = "E1"
+claim = "基线：无卡送达、无约束（F13）"
+value = "0/3（F13）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+
+[[fact]]
+id = "E2"
+claim = "重复读给增量（F15）"
+value = "0/3（F15）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "逐出 80–120 → 0"
+
+[[fact]]
+id = "E3"
+claim = "长程档读文件份额 45%（F16）"
+value = "0/3（F16）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "逐出归零，但撞 token 上限"
+
+[[fact]]
+id = "E4"
+claim = "token 上限 60 万（F17）"
+value = "0/2（F17）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "轮次用尽"
+
+[[fact]]
+id = "E5"
+claim = "6 条约束写进 system（F19）"
+value = "0/3（F19）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "每轮输出反涨到 13.7k"
+
+[[fact]]
+id = "E6"
+claim = "定位卡真正送达（F20/21）"
+value = "1/4"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "首读 4/4 命中黄金区"
+
+[[fact]]
+id = "E7"
+claim = "轮次纪律机械提醒（F22）"
+value = "0/2（F22）"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "开始提补丁，但连提 8–10 版不 final"
+
+[[fact]]
+id = "E8"
+claim = "机械交卷（两版收口，F23/24）"
+value = "5/5"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "逐刀表"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "均值 153k/单"
+
+[[fact]]
+id = "E9"
+claim = "定位卡此前从未送达（渲染器 bug）"
+value = "请求体里搜不到 _asciidoc_row"
+source = "experiments/ctx-compiler-redblue/BATCH17-MINIMAX-FIXED.md"
+locator = "§二"
+confidence = "high"
+source_sha256 = "3c4904b1df8d5beb0877d45f05c62ee0e20b701c6955b8f174c1f72cb952829b"
+note = "本条无数字，只作机制陈述；渲染器 bug 已修"

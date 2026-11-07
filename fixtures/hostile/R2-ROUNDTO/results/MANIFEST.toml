@@ -1,0 +1,7 @@
+[manifest]
+signed_by = "fixture-human"
+signed_at = "2026-11-08T00:00:00Z"
+version = 1
+
+[files]
+"results/run.log" = "72cc8b9781a2712dea5ae984bdcdbe5312b861d8ce900cd0a8b9e7e49b0d5a6e"

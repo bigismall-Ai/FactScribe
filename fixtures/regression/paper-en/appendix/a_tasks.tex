@@ -1,0 +1,5 @@
+\section{Task selection and exclusions}
+
+The main subset was filtered before the comparison ran. Every instance had already been executed on this machine with the gold patch and without it: an instance entered the subset only if it failed before the patch and passed after the gold patch. That filter removes instances whose tests are broken in this environment, and it also removes instances that start green. The cost is that the subset is easier than a random draw of the benchmark, a point we carry into Section~\ref{sec:threats}.
+
+Two stable baseline-red instances were excluded from the headline denominators, and both denominators are reported in Section~\ref{sec:threats} and in Table~\ref{tab:main}. One gold run was flaky rather than consistently red and is not counted as baseline-red; this is the only case where the classification rests on a rerun. Difficulty buckets in Table~\ref{tab:difficulty} use the label shipped with the dataset, not a label we assigned.

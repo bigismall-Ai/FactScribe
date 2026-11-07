@@ -1,0 +1,46 @@
+{
+  "approvals": [],
+  "assertions_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+  "generated_at": "2026-11-08T00:00:00Z",
+  "input_set_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "level": "L2",
+  "number_ledger": [
+    {
+      "col": 12,
+      "fact": "A2",
+      "file": "sections/body.tex",
+      "keys": [
+        "10",
+        "16"
+      ],
+      "line": 1,
+      "page": 1,
+      "raw": "10/16"
+    },
+    {
+      "col": 26,
+      "fact": "A3",
+      "file": "sections/body.tex",
+      "keys": [
+        "5",
+        "16"
+      ],
+      "line": 1,
+      "page": 1,
+      "raw": "5/16"
+    }
+  ],
+  "pdf_whitelist": [],
+  "report_sha256": "sha256:6f0e96943764e16a8f01aa8b6334467e4a8da26513b852a65cd2477549cf1db6",
+  "rules_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "schema": "paperkit-report/3.0",
+  "signers": [],
+  "signing_boundary": "key_only",
+  "signing_mode": "offline_manifest",
+  "tool": {
+    "canon_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "canon_version": "3",
+    "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "verdict": "PASS"
+}

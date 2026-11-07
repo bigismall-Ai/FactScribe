@@ -1,0 +1,10 @@
+\section{Debug log: run order and per-arm cost}
+\label{app:debuglog}
+
+The main text states the ablation as four hypotheses. This appendix records the order in which the arms actually ran, so that the chronology stays available without turning the results section into a debugging log. Arms ran in sequence on one machine with one key, so the order is confounded with time, as Section~\ref{sec:threats} notes.
+
+Table~\ref{tab:ablation} reproduces the sequence. Each row adds one mechanism to the row above. The final column is the tokens recorded for that arm in the original batch report.
+
+\input{tables/t3_ablations}
+
+Two details belong to the log rather than to the argument. The session token ceiling was raised after the read-share cut hit it, so the third capacity arm answers the second rather than testing capacity independently. And the locator card was reported as delivered for several arms before a search of the recorded request bodies showed that it had never been rendered; the card row is therefore later than the capacity rows in wall-clock order but earlier in the argument.

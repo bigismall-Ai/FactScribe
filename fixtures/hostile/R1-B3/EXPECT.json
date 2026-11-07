@@ -1,0 +1,16 @@
+{
+  "id": "R1-B3",
+  "kind": "hostile",
+  "round": "R1",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-03 / R-02（内部 B3 行级绑定）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "BINDING_ATTRIBUTION"
+  ],
+  "expected_verdict": "RED",
+  "note": "同一物理行里两个 fact 的值域取并集，A/B 对调后仍全绿"
+}

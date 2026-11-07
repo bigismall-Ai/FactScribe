@@ -1,0 +1,14 @@
+{
+  "id": "R3-PDF-ONEWAY",
+  "kind": "benign",
+  "round": "R3",
+  "attack_family": "PDF_LEDGER_GAP",
+  "criteria": [
+    "V3.0 P-04 / P-05"
+  ],
+  "command": "verify-pdf",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "PDF 数字多重集与 ledger 相等"
+}

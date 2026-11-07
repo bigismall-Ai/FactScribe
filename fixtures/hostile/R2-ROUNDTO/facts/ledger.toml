@@ -1,0 +1,8 @@
+[[fact]]
+id = "A2"
+claim = "score"
+value = "0.91"
+source = "results/run.log"
+source_sha256 = "72cc8b9781a2712dea5ae984bdcdbe5312b861d8ce900cd0a8b9e7e49b0d5a6e"
+confidence = "high"
+display = [{ text = "0.9", round_to = 1 }]

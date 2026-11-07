@@ -1,0 +1,16 @@
+{
+  "id": "R1-B2",
+  "kind": "hostile",
+  "round": "R1",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-03 / R-04（内部 B2 值域白名单）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "BOUND_MISMATCH"
+  ],
+  "expected_verdict": "RED",
+  "note": "10/16 的商被四舍五入放宽后，1/16 也能落到 A2 的值域里"
+}

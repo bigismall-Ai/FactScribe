@@ -1,0 +1,34 @@
+% 生成件：勿手改。整表进 \pkignore 显式豁免区（见正文 \input 附近的 \fact 复述）。
+\pkignore{%
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{SWE-bench Verified subset: resolved vs not, per instance. Baseline-red rows fail even with the gold patch and are excluded from the headline numbers.}
+\label{tab:main}
+\begin{tabular}{lrrrrr}
+\toprule
+Instance & Baseline-red & On & Off & On tokens & Off tokens \\
+\midrule
+pallets\_flask-5014 &  & \checkmark & \checkmark & 26,286 & 53,271 \\
+psf\_requests-6028 &  & -- & -- & 82,105 & 64,375 \\
+pylint-dev\_pylint-4970 &  & \checkmark & -- & 63,727 & 92,683 \\
+pylint-dev\_pylint-6528 & yes & -- & -- & 136,118 & 147,369 \\
+pylint-dev\_pylint-7277 & yes & -- & -- & 47,704 & 45,560 \\
+pylint-dev\_pylint-8898 &  & \checkmark & -- & 126,537 & 98,627 \\
+pytest-dev\_pytest-10051 &  & -- & -- & 56,742 & 76,973 \\
+pytest-dev\_pytest-10081 &  & \checkmark & -- & 88,368 & 80,854 \\
+pytest-dev\_pytest-10356 &  & -- & -- & 116,106 & 119,415 \\
+pytest-dev\_pytest-7982 &  & \checkmark & \checkmark & 28,477 & 63,349 \\
+pytest-dev\_pytest-8399 &  & \checkmark & \checkmark & 83,489 & 83,886 \\
+sphinx-doc\_sphinx-10323 &  & \checkmark & \checkmark & 100,485 & 105,737 \\
+sphinx-doc\_sphinx-10435 &  & \checkmark & \checkmark & 64,677 & 130,547 \\
+sphinx-doc\_sphinx-10449 &  & \checkmark & -- & 119,770 & 110,119 \\
+sphinx-doc\_sphinx-10614 &  & -- & -- & 169,853 & 153,599 \\
+sphinx-doc\_sphinx-10673 &  & \checkmark & -- & 136,456 & 112,573 \\
+\bottomrule
+\end{tabular}
+
+\par\smallskip\footnotesize resolved = all FAIL\_TO\_PASS nodes pass and no PASS\_TO\_PASS regression. Baseline-red marks the instances whose gold patch fails on this machine; one flaky gold run is not counted as baseline-red. Per-instance tokens come from the original batch report; later reruns of several instances are not reflected here.
+\end{table}
+}

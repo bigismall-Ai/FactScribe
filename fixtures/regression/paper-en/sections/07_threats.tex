@@ -1,0 +1,36 @@
+\section{Threats to Validity}
+\label{sec:threats}
+
+We separate limitations we know about and have not fixed, claim boundaries that follow from the size of the runs, and limitations that follow from the design.
+
+\subsection{Known and not fixed}
+
+The main comparison has 16\fact{A1} instances, 14\fact{A4} of them judgeable. A paired difference on that many cases has a wide interval, and we did not compute one; the direction of the 5\fact{A7} discordant pairs is more robust than the size of the margin. The cross-scaffold comparison is six tasks, the ablation one task, and every rate in this paper inherits that width.
+
+Each experiment ran in a single window on a single machine, with one provider key per model and one run per arm. Arms ran in sequence, so provider drift and our own edits between arms are confounded with the variable under test. The ablation is the most exposed: it ran on one day with one key, its arms were not repeated, and its rows are a design history rather than a set of effect sizes. The last arm's 5/5\fact{E8} is five runs of one task, while the unsuccessful arms are smaller sets. The gate's evidence is one task and one model; in the main SWE-bench comparison the gate is held fixed across both arms, so it cannot explain that result.
+
+The environment is macOS without containers, and two instances are baseline-red because two pass-to-pass nodes depend on the shape of the local \texttt{sys.path} rather than on the patch. On a Linux container those instances might be judgeable, and their outcomes might differ. The judge is not pinned by a container image, so a reader reproducing this work should expect the baseline-red set to move.
+
+The close-out rule is a hard rule, not a policy the model can negotiate. A cap of two versions can submit a bad last version: on one instance the model's second patch restored the original file, and the gate sent that revert to the verifier, producing an empty diff. That is a designed way to fail. We keep the rule because it is the mechanism under test, and we report the case rather than tuning it away.
+
+Model endpoints drift. We recorded the model identifier and the date of each batch but did not pin weights or a serving version, so a rerun may not reproduce the same completions even at the same temperature.
+
+\subsection{Claim boundaries}
+
+Every number in the evaluation is a point estimate from one run per arm. There is no repetition, no seed control, and no second machine. We therefore describe what we observed rather than estimate an effect, and we leave the size of the effect, its stability under repetition, and its transfer to containerized judging open.
+
+The cross-scaffold comparison establishes that the arm sits in the same band as a mature CLI on this task set; it does not establish superiority over that CLI, and we do not claim it. The pilot's token means are computed over a different task set from the sixteen-instance means and are not pooled with them.
+
+The cost lever is a probe, not an estimate. A single probe moved thinking tokens from 941\fact{D4} to 243\fact{D4}, a factor of 0.26\fact{D4}; we label it as a probe. The arithmetic projection over the same six tasks is a 66.78082192\%\fact{D5} reduction; it is arithmetic, not a run, and it is the weakest number in this paper. Its preconditions: when a provider omits cached tokens we record zero and overstate cost; replayed bodies measure prompt size, not a billed history; and because cached input is cheap, a shorter context is not automatically a cheaper run.
+
+\subsection{Structural}
+
+Three limitations are built into the design. First, the judge can be wrong in a way the ledger cannot see: the two baseline-red instances fail with the gold patch, and one gold run was flaky. Because the gate is judged by that same selector, a harness compared here inherits the judge's defects. Improving the agent cannot repair a node that is red for the environment.
+
+Second, the task statements come from a dataset rather than from live tickets. SWE-bench issues are curated, usually include a reproduction, and arrive with the test selector that defines success. A real ticket does not ship its fail-to-pass list. Delivery may therefore be harder in production than in our setting, and the locator card receives a cleaner signal than a real report would provide.
+
+Third, the ledger's trust root is a signature, and at the time of writing that signature is an agent's, not a human's. Hashing and append-only storage establish that a record was not altered after the fact; they do not establish that the run happened as recorded, or that the recorded run was the intended one. The audit tools check internal consistency, not truth. A wrong result, entered faithfully, passes every check in this paper.
+
+Finally, our definition of resolved is stricter than the fail-to-pass-only scoring used in some reports: a pass-to-pass regression counts as failure. Counts here are therefore not directly comparable with fail-to-pass-only figures, and we state the convention wherever a count appears.
+
+% FACTS-USED: A1, A4, D4, D5

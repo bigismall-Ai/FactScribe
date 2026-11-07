@@ -1,0 +1,68 @@
+# D. 成本归因（批 31，重放 107 份真实请求体）
+# 来源 FACTS.md §D；原始产物 experiments/ctx-compiler-redblue/BATCH31-COST.md
+# 注：FACTS.md 的 73.1k/21.9k/78.8k 等是四舍五入写法，账上取原始报告的字面精确值，
+#     以保证 value 能在 source 里逐 token 回查（paperkit G2''）。
+
+[[fact]]
+id = "D1"
+claim = "真实账单（每题，6 题均值；我们 vs mcode）"
+value = "$0.0486 / $0.0292（1.66×）"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "结论 / 真实账单行"
+confidence = "med"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+metric = "cost-per-task"
+scope = "real-bill"
+note = "按公开价目换算（$0.15/$0.60/$0.015 每百万）；与 H1 的 3× 冲突，正文必须同时给两个口径"
+
+[[fact]]
+id = "D2"
+claim = "输出/思考 token（我们 vs mcode，6 题均值）"
+value = "73,051 / 12,495"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "归因表"
+confidence = "high"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+note = "FACTS.md 记 73.1k / 12.5k（四舍五入）；我们 99% 输出是推理 token"
+
+[[fact]]
+id = "D3"
+claim = "新鲜输入 token（我们 vs mcode，6 题均值）"
+value = "21,941 / 52,996"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "归因表"
+confidence = "high"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+note = "FACTS.md 记 21.9k / 53.0k（四舍五入）；输入侧我们更便宜"
+
+[[fact]]
+id = "D4"
+claim = "reasoning effort 探针（high → low 的 thinking tokens）"
+value = "941 → 243（0.26×）"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "削减清单"
+confidence = "med"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+note = "单次探针，未做多次"
+
+[[fact]]
+id = "D5"
+claim = "预计节省（6 题账单 $0.292 → $0.097）"
+value = "-66.78082192%"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "削减清单"
+confidence = "low"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+derived_from = ["D1", "D4"]
+expr = "(0.292 - 0.097) / 0.292 * 100"
+note = "推算值，未实跑验证；FACTS.md 写 −67% 是四舍五入；精确式 (0.292-0.097)/0.292*100 = 66.7808（降幅），正文按 value 的精度写"
+
+[[fact]]
+id = "D6"
+claim = "成功题平均 token；两道失败题占输出份额"
+value = "78,844；70.9%"
+source = "experiments/ctx-compiler-redblue/BATCH31-COST.md"
+locator = "发现"
+confidence = "med"
+source_sha256 = "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+note = "FACTS.md 记 78.8k / 71%（四舍五入）"

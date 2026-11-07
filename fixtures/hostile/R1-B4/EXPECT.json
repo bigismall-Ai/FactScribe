@@ -1,0 +1,16 @@
+{
+  "id": "R1-B4",
+  "kind": "hostile",
+  "round": "R1",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-07（内部 B4 \\pkignore 后门）"
+  ],
+  "command": "audit",
+  "exit": 1,
+  "codes": [
+    "PKIGNORE_QUANT"
+  ],
+  "expected_verdict": "RED",
+  "note": "\\pkignore 参数不做检查，整句假结论被抹成空白"
+}

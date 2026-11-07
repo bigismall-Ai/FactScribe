@@ -1,0 +1,19 @@
+% 生成件：勿手改。整表进 \pkignore 显式豁免区（见正文 \input 附近的 \fact 复述）。
+\pkignore{%
+\begin{table}[t]
+\centering
+\caption{Same six SWE-bench tasks, same model (MiniMax-M3.1-Flash), two scaffolds.}
+\label{tab:cost}
+\begin{tabular}{lrrr}
+\toprule
+Scaffold & Resolved & Tokens/run & Wall time/run \\
+\midrule
+mcode (24-step cap) & 3/6 & 65,492 & 131s \\
+mcode (60-step cap) & 5/6 & -- & -- \\
+\sys{} (ours) & 3/6 & 195,228 & 480.9s \\
+\bottomrule
+\end{tabular}
+
+\par\smallskip\footnotesize Resolved counts: C1 (mcode) and C4 (ours). Tokens and wall time: C2, C3, C5, C6. The 60-step row is a rerun under a raised cap; its tokens and time were not recorded. Our input/output split is an estimate; wall times come from two concurrent batches sharing one key.
+\end{table}
+}

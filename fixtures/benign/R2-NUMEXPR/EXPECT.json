@@ -1,0 +1,14 @@
+{
+  "id": "R2-NUMEXPR",
+  "kind": "benign",
+  "round": "R2",
+  "attack_family": "SOURCE_BINDING",
+  "criteria": [
+    "V2.2 R-01A（\\numexpr 派生数）"
+  ],
+  "command": "audit",
+  "exit": 0,
+  "codes": [],
+  "expected_verdict": "PASS",
+  "note": "同内容合法近邻；必须 exit 0"
+}

@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+
+# 生成物不入库
+audit/
+*.pdf
+*.aux
+*.log
+*.xdv
+*.bbl
+*.blg

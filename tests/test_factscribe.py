@@ -297,8 +297,8 @@ class TestAudit(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(
                 tmp,
-                sections={"a.tex": "56.25\\% 与 10/16 与 53k 与 1,234 与 3.5M\\fact{A1,A3,A2,B1,B2}\n"},
-                # 加两条只为提供 1234 / 53000 / 3500000
+                sections={"a.tex": "56.25\\% 与 10/16 与 53k 与 1,234 与 3.5M\\fact{A2,A1,B1,B1,B2}\n"},
+                # 标记顺序＝数字出现顺序（R-03 归属判据）；加两条只为提供 1234 / 53000 / 3500000
                 facts=FACTS + """
 [[fact]]
 id = "B1"

@@ -85,12 +85,16 @@ def fact_value_keys(value: str, include_quotient: bool = True) -> set[str]:
     """一个 fact.value 能接受的全部规范数字。
 
     除了字面数字，还接受：
-    - 分数 a/b 的商（10/16 -> 0.625），并按 0~4 位小数放宽四舍五入；
+    - 分数 a/b 的**精确**商（10/16 -> 0.625，只此一个十进制，不展开舍入）；
     - 区间 10--16 的两端（NUM_RE 天然拆成两个）；
     - 百分号形式的裸数字（62.5% 同时接受 62.5）。
 
     注意：这是**值域**；v1 里它只有在内联绑定（\\fact{ID}）的语境下才算核销，
     全局裸数字命中只算黄（UNBOUND_NUMBER），不再能换来绿（红队 B1/C6/C11）。
+
+    V2.2 R-04 / 内部 B2：隐式四舍五入已删除。v2.1 的 `places=0..4` 会把
+    `10/16` 的值域撑成 `{1, 0.6, 0.62, 0.625}`，于是 `1`（来自 `1/16`）也能
+    通过绑定。值域现在只含字面形式与精确商；近似显示只能进 `approx_display`。
     """
     keys: set[str] = set()
     for raw, suffix, pct in literal_tokens(value):
@@ -107,12 +111,40 @@ def fact_value_keys(value: str, include_quotient: bool = True) -> set[str]:
                 continue
             q = num / den
             keys.add(_num_key(q))
-            for places in range(0, 5):
-                try:
-                    keys.add(_num_key(q.quantize(Decimal(1).scaleb(-places))))
-                except InvalidOperation:
-                    pass
     return keys
+
+
+def canon_text(text: str) -> str | None:
+    """把一个「单一数值表达式」收敛成比较用的规范键；不可解析返回 None。
+
+    用于 `display` 严格等价判定（R-04）：`10/16` 与 `62.5%` 都是 0.625；
+    `0.91` 与 `0.9` 永不相等（不再有 round_to 容差）。
+    """
+    s = str(text or "").strip()
+    if not s:
+        return None
+    m = _FRACTION_RE.fullmatch(s)
+    if m:
+        try:
+            num, den = Decimal(m.group(1)), Decimal(m.group(2))
+        except InvalidOperation:
+            return None
+        if den == 0:
+            return None
+        return _num_key(num / den)
+    m = _NUM_RE.fullmatch(s)
+    if not m:
+        return None
+    return number_key(m.group(1), m.group(2) or None, bool(m.group(3)))
+
+
+def decimal_places(text: str) -> int:
+    """`text` 里数字的小数位数（用于 round_to 机械校验）。"""
+    m = _NUM_RE.search(str(text or ""))
+    if not m:
+        return 0
+    raw = m.group(1).replace(",", "")
+    return len(raw.split(".", 1)[1]) if "." in raw else 0
 
 @dataclass
 class Fact:
@@ -130,6 +162,8 @@ class Fact:
     metric: str = ""
     scope: str = ""
     note: str = ""
+    display: list = field(default_factory=list)   # [{text, round_to, setting}]
+    co_claim: list = field(default_factory=list)
     file: str = ""
     line: int = 0
     value_keys: set = field(default_factory=set)

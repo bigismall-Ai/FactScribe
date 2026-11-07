@@ -17,7 +17,11 @@ from .constants import (CONFIDENCE_OK, KINDS_OK, SEV_INFO, SEV_RED,
                         SEV_YELLOW, VERSION)
 from .facts import (Fact, ExprError, _cycles, _declared_number, eval_expr,
                     literal_tokens, number_key, sha256_file)
-from .texscan import _extract_numbers, scan_tex
+from .texrules import (adjacency_hits, arith_hits, display_hits,
+                       numeric_macro_hits, pkignore_quant_hits,
+                       tabular_regions)
+from .texscan import (_extract_numbers, _merge_number_units, scan_tex,
+                      sentence_index, sentence_spans)
 
 # --------------------------------------------------------------------------
 # 问题单
@@ -31,6 +35,7 @@ class Issue:
     token: str = ""
     context: str = ""
     severity: str = SEV_RED
+    exit_code: int = 1        # 1=FACT/CONFIG，5=COVERAGE/INTEGRITY，7=STALE，8=工具缺失
 
     def as_dict(self) -> dict:
         d = {"severity": self.severity, "code": self.code, "message": self.message}
@@ -50,6 +55,52 @@ def _source_rel_ok(src: str) -> str:
     if p.is_absolute() or ".." in p.parts:
         return "BAD_SOURCE_PATH"
     return ""
+
+
+def _display_issues(facts: list[Fact]) -> list[Issue]:
+    """R-04：display 只能追加与 value 严格等价的写法（内部 B2/2-B2）。"""
+    out: list[Issue] = []
+    for f in facts:
+        loc = "%s:%s" % (f.file, f.line or "?")
+        for code, detail in display_hits(f):
+            out.append(Issue(code, "fact %r：%s" % (f.id, detail),
+                             location=loc, token=f.id))
+    return out
+
+
+def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
+    """R-01A / R-05 / R-07 的闭包级判据（对每个扫描到的文本文件跑）。"""
+    out: list[Issue] = []
+    for rel, text in sections:
+        for name, line in arith_hits(text):
+            out.append(Issue(
+                "ARITH_IN_BODY",
+                "算术/计数器命令 \\%s 会产生账上没有的数字——数值不可寻址（R-01A-A）"
+                % name, location="%s:%s" % (rel, line), token="\\" + name))
+        for name, line, digit in numeric_macro_hits(text, cfg.numeric_macro_allow):
+            out.append(Issue(
+                "NUMERIC_IN_MACRO",
+                "宏 \\%s 的定义体携带数字（%r）——宏可以携带 fact id，不可以携带数字"
+                "（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）"
+                % (name, digit), location="%s:%s" % (rel, line), token="\\" + name))
+        for line, arg, hits in pkignore_quant_hits(scan_tex(text).annotation_args):
+            out.append(Issue(
+                "PKIGNORE_QUANT",
+                "\\pkignore 参数里出现定量（%s）——豁免宏不得用来抹掉结论句：%r"
+                % (hits, arg), location="%s:%s" % (rel, line), token=hits))
+    return out
+
+
+def _aggregate_exit(red: list[Issue], yellow: list[Issue], strict: bool = False) -> int:
+    if red:
+        codes = {i.exit_code for i in red}
+        for code in (8, 1, 5, 7):
+            if code in codes:
+                return code
+        return 1
+    if yellow:
+        return 1 if strict else 3
+    return 0
 
 
 def source_base(cfg: Config) -> Path:
@@ -228,6 +279,7 @@ def run_check(cfg: Config, facts: list[Fact]):
     red_src, yellow_src = verify_sources(cfg, facts)
     issues += red_src
     warnings += yellow_src
+    issues += _display_issues(facts)
 
     seen: dict[str, Fact] = {}
     superseded = {s.strip().casefold() for f in facts for s in f.supersedes}
@@ -487,9 +539,13 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     unresolved: list[dict] = []
     seen_figures: set[str] = set()
 
+    red += _display_issues(facts)
+    red += _source_rule_issues(cfg, sections)
+
     for rel, text in sections:
         scan = scanned[rel]
         nums = _extract_numbers(scan.masked, text)
+        units = _merge_number_units(nums, scan.masked)
         numbers_total += len(nums)
         annotations_total += len(scan.annotations)
         annotation_sites += ["%s:%s \\%s" % (rel, line, name)
@@ -513,40 +569,124 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 "认不出的引用命令 \\%s——引用闸门默认 fail-closed，请改用已知的 cite 家族命令"
                 % name, location="%s:%s:%s" % (rel, line, col), token=name))
 
+        # ---- R-01A C：数字不得贴宏 / 不得紧跟闭合组 / 不得被空组拼接 ----
+        seen_adj: set[tuple[str, int]] = set()
         for num in nums:
-            loc = "%s:%s:%s" % (rel, num["line"], num["col"])
-            ids = scan.bindings.get(num["line"])
-            if ids:
-                allowed: set[str] = set()
-                known_ids = []
-                for fid in ids:
-                    f = fact_by_id.get(fid.strip().casefold())
-                    if f is not None:
-                        known_ids.append(f.id)
-                        allowed |= f.value_keys
-                if num["key"] in allowed:
-                    bound += 1
+            for code, detail in adjacency_hits(scan.adjacency, num):
+                mark = (code, num["start_abs"])
+                if mark in seen_adj:
+                    continue
+                seen_adj.add(mark)
+                red.append(Issue(
+                    code, "%s（%r）——渲染出的数字必须由连续字面数字构成"
+                    % (detail, num["token"]),
+                    location="%s:%s:%s" % (rel, num["line"], num["col"]),
+                    token=num["token"], context=num["text"]))
+
+        # ---- R-02/R-03：BU 是句子；标记组只闭合自己那一句，token 按出现顺序归属 ----
+        spans = sentence_spans(scan.masked)
+        groups = scan.marker_groups
+        group_sentence = [sentence_index(spans, max(0, g["end"] - 1))
+                          for g in groups]
+        covered: dict[int, list[dict]] = {i: [] for i in range(len(groups))}
+        ungrouped: list[dict] = []
+        for unit in units:
+            unit["sentence"] = sentence_index(spans, unit["start_abs"])
+            owner = None
+            for gi, g in enumerate(groups):
+                if group_sentence[gi] == unit["sentence"] and g["end"] > unit["start_abs"]:
+                    owner = gi
+                    break
+            if owner is None:
+                ungrouped.append(unit)
+            else:
+                covered[owner].append(unit)
+
+        for gi, g in enumerate(groups):
+            utokens = covered[gi]
+            if not utokens:
+                continue
+            known_facts = []
+            for fid in g["ids"]:
+                f = fact_by_id.get(fid.strip().casefold())
+                if f is not None:
+                    known_facts.append(f)
+            if not known_facts:
+                continue       # 未知 id 已由 UNKNOWN_FACT_MARKER 判红
+            quant_facts = [f for f in known_facts if f.value_keys]
+            if not quant_facts:
+                for unit in utokens:
+                    unmatched += len(unit["tokens"])
+                    red.append(Issue(
+                        "NONQUANT_BACKS_QUANT",
+                        "只有机制陈述（%s）来背数字 %s——非定量 fact 不能授权定量断言"
+                        % ("/".join(f.id for f in known_facts), unit["token"]),
+                        location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
+                        token=unit["token"], context=unit["text"]))
+                continue
+            allowed: set[str] = set()
+            for f in quant_facts:
+                allowed |= f.value_keys
+            sequential = (len(utokens) == len(quant_facts)
+                          and not any(f.co_claim for f in quant_facts))
+            if sequential and len(quant_facts) > 1:
+                # ① 归属分支：第 k 个 token 归第 k 个 fact（内部 B3 / 2-S1）
+                for unit, f in zip(utokens, quant_facts):
+                    if unit["canon"] in f.value_keys:
+                        bound += len(unit["tokens"])
+                    else:
+                        unmatched += len(unit["tokens"])
+                        red.append(Issue(
+                            "BINDING_ATTRIBUTION",
+                            "组内第 %d 个数字 %s 归 %s，但不在它的 value 里——"
+                            "标记组成员按书写顺序一一对应（想真·同值请写 co_claim）"
+                            % (utokens.index(unit) + 1, unit["token"], f.id),
+                            location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
+                            token=unit["token"], context=unit["text"]))
+            else:
+                # ② 并集分支：token 数≠fact 数时整段取并集（R-03）
+                for unit in utokens:
+                    if all(k in allowed for k in unit["keys"]):
+                        bound += len(unit["tokens"])
+                    else:
+                        unmatched += len(unit["tokens"])
+                        red.append(Issue(
+                            "BOUND_MISMATCH",
+                            "该段绑定 %s，但数字 %s 不在其 value 里（内联绑定是硬约束）"
+                            % ("/".join(f.id for f in quant_facts), unit["token"]),
+                            location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
+                            token=unit["token"], context=unit["text"]))
+
+        # ---- 未被任何标记组闭合的尾段/远句 ----
+        tables = tabular_regions(text)
+        for unit in ungrouped:
+            in_table = any(s <= unit["start_abs"] < e for s, e in tables)
+            keys_known = all(k in key_to_facts for k in unit["keys"])
+            if in_table and not keys_known:
+                # R-06：表格 cell 里的数字必须能被账回查，否则整表绕开审计
+                unmatched += len(unit["tokens"])
+                red.append(Issue(
+                    "TABLE_UNBOUND",
+                    "表格 cell 里的数字 %s 回不到任何 fact.value——表格必须进扫描闭包"
+                    "并带 cell→fact 映射（R-06）" % unit["token"],
+                    location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
+                    token=unit["token"], context=unit["text"], exit_code=5))
+                continue
+            for tok in unit["tokens"]:
+                loc = "%s:%s:%s" % (rel, tok["line"], tok["col"])
+                if tok["key"] in key_to_facts:
+                    unbound_yellow += 1
+                    yellow.append(Issue(
+                        "UNBOUND_NUMBER",
+                        "数字 %s 回得到账（%s），但正文没内联绑定——只算黄，不算已核验"
+                        % (tok["token"], "/".join(key_to_facts[tok["key"]])),
+                        location=loc, token=tok["token"], context=tok["text"],
+                        severity=SEV_YELLOW))
                 else:
                     unmatched += 1
                     red.append(Issue(
-                        "BOUND_MISMATCH",
-                        "该行绑定 %s，但数字 %s 不在其 value 里（内联绑定是硬约束）"
-                        % ("/".join(known_ids or ids), num["token"]),
-                        location=loc, token=num["token"], context=num["text"]))
-                continue
-            if num["key"] in key_to_facts:
-                unbound_yellow += 1
-                yellow.append(Issue(
-                    "UNBOUND_NUMBER",
-                    "数字 %s 回得到账（%s），但正文没内联绑定——只算黄，不算已核验"
-                    % (num["token"], "/".join(key_to_facts[num["key"]])),
-                    location=loc, token=num["token"], context=num["text"],
-                    severity=SEV_YELLOW))
-            else:
-                unmatched += 1
-                red.append(Issue(
-                    "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value" % num["token"],
-                    location=loc, token=num["token"], context=num["text"]))
+                        "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value" % tok["token"],
+                        location=loc, token=tok["token"], context=tok["text"]))
         matched = bound + unbound_yellow
 
         for key, line, col in scan.cites:

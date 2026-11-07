@@ -8,10 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .audit import run_audit, run_check
+from .audit import _aggregate_exit, run_audit, run_check
 from .config import (ConfigError, load_config, load_facts, load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
+from .pdfgate import verify_pdf
 from .report import (PREAMBLE_TEXT, _emit, _human_audit, _human_check,
                      _payload, _severity_of, render_matrix)
 
@@ -66,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--out", default=None, help="默认 audit/matrix.md")
         if name == "preamble":
             sp.add_argument("--out", default=None, help="默认 audit/preamble.tex")
+    sp = sub.add_parser("verify-pdf", help="PDF 回检：文本层/栅格/双向多重集/stamp（V3.0）")
+    sp.add_argument("pdf", help="最终 PDF 路径")
+    sp.add_argument("--report", required=True, help="audit/report.json（被签的那一份）")
+    sp.add_argument("--stamp", default=None, help="audit/stamp.json（有则必须先验信任链）")
+    sp.add_argument("--keys", default=None, help="项目外公钥登记 approver_keys.json")
+    sp.add_argument("--json", action="store_true", help="（本命令默认只输出 JSON）")
     return p
 
 
@@ -73,7 +80,7 @@ def cmd_check(args) -> int:
     cfg = load_config(Path(args.project))
     facts = load_facts(cfg)
     issues, warnings, conflicts, summary = run_check(cfg, facts)
-    code = _exit_code(len(issues), len(warnings), getattr(args, "strict", False))
+    code = _aggregate_exit(issues, warnings, getattr(args, "strict", False))
     text = _human_check(cfg, facts, issues, warnings, conflicts, summary, code)
     _emit(_payload("check", _severity_of(code), code,
                    summary=summary,
@@ -89,7 +96,7 @@ def cmd_audit(args) -> int:
     sections = load_sections(cfg)
     red, yellow, hints, summary, unresolved = run_audit(
         cfg, facts, sections, resolve=getattr(args, "resolve", False))
-    code = _exit_code(len(red), len(yellow), getattr(args, "strict", False))
+    code = _aggregate_exit(red, yellow, getattr(args, "strict", False))
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     _emit(_payload("audit", _severity_of(code), code,
                    summary=summary,
@@ -98,6 +105,19 @@ def cmd_audit(args) -> int:
                    hints=[h.as_dict() for h in hints],
                    coverage=summary.get("coverage", {}),
                    resolved=unresolved), text, args.json)
+    return code
+
+
+def cmd_verify_pdf(args) -> int:
+    issues, warnings, code = verify_pdf(
+        Path(args.pdf), Path(args.report),
+        Path(args.stamp) if args.stamp else None,
+        Path(args.keys) if args.keys else None)
+    human = "== factscribe verify-pdf ==\n%s\n红：%d   黄：%d   退出码：%d" % (
+        args.pdf, len(issues), len(warnings), code)
+    _emit(_payload("verify-pdf", _severity_of(code), code,
+                   issues=[i.as_dict() for i in issues],
+                   warnings=[w.as_dict() for w in warnings]), human, True)
     return code
 
 
@@ -137,7 +157,8 @@ def cmd_build(args) -> int:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
-                "build": cmd_build, "preamble": cmd_preamble}
+                "build": cmd_build, "preamble": cmd_preamble,
+                "verify-pdf": cmd_verify_pdf}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

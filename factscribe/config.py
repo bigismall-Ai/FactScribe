@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .facts import Fact, fact_value_keys
+from .facts import Fact, canon_text, fact_value_keys
 
 # --------------------------------------------------------------------------
 # TOML 读写（3.11+ 用 tomllib；3.10 用内置极简解析器兜底）
@@ -169,6 +169,7 @@ class Config:
     build: str = ""
     manifest: str = "results/MANIFEST.toml"
     source_root: str = ""        # source 的解析根；空＝只许项目内 results/
+    numeric_macro_allow: list = field(default_factory=list)  # 人签登记的数值宏名
 
 def load_config(root: Path) -> Config:
     path = root / "factscribe.toml"
@@ -186,6 +187,14 @@ def load_config(root: Path) -> Config:
     authors = proj.get("authors") or []
     if isinstance(authors, str):
         authors = [authors]
+    allow = proj.get("numeric_macro_allow") or []
+    if isinstance(allow, (str, dict)):
+        allow = [allow]
+    macro_allow: list[str] = []
+    for item in allow:
+        name = item.get("name") if isinstance(item, dict) else item
+        if str(name or "").strip():
+            macro_allow.append(str(name).strip().lstrip("\\"))
     return Config(
         root=root,
         title=str(proj.get("title") or ""),
@@ -196,7 +205,27 @@ def load_config(root: Path) -> Config:
         build=str(proj.get("build") or ""),
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
         source_root=str(proj.get("source_root") or ""),
+        numeric_macro_allow=macro_allow,
     )
+
+
+def _normalise_display(raw) -> list[dict]:
+    """display 项：字符串简写或 `{text, round_to?, setting?}` 表。"""
+    if raw is None:
+        return []
+    if isinstance(raw, (str, dict)):
+        raw = [raw]
+    out: list[dict] = []
+    for item in raw:
+        if isinstance(item, str):
+            out.append({"text": item, "round_to": None, "setting": None})
+        elif isinstance(item, dict):
+            out.append({
+                "text": str(item.get("text") or ""),
+                "round_to": item.get("round_to"),
+                "setting": item.get("setting"),
+            })
+    return out
 
 
 def _locate_id_line(path: Path, fid: str) -> int:
@@ -240,12 +269,21 @@ def load_facts(cfg: Config) -> list[Fact]:
                 metric=str(raw.get("metric") or ""),
                 scope=str(raw.get("scope") or ""),
                 note=str(raw.get("note") or ""),
+                display=_normalise_display(raw.get("display")),
+                co_claim=[str(x) for x in (raw.get("co_claim") or [])],
                 file=rel,
                 line=_locate_id_line(path, fid),
             )
             if not f.id:
                 raise ConfigError("%s 里有一条 fact 缺 id（不准匿名入账）" % path)
             f.value_keys = fact_value_keys(f.value)
+            # display 只允许追加与 value **严格等价**的写法（R-04）；这里先把
+            # 它们的字面规范键并入值域，等价性另由 DISPLAY_INCONSISTENT 检查。
+            for item in f.display:
+                f.value_keys |= fact_value_keys(item["text"])
+                canon = canon_text(item["text"])
+                if canon is not None:
+                    f.value_keys.add(canon)
             facts.append(f)
     return facts
 
@@ -266,7 +304,113 @@ def _glob_paths(root: Path, pattern: str) -> dict[str, Path]:
 
 
 _INPUT_RE = re.compile(r"\\(?:input|include|subfile|import)\s*\{([^}]*)\}")
+_DEF_RE = re.compile(
+    r"\\(?:newcommand|renewcommand|providecommand)\*?\s*\{\s*\\([A-Za-z@]+)\s*\}"
+    r"\s*(?:\[(\d)\])?\s*(?:\[[^\]]*\])?\s*\{")
+_INPUT_WRAPPER_RE = re.compile(r"^\s*\\input\s*\{([^{}]*#(\d)[^{}]*)\}\s*$")
 _SKIP_DIRS = {".git", ".venv", "__pycache__", "audit", "node_modules", ".pytest_cache"}
+
+
+def _balanced_braces(text: str, start: int) -> int:
+    """text[start] == '{'；返回配对 '}' 之后的位置。"""
+    depth = 0
+    i = start
+    while i < len(text):
+        c = text[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return len(text)
+
+
+def _input_wrappers(text: str) -> dict[str, tuple[str, str]]:
+    """识别 `\\newcommand{\\X}[1]{\\input{#1}}` 这类「审计隧道」包装宏。
+
+    V2.2 R-05 / 内部 B1：闭包必须展开纯 `\\input` 包装宏，否则表格整体
+    绕开审计。返回 {宏名: (参数号, 目标模板)}，模板里保留 `#1` 占位。
+    """
+    out: dict[str, tuple[str, str]] = {}
+    for m in _DEF_RE.finditer(text):
+        name = m.group(1)
+        body_start = m.end() - 1
+        body_end = _balanced_braces(text, body_start)
+        body = text[body_start + 1:body_end - 1].strip()
+        w = _INPUT_WRAPPER_RE.match(body)
+        if w:
+            out[name] = (w.group(2), w.group(1))
+    return out
+
+
+def _wrapper_calls(text: str, wrappers: dict[str, tuple[str, str]]):
+    for name, (argn, template) in wrappers.items():
+        pat = re.compile(r"\\%s\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}" % re.escape(name))
+        for m in pat.finditer(text):
+            yield template.replace("#" + argn, m.group(1).strip())
+
+
+def load_sections(cfg: Config) -> list[tuple[str, str]]:
+    """sections = glob 递归命中 + `\\input/\\include/\\subfile` 闭包（红队 B4）
+    + 纯 `\\input` 包装宏展开（V2.2 R-05 / 内部 B1）。
+
+    文件边界不是句子边界（R-02）；这里只负责把「会被编译进 PDF 的文本文件」
+    收齐，拼流与切句交给 texscan。
+    """
+    found = _glob_paths(cfg.root, cfg.sections_glob)
+    seen: dict[str, Path] = dict(found)
+    queue: list[Path] = list(found.values())
+
+    def add_ref(ref: str, base_dir: Path) -> bool:
+        ref = ref.strip()
+        if not ref or "\\" in ref or "#" in ref:
+            return False
+        for candidate in (base_dir / ref, base_dir / (ref + ".tex")):
+            if not candidate.is_file():
+                continue
+            try:
+                rel = candidate.resolve().relative_to(cfg.root.resolve()).as_posix()
+            except ValueError:
+                return False
+            if rel in seen:
+                continue
+            seen[rel] = candidate
+            queue.append(candidate)
+            return True
+        return False
+
+    while True:
+        # 普通 \input 闭包
+        while queue:
+            p = queue.pop(0)
+            text = _read_text(p, cfg.root)
+            for m in _INPUT_RE.finditer(text):
+                add_ref(m.group(1), p.parent)
+                add_ref(m.group(1), cfg.root)
+        # 包装宏：定义可能出现在后加载的文件里，故反复扫到稳定为止
+        wrappers: dict[str, tuple[str, str]] = {}
+        for p in list(seen.values()):
+            wrappers.update(_input_wrappers(_read_text(p, cfg.root)))
+        if not wrappers:
+            break
+        grew = False
+        for p in list(seen.values()):
+            text = _read_text(p, cfg.root)
+            for ref in _wrapper_calls(text, wrappers):
+                if add_ref(ref, p.parent) or add_ref(ref, cfg.root):
+                    grew = True
+        if not grew:
+            break
+
+    out = []
+    for rel in sorted(seen):
+        out.append((rel, _read_text(seen[rel], cfg.root)))
+    return out
 
 
 def _read_text(path: Path, root: Path) -> str:
@@ -276,35 +420,6 @@ def _read_text(path: Path, root: Path) -> str:
         raise ConfigError("%s 不是合法 UTF-8：%s" % (path, exc))
     except OSError as exc:
         raise ConfigError("读不了 %s：%s" % (path, exc))
-
-
-def load_sections(cfg: Config) -> list[tuple[str, str]]:
-    """sections = glob 递归命中 + \\input/\\include/\\subfile 闭包（红队 B4）。"""
-    found = _glob_paths(cfg.root, cfg.sections_glob)
-    seen: dict[str, Path] = dict(found)
-    queue: list[Path] = list(found.values())
-    while queue:
-        p = queue.pop(0)
-        text = _read_text(p, cfg.root)
-        for m in _INPUT_RE.finditer(text):
-            ref = m.group(1).strip()
-            if not ref or "\\" in ref or "#" in ref:
-                continue
-            for base_dir in (cfg.root, p.parent):
-                for cand in (base_dir / ref, base_dir / (ref + ".tex")):
-                    if not cand.is_file():
-                        continue
-                    try:
-                        rel = cand.resolve().relative_to(cfg.root.resolve()).as_posix()
-                    except ValueError:
-                        continue
-                    if rel not in seen:
-                        seen[rel] = cand
-                        queue.append(cand)
-    out = []
-    for rel in sorted(seen):
-        out.append((rel, _read_text(seen[rel], cfg.root)))
-    return out
 
 
 def all_tex_files(cfg: Config) -> list[str]:

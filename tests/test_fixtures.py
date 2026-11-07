@@ -103,7 +103,7 @@ class FixtureSchemaTest(unittest.TestCase):
 
 
 class HostileFixtureTest(unittest.TestCase):
-    """12 条 hostile：当前实现全部达不到 SPEC 期望，故逐条 expectedFailure。"""
+    """12 条 hostile：批 47 / C 阶段后逐条必须红（expectedFailure=0）。"""
 
     def _assert_hostile(self, name: str) -> None:
         case = FIXTURES / "hostile" / name
@@ -124,62 +124,50 @@ class HostileFixtureTest(unittest.TestCase):
             self.assertIn(code, actual["codes"],
                           "缺少期望 code %s（实际 %s）" % (code, actual["codes"]))
 
-    @unittest.expectedFailure
     def test_R1_B2_value_range_whitelist(self):
         """SPEC-V2.2 R-03/R-04（内部 B2）：`10/16` 的值域不得授权 `1/16` → BOUND_MISMATCH。"""
         self._assert_hostile("R1-B2")
 
-    @unittest.expectedFailure
     def test_R1_B3_line_level_binding(self):
         """SPEC-V2.2 R-03/R-02（内部 B3）：行级绑定整段 → 两 fact 对调应 BINDING_ATTRIBUTION。"""
         self._assert_hostile("R1-B3")
 
-    @unittest.expectedFailure
     def test_R1_B1_tableinput_tunnel(self):
         """SPEC-V2.2 R-05/R-06（内部 B1）：`\\tableinput` 包装宏必须展开 → TABLE_UNBOUND（exit 5）。"""
         self._assert_hostile("R1-B1")
 
-    @unittest.expectedFailure
     def test_R1_B4_pkignore_fake_conclusion(self):
         """SPEC-V2.2 R-07（内部 B4）：`\\pkignore` 参数含数字必须红 → PKIGNORE_QUANT。"""
         self._assert_hostile("R1-B4")
 
-    @unittest.expectedFailure
     def test_R2_macro_body_escape(self):
         """SPEC-V2.2 R-01A：宏体不得携带数字 → NUMERIC_IN_MACRO（渲染可归责）。"""
         self._assert_hostile("R2-MACRO")
 
-    @unittest.expectedFailure
     def test_R2_token_concatenation(self):
         """SPEC-V2.2 R-01A：`9`+`1.4` 拼成 91.4 不是 token → NUM_AFTER_GROUP。"""
         self._assert_hostile("R2-CONCAT")
 
-    @unittest.expectedFailure
     def test_R2_numexpr_derived(self):
         """SPEC-V2.2 R-01A：`\\numexpr` 派生数不可归责 → ARITH_IN_BODY。"""
         self._assert_hostile("R2-NUMEXPR")
 
-    @unittest.expectedFailure
     def test_R2_sentence_multi_fact(self):
         """SPEC-V2.2 R-02（2-S1）：一句多 fact 按出现顺序归属，对调必红 → BINDING_ATTRIBUTION。"""
         self._assert_hostile("R2-MULTIFACT")
 
-    @unittest.expectedFailure
     def test_R2_display_round_to(self):
         """SPEC-V2.2 R-04（2-B2）：display 的 `round_to` 不得把 0.91 放宽成 0.9 → DISPLAY_INCONSISTENT。"""
         self._assert_hostile("R2-ROUNDTO")
 
-    @unittest.expectedFailure
     def test_R3_pdf_raster(self):
         """SPEC-V3.0 P-02/P-03：纯图片页必须红 → PDF_PAGE_NO_TEXT + PDF_PAGE_RASTERIZED（exit 5）。"""
         self._assert_hostile("R3-PDF-RASTER")
 
-    @unittest.expectedFailure
     def test_R3_pdf_one_way_inclusion(self):
         """SPEC-V3.0 P-04/P-05：ledger ⊆ PDF 的单向包含会放行缺数 → PDF_LEDGER_TOKEN_MISSING（exit 5）。"""
         self._assert_hostile("R3-PDF-ONEWAY")
 
-    @unittest.expectedFailure
     def test_R3_stamp_self_signed(self):
         """SPEC-V3.0 P-08/S-01：公钥在项目内即不可信 → STAMP_KEY_UNTRUSTED（exit 5）。"""
         self._assert_hostile("R3-STAMP-SELFSIGN")

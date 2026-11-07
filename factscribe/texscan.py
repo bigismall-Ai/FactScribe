@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .facts import THIN, _NUM_RE, number_key
+from .facts import THIN, _NUM_RE, canon_text, number_key
 
 # --------------------------------------------------------------------------
 # LaTeX 扫描：注释、命令名、结构参数、\fact{} 绑定
@@ -35,6 +35,9 @@ _SKIP_ARGS = {
 }
 
 _CMD_RE = re.compile(r"\\([A-Za-z]+[0-9]*)(\*?)")
+_MACRO_DEF_CMDS = {"newcommand", "renewcommand", "providecommand",
+                   "DeclareRobustCommand", "NewDocumentCommand",
+                   "DeclareDocumentCommand", "def"}
 _WIKI_FACT_RE = re.compile(r"\[\[\s*fact\s*:\s*([^\]]+?)\s*\]\]")
 
 # 引用命令：任何名字里带 cite 的命令都算「引用家族」（红队 B2 的 fail-closed）。
@@ -102,14 +105,16 @@ def _line_of(s: str, pos: int) -> int:
 _ANNOTATION_CMDS = ("todoq", "todo", "pkignore", "pknote", "fixme", "note", "tbd")
 
 
-def _mask_envs_and_verb(tex: str) -> tuple[list, list[tuple[str, int]]]:
+def _mask_envs_and_verb(tex: str) -> tuple[list, list[tuple[str, int]], list[tuple[str, int, str]]]:
     """第一刀：verbatim/verb/pkignore 整块与写作批注宏抹掉（在剥注释之前）。
 
-    返回 (chars, annotations)，annotations 是 [(宏名, 行号)]，供审计报告单列
-    「已跳过 N 处批注」——跳过不等于放行，必须让人看见跳了多少。
+    返回 (chars, annotations, annotation_args)，annotations 是 [(宏名, 行号)]，
+    annotation_args 额外带参数原文（供 R-07 的 PKIGNORE_QUANT 检查），供审计
+    报告单列「已跳过 N 处批注」——跳过不等于放行，必须让人看见跳了多少。
     """
     chars = list(tex)
     annotations: list[tuple[str, int]] = []
+    annotation_args: list[tuple[str, int, str]] = []
     for m in _SKIP_ENV_RE.finditer(tex):
         _blank(chars, m.start(), m.end())
     # \verb|...|（同一行内，分隔符为任意非字母非空白字符）；在环境掩码之后做，
@@ -141,14 +146,17 @@ def _mask_envs_and_verb(tex: str) -> tuple[list, list[tuple[str, int]]]:
             else:
                 break
         k = _skip_ws(s, j)
+        arg_text = ""
         if k < len(s) and s[k] == "{":
             end = _balanced(s, k, "{", "}")
+            arg_text = s[k + 1:end - 1]
         else:
             end = s.find("\n", m.end())
             end = len(s) if end < 0 else end
         annotations.append((m.group(1), _line_of(s, m.start())))
+        annotation_args.append((m.group(1), _line_of(s, m.start()), arg_text))
         _blank(chars, m.start(), end)
-    return chars, annotations
+    return chars, annotations, annotation_args
 
 
 def _mask_scripts(chars: list) -> None:
@@ -168,18 +176,21 @@ def _mask_scripts(chars: list) -> None:
 @dataclass
 class ScanResult:
     masked: str                     # 抹掉注释/命令/参数后的正文
-    bindings: dict[int, list[str]]  # 行号 -> [fact id]
+    bindings: dict[int, list[str]]  # 行号 -> [fact id]（兼容旧口径；审计按 BU 归属）
     markers: list[tuple[str, int]]  # (fact id, 行号)
     cites: list[tuple[str, int, int]]  # (key, 行号, 列)
     unknown_cites: list[tuple[str, int, int]] = field(default_factory=list)
     bib_files: list[str] = field(default_factory=list)
     figures: list[tuple[str, int]] = field(default_factory=list)
     annotations: list[tuple[str, int]] = field(default_factory=list)  # (宏名, 行号)
+    annotation_args: list[tuple[str, int, str]] = field(default_factory=list)
+    marker_groups: list[dict] = field(default_factory=list)  # [{ids, end, line}]
+    adjacency: str = ""             # 命令名未抹除的结构层（邻接判据用）
 
 
 def scan_tex(tex: str) -> ScanResult:
     # ---- pass 1a：verbatim/verb/批注宏整块跳过 ----
-    masked, annotations = _mask_envs_and_verb(tex)
+    masked, annotations, annotation_args = _mask_envs_and_verb(tex)
 
     # ---- pass 1b：{,} 当千分位哨兵（数学里 1{,}024） ----
     s0 = "".join(masked)
@@ -266,11 +277,28 @@ def scan_tex(tex: str) -> ScanResult:
     # ---- pass 3：上下标 ----
     _mask_scripts(masked)
     s = "".join(masked)
+    adjacency_text = s          # 命令名尚未抹除：邻接判据（R-01A C）用
 
     # ---- pass 4：命令名与结构参数 ----
     out = list(s)
     bindings: dict[int, list[str]] = {}
     markers: list[tuple[str, int]] = []
+    marker_groups: list[dict] = []
+
+    def add_markers(ids: list[str], start: int, end: int) -> None:
+        line = _line_of(s, start)
+        for fid in ids:
+            bindings.setdefault(line, []).append(fid)
+            markers.append((fid, line))
+        if marker_groups:
+            prev = marker_groups[-1]
+            gap = s[prev["end"]:start]
+            if re.fullmatch(r"[\s,.;:，。；：、]*", gap):
+                prev["ids"].extend(ids)
+                prev["end"] = end
+                return
+        marker_groups.append({"ids": list(ids), "end": end, "line": line})
+
     pos = 0
     while True:
         m = _CMD_RE.search(s, pos)
@@ -290,13 +318,39 @@ def scan_tex(tex: str) -> ScanResult:
             if k < len(s) and s[k] == "{":
                 end = _balanced(s, k, "{", "}")
                 ids = [x.strip() for x in s[k + 1:end - 1].split(",") if x.strip()]
-                line = _line_of(s, k)
-                for fid in ids:
-                    bindings.setdefault(line, []).append(fid)
-                    markers.append((fid, line))
+                add_markers(ids, m.start(), end)
                 _blank(out, m.start(), end)
                 pos = end
                 continue
+        # 宏定义：名字组 + [参数个数] + [默认值] + 宏体整段吞掉。
+        # 参数个数 [1] 是结构，不是正文数字；不吞掉会让 \tableinput 的
+        # `[1]` 变成一条假数字（内部 B1 的噪声来源）。
+        if name in _MACRO_DEF_CMDS:
+            if name == "def":
+                k = s.find("{", j)
+                j2 = _balanced(s, k, "{", "}") if k >= 0 else j
+                _blank(out, m.start(), j2)
+                pos = max(j2, m.end())
+                continue
+            j2 = j
+            k = _skip_ws(s, j2)
+            if k < len(s) and s[k] == "{":
+                j2 = _balanced(s, k, "{", "}")
+            elif k < len(s) and s[k] == "\\":
+                m2 = _CMD_RE.match(s, k)
+                if m2:
+                    j2 = m2.end()
+            while True:
+                k = _skip_ws(s, j2)
+                if k < len(s) and s[k] == "[":
+                    j2 = _balanced(s, k, "[", "]")
+                elif k < len(s) and s[k] == "{":
+                    j2 = _balanced(s, k, "{", "}")
+                else:
+                    break
+            _blank(out, m.start(), j2)
+            pos = max(j2, m.end())
+            continue
         # 引用家族（含未知 *cite*）：命令名 + 可选参数 + key 参数整段吞掉
         if "cite" in name.lower():
             k = _skip_ws(s, j)
@@ -327,21 +381,20 @@ def scan_tex(tex: str) -> ScanResult:
     chars = list(masked2)
     for m in _WIKI_FACT_RE.finditer(masked2):
         ids = [x.strip() for x in m.group(1).split(",") if x.strip()]
-        line = _line_of(masked2, m.start())
-        for fid in ids:
-            bindings.setdefault(line, []).append(fid)
-            markers.append((fid, line))
+        add_markers(ids, m.start(), m.end())
         _blank(chars, m.start(), m.end())
     masked2 = "".join(chars)
 
     return ScanResult(masked=masked2, bindings=bindings, markers=markers,
                       cites=cites, unknown_cites=unknown_cites,
                       bib_files=bib_files, figures=figures,
-                      annotations=annotations)
+                      annotations=annotations, annotation_args=annotation_args,
+                      marker_groups=marker_groups, adjacency=adjacency_text)
 
 def _extract_numbers(masked: str, original: str) -> list[dict]:
     orig_lines = original.split("\n")
     out = []
+    offset = 0
     for ln, line in enumerate(masked.split("\n"), 1):
         toks: list[dict] = []
         for m in _NUM_RE.finditer(line):
@@ -354,6 +407,8 @@ def _extract_numbers(masked: str, original: str) -> list[dict]:
                 "line": ln,
                 "col": m.start(1) + 1,
                 "end": m.end(),
+                "start_abs": offset + m.start(1),
+                "end_abs": offset + m.end(),
                 "text": orig_lines[ln - 1].strip() if ln - 1 < len(orig_lines) else "",
             }
             # 千分位合并：1<THIN>000<THIN>000 -> 1000000（只合并 3 位整数段）
@@ -366,6 +421,7 @@ def _extract_numbers(masked: str, original: str) -> list[dict]:
                         and re.fullmatch(r"\d{3}", raw)):
                     prev["raw"] += raw
                     prev["end"] = m.end()
+                    prev["end_abs"] = offset + m.end()
                     prev["key"] = number_key(prev["raw"])
                     continue
             toks.append(item)
@@ -376,5 +432,117 @@ def _extract_numbers(masked: str, original: str) -> list[dict]:
                 "line": it["line"],
                 "col": it["col"],
                 "text": it["text"],
+                "start_abs": it["start_abs"],
+                "end_abs": it["end_abs"],
+                "raw": it["raw"],
+                "suffix": it["suffix"],
+                "pct": it["pct"],
             })
+        offset += len(line) + 1
     return out
+
+
+def _merge_number_units(nums: list[dict], masked: str) -> list[dict]:
+    """把 `10/16` 的两个抽取片段合并成一个 QUANT 单元（R-01 FRAC）。
+
+    抽取层为了兼容旧读数保留「分子、分母各一个 token」；归属判定必须按
+    一个分数整体算（否则 `5/16` 会变成两个可被并集吞下的数）。
+    """
+    units: list[dict] = []
+    i = 0
+    while i < len(nums):
+        tok = nums[i]
+        if i + 1 < len(nums):
+            nxt = nums[i + 1]
+            gap = masked[tok["end_abs"]:nxt["start_abs"]]
+            if (re.fullmatch(r"\s*/\s*", gap or "")
+                    and re.fullmatch(r"\d+", tok["raw"])
+                    and re.fullmatch(r"\d+", nxt["raw"])):
+                raw = tok["raw"] + "/" + nxt["raw"]
+                units.append({
+                    "token": raw,
+                    "keys": [tok["key"], nxt["key"]],
+                    "canon": canon_text(raw),
+                    "line": tok["line"],
+                    "col": tok["col"],
+                    "text": tok["text"],
+                    "start_abs": tok["start_abs"],
+                    "end_abs": nxt["end_abs"],
+                    "tokens": [tok, nxt],
+                })
+                i += 2
+                continue
+        units.append({
+            "token": tok["token"],
+            "keys": [tok["key"]],
+            "canon": tok["key"],
+            "line": tok["line"],
+            "col": tok["col"],
+            "text": tok["text"],
+            "start_abs": tok["start_abs"],
+            "end_abs": tok["end_abs"],
+            "tokens": [tok],
+        })
+        i += 1
+    return units
+
+
+_ABBREV = {"et al", "fig", "eq", "sec", "vs", "e.g", "i.e", "approx",
+           "no", "ref", "dr", "mr", "mrs", "ms", "prof"}
+
+
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """R-02 的切句：BU 是句子，不是物理行。
+
+    只在句末标点＋守卫成立时切；中文句末符总是切。行尾单独一个 ``\\\\``
+    也切。空行切。这样「标记只闭合自己那一句」——同一行另一句里的数字
+    不会再被行级绑定顺带背书（内部 B3）。
+    """
+    spans: list[tuple[int, int]] = []
+    start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        boundary = False
+        skip = 1
+        if c == "\\" and i + 1 < n and text[i + 1] == "\\":
+            boundary = True
+            skip = 2
+        elif c in "。！？；":
+            boundary = True
+        elif c in ".!?;":
+            prev = text[i - 1] if i > 0 else ""
+            nxt = text[i + 1] if i + 1 < n else ""
+            if prev.isdigit() and nxt.isdigit():
+                boundary = False
+            elif nxt and not nxt.isspace():
+                boundary = False
+            elif prev.isupper() and (i < 2 or text[i - 2].isspace()
+                                     or text[i - 2] in "([\"'"):
+                boundary = False
+            else:
+                w = re.search(r"([A-Za-z.]+)$", text[start:i])
+                word = w.group(1).lower().rstrip(".") if w else ""
+                boundary = word not in _ABBREV
+        elif c == "\n":
+            if re.match(r"[^\S\n]*\n", text[i + 1:]):
+                boundary = True
+        if boundary:
+            spans.append((start, i + skip))
+            start = i + skip
+            i += skip
+            continue
+        i += 1
+    if start < n:
+        spans.append((start, n))
+    if not spans:
+        spans = [(0, 0)]
+    return spans
+
+
+def sentence_index(spans: list[tuple[int, int]], pos: int) -> int:
+    for idx, (s, e) in enumerate(spans):
+        if s <= pos < e:
+            return idx
+    return len(spans) - 1

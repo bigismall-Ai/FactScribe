@@ -39,7 +39,7 @@ python3 paperkit.py audit examples/minimal --json
 <project>/
   paperkit.toml            # 项目声明（必需）
   facts/*.toml             # 事实账，只追加，一条一个 id
-  results/                 # 原始实验产物（只读；facts.source 指过来）
+  results/                 # 项目内产物区（只读）；也可用 source_root 指到项目外
   results/MANIFEST.toml    # 人签清单：路径 -> sha256 + signed_by
   sections/*.tex           # 正文（递归匹配 + \input 闭包）
   refs.bib                 # 参考文献，只放已核实条目
@@ -54,6 +54,7 @@ sections = "sections/*.tex"      # 默认递归（同时匹配 sections/**/*.tex
 facts = "facts/*.toml"
 bib = "refs.bib"
 manifest = "results/MANIFEST.toml"
+source_root = "/abs/workspace"   # 可选：source 相对它解析（不配＝只许项目内 results/）
 build = "tectonic -X compile main.tex"   # 留空＝跳过编译
 ```
 
@@ -62,7 +63,7 @@ build = "tectonic -X compile main.tex"   # 留空＝跳过编译
 id = "A2"
 claim = "两臂合计准确率"
 value = "56.25%"
-source = "results/swb16.md"           # 必须在 results/ 下
+source = "results/swb16.md"           # 相对 source_root（未配＝项目内 results/ 下）
 source_sha256 = "0147ea0c…"           # 现算比对；缺/不符判红
 locator = "§三 平均行"
 confidence = "high"                   # high | med | low

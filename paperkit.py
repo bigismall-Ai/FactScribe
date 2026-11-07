@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SCHEMA_VERSION = "1.0"
 
 CONFIDENCE_OK = {"high", "med", "low"}
@@ -195,16 +195,25 @@ def load_toml(path: Path) -> dict:
 # 数字归一化
 # --------------------------------------------------------------------------
 
-# 匹配一个“数字 + 可选量级后缀 + 可选百分号”。
-# - 前面不能紧跟字母/下划线/点：避开 ctex2017、v2.0 这类；
+# 匹配一个“数字 + 可选量级/单位后缀 + 可选百分号”。
+# - 前面不能紧跟字母/下划线/点：避开 ctex2017、v2.0、R2、H2O 这类；
 # - 量级后缀必须紧贴数字（k/K/M/B），避免把 "47.3 ms" 读成 47.3 毫
+# - 单位后缀（批 36 D2）：131s / 2220s / 53000token / 5GB 都是「数字＋量纲」，
+#   数字照抽，单位只作噪声（不参与数值换算）。长单位排在短单位前，避免
+#   "ms" 被 "m"、"tokens" 被 "tok" 抢先；量级 [kKMB] 排在单位之后，
+#   所以 "5MB" 是单位、"5M" 仍是量级。
 # - 百分号允许中间有空格（\% 掩码后就是 " %"），也接受 percent/pct 英文词
 # - 科学计数法整体成 token（3e-4 / 1.2E+05），不拆成 3 和 4
 # *** 匹配是 token 锚定的：不做子串匹配（红队 B1）***
+_UNIT_RE = (
+    r"(?:tokens|token|toks|tok|mins|min|ms|secs|sec|hrs|hr|"
+    r"GiB|MiB|KiB|TiB|GB|MB|KB|TB|"
+    r"x|×|s|h)"
+)
 _NUM_RE = re.compile(
     r"(?<![\w.])"
     r"(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)"
-    r"([kKMB])?"
+    r"(" + _UNIT_RE + r"|[kKMB])?"
     r"(\s*(?:%|percent\b|pct\b))?"
     r"(?![\w])"
 )
@@ -238,7 +247,10 @@ def number_key(token: str, suffix: str | None = None, percent: bool = False) -> 
     except InvalidOperation:
         return token
     if suffix:
-        d = d * _MAGNITUDE[suffix.lower()]
+        # 只有量级后缀换算数值；s / token / GB 这类单位只表示量纲，不换算。
+        mag = _MAGNITUDE.get(suffix.lower())
+        if mag is not None:
+            d = d * mag
     if percent:
         d = d / Decimal(100)
     return _num_key(d)
@@ -376,9 +388,19 @@ def _line_of(s: str, pos: int) -> int:
     return s.count("\n", 0, pos) + 1
 
 
-def _mask_envs_and_verb(tex: str) -> list:
-    """第一刀：verbatim/verb/pkignore 整块抹掉（在剥注释之前，红队 B3）。"""
+# 写作批注宏（批 36 D1）：内容是作者给作者的问题，不是正文命题。
+# 抽数字前整块剥离（连同参数），不参与审计，只计数上报。
+_ANNOTATION_CMDS = ("todoq", "todo", "pkignore", "pknote", "fixme", "note", "tbd")
+
+
+def _mask_envs_and_verb(tex: str) -> tuple[list, list[tuple[str, int]]]:
+    """第一刀：verbatim/verb/pkignore 整块与写作批注宏抹掉（在剥注释之前）。
+
+    返回 (chars, annotations)，annotations 是 [(宏名, 行号)]，供审计报告单列
+    「已跳过 N 处批注」——跳过不等于放行，必须让人看见跳了多少。
+    """
     chars = list(tex)
+    annotations: list[tuple[str, int]] = []
     for m in _SKIP_ENV_RE.finditer(tex):
         _blank(chars, m.start(), m.end())
     # \verb|...|（同一行内，分隔符为任意非字母非空白字符）；在环境掩码之后做，
@@ -393,17 +415,31 @@ def _mask_envs_and_verb(tex: str) -> list:
         else:
             end += 1
         _blank(chars, m.start(), end)
-    # \pkignore{...} 行内豁免（C2/C3 的显式出口，替代按模式猜年份）
+    # \pkignore{...} / \todoq{...} / \todo[...]{...}：整条批注连同参数抹成空白。
+    # 行号用抹除前的文本算（结构未被改动前的位置）。
     s = "".join(chars)
-    for m in re.finditer(r"\\pkignore\b", s):
-        j = _skip_ws(s, m.end())
-        if j < len(s) and s[j] == "{":
-            end = _balanced(s, j, "{", "}")
+    ann_re = re.compile(r"\\(%s)\b" % "|".join(_ANNOTATION_CMDS))
+    for m in ann_re.finditer(s):
+        # 注释里的批注不算（先剥注释做不到——verbatim 里的 % 不是注释）
+        line_start = s.rfind("\n", 0, m.start()) + 1
+        if re.search(r"(?<!\\)%", s[line_start:m.start()]):
+            continue
+        j = m.end()
+        while True:
+            k = _skip_ws(s, j)
+            if k < len(s) and s[k] == "[":
+                j = _balanced(s, k, "[", "]")
+            else:
+                break
+        k = _skip_ws(s, j)
+        if k < len(s) and s[k] == "{":
+            end = _balanced(s, k, "{", "}")
         else:
             end = s.find("\n", m.end())
             end = len(s) if end < 0 else end
+        annotations.append((m.group(1), _line_of(s, m.start())))
         _blank(chars, m.start(), end)
-    return chars
+    return chars, annotations
 
 
 def _mask_scripts(chars: list) -> None:
@@ -429,11 +465,12 @@ class ScanResult:
     unknown_cites: list[tuple[str, int, int]] = field(default_factory=list)
     bib_files: list[str] = field(default_factory=list)
     figures: list[tuple[str, int]] = field(default_factory=list)
+    annotations: list[tuple[str, int]] = field(default_factory=list)  # (宏名, 行号)
 
 
 def scan_tex(tex: str) -> ScanResult:
-    # ---- pass 1a：verbatim/verb/pkignore 整块跳过 ----
-    masked = _mask_envs_and_verb(tex)
+    # ---- pass 1a：verbatim/verb/批注宏整块跳过 ----
+    masked, annotations = _mask_envs_and_verb(tex)
 
     # ---- pass 1b：{,} 当千分位哨兵（数学里 1{,}024） ----
     s0 = "".join(masked)
@@ -590,7 +627,8 @@ def scan_tex(tex: str) -> ScanResult:
 
     return ScanResult(masked=masked2, bindings=bindings, markers=markers,
                       cites=cites, unknown_cites=unknown_cites,
-                      bib_files=bib_files, figures=figures)
+                      bib_files=bib_files, figures=figures,
+                      annotations=annotations)
 
 
 # --------------------------------------------------------------------------
@@ -607,6 +645,7 @@ class Config:
     bib: str = "refs.bib"
     build: str = ""
     manifest: str = "results/MANIFEST.toml"
+    source_root: str = ""        # source 的解析根；空＝只许项目内 results/
 
 
 @dataclass
@@ -661,6 +700,7 @@ def load_config(root: Path) -> Config:
         bib=str(proj.get("bib") or "refs.bib"),
         build=str(proj.get("build") or ""),
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
+        source_root=str(proj.get("source_root") or ""),
     )
 
 
@@ -983,13 +1023,31 @@ def sha256_file(path: Path) -> str:
 
 
 def _source_rel_ok(src: str) -> str:
-    """source 必须是项目内相对路径；返回错误码或空串。"""
+    """source 必须是相对路径；返回错误码或空串。"""
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", src):
         return "BAD_SOURCE_PATH"
     p = Path(src)
     if p.is_absolute() or ".." in p.parts:
         return "BAD_SOURCE_PATH"
     return ""
+
+
+def source_base(cfg: Config) -> Path:
+    """source 的解析根（批 36 D3）。
+
+    - 配了 project.source_root：source 相对它解析（论文项目指到工作区根，
+      原始产物留在 experiments/ 原地，不必为过闸复制）；
+    - 没配：兼容 v1，source 只许在项目内 results/ 下。
+    """
+    raw = (cfg.source_root or "").strip()
+    if not raw:
+        return cfg.root
+    p = Path(raw).expanduser()
+    return p if p.is_absolute() else (cfg.root / p)
+
+
+def source_path(cfg: Config, src: str) -> Path:
+    return source_base(cfg) / src
 
 
 def _source_text_keys(text: str) -> set[str]:
@@ -1004,6 +1062,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
     yellow: list[Issue] = []
     root = cfg.root
     results_dir = (root / "results")
+    base = source_base(cfg)
     texts: dict[str, str] = {}
     actual: dict[str, str] = {}
 
@@ -1016,18 +1075,30 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             continue
         bad = _source_rel_ok(src)
         if bad:
-            red.append(Issue(bad, "fact %r 的 source 必须是项目内相对路径，不许 URL/绝对路径：%s"
-                             % (f.id, src), location=loc, token=f.id))
+            red.append(Issue(bad, "fact %r 的 source 必须是相对路径（不许 URL/绝对路径/%s）：%s"
+                             % (f.id, ".. 越界" if ".." in Path(src).parts else "绝对路径", src),
+                             location=loc, token=f.id))
             continue
-        full = root / src
+        full = base / src
         try:
-            full.resolve().relative_to(results_dir.resolve())
+            full.resolve().relative_to(base.resolve())
         except ValueError:
             red.append(Issue(
-                "SOURCE_OUTSIDE_RESULTS",
-                "fact %r 的 source 不在 results/ 下（%s）——原始产物必须由人签清单锁死"
-                % (f.id, src), location=loc, token=f.id))
+                "SOURCE_OUTSIDE_SOURCE_ROOT",
+                "fact %r 的 source 越出 source_root（%s）：%s" % (f.id, base, src),
+                location=loc, token=f.id))
             continue
+        if not cfg.source_root.strip():
+            # 未配 source_root：沿用 v1 口径，source 必须在项目 results/ 下
+            try:
+                full.resolve().relative_to(results_dir.resolve())
+            except ValueError:
+                red.append(Issue(
+                    "SOURCE_OUTSIDE_RESULTS",
+                    "fact %r 的 source 不在 results/ 下（%s）——原始产物必须由人签清单锁死"
+                    "；跨目录请配 project.source_root" % (f.id, src),
+                    location=loc, token=f.id))
+                continue
         if not full.is_file():
             red.append(Issue("MISSING_SOURCE", "fact %r 的 source 不存在或不是普通文件：%s"
                              % (f.id, src), location=loc, token=f.id))
@@ -1382,7 +1453,7 @@ def run_check(cfg: Config, facts: list[Fact]):
     summary = {
         "facts": len(facts),
         "ids": len(known),
-        "sources_ok": sum(1 for f in facts if f.source and (cfg.root / f.source).is_file()),
+        "sources_ok": sum(1 for f in facts if f.source and source_path(cfg, f.source).is_file()),
         "sha_pinned": sum(1 for f in facts if f.source_sha256),
         "conflicts": len(conflicts),
         "red": len(issues),
@@ -1555,6 +1626,8 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     bound = 0          # 内联绑定且对得上
     unbound_yellow = 0
     unmatched = 0
+    annotations_total = 0
+    annotation_sites: list[str] = []
     usage: dict[str, list[str]] = {f.id: [] for f in facts}
     marker_count: dict[str, int] = {f.id: 0 for f in facts}
     used_keys: dict[str, int] = {}
@@ -1565,6 +1638,9 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         scan = scanned[rel]
         nums = _extract_numbers(scan.masked, text)
         numbers_total += len(nums)
+        annotations_total += len(scan.annotations)
+        annotation_sites += ["%s:%s \\%s" % (rel, line, name)
+                             for name, line in scan.annotations]
 
         for fid, _line in scan.markers:
             f = fact_by_id.get(fid.strip().casefold())
@@ -1730,6 +1806,8 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         "numbers_bound": bound,
         "numbers_unbound": unbound_yellow,
         "numbers_unmatched": unmatched,
+        "annotations_skipped": annotations_total,
+        "annotation_sites": annotation_sites,
         "cites_total": sum(used_keys.values()),
         "cites_unique": len(used_keys),
         "bib_entries": len(bib_entries),
@@ -1907,6 +1985,8 @@ def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
         "numbers : %d 个（bound %d / unbound %d / unmatched %d）" % (
             summary["numbers_total"], summary["numbers_bound"],
             summary.get("numbers_unbound", 0), summary["numbers_unmatched"]),
+        "notes   : 已跳过 %d 处批注（\\todoq/\\todo/\\pkignore 等，内容不参与审计）"
+        % summary.get("annotations_skipped", 0),
         "cites   : %d 次调用、%d 个 key；bib %d 条（命中 %d）" % (
             summary["cites_total"], summary["cites_unique"],
             summary["bib_entries"], summary["bib_used"]),

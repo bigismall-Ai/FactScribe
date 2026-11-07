@@ -832,5 +832,100 @@ class TestRedTeamCounterexamples(unittest.TestCase):
         self.assertEqual({i["token"] for i in data["issues"]}, {"3.7%", "12"})
 
 
+class TestBatch36Friction(unittest.TestCase):
+    """批 36 的三处落地摩擦：批注宏、数字贴单位、source_root。"""
+
+    # ---- D1：批注宏不是正文 ----
+    def test_d1_annotation_numbers_are_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp, sections={"a.tex": "\\todoq{编造 47.3 与 15 与 4.3}\n"
+                                        "\\todo[inline,color=red!20]{p~0.03}\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+            self.assertEqual(data["summary"]["red"], 0)
+            self.assertEqual(data["summary"]["annotations_skipped"], 2)
+            self.assertEqual(data["summary"]["numbers_total"], 0)
+
+    def test_d1_real_number_next_to_annotation_still_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp, sections={"a.tex": "\\todoq{编造 47.3}\n真的 47.3 在这里\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertEqual([i["code"] for i in data["issues"]], ["UNMATCHED_NUMBER"])
+            self.assertEqual(data["issues"][0]["token"], "47.3")
+            self.assertEqual(data["summary"]["annotations_skipped"], 1)
+
+    # ---- D2：数字贴单位 ----
+    def test_d2_number_with_unit_suffix_is_extracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp,
+                facts="""[[fact]]
+id = "T1"
+claim = "耗时"
+value = "131 秒"
+source = "results/raw.md"
+locator = "§一"
+confidence = "high"
+""",
+                results_text="run took 131s, 53000 tokens, 5GB\n",
+                sections={"a.tex": "耗时 131s\\fact{T1}\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+            self.assertEqual(data["summary"]["numbers_bound"], 1)
+
+    def test_d2_letter_leading_digits_are_not_numbers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp, sections={"a.tex": "R2 H2O v2 都不是数字，但 47s 是\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertEqual([i["token"] for i in data["issues"]], ["47s"])
+
+    # ---- D3：source_root ----
+    def _external(self, tmp, source_root=None, symlink=False):
+        tmp = Path(tmp)
+        root = tmp / "paper"
+        make_project(root, sections={"a.tex": "10/16\\fact{A1}\n"}, manifest=False)
+        (root / "results" / "raw.md").unlink()
+        src = tmp / "data" / "raw.md"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text(RESULT_TEXT, encoding="utf-8")
+        digest = _sha(src)
+        (root / "facts" / "f.toml").write_text(
+            '[[fact]]\nid = "A1"\nclaim = "x"\nvalue = "10/16"\n'
+            'source = "data/raw.md"\nsource_sha256 = "%s"\n'
+            'locator = "§"\nconfidence = "high"\n' % digest, encoding="utf-8")
+        base = Path(source_root) if source_root else tmp
+        if symlink:
+            (base / "data").mkdir(parents=True, exist_ok=True)
+            link = base / "data" / "raw.md"
+            if not link.exists():
+                link.symlink_to(src)
+        (root / "paperkit.toml").write_text(
+            '[project]\ntitle = "t"\nsections = "sections/*.tex"\nfacts = "facts/*.toml"\n'
+            'bib = "refs.bib"\nbuild = ""\nsource_root = "%s"\n' % base,
+            encoding="utf-8")
+        _write_manifest(root, {"data/raw.md": digest})
+        return root
+
+    def test_d3_source_under_source_root_is_ok(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._external(tmp)
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+            self.assertEqual(data["summary"]["red"], 0)
+
+    def test_d3_source_escaping_source_root_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._external(tmp, source_root=Path(tmp) / "scope", symlink=True)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("SOURCE_OUTSIDE_SOURCE_ROOT",
+                          [i["code"] for i in data["issues"]])
+
+
 if __name__ == "__main__":
     unittest.main()

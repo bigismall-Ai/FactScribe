@@ -15,19 +15,19 @@
 ## 跑起来
 
 ```bash
-python3 paperkit.py check    <项目目录>            # 账本身：id/sha256/清单/expr/冲突
-python3 paperkit.py audit    <项目目录>            # 核心：绑定 + 数字 + 引用 + 覆盖
-python3 paperkit.py audit    <项目目录> --resolve  # 再联网核验 arXiv/DOI（可选）
-python3 paperkit.py matrix   <项目目录>            # 生成 audit/matrix.md
-python3 paperkit.py preamble <项目目录>            # 生成 \fact / \pkignore 宏
-python3 paperkit.py build    <项目目录>            # 跑 project.build
+python3 -m factscribe check    <项目目录>            # 账本身：id/sha256/清单/expr/冲突
+python3 -m factscribe audit    <项目目录>            # 核心：绑定 + 数字 + 引用 + 覆盖
+python3 -m factscribe audit    <项目目录> --resolve  # 再联网核验 arXiv/DOI（可选）
+python3 -m factscribe matrix   <项目目录>            # 生成 audit/matrix.md
+python3 -m factscribe preamble <项目目录>            # 生成 \fact / \pkignore 宏
+python3 -m factscribe build    <项目目录>            # 跑 project.build
 ```
 
 全部支持 `--json`（给 agent 用；stdout 只出 JSON）；`check/audit` 还有 `--strict`
 （黄也当红，CI 用）：
 
 ```bash
-python3 paperkit.py audit examples/minimal --json
+python3 -m factscribe audit examples/minimal --json
 ```
 
 退出码：`0`＝绿（无红无黄）；`1`＝红（违例）；`2`＝配置/用法错；`3`＝黄
@@ -104,7 +104,7 @@ version = 1
   `3.5M`＝`3500000`、`3e-4` 整体成 token、`1\,000\,000`＝`1000000`；
   `value = "10/16"` 接受 `10`、`16`、`0.625`。
 - **显式豁免**：`\pkignore{...}` 或 `\begin{pkignore}…\end{pkignore}`（内容照排，
-  不进审计）。宏由 `paperkit preamble` 生成。
+  不进审计）。宏由 `factscribe preamble` 生成。
 - 未匹配一律报 `文件:行:列 | 数字 | 所在整行`。
 
 ## 引用怎么算「落到稳定标识」
@@ -148,10 +148,11 @@ python3 -m unittest discover -s tests -v     # 93 例，全离线，约 5 秒
 ## 安装（可选）
 
 ```bash
-python3 -m pip install -e .    # 之后可用 paperkit check <项目目录>
+python3 -m pip install -e .    # 之后可用 factscribe check <项目目录>
 ```
 
-不装也行：`paperkit.py` 是单文件纯标准库，拷进任何项目即可用。
+不装也行：把 `factscribe/` 包目录拷进项目（或把仓根加入 `PYTHONPATH`），
+再跑 `python3 -m factscribe <子命令> ...`。
 
 ## 参与
 

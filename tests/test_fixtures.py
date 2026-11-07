@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-FACTSCRIBE = REPO / "factscribe.py"
+FACTSCRIBE = [sys.executable, "-m", "factscribe"]
 FIXTURES = REPO / "fixtures"
 
 
@@ -26,7 +26,7 @@ def _load_expect(case: Path) -> dict:
 
 def _run_audit(case: Path) -> tuple[dict | None, subprocess.CompletedProcess]:
     proc = subprocess.run(
-        [sys.executable, str(FACTSCRIBE), "audit", str(case), "--json"],
+        FACTSCRIBE + ["audit", str(case), "--json"],
         cwd=REPO, capture_output=True, text=True)
     try:
         data = json.loads(proc.stdout)
@@ -49,7 +49,7 @@ def _run_gate(case: Path, command: str) -> tuple[dict | None, subprocess.Complet
     if not keys.is_file():
         keys = FIXTURES / "trust/approver_keys.json"
     proc = subprocess.run(
-        [sys.executable, str(FACTSCRIBE), "verify-pdf", str(case / "main.pdf"),
+        FACTSCRIBE + ["verify-pdf", str(case / "main.pdf"),
          "--report", str(case / "audit/report.json"),
          "--stamp", str(case / "audit/stamp.json"),
          "--keys", str(keys)],

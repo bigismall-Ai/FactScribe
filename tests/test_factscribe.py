@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 import factscribe as paperkit  # noqa: E402
 
-CLI = ROOT / "factscribe.py"
+CLI_ROOTS = str(ROOT)
 
 BIB_OK = """@inproceedings{chen2023,
   title = {A Paper},
@@ -121,8 +121,9 @@ def make_project(tmp, facts=FACTS, sections=None, bib=BIB_OK, build="",
 
 
 def run(args, cwd=None):
-    return subprocess.run([sys.executable, str(CLI)] + args,
-                          capture_output=True, text=True, cwd=cwd)
+    return subprocess.run([sys.executable, "-m", "factscribe"] + args,
+                          capture_output=True, text=True,
+                          cwd=cwd or CLI_ROOTS)
 
 
 def run_json(args):

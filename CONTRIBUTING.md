@@ -15,14 +15,14 @@ does not know something.
 
 | Rule | Why |
 |---|---|
-| **Standard library only.** No new dependencies, ever (dev-time too). | Users copy `paperkit.py` into a paper repo and run it. `pip install` must never be required. |
+| **Standard library only.** No new dependencies, ever (dev-time too). | Users can copy the `factscribe/` package into a paper repo and run it. `pip install` must never be required. |
 | **Tests are offline.** No network, no `--resolve` in tests (mock the degrade branch instead). | CI runs with no network; a flaky test is worse than no test. |
 | **The exit-code contract is frozen.** `0` green / `1` red / `2` config / `3` yellow / `4` internal. | People wire paperkit into CI. Changing a code silently breaks their pipelines. |
 | **Fail closed.** Unknown `*cite*` command, unreadable source, missing manifest => report, never skip. | A silent skip is a false green. |
 | **No silent passes.** Missing `paperkit.toml`, empty facts/sections, missing bib => exit `2` with a reason. | |
 
-Python `>= 3.10`. Keep the file a single `paperkit.py`; it is imported by the
-tests and packaged as a `py-module` (see `pyproject.toml`).
+Python `>= 3.10`. Keep `factscribe/` a stdlib-only package; it is imported by
+the tests and packaged via `packages = ["factscribe"]` (see `pyproject.toml`).
 
 ---
 
@@ -37,13 +37,13 @@ No install step. If you want the console entry point:
 
 ```bash
 python3 -m pip install -e .    # or: uv pip install -e .
-paperkit --version
+factscribe --version
 ```
 
 Acceptance sample — deliberately red, and it must stay that way:
 
 ```bash
-python3 paperkit.py audit examples/minimal
+python3 -m factscribe audit examples/minimal
 # => exit 1, exactly 2 red (UNMATCHED_NUMBER 47.3, MISSING_CITE ghost2024)
 #    and 7 yellow (unbound numbers, unscanned main.tex, low binding rate)
 ```
@@ -51,8 +51,8 @@ python3 paperkit.py audit examples/minimal
 Useful while developing:
 
 ```bash
-python3 paperkit.py audit examples/minimal --json | python3 -m json.tool
-python3 paperkit.py check examples/minimal --strict
+python3 -m factscribe audit examples/minimal --json | python3 -m json.tool
+python3 -m factscribe check examples/minimal --strict
 ```
 
 ---
@@ -61,15 +61,16 @@ python3 paperkit.py check examples/minimal --strict
 
 | Path | Contents |
 |---|---|
-| `paperkit.py` | Everything: TOML subset parser, tex lexer, bib parser, checks, CLI. |
-| `tests/test_paperkit.py` | Unit + end-to-end tests; `make_project()` builds a throwaway project, `run()` shells out to the CLI. |
+| `factscribe/` | Package: constants, facts/expr, config/TOML, tex scanner, citations, audit/check, rendering, CLI. |
+| `tests/test_factscribe.py` | Unit + end-to-end tests; `make_project()` builds a throwaway project, `run()` shells out to the CLI. |
+| `tests/test_fixtures.py` | Hostile/benign fixture regression line (SPEC expectations). |
 | `tests/fixtures/redteam-b1`, `redteam-b4` | Counterexamples that must stay red. |
 | `examples/minimal/` | The 5-minute acceptance sample (see its README). |
 | `SPEC.md`, `docs/design/SPEC-V1.md` | Contract and defence boundary. `docs/design/SPEC-V1.md` wins on conflict. |
 | `docs/implementation/IMPLEMENTATION*.md` | Where each gate lives, measured readings, known holes. |
 | `CHANGELOG.md` | One entry per user-visible change. |
 
-Key entry points in `paperkit.py`:
+Key entry points in `factscribe/`:
 
 - `scan_tex()` — the single lexical pipeline (mask verbatim/annotations →
   comments → command args → scripts → numbers). Add lexing fixes here.
@@ -94,7 +95,7 @@ Key entry points in `paperkit.py`:
    matters, and the *one-line fix*. Match the tone of existing findings.
 4. **Fail closed**: if you cannot decide, report yellow — never fall through to
    silently OK.
-5. **Test both directions** in `tests/test_paperkit.py`:
+5. **Test both directions** in `tests/test_factscribe.py`:
    - a project that must trigger the new code (assert code, severity, exit code,
      and that the `--json` payload contains it);
    - a project just beside it that must **not** trigger it (no false positive).

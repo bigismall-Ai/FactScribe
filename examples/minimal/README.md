@@ -4,8 +4,8 @@ A fake-but-consistent mini paper. It is **supposed to fail**, and it fails for
 exactly the two reasons we document. Run it from the repository root:
 
 ```bash
-python3 paperkit.py check examples/minimal    # exit 0  — the ledger is intact
-python3 paperkit.py audit examples/minimal    # exit 1  — 2 red, 7 yellow
+python3 -m factscribe check examples/minimal    # exit 0  — the ledger is intact
+python3 -m factscribe audit examples/minimal    # exit 1  — 2 red, 7 yellow
 ```
 
 Expected audit reading (v1.1.0):
@@ -54,7 +54,7 @@ Fix the sample in place, then re-run `audit`:
 ```bash
 cp -R examples/minimal my-paper
 cd my-paper
-python3 ../paperkit.py check .
+python3 -m factscribe check .
 ```
 
 Then replace `facts/`, `results/` and `sections/` with your own, and write a

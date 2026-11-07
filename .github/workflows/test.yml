@@ -25,7 +25,7 @@ jobs:
 
       # factscribe is stdlib-only: no install, no network, no services.
       - name: Version
-        run: python factscribe.py --version
+        run: python -m factscribe --version
 
       - name: Unit tests (offline)
         run: python -m unittest discover -s tests -v
@@ -35,7 +35,7 @@ jobs:
       - name: Acceptance sample fails as documented
         run: |
           set +e
-          python factscribe.py audit examples/minimal
+          python -m factscribe audit examples/minimal
           code=$?
           set -e
           if [ "$code" -ne 1 ]; then

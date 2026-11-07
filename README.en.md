@@ -19,15 +19,15 @@ manifest**; every `\cite`-family command must land on a stable identifier
 ## Run it
 
 ```bash
-python3 paperkit.py check    <project-dir>            # the ledger: id/sha256/manifest/expr/conflicts
-python3 paperkit.py audit    <project-dir>            # the core: binding + numbers + citations + coverage
-python3 paperkit.py audit    <project-dir> --resolve  # also verify arXiv/DOI online (optional)
-python3 paperkit.py matrix   <project-dir>            # write audit/matrix.md
-python3 paperkit.py preamble <project-dir>            # write the \fact / \pkignore macros
-python3 paperkit.py build    <project-dir>            # run project.build
+python3 -m factscribe check    <project-dir>            # the ledger: id/sha256/manifest/expr/conflicts
+python3 -m factscribe audit    <project-dir>            # the core: binding + numbers + citations + coverage
+python3 -m factscribe audit    <project-dir> --resolve  # also verify arXiv/DOI online (optional)
+python3 -m factscribe matrix   <project-dir>            # write audit/matrix.md
+python3 -m factscribe preamble <project-dir>            # write the \fact / \pkignore macros
+python3 -m factscribe build    <project-dir>            # run project.build
 ```
 
-Install it as a command if you prefer (`paperkit check ...`):
+Install it as a command if you prefer (`factscribe check ...`):
 
 ```bash
 python3 -m pip install -e .    # or: uv pip install -e .
@@ -37,7 +37,7 @@ Every subcommand supports `--json` (for agents; stdout is JSON only);
 `check`/`audit` also support `--strict` (yellow becomes fatal, for CI):
 
 ```bash
-python3 paperkit.py audit examples/minimal --json
+python3 -m factscribe audit examples/minimal --json
 ```
 
 Exit codes: `0` green (no red, no yellow); `1` red (violations); `2`
@@ -119,7 +119,7 @@ version = 1
   `value = "10/16"` accepts `10`, `16`, `0.625`.
 - **Explicit exemption**: `\pkignore{...}` or `\begin{pkignore}…\end{pkignore}`
   (typeset as usual, excluded from the audit). Macros come from
-  `paperkit preamble`.
+  `factscribe preamble`.
 - Every unmatched number is reported as `file:line:col | number | whole line`.
 
 ## How a citation "lands on a stable identifier"

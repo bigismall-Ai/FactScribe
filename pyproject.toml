@@ -25,13 +25,12 @@ classifiers = [
 ]
 
 [project.scripts]
-factscribe = "factscribe:main"
+factscribe = "factscribe.cli:main"
 
-# One 87 KB stdlib-only module on purpose: keep it a single file so users can
-# copy `paperkit.py` into any project and run it with no install step. Packaging
-# therefore uses `py-modules`, not a package directory (nothing to split).
+# Package layout: `factscribe/` is a normal package of stdlib-only modules.
+# See docs/implementation/SPLIT-B.md for the module boundary map.
 [tool.setuptools]
-py-modules = ["paperkit"]
+packages = ["factscribe"]
 
 [tool.setuptools.dynamic]
-version = { attr = "paperkit.VERSION" }
+version = { attr = "factscribe.constants.VERSION" }

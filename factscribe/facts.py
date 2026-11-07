@@ -167,6 +167,14 @@ class Fact:
     file: str = ""
     line: int = 0
     value_keys: set = field(default_factory=set)
+    # ---- V3 断言与审批模型（SPEC §2.2 / S-03）----
+    role: str = ""
+    headline: bool = False
+    quantitative: bool = False
+    run_id: str = ""
+    pointer: str = ""
+    assertions: list = field(default_factory=list)  # [{claim_id,value_canon,...}]
+    approvals: list = field(default_factory=list)   # 预留：报告里的签名账
 
     @property
     def id_key(self) -> str:

@@ -96,10 +96,13 @@ def cmd_audit(args) -> int:
     sections = load_sections(cfg)
     red, yellow, hints, summary, unresolved = run_audit(
         cfg, facts, sections, resolve=getattr(args, "resolve", False))
-    code = _aggregate_exit(red, yellow, getattr(args, "strict", False))
+    code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
+                           integrity_first=cfg.is_v3)
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
     _emit(_payload("audit", _severity_of(code), code,
                    summary=summary,
+                   findings=findings,
                    issues=[i.as_dict() for i in red],
                    warnings=[i.as_dict() for i in yellow],
                    hints=[h.as_dict() for h in hints],

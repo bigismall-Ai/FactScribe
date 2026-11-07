@@ -9,7 +9,20 @@ and will not change without a major version bump.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- V3.0 evidence model in `factscribe/v3.py`: `runs/` as the source root,
+  `root_tex`-rooted closure, BU sentence fingerprints, assertion/approval
+  verification, external key roots (`STAMP_KEY_UNTRUSTED`), and structured
+  `numeric_macro_allow` shape/double-sign/expiry checks.
+- V3 `audit` now runs the PDF gate (P-02..P-05) against the project `output`
+  and emits P-04/P-05 multiset findings (W1/W2/W3/W4 accounted explicitly).
+- JSON payload gains `findings` (issues + warnings) for machine scoring.
+- Project schema aliases: `paperkit-project/3.x` and `factscribe/3.x`; mixed
+  flat/`[project]` declarations; `facts` directory form; `number_locale = "dot"`.
+- Two-argument `\fact{ID}{value}` is audited as rendered text; single-argument
+  forward markers (`\fact{ID}10/16`) bind the following token.
+- `tests/test_v3_evidence.py` (22 positive/negative criterion tests) and
+  `docs/implementation/BLIND-PASS.md` (blind-pass record).
 
 ## [1.1.0] — 2026-11-07
 

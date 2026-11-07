@@ -202,11 +202,56 @@ _ID_MASK = re.compile(
 
 
 def pdf_number_counts(text: str) -> Counter:
+    """PDF 页文本 → 数字 key 多重集。
+
+    `62.5%` 同时产生百分比归一键（0.625）与字面键（62.5）：源层账本按同一
+    规则展开，两侧才可比（P-04 的多重集相等不是单向包含）。
+    """
     masked = _ID_MASK.sub(lambda m: " " * len(m.group(0)), text)
     counts: Counter = Counter()
     for m in _NUM_RE.finditer(masked):
-        counts[number_key(m.group(1), m.group(2) or None, bool(m.group(3)))] += 1
+        raw, suffix, pct = m.group(1), m.group(2) or None, bool(m.group(3))
+        counts[number_key(raw, suffix, pct)] += 1
+        if pct:
+            counts[number_key(raw, suffix, False)] += 1
     return counts
+
+
+# W3/W4：引用编号与结构号是「上下文可判」的数字，按上下文模式先掩掉。
+# 这是白名单的机械实现（SPEC P-05 W3/W4），不是放宽相等判定：
+# 掩掉的数量进白名单计数表，报告里单列。
+_CITE_LABEL_RE = re.compile(r"\[\s*\d+(?:\s*[,\-–]\s*\d+)*\s*\]")
+_STRUCT_PREFIX_RE = re.compile(
+    r"(?m)^\s*(?:Figure|Fig\.?|Table|Tab\.?|Section|Sec\.?|Equation|Eq\.?|"
+    r"Appendix|Algorithm)\s*(\d+)\b")
+_STRUCT_LINE_RE = re.compile(r"(?m)^\s*(\d+)[.)]\s")
+
+
+def mask_pdf_context(text: str, page_no: int) -> tuple[str, Counter]:
+    """掩掉引用标签/结构号/页码，返回 (掩后文本, 被掩掉的 key 计数)。"""
+    masked_out: Counter = Counter()
+
+    def _take(match: re.Match) -> str:
+        for m in _NUM_RE.finditer(match.group(0)):
+            masked_out[number_key(m.group(1), m.group(2) or None,
+                                  bool(m.group(3)))] += 1
+        return " " * len(match.group(0))
+
+    out = _CITE_LABEL_RE.sub(_take, text)
+    out = _STRUCT_PREFIX_RE.sub(_take, out)
+    out = _STRUCT_LINE_RE.sub(_take, out)
+
+    # W1：页脚/页眉的页码（整行只有当前页号）
+    lines = out.split("\n")
+    for i in range(len(lines) - 1, -1, -1):
+        line = lines[i].strip()
+        if not line:
+            continue
+        if line.isdigit() and int(line) == page_no:
+            masked_out[number_key(line)] += 1
+            lines[i] = " " * len(lines[i])
+        break
+    return "\n".join(lines), masked_out
 
 
 def ledger_counts(report: dict) -> Counter:
@@ -214,6 +259,19 @@ def ledger_counts(report: dict) -> Counter:
     for entry in report.get("number_ledger") or []:
         for key in entry.get("keys") or []:
             counts[str(key)] += 1
+    return counts
+
+
+def pdf_key_counts(pdf: Path) -> Counter:
+    """整份 PDF 的数字 key 多重集（与 verify_document 用同一套上下文掩码）。"""
+    counts: Counter = Counter()
+    try:
+        texts = page_texts(pdf)
+    except Exception:  # noqa: BLE001 - 工具缺失/解析失败由 verify_document 报
+        return counts
+    for idx, page in enumerate(texts, 1):
+        masked, _context = mask_pdf_context(page, idx)
+        counts.update(pdf_number_counts(masked))
     return counts
 
 
@@ -381,47 +439,21 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
 
 
 # --------------------------------------------------------------------------
-# 主入口
+# 页面与数字（P-02..P-05）：audit 与 verify-pdf 共用
 # --------------------------------------------------------------------------
 
-def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
-               keys_path: Path | None) -> tuple[list[Issue], list[Issue], int]:
+def verify_document(pdf: Path, report: dict) -> tuple[list[Issue], list[Issue]]:
+    """P-02/P-03/P-04/P-05：只判磁盘上的 PDF 字节与报告里的账/白名单。"""
     issues: list[Issue] = []
     warnings: list[Issue] = []
 
-    missing = missing_tools()
-    if missing:
-        issues.append(Issue(
-            "PDF_TOOL_MISSING",
-            "缺 PDF 工具链：%s——不许静默放行；装上 poppler 后重跑"
-            % "、".join(missing), exit_code=EXIT_MISSING))
-        return issues, warnings, EXIT_MISSING
-
-    try:
-        report = _load_json(report_path)
-    except (OSError, json.JSONDecodeError) as exc:
-        issues.append(Issue("REPORT_SCHEMA_INVALID", "读不了 report：%s" % exc,
-                            location=str(report_path), exit_code=2))
-        return issues, warnings, 2
-
-    # 写死顺序：P-08 信任链先过；不过就不得用未验签的 report 继续判允许集。
-    if stamp_path is not None and Path(stamp_path).is_file():
-        if keys_path is None or not Path(keys_path).is_file():
-            issues.append(Issue("STAMP_KEY_UNTRUSTED", "有 stamp 但没提供公钥登记文件",
-                                exit_code=5))
-            return issues, warnings, 5
-        stamp_red = _stamp_issues(pdf, report, Path(stamp_path), Path(keys_path))
-        if stamp_red:
-            return stamp_red, warnings, _exit_of(stamp_red)
-
-    # P-02：每页必须有可抽取文本层
     try:
         texts = page_texts(pdf)
         total_pages = page_count(pdf) or len(texts)
     except Exception as exc:  # noqa: BLE001 - poppler 输出不可解析按工具错处理
         issues.append(Issue("PDF_TOOL_MISSING", "pdftotext/pdfinfo 解析失败：%s" % exc,
                             exit_code=EXIT_MISSING))
-        return issues, warnings, EXIT_MISSING
+        return issues, warnings
     while len(texts) < total_pages:
         texts.append("")
 
@@ -460,10 +492,12 @@ def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
                 % (page_no, cov * 100, chars),
                 location="page %d" % page_no, severity=SEV_YELLOW))
 
-    # P-04 / P-05：双向多重集
+    # P-04 / P-05：双向多重集（先按 W1/W3/W4 上下文掩码；数字与数字之间的
+    # 空白一律保留，防止 "9 1.4" 被拼成 91.4）。
     pdf_counts = Counter()
-    for page in texts[:total_pages]:
-        pdf_counts.update(pdf_number_counts(page))
+    for idx, page in enumerate(texts[:total_pages], 1):
+        masked, _context = mask_pdf_context(page, idx)
+        pdf_counts.update(pdf_number_counts(masked))
     want = ledger_counts(report)
     whitelist = _whitelist(report, issues)
     allowed = want + whitelist
@@ -488,6 +522,44 @@ def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
                 "白名单声明了 key=%s（%d 次）但 PDF 里没出现" % (key, count),
                 token=key, severity=SEV_YELLOW))
 
+    return issues, warnings
+
+
+# --------------------------------------------------------------------------
+# 主入口
+# --------------------------------------------------------------------------
+
+def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
+               keys_path: Path | None) -> tuple[list[Issue], list[Issue], int]:
+    issues: list[Issue] = []
+    warnings: list[Issue] = []
+
+    missing = missing_tools()
+    if missing:
+        issues.append(Issue(
+            "PDF_TOOL_MISSING",
+            "缺 PDF 工具链：%s——不许静默放行；装上 poppler 后重跑"
+            % "、".join(missing), exit_code=EXIT_MISSING))
+        return issues, warnings, EXIT_MISSING
+
+    try:
+        report = _load_json(report_path)
+    except (OSError, json.JSONDecodeError) as exc:
+        issues.append(Issue("REPORT_SCHEMA_INVALID", "读不了 report：%s" % exc,
+                            location=str(report_path), exit_code=2))
+        return issues, warnings, 2
+
+    # 写死顺序：P-08 信任链先过；不过就不得用未验签的 report 继续判允许集。
+    if stamp_path is not None and Path(stamp_path).is_file():
+        if keys_path is None or not Path(keys_path).is_file():
+            issues.append(Issue("STAMP_KEY_UNTRUSTED", "有 stamp 但没提供公钥登记文件",
+                                exit_code=5))
+            return issues, warnings, 5
+        stamp_red = _stamp_issues(pdf, report, Path(stamp_path), Path(keys_path))
+        if stamp_red:
+            return stamp_red, warnings, _exit_of(stamp_red)
+
+    issues, warnings = verify_document(pdf, report)
     return issues, warnings, _exit_of(issues)
 
 

@@ -57,7 +57,9 @@ _FIGURE_RE = re.compile(r"\\includegraphics\*?(?:\s*\[[^\]]*\])*\s*\{([^}]*)\}")
 _BIBRES_RE = re.compile(r"\\(?:bibliography|addbibresource)\s*\{([^}]*)\}")
 
 # 整体跳过的环境：verbatim 里的 % 不是注释（红队 B3）；pkignore 是显式豁免区。
-_SKIP_ENVS = r"(?:verbatim\*?|Verbatim|lstlisting|minted|comment\*?|pkignore)"
+# thebibliography：渲染的是文献表（W2/W3 白名单面），不是正文定量断言；
+# 文献里的年份/页码不能按「正文数字」判，PDF 层用白名单显式计数兜住（P-05）。
+_SKIP_ENVS = r"(?:verbatim\*?|Verbatim|lstlisting|minted|comment\*?|pkignore|thebibliography)"
 _SKIP_ENV_RE = re.compile(
     r"\\begin\{(%s)\}.*?\\end\{\1\}" % _SKIP_ENVS, re.S)
 _VERB_RE = re.compile(r"\\verb\*?([^A-Za-z\s])")
@@ -277,27 +279,30 @@ def scan_tex(tex: str) -> ScanResult:
     # ---- pass 3：上下标 ----
     _mask_scripts(masked)
     s = "".join(masked)
-    adjacency_text = s          # 命令名尚未抹除：邻接判据（R-01A C）用
 
     # ---- pass 4：命令名与结构参数 ----
     out = list(s)
+    adj = list(s)          # 邻接判据用；只把 \fact 标记抹掉，其它命令名保留
     bindings: dict[int, list[str]] = {}
     markers: list[tuple[str, int]] = []
     marker_groups: list[dict] = []
 
-    def add_markers(ids: list[str], start: int, end: int) -> None:
+    def add_markers(ids: list[str], start: int, end: int,
+                    next_only: bool = False) -> None:
         line = _line_of(s, start)
         for fid in ids:
             bindings.setdefault(line, []).append(fid)
             markers.append((fid, line))
-        if marker_groups:
+        if marker_groups and not next_only:
             prev = marker_groups[-1]
             gap = s[prev["end"]:start]
-            if re.fullmatch(r"[\s,.;:，。；：、]*", gap):
+            if (not prev.get("next_only")
+                    and re.fullmatch(r"[\s,.;:，。；：、]*", gap)):
                 prev["ids"].extend(ids)
                 prev["end"] = end
                 return
-        marker_groups.append({"ids": list(ids), "end": end, "line": line})
+        marker_groups.append({"ids": list(ids), "end": end, "line": line,
+                              "next_only": next_only})
 
     pos = 0
     while True:
@@ -318,9 +323,26 @@ def scan_tex(tex: str) -> ScanResult:
             if k < len(s) and s[k] == "{":
                 end = _balanced(s, k, "{", "}")
                 ids = [x.strip() for x in s[k + 1:end - 1].split(",") if x.strip()]
-                add_markers(ids, m.start(), end)
-                _blank(out, m.start(), end)
-                pos = end
+                # V3 的 \fact{ID}{value}：第二个参数是**要渲染的数字**，必须留在
+                # 扫描流里参与数字审计；只抹掉命令名与 ID 参数。
+                k2 = _skip_ws(s, end)
+                has_body = k2 < len(s) and s[k2] == "{"
+                if has_body:
+                    body_end = _balanced(s, k2, "{", "}")
+                    add_markers(ids, m.start(), body_end)
+                    _blank(out, m.start(), end)
+                    _blank(adj, m.start(), end)
+                    pos = body_end
+                else:
+                    # 单参数标记的两种惯例：`10/16\fact{A1}`（token 在前，v1）
+                    # 与 `\fact{A1}10/16`（token 紧随其后，V3）。看紧跟的
+                    # 非空白字符是不是数字来决定「向后绑定」。
+                    nxt = _skip_ws(s, end)
+                    next_only = nxt < len(s) and s[nxt].isdigit()
+                    add_markers(ids, m.start(), end, next_only=next_only)
+                    _blank(out, m.start(), end)
+                    _blank(adj, m.start(), end)
+                    pos = end
                 continue
         # 宏定义：名字组 + [参数个数] + [默认值] + 宏体整段吞掉。
         # 参数个数 [1] 是结构，不是正文数字；不吞掉会让 \tableinput 的
@@ -376,6 +398,7 @@ def scan_tex(tex: str) -> ScanResult:
         pos = m.end()
 
     masked2 = "".join(out)
+    adjacency_text = "".join(adj)
 
     # ---- pass 5：[[fact:A1]] 形式 ----
     chars = list(masked2)

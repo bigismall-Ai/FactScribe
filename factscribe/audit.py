@@ -20,8 +20,9 @@ from .facts import (Fact, ExprError, _cycles, _declared_number, eval_expr,
 from .texrules import (adjacency_hits, arith_hits, display_hits,
                        numeric_macro_hits, pkignore_quant_hits,
                        tabular_regions)
-from .texscan import (_extract_numbers, _merge_number_units, scan_tex,
-                      sentence_index, sentence_spans)
+from .texscan import (_balanced, _blank, _extract_numbers,
+                      _merge_number_units, scan_tex, sentence_index,
+                      sentence_spans)
 
 # --------------------------------------------------------------------------
 # 问题单
@@ -68,11 +69,47 @@ def _display_issues(facts: list[Fact]) -> list[Issue]:
     return out
 
 
+def _mask_fact_bodies(tex: str) -> str:
+    """V3：`\\fact{ID}{value}` 的 value 是**被绑定**的显示形。
+
+    `\\the\\value{counter}` 这类计数渲染出现在绑定体内时，数字由 fact 授权、
+    再由 PDF 闸门核对；不该在这里重复判 ARITH_IN_BODY。空白保留换行以
+    维持行号。
+    """
+    out = list(tex)
+    i = 0
+    n = len(tex)
+    while i < n:
+        if tex.startswith("\\fact", i):
+            j = i + 5
+            while j < n and tex[j] in " \t\r\n":
+                j += 1
+            if j < n and tex[j] == "{":
+                e1 = _balanced(tex, j, "{", "}")
+                k = e1
+                while k < n and tex[k] in " \t\r\n":
+                    k += 1
+                if k < n and tex[k] == "{":
+                    e2 = _balanced(tex, k, "{", "}")
+                    _blank(out, i, e2)
+                    i = e2
+                    continue
+        i += 1
+    return "".join(out)
+
+
 def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
     """R-01A / R-05 / R-07 的闭包级判据（对每个扫描到的文本文件跑）。"""
     out: list[Issue] = []
+    # V3：计数器**声明/赋值**（\newcounter/\setcounter…）是证据源定义，不是
+    # 渲染出的数字；真正把计数器渲染成数字的 \the/\value/\numexpr 仍判红，
+    # 绑定体内的渲染由 _mask_fact_bodies 交给 PDF 闸门核对。
+    counter_setup = {"newcounter", "setcounter", "addtocounter",
+                     "stepcounter", "refstepcounter"} if cfg.is_v3 else set()
     for rel, text in sections:
-        for name, line in arith_hits(text):
+        for name, line in arith_hits(_mask_fact_bodies(text) if cfg.is_v3 else text):
+            if name in counter_setup:
+                continue
             out.append(Issue(
                 "ARITH_IN_BODY",
                 "算术/计数器命令 \\%s 会产生账上没有的数字——数值不可寻址（R-01A-A）"
@@ -91,9 +128,12 @@ def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
     return out
 
 
-def _aggregate_exit(red: list[Issue], yellow: list[Issue], strict: bool = False) -> int:
+def _aggregate_exit(red: list[Issue], yellow: list[Issue], strict: bool = False,
+                    integrity_first: bool = False) -> int:
     if red:
         codes = {i.exit_code for i in red}
+        if integrity_first and 5 in codes:
+            return 5
         for code in (8, 1, 5, 7):
             if code in codes:
                 return code
@@ -101,6 +141,82 @@ def _aggregate_exit(red: list[Issue], yellow: list[Issue], strict: bool = False)
     if yellow:
         return 1 if strict else 3
     return 0
+
+
+def _v3_source_issues(cfg: Config, facts: list[Fact],
+                      sections: list[tuple[str, str]]) -> list[Issue]:
+    """V3 专属的源层判据：key 信任根、数值宏形状、断言/审批（S-01/S-03/S-08）。"""
+    from .v3 import (_load_json, approval_issues, approval_report_issues,
+                     assertion_issues, bu_index, key_trust_issues,
+                     numeric_macro_issues)
+
+    out: list[Issue] = []
+    out += key_trust_issues(cfg)
+    out += numeric_macro_issues(cfg)
+    out += assertion_issues(facts, bu_index(sections))
+    # display 也是审批对象的一部分（S-03 的 approve_target 含 display）：
+    # 追加一个与 value 不等价的显示形，就是断言漂移。
+    for f in facts:
+        loc = "%s:%s" % (f.file, f.line or "?")
+        for code, detail in display_hits(f):
+            if code == "DISPLAY_INCONSISTENT":
+                out.append(Issue(
+                    "ASSERTION_DRIFT",
+                    "fact %r 的批准显示形与 value 不等价：%s（S-03）" % (f.id, detail),
+                    location=loc, token=f.id))
+    rpath = cfg.root / "audit" / "report.json"
+    report = _load_json(rpath) if rpath.is_file() else None
+    out += approval_issues(cfg, facts, report)
+    out += approval_report_issues(cfg)
+    return out
+
+
+def _fact_form_keys(value: str) -> list[str]:
+    """把 value/display 这种字面写法展开成 PDF 侧会抽到的 key（去重）。"""
+    keys: list[str] = []
+    for raw, suffix, pct in literal_tokens(value):
+        keys.append(number_key(raw, suffix or None, pct))
+        if pct:
+            keys.append(number_key(raw, suffix or None, False))
+    return sorted(set(keys))
+
+
+def _v3_whitelist(bib_entries, used_keys: dict) -> list[dict]:
+    """P-05 W2：被引用文献的字段数字是白名单（每 entry 同一值最多 3 次）。
+
+    W1（页码）/W3（引用标签）/W4（结构号）由 pdfgate 的上下文掩码处理，
+    不在这里重复计数——避免同一数字被「掩掉 + 白名单」双重放行。
+    """
+    declared: dict[str, dict] = {}
+    for e in bib_entries:
+        if used_keys and e.key not in used_keys:
+            continue
+        for field in ("year", "volume", "number", "pages", "doi", "eprint"):
+            text = str(e.fields.get(field) or "")
+            for raw, suffix, pct in literal_tokens(text):
+                key = number_key(raw, suffix or None, pct)
+                entry = declared.setdefault(key, {"key": key, "count": 0,
+                                                  "source": "%s#%s.%s"
+                                                            % (e.file, e.key, field)})
+                if entry["count"] < 3:
+                    entry["count"] += 1
+    return list(declared.values())
+
+
+def _drift_issues(cfg: Config, fact_id: str, unit: dict, rel: str) -> list[Issue]:
+    """V3：正文断言的数字与账上的值不符 ＝ 断言漂移（S-03）。
+
+    v1 里同一件事叫 BOUND_MISMATCH；V3 的审批对象是「断言」，值与句子
+    一起被签，所以同一处同时记一条 ASSERTION_DRIFT，供盲测/审计分诊。
+    """
+    if not cfg.is_v3:
+        return []
+    return [Issue(
+        "ASSERTION_DRIFT",
+        "fact %r 在正文断言的数字 %s 不在被签的 value/display 里——"
+        "句子与账的断言漂移（S-03）" % (fact_id, unit["token"]),
+        location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
+        token=unit["token"], context=unit["text"])]
 
 
 def source_base(cfg: Config) -> Path:
@@ -132,7 +248,8 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
     red: list[Issue] = []
     yellow: list[Issue] = []
     root = cfg.root
-    results_dir = (root / "results")
+    # v1 的原始产物在 results/；V3 证据模型在 runs/（SPEC-V3.0 证据根）。
+    results_dir = (root / cfg.source_dir)
     base = source_base(cfg)
     texts: dict[str, str] = {}
     actual: dict[str, str] = {}
@@ -160,14 +277,16 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                 location=loc, token=f.id))
             continue
         if not cfg.source_root.strip():
-            # 未配 source_root：沿用 v1 口径，source 必须在项目 results/ 下
+            # 未配 source_root：沿用口径，source 必须在项目 results/（v1）
+            # 或 runs/（V3）下
             try:
                 full.resolve().relative_to(results_dir.resolve())
             except ValueError:
                 red.append(Issue(
-                    "SOURCE_OUTSIDE_RESULTS",
-                    "fact %r 的 source 不在 results/ 下（%s）——原始产物必须由人签清单锁死"
-                    "；跨目录请配 project.source_root" % (f.id, src),
+                    "SOURCE_OUTSIDE_RESULTS" if not cfg.is_v3 else "SOURCE_OUTSIDE_RUNS",
+                    "fact %r 的 source 不在 %s/ 下（%s）——原始产物必须由人签清单/"
+                    "审批目标锁死；跨目录请配 source_root"
+                    % (f.id, cfg.source_dir, src),
                     location=loc, token=f.id))
                 continue
         if not full.is_file():
@@ -183,10 +302,13 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             continue
         actual[src] = digest
         if not f.source_sha256:
-            red.append(Issue(
-                "MISSING_SOURCE_SHA256",
-                "fact %r 缺 source_sha256——没有内容锚定，账就无法证明「从签过那刻起没被改」"
-                % f.id, location=loc, token=f.id))
+            # V3 的内容锚在审批目标的 source_sha256 上（S-03）；v1 仍然要求
+            # fact 本件钉住 sha256。
+            if not cfg.is_v3:
+                red.append(Issue(
+                    "MISSING_SOURCE_SHA256",
+                    "fact %r 缺 source_sha256——没有内容锚定，账就无法证明「从签过那刻起没被改」"
+                    % f.id, location=loc, token=f.id))
         elif f.source_sha256 != digest:
             red.append(Issue(
                 "SOURCE_SHA256_MISMATCH",
@@ -198,7 +320,12 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             src_keys = _source_text_keys(texts[src])
             missing = []
             for raw, suffix, pct in literal_tokens(f.value):
-                if number_key(raw, suffix or None, pct) not in src_keys:
+                keys = [number_key(raw, suffix or None, pct)]
+                # V3 的 runs/ 摘要常把百分比存成整数（40 / 0.4 都是 40%），
+                # 源层回查接受这两种写法；值域判定仍用严格 canon。
+                if cfg.is_v3 and pct:
+                    keys.append(number_key(raw, suffix or None, False))
+                if not any(k in src_keys for k in keys):
                     missing.append(raw + suffix + ("%" if pct else ""))
             if missing:
                 yellow.append(Issue(
@@ -206,6 +333,11 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "fact %r 的 value 数字 %s 没有出现在 source 里（内容回查失败）"
                     % (f.id, "、".join(missing)), location=loc, token=f.id,
                     severity=SEV_YELLOW))
+
+    if cfg.is_v3:
+        # V3 没有 results/MANIFEST.toml：证据是项目外审批目标 + runs/ 产物，
+        # 由 v3.approval_issues / key_trust_issues 单独判。
+        return red, yellow
 
     # ---- 人签清单 ----
     mpath = cfg.root / cfg.manifest
@@ -538,9 +670,22 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     used_keys: dict[str, int] = {}
     unresolved: list[dict] = []
     seen_figures: set[str] = set()
+    ledger: list[dict] = []          # P-04 的账（V3 用来对 PDF 多重集）
+
+    def _ledger_add(rel: str, fid: str, unit: dict) -> None:
+        keys: list[str] = []
+        for tok in unit["tokens"]:
+            keys.append(tok["key"])
+            if tok["pct"]:
+                keys.append(number_key(tok["raw"], tok["suffix"] or None, False))
+        ledger.append({"fact_id": fid, "raw": unit["token"],
+                       "keys": sorted(set(keys)), "file": rel, "page": 1,
+                       "line": unit["line"], "col": unit["col"]})
 
     red += _display_issues(facts)
     red += _source_rule_issues(cfg, sections)
+    if cfg.is_v3:
+        red += _v3_source_issues(cfg, facts, sections)
 
     for rel, text in sections:
         scan = scanned[rel]
@@ -594,13 +739,35 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             unit["sentence"] = sentence_index(spans, unit["start_abs"])
             owner = None
             for gi, g in enumerate(groups):
-                if group_sentence[gi] == unit["sentence"] and g["end"] > unit["start_abs"]:
+                if group_sentence[gi] != unit["sentence"]:
+                    continue
+                if g.get("next_only"):
+                    continue          # 向后绑定，交给下面的 next_only 分配
+                if g["end"] > unit["start_abs"]:
                     owner = gi
                     break
             if owner is None:
                 ungrouped.append(unit)
             else:
                 covered[owner].append(unit)
+
+        # 单参数标记（`\fact{A1}10/16`）绑定**紧随其后**的数字：v1 的
+        # `10/16\fact{A1}` 由上面的「闭合句子」规则处理，这里补上 V3 的
+        # 前置标记写法。一个 token 只归一个组。
+        assigned = {id(u) for group in covered.values() for u in group}
+        for gi, g in enumerate(groups):
+            if not g.get("next_only") or covered[gi]:
+                continue
+            for unit in units:
+                if id(unit) in assigned:
+                    continue
+                if unit["sentence"] != group_sentence[gi]:
+                    continue
+                if unit["start_abs"] >= g["end"]:
+                    covered[gi].append(unit)
+                    assigned.add(id(unit))
+                    break
+        ungrouped = [u for u in units if id(u) not in assigned]
 
         for gi, g in enumerate(groups):
             utokens = covered[gi]
@@ -634,6 +801,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 for unit, f in zip(utokens, quant_facts):
                     if unit["canon"] in f.value_keys:
                         bound += len(unit["tokens"])
+                        _ledger_add(rel, f.id, unit)
                     else:
                         unmatched += len(unit["tokens"])
                         red.append(Issue(
@@ -643,11 +811,13 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             % (utokens.index(unit) + 1, unit["token"], f.id),
                             location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
                             token=unit["token"], context=unit["text"]))
+                        red += _drift_issues(cfg, f.id, unit, rel)
             else:
                 # ② 并集分支：token 数≠fact 数时整段取并集（R-03）
                 for unit in utokens:
                     if all(k in allowed for k in unit["keys"]):
                         bound += len(unit["tokens"])
+                        _ledger_add(rel, quant_facts[0].id, unit)
                     else:
                         unmatched += len(unit["tokens"])
                         red.append(Issue(
@@ -656,6 +826,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             % ("/".join(f.id for f in quant_facts), unit["token"]),
                             location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
                             token=unit["token"], context=unit["text"]))
+                        red += _drift_issues(cfg, quant_facts[0].id, unit, rel)
 
         # ---- 未被任何标记组闭合的尾段/远句 ----
         tables = tabular_regions(text)
@@ -672,6 +843,8 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
                     token=unit["token"], context=unit["text"], exit_code=5))
                 continue
+            if keys_known and unit["keys"]:
+                _ledger_add(rel, key_to_facts[unit["keys"][0]][0], unit)
             for tok in unit["tokens"]:
                 loc = "%s:%s:%s" % (rel, tok["line"], tok["col"])
                 if tok["key"] in key_to_facts:
@@ -701,11 +874,18 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 continue
             name, value = entry.stable_id
             if name is None:
-                red.append(Issue(
+                # V3 的证据模型不把「远端稳定标识」当发布闸：本地审计只要求
+                # 引用 key 在 bib 里有条目；缺 DOI/arXiv 记提示，供人工补。
+                issue = Issue(
                     "BIB_NO_STABLE_ID",
-                    "bib 条目 %r（@%s）没有 arxiv/doi%s（不可复核）"
+                    "bib 条目 %r（@%s）没有 arxiv/doi%s（不可远端复核）"
                     % (key, entry.kind, "/url" if entry.kind in _URL_OK_TYPES else ""),
-                    location="%s:%s" % (entry.file, entry.line), token=key))
+                    location="%s:%s" % (entry.file, entry.line), token=key,
+                    severity=SEV_INFO if cfg.is_v3 else SEV_RED)
+                if cfg.is_v3:
+                    hints.append(issue)
+                else:
+                    red.append(issue)
                 continue
             if not valid_stable_id(name, value):
                 red.append(Issue(
@@ -791,6 +971,47 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 "联网核验 %d/%d 条都没成功（限流/无网？）——引用存在性本轮等于没验"
                 % (bad, len(unresolved)), location="refs.bib", severity=SEV_YELLOW))
 
+    pdf_summary: dict = {"checked": False}
+    if cfg.is_v3:
+        # 账上每条定量 fact 都必须能在 PDF 里找到（未被正文绑定的 fact 也
+        # 要出现：账上的数被删/漏渲染同样是完整性缺口，P-04）。
+        bound_ids = {e["fact_id"] for e in ledger}
+        for f in facts:
+            if f.kind != "claim" or not f.value_keys or f.id in bound_ids:
+                continue
+            forms = [f.value] + [d.get("text", "") for d in f.display]
+            keys: list[str] = []
+            for form in forms:
+                keys.extend(_fact_form_keys(form))
+            keys = sorted(set(keys))
+            if keys:
+                ledger.append({"fact_id": f.id, "raw": f.value, "keys": keys,
+                               "file": f.file, "page": 1,
+                               "line": f.line or 1, "col": 1})
+
+        pdf_path = cfg.root / cfg.output
+        if pdf_path.is_file():
+            from .pdfgate import pdf_key_counts, verify_document
+            actual = pdf_key_counts(pdf_path)
+            declared = _v3_whitelist(bib_entries, used_keys)
+            whitelist = []
+            for item in declared:
+                present = actual.get(item["key"], 0)
+                if present <= 0:
+                    continue
+                whitelist.append({"key": item["key"],
+                                  "count": min(item["count"], present),
+                                  "source": item["source"],
+                                  "category": "W2-bib"})
+            pdf_red, pdf_yellow = verify_document(
+                pdf_path, {"number_ledger": ledger, "pdf_whitelist": whitelist})
+            red += pdf_red
+            yellow += pdf_yellow
+            pdf_summary = {"checked": True, "file": cfg.output,
+                           "ledger": len(ledger),
+                           "whitelist": len(whitelist),
+                           "red": len(pdf_red), "yellow": len(pdf_yellow)}
+
     summary = {
         "facts": len(facts),
         "sections": len(sections),
@@ -809,6 +1030,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         "red": len(red),
         "yellow": len(yellow),
         "hints": len(hints),
+        "pdf": pdf_summary,
         "confidence": {
             "high": sum(1 for f in facts if f.confidence == "high"),
             "med": sum(1 for f in facts if f.confidence == "med"),

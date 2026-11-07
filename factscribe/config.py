@@ -168,8 +168,10 @@ class Config:
     bib: str = "refs.bib"
     build: str = ""
     manifest: str = "results/MANIFEST.toml"
-    source_root: str = ""        # source 的解析根；空＝只许项目内 results/
+    source_root: str = ""        # source 的解析根；空＝只许项目内 results/（V3＝runs/）
     numeric_macro_allow: list = field(default_factory=list)  # 人签登记的数值宏名
+    numeric_macro_rules: list = field(default_factory=list)  # V3：结构化数值宏登记（S-08）
+    facts_dirs: bool = False     # V3：facts 配的是目录而不是 glob
 
     # ---- V3.0 扁平项目声明（schema = "paperkit-project/3.x"）----
     # v1 配置不写顶层 schema，以下字段保持默认值，行为与旧版完全一致。
@@ -187,13 +189,37 @@ class Config:
 
     @property
     def is_v3(self) -> bool:
-        return self.schema.startswith(V3_PROJECT_SCHEMA_PREFIX)
+        return is_v3_project_schema(self.schema)
+
+    @property
+    def source_dir(self) -> str:
+        """未配 source_root 时，source 必须落在这个项目内目录下。
+
+        v1 的原始产物在 `results/`；V3 的证据模型把运行产物放在 `runs/`
+        （`runs/<run_id>/summary.json`），闭包从 `root_tex` 展开。
+        """
+        return "runs" if self.is_v3 else "results"
 
 
-V3_PROJECT_SCHEMA_PREFIX = "paperkit-project/3."
-V3_FACT_SCHEMA_PREFIX = "paperkit-fact/3."
+# V3.0 项目声明有两个已冻结的字面量：规范正文里的 `paperkit-project/3.x`
+# 与早期盲测/工单里使用的 `factscribe/3.x`。两者是同一套扁平声明的别名。
+V3_PROJECT_SCHEMA_PREFIXES = ("paperkit-project/3.", "factscribe/3.")
+V3_PROJECT_SCHEMA_PREFIX = V3_PROJECT_SCHEMA_PREFIXES[0]
+V3_FACT_SCHEMA_PREFIXES = ("paperkit-fact/3.", "factscribe-fact/3.")
+V3_FACT_SCHEMA_PREFIX = V3_FACT_SCHEMA_PREFIXES[0]
 SIGNING_MODES = ("offline_manifest", "local_key")
 NUMBER_LOCALES = ("period", "comma")
+# `dot` 是 `period` 的同义写法（盲测工单用 dot）；两者都表示小数点用 `.`
+NUMBER_LOCALE_ALIASES = {"dot": "period", "point": "period",
+                         "period": "period", "comma": "comma"}
+
+
+def is_v3_project_schema(schema: str) -> bool:
+    return any(str(schema or "").startswith(p) for p in V3_PROJECT_SCHEMA_PREFIXES)
+
+
+def is_v3_fact_schema(schema: str) -> bool:
+    return any(str(schema or "").startswith(p) for p in V3_FACT_SCHEMA_PREFIXES)
 
 
 def _v3_str(data: dict, key: str, path: Path, *, default=None,
@@ -205,6 +231,10 @@ def _v3_str(data: dict, key: str, path: Path, *, default=None,
                 "%s 缺少顶层 %s（schema=%r 必填）" % (path, key, data.get("schema")))
         return "" if default is None else default
     raw = data[key]
+    if raw is None:
+        if required:
+            raise ConfigError("%s 的 %s 不能为空" % (path, key))
+        return "" if default is None else default
     if not isinstance(raw, str):
         raise ConfigError(
             "%s 的 %s 必须是字符串，现在是 %r" % (path, key, raw))
@@ -277,40 +307,102 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     )
 
 
+def _v3_get(data: dict, key: str, default=None):
+    """V3 扁平声明允许把属性写在顶层，或写进 `[project]` 表（两处都认）。
+
+    顶层优先：`factscribe/3.0` 的工单里 `root_tex/facts/refs` 在顶层，
+    `signing_mode/number_locale/...` 在 `[project]` 表里。
+    """
+    if key in data:
+        return data[key]
+    proj = data.get("project")
+    if isinstance(proj, dict) and key in proj:
+        return proj[key]
+    return default
+
+
+def _v3_facts_glob(raw: str, path: Path) -> str:
+    """V3 的 `facts` 可以是 glob，也可以是一个目录名（目录＝其下 *.toml）。"""
+    text = str(raw or "").strip()
+    if not text:
+        return "facts/*.toml"
+    if any(ch in text for ch in "*?["):
+        return text
+    return text.rstrip("/") + "/*.toml"
+
+
+def _v3_macro_rules(data: dict, path: Path) -> tuple[list[str], list[dict]]:
+    """`numeric_macro_allow` 两种形态：v1 的宏名数组 / V3 的结构化登记表。
+
+    返回 (纯宏名, 结构化条目)。结构化条目里缺字段不在读取期判死——判据
+    （形状/双签/到期）留给审计面，才能给出具体 code。
+    """
+    raw = _v3_get(data, "numeric_macro_allow") or []
+    if isinstance(raw, (str, dict)):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raise ConfigError("%s 的 numeric_macro_allow 必须是数组，现在是 %r"
+                          % (path, raw))
+    names: list[str] = []
+    rules: list[dict] = []
+    for item in raw:
+        if isinstance(item, str):
+            if item.strip():
+                names.append(item.strip().lstrip("\\"))
+            continue
+        if not isinstance(item, dict):
+            raise ConfigError("%s 的 numeric_macro_allow 里有非字符串/非表条目：%r"
+                              % (path, item))
+        name = str(item.get("name") or "").strip().lstrip("\\")
+        if name:
+            names.append(name)
+        rules.append(dict(item))
+    return names, rules
+
+
 def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
     """V3.0 扁平声明：顶层 schema/name/root_tex/output/...（无 [project] 段）。
 
-    本轮只负责「读得到、传得下去」：字段做类型与取值域校验后放进 Config；
-    判据（keys 是否在项目外、locale 是否已签名、图片预算是否被签过等）
-    留到 C 阶段，这里不预先判红。
+    兼容两种布局：
+    - 规范正文的扁平布局（顶层字段 + 顶层 `[[numeric_macro_allow]]`）；
+    - 盲测工单的混合布局（`root_tex/facts/refs` 在顶层，其余在 `[project]`）。
     """
     schema = str(data.get("schema") or "").strip()
-    root_tex = _v3_str(data, "root_tex", path, required=True)
+    root_tex = _v3_str({"root_tex": _v3_get(data, "root_tex")}, "root_tex", path,
+                       required=True)
     root_tex = _v3_rel_path(root_tex, "root_tex", path)
-    output = _v3_str(data, "output", path, default="main.pdf")
+    output = _v3_str({"output": _v3_get(data, "output")}, "output", path,
+                     default="main.pdf")
     if output:
         output = _v3_rel_path(output, "output", path)
-    signing_mode = _v3_str(data, "signing_mode", path, default="offline_manifest")
+    signing_mode = _v3_str({"signing_mode": _v3_get(data, "signing_mode")},
+                           "signing_mode", path, default="offline_manifest")
     if signing_mode not in SIGNING_MODES:
         raise ConfigError(
             "%s 的 signing_mode=%r 不认识（只允许 %s）"
             % (path, signing_mode, " / ".join(SIGNING_MODES)))
-    number_locale = _v3_str(data, "number_locale", path, default="period")
-    if number_locale not in NUMBER_LOCALES:
+    raw_locale = _v3_str({"number_locale": _v3_get(data, "number_locale")},
+                         "number_locale", path, default="period")
+    number_locale = NUMBER_LOCALE_ALIASES.get(raw_locale)
+    if number_locale is None:
         raise ConfigError(
             "%s 的 number_locale=%r 不认识（只允许 %s）"
-            % (path, number_locale, " / ".join(NUMBER_LOCALES)))
-    budget = data.get("image_budget_extra", 0)
+            % (path, raw_locale, " / ".join(sorted(NUMBER_LOCALE_ALIASES))))
+    budget = _v3_get(data, "image_budget_extra", 0)
     if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
         raise ConfigError(
             "%s 的 image_budget_extra 必须是非负整数，现在是 %r" % (path, budget))
-    name = _v3_str(data, "name", path)
+    name = _v3_str({"name": _v3_get(data, "name") or _v3_get(data, "title")},
+                   "name", path)
+    proj = data.get("project") if isinstance(data.get("project"), dict) else {}
+    macro_names, macro_rules = _v3_macro_rules(data, path)
     return Config(
         root=root,
         title=name,
+        authors=[str(a) for a in (proj.get("authors") or [])],
         sections_glob=root_tex,
-        facts_glob="facts/*.toml",
-        bib="refs.bib",
+        facts_glob=_v3_facts_glob(_v3_get(data, "facts", "facts"), path),
+        bib=str(_v3_get(data, "refs") or _v3_get(data, "bib") or "refs.bib"),
         build="",
         manifest="results/MANIFEST.toml",
         schema=schema,
@@ -319,11 +411,22 @@ def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
         output=output,
         signing_mode=signing_mode,
         number_locale=number_locale,
-        approver_keys_file=_v3_str(data, "approver_keys_file", path),
-        release_keys_file=_v3_str(data, "release_keys_file", path),
+        approver_keys_file=_v3_str(
+            {"approver_keys_file": _v3_get(data, "approver_keys_file")},
+            "approver_keys_file", path),
+        release_keys_file=_v3_str(
+            {"release_keys_file": _v3_get(data, "release_keys_file")},
+            "release_keys_file", path),
         image_budget_extra=budget,
-        frac_allow=_v3_str_list(data, "frac_allow", path),
-        inline_images_allow=_v3_str_list(data, "inline_images_allow", path),
+        frac_allow=_v3_str_list(
+            {"frac_allow": _v3_get(data, "frac_allow")}, "frac_allow", path),
+        inline_images_allow=_v3_str_list(
+            {"inline_images_allow": _v3_get(data, "inline_images_allow")},
+            "inline_images_allow", path),
+        numeric_macro_allow=macro_names,
+        numeric_macro_rules=macro_rules,
+        facts_dirs=not any(ch in str(_v3_get(data, "facts", "facts"))
+                           for ch in "*?["),
     )
 
 
@@ -335,18 +438,18 @@ def load_config(root: Path) -> Config:
         raise ConfigError("找不到项目声明 %s（缺 paperkit.toml 不敢跑）" % path)
     data = load_toml(path)
 
-    # schema 自动识别：有顶层 schema 就只认 paperkit-project/3.x；
+    # schema 自动识别：有顶层 schema 就只认 V3 的扁平声明（两个字面量别名）；
     # 没写 schema 的走 v1（[project] 表，行为不变）。未知版本明确报错，不猜。
     if "schema" in data:
         schema = data.get("schema")
         if not isinstance(schema, str) or not schema.strip():
             raise ConfigError(
                 "%s 的顶层 schema 必须是非空字符串，现在是 %r" % (path, schema))
-        if not schema.strip().startswith(V3_PROJECT_SCHEMA_PREFIX):
+        if not is_v3_project_schema(schema.strip()):
             raise ConfigError(
-                "%s 的 schema=%r 不认识——本工具只认 %sx 的扁平声明；"
+                "%s 的 schema=%r 不认识——本工具只认 %s 的扁平声明；"
                 "旧版配置请去掉顶层 schema、改用 [project] 表"
-                % (path, schema, V3_PROJECT_SCHEMA_PREFIX))
+                % (path, schema, " / ".join(p + "x" for p in V3_PROJECT_SCHEMA_PREFIXES)))
         return _load_v3_config(root, path, data)
 
     return _load_v1_config(root, path, data)
@@ -408,6 +511,13 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         co_claim=[str(x) for x in (raw.get("co_claim") or [])],
         file=rel,
         line=_locate_id_line(path, fid),
+        role=str(raw.get("role") or ""),
+        headline=bool(raw.get("headline")),
+        quantitative=bool(raw.get("quantitative")),
+        run_id=str(raw.get("run_id") or ""),
+        pointer=str(raw.get("pointer") or ""),
+        assertions=[dict(a) for a in (raw.get("assertions") or [])
+                    if isinstance(a, dict)],
     )
     if not f.id:
         raise ConfigError("%s 里有一条 fact 缺 id（不准匿名入账）" % path)
@@ -431,16 +541,21 @@ def load_facts(cfg: Config) -> list[Fact]:
         # 未知 fact schema 明确报错。没写 schema 的仍是 v1 的 [[fact]] 表数组。
         if "schema" in data:
             schema = data.get("schema")
-            if not isinstance(schema, str) or not schema.strip().startswith(
-                    V3_FACT_SCHEMA_PREFIX):
+            if not isinstance(schema, str) or not is_v3_fact_schema(schema.strip()):
                 raise ConfigError(
-                    "%s 的 schema=%r 不认识——本工具只认 %sx 的扁平 fact 文件"
-                    % (path, schema, V3_FACT_SCHEMA_PREFIX))
+                    "%s 的 schema=%r 不认识——本工具只认 %s 的扁平 fact 文件"
+                    % (path, schema,
+                       " / ".join(p + "x" for p in V3_FACT_SCHEMA_PREFIXES)))
             entries = [data]
         else:
             entries = data.get("fact")
             if entries is None:
-                continue
+                # V3 的 flat fact 文件可以省略 schema（一文件一条、顶层扁平）；
+                # v1 仍是 [[fact]] 表数组，绝不猜。
+                if cfg.is_v3 and ("id" in data or "value" in data):
+                    entries = [data]
+                else:
+                    continue
             if not isinstance(entries, list):
                 raise ConfigError("%s 里 fact 必须是 [[fact]] 表数组" % path)
         for raw in entries:

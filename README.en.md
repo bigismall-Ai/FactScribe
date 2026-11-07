@@ -14,7 +14,7 @@ manifest**; every `\cite`-family command must land on a stable identifier
 
 > **Green = "the book has evidence, the evidence is unchanged, the text is
 > bound" — not "the paper is true".** The boundary is spelled out in
-> `SPEC-V1.md` §2.3.
+> `docs/design/SPEC-V1.md` §2.3.
 
 ## Run it
 
@@ -164,5 +164,5 @@ planted on purpose; `audit` must report exactly those **2 reds** (plus yellows).
 Red-team counterexamples B1/B4 live in `tests/fixtures/` and stay red.
 
 See `examples/minimal/README.md` for a 5-minute walkthrough.
-The contract and its boundary are in `SPEC-V1.md`; changes and known holes are in
-`IMPLEMENTATION-V1.md` and `IMPLEMENTATION-V2.md`. History: `CHANGELOG.md`.
+The contract and its boundary are in `docs/design/SPEC-V1.md`; changes and known holes are in
+`docs/implementation/IMPLEMENTATION-V1.md` and `docs/implementation/IMPLEMENTATION-V2.md`. History: `CHANGELOG.md`.

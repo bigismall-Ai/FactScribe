@@ -1,14 +1,6 @@
-# TODO: confirm license with owner
-#
-# This file is a PLACEHOLDER. The owner must choose one of MIT / Apache-2.0 /
-# AGPL-3.0 before paperkit is published, then replace this entire file with the
-# corresponding license text. See RELEASE-CHECKLIST.md for a one-line comparison.
-#
-# The MIT text below is the default candidate (simplest, most permissive).
-
 MIT License
 
-Copyright (c) 2026 paperkit contributors
+Copyright (c) 2026 FactScribe contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

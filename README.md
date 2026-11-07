@@ -10,7 +10,7 @@
 里的 `results/` 原始产物；每个 `\cite` 家族命令必须落到稳定标识（`arxiv`/`doi`）。
 闸门不通过就非零退出。
 
-> **绿 = 「账有据、据未改、文有绑」，不是「论文为真」。** 边界见 `SPEC-V1.md` §2.3。
+> **绿 = 「账有据、据未改、文有绑」，不是「论文为真」。** 边界见 `docs/design/SPEC-V1.md` §2.3。
 
 ## 跑起来
 
@@ -142,8 +142,8 @@ python3 -m unittest discover -s tests -v     # 93 例，全离线，约 5 秒
 （`47.3 ms`）和 **1 个假引用**（`\cite{ghost2024}`）；`audit` 必须报出且只报这
 **2 处红**（另有黄项）。红队 B1/B4 反例在 `tests/fixtures/`，现在都红。
 
-裁决与边界见 `SPEC-V1.md`；改动与已知漏洞见 `IMPLEMENTATION-V1.md`、
-`IMPLEMENTATION-V2.md`。历史见 `CHANGELOG.md`。
+裁决与边界见 `docs/design/SPEC-V1.md`；改动与已知漏洞见 `docs/implementation/IMPLEMENTATION-V1.md`、
+`docs/implementation/IMPLEMENTATION-V2.md`。历史见 `CHANGELOG.md`。
 
 ## 安装（可选）
 

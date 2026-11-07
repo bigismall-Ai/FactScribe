@@ -4,7 +4,7 @@ Thanks for looking. paperkit is a small, deliberately boring tool: one
 stdlib-only Python file, offline tests, no plugins, no services. Most
 contributions are "one more gate" or "one more lexical edge case".
 
-**Read `SPEC-V1.md` §2.3 first.** paperkit's honesty is its product: it checks
+**Read `docs/design/SPEC-V1.md` §2.3 first.** paperkit's honesty is its product: it checks
 that the bookkeeping is consistent (`book -> evidence -> text`), not that the
 science is true. Never make a change that lets the tool report green when it
 does not know something.
@@ -65,8 +65,8 @@ python3 paperkit.py check examples/minimal --strict
 | `tests/test_paperkit.py` | Unit + end-to-end tests; `make_project()` builds a throwaway project, `run()` shells out to the CLI. |
 | `tests/fixtures/redteam-b1`, `redteam-b4` | Counterexamples that must stay red. |
 | `examples/minimal/` | The 5-minute acceptance sample (see its README). |
-| `SPEC.md`, `SPEC-V1.md` | Contract and defence boundary. `SPEC-V1.md` wins on conflict. |
-| `IMPLEMENTATION*.md` | Where each gate lives, measured readings, known holes. |
+| `SPEC.md`, `docs/design/SPEC-V1.md` | Contract and defence boundary. `docs/design/SPEC-V1.md` wins on conflict. |
+| `docs/implementation/IMPLEMENTATION*.md` | Where each gate lives, measured readings, known holes. |
 | `CHANGELOG.md` | One entry per user-visible change. |
 
 Key entry points in `paperkit.py`:
@@ -100,7 +100,7 @@ Key entry points in `paperkit.py`:
    - a project just beside it that must **not** trigger it (no false positive).
    Use `make_project()` + `run_json()`; no network.
 6. **Document it**: add the code to `README.md` (red/yellow/info list) and
-   `README.en.md`, note the rule in `SPEC-V1.md` if it belongs to the contract,
+   `README.en.md`, note the rule in `docs/design/SPEC-V1.md` if it belongs to the contract,
    and add a `CHANGELOG.md` line under `[Unreleased]`.
 
 Example shape:

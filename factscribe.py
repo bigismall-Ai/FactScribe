@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""paperkit —— 论文数字与引用的机械闸门（v1）。
+"""FactScribe（原 paperkit）—— 论文数字与引用的机械闸门（v1）。
 
 纯标准库；Python >= 3.10。
 子命令：check / audit / matrix / build / preamble，全部支持 --json。
@@ -678,7 +678,9 @@ class Fact:
 
 
 def load_config(root: Path) -> Config:
-    path = root / "paperkit.toml"
+    path = root / "factscribe.toml"
+    if not path.is_file():
+        path = root / "paperkit.toml"
     if not path.is_file():
         raise ConfigError("找不到项目声明 %s（缺 paperkit.toml 不敢跑）" % path)
     data = load_toml(path)
@@ -2053,7 +2055,7 @@ def _severity_of(code: int) -> str:
 
 
 def _payload(command: str, status: str, code: int, **kw) -> dict:
-    d = {"schema_version": SCHEMA_VERSION, "tool": "paperkit", "version": VERSION,
+    d = {"schema_version": SCHEMA_VERSION, "tool": "factscribe", "version": VERSION,
          "command": command, "status": status, "severity": _severity_of(code),
          "exit": code}
     d.update(kw)
@@ -2062,9 +2064,9 @@ def _payload(command: str, status: str, code: int, **kw) -> dict:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="paperkit",
+        prog="factscribe",
         description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble）")
-    p.add_argument("--version", action="version", version="paperkit %s" % VERSION)
+    p.add_argument("--version", action="version", version="factscribe %s" % VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
     for name, help_text in (
@@ -2166,7 +2168,7 @@ def main(argv=None) -> int:
             print(json.dumps(_payload(args.command, "error", EXIT_CONFIG,
                                       message=str(exc)), ensure_ascii=False, indent=2))
         else:
-            print("paperkit: 配置/用法错：%s" % exc, file=sys.stderr)
+            print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)
         return EXIT_CONFIG
     except Exception as exc:  # noqa: BLE001 - 内部错误必须与「有违例」分开
         if getattr(args, "json", False):
@@ -2174,7 +2176,7 @@ def main(argv=None) -> int:
                                       message="%s: %s" % (type(exc).__name__, exc)),
                              ensure_ascii=False, indent=2))
         else:
-            print("paperkit: 工具内部错误：%s: %s" % (type(exc).__name__, exc),
+            print("factscribe: 工具内部错误：%s: %s" % (type(exc).__name__, exc),
                   file=sys.stderr)
         return EXIT_INTERNAL
 

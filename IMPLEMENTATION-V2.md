@@ -1,6 +1,6 @@
-# paperkit v2 实现记录（批 36：三处落地摩擦）
+# paperkit v1.1 实现记录（三处落地摩擦）
 
-日期：2026-11-07　　实现者：批 36 实施工（D 席 / opencode）
+日期：2026-11-07　　实现者：paperkit contributors
 基线：`9d255bd`（v1.0.0，87 例）　　本批：v1.1.0，93 例
 
 本批不改闸门口径（红/黄/绑定的判定逻辑原样保留），只修「工具让写作变难」的三处
@@ -50,7 +50,7 @@ G4（507 秒，最慢 2220）因 source 里写作 `131s` / `2220s` 而报黄 `VA
 
 ## 3. D3 来源不该被迫搬家
 
-**症状**：v1 强制 `source` 落在项目 `paper/results/` 下；批 35 为过闸把 45 份原始产物
+**症状**：v1 强制 `source` 落在项目 `results/` 下；真实项目为过闸把几十份原始产物
 复制进 `results/`，出现两份副本、靠 `origin` 字段人工追溯。
 
 **改法**
@@ -63,12 +63,11 @@ G4（507 秒，最慢 2220）因 source 里写作 `131s` / `2220s` 而报黄 `VA
   `SOURCE_OUTSIDE_SOURCE_ROOT`；未配 `source_root` 时仍是红 `SOURCE_OUTSIDE_RESULTS`，
   旧项目与旧测试不受影响。
 - `results/` 未签文件扫描保持原样（项目内产物区照旧点名）；清单 `[files]` 的键
-  ＝facts 里的 `source` 串（本论文＝`experiments/ctx-compiler-redblue/...`）。
+  ＝facts 里的 `source` 串（例如 `experiments/demo/...`）。
 
-**论文项目落地**：`paper/paperkit.toml` 加
-`source_root = "/Users/moc/workspaces/SiAgent"`；8 个 facts 文件的 48 条 `source`
-改回 `experiments/ctx-compiler-redblue/...`，删掉全部 `origin` 字段；
-`paper/results/` 下 9 份 BATCH 副本删除；`results/MANIFEST.toml` 按新键重算 sha256
+**论文项目落地**：真实论文项目在 `paperkit.toml` 里把 `source_root` 指向工作区根
+（例如 `/abs/workspace`），facts 的 48 条 `source` 写成相对它的产物路径；
+`results/` 下的产物副本删除，`results/MANIFEST.toml` 按新键重算 sha256
 （值与 facts 里已钉的一致）。复制不再必要。
 
 ## 4. CJK 缺字警告根因（204 → 0）

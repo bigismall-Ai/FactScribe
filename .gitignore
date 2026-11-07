@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 .venv/
+*.egg-info/
+build/
+dist/
 
 # 生成物不入库
 audit/
@@ -10,3 +13,6 @@ audit/
 *.xdv
 *.bbl
 *.blg
+
+# 例外：红队夹具的原始产物是测试输入，必须入库（否则干净克隆跑不出同一读数）
+!tests/fixtures/**/results/*.log

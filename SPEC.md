@@ -1,6 +1,6 @@
 # paperkit-dev — 规格（v0，待红蓝对抗）
 
-> **已被 `SPEC-V1.md` 取代（2026-11-07，批 34）。** 本件保留为红队攻击对象与历史稿；
+> **已被 `SPEC-V1.md` 取代（2026-11-07）。** 本件保留为红队攻击对象与历史稿；
 > 现行契约与 29 条裁决见 `SPEC-V1.md`，实现记录见 `IMPLEMENTATION-V1.md`。
 
 一个**独立**的论文生产工具：给 agent（或人）写 LaTeX 论文，但**不允许它编数字、编引用**。
@@ -46,7 +46,7 @@ build = "tectonic main.tex"     # 或留空跳过编译
 id = "A2"                       # 唯一；正文用 [[fact:A2]] 或 {A2} 引用
 claim = "开臂 resolved（16 题）"
 value = "10/16"
-source = "experiments/ctx-compiler-redblue/BATCH23-SWB16.md"
+source = "experiments/demo/BATCH23-SWB16.md"
 locator = "§二 汇总表"
 confidence = "high"             # high | med | low
 derived_from = []               # 若是推算值，列依赖的 fact id

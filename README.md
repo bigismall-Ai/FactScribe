@@ -1,5 +1,7 @@
 # paperkit — 论文数字与引用的机械闸门（v1）
 
+**中文** · [English](README.en.md)
+
 给 agent（或人）写 LaTeX 论文，但**不许编数字、不许编引用**。
 不依赖 sia-harness，不依赖任何模型 SDK，纯标准库，Python ≥ 3.10。
 
@@ -80,7 +82,7 @@ note = ""
 
 ```toml
 [manifest]
-signed_by = "moc"
+signed_by = "alice"
 signed_at = "2026-11-07T12:00:00Z"
 version = 1
 
@@ -133,11 +135,26 @@ version = 1
 ## 测试
 
 ```bash
-python3 -m unittest discover -s tests -v     # 87 例，全离线，约 5 秒
+python3 -m unittest discover -s tests -v     # 93 例，全离线，约 5 秒
 ```
 
 `examples/minimal/` 是验收样例：3 条 fact、2 节 tex，故意混入 **1 个编造数字**
 （`47.3 ms`）和 **1 个假引用**（`\cite{ghost2024}`）；`audit` 必须报出且只报这
 **2 处红**（另有黄项）。红队 B1/B4 反例在 `tests/fixtures/`，现在都红。
 
-裁决与边界见 `SPEC-V1.md`；改动与已知漏洞见 `IMPLEMENTATION-V1.md`。
+裁决与边界见 `SPEC-V1.md`；改动与已知漏洞见 `IMPLEMENTATION-V1.md`、
+`IMPLEMENTATION-V2.md`。历史见 `CHANGELOG.md`。
+
+## 安装（可选）
+
+```bash
+python3 -m pip install -e .    # 之后可用 paperkit check <项目目录>
+```
+
+不装也行：`paperkit.py` 是单文件纯标准库，拷进任何项目即可用。
+
+## 参与
+
+`CONTRIBUTING.md`：怎么跑测试、怎么加一个闸门、PR 必须带测试。5 分钟上手见
+`examples/minimal/README.md`。
+

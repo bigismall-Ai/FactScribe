@@ -833,7 +833,7 @@ class TestRedTeamCounterexamples(unittest.TestCase):
 
 
 class TestBatch36Friction(unittest.TestCase):
-    """批 36 的三处落地摩擦：批注宏、数字贴单位、source_root。"""
+    """v1.1 的三处落地摩擦：批注宏、数字贴单位、source_root。"""
 
     # ---- D1：批注宏不是正文 ----
     def test_d1_annotation_numbers_are_skipped(self):

@@ -186,7 +186,7 @@ note = ""
 
 ```toml
 [manifest]
-signed_by = "moc"                    # 必填；空 ⇒ 红 MANIFEST_UNSIGNED
+signed_by = "alice"                    # 必填；空 ⇒ 红 MANIFEST_UNSIGNED
 signed_at = "2026-11-07T12:00:00Z"   # 缺 ⇒ 黄
 version = 1
 

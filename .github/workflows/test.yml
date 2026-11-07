@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # paperkit is stdlib-only: no install, no network, no services.
+      - name: Version
+        run: python paperkit.py --version
+
+      - name: Unit tests (offline)
+        run: python -m unittest discover -s tests -v
+
+      # Acceptance sample must stay red for exactly the reasons we document:
+      # exit 1 = violations found (not 0 = false green, not 2 = broken config).
+      - name: Acceptance sample fails as documented
+        run: |
+          set +e
+          python paperkit.py audit examples/minimal
+          code=$?
+          set -e
+          if [ "$code" -ne 1 ]; then
+            echo "::error::examples/minimal audit exit=$code, expected 1 (red)"
+            exit 1
+          fi

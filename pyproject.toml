@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperkit"
+dynamic = ["version"]
+description = "Mechanical gate for numbers and citations in LaTeX papers: every number bound to a sha256-pinned fact, every citation pinned to a stable identifier. Offline, stdlib only."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "paperkit contributors" }]
+keywords = ["latex", "reproducibility", "citations", "fact-checking", "paper"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Text Processing :: Markup :: LaTeX",
+]
+
+[project.scripts]
+paperkit = "paperkit:main"
+
+# One 87 KB stdlib-only module on purpose: keep it a single file so users can
+# copy `paperkit.py` into any project and run it with no install step. Packaging
+# therefore uses `py-modules`, not a package directory (nothing to split).
+[tool.setuptools]
+py-modules = ["paperkit"]
+
+[tool.setuptools.dynamic]
+version = { attr = "paperkit.VERSION" }

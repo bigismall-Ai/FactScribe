@@ -198,7 +198,7 @@ def load_toml(path: Path) -> dict:
 # 匹配一个“数字 + 可选量级/单位后缀 + 可选百分号”。
 # - 前面不能紧跟字母/下划线/点：避开 ctex2017、v2.0、R2、H2O 这类；
 # - 量级后缀必须紧贴数字（k/K/M/B），避免把 "47.3 ms" 读成 47.3 毫
-# - 单位后缀（批 36 D2）：131s / 2220s / 53000token / 5GB 都是「数字＋量纲」，
+# - 单位后缀（v1.1）：131s / 2220s / 53000token / 5GB 都是「数字＋量纲」，
 #   数字照抽，单位只作噪声（不参与数值换算）。长单位排在短单位前，避免
 #   "ms" 被 "m"、"tokens" 被 "tok" 抢先；量级 [kKMB] 排在单位之后，
 #   所以 "5MB" 是单位、"5M" 仍是量级。
@@ -388,7 +388,7 @@ def _line_of(s: str, pos: int) -> int:
     return s.count("\n", 0, pos) + 1
 
 
-# 写作批注宏（批 36 D1）：内容是作者给作者的问题，不是正文命题。
+# 写作批注宏（v1.1）：内容是作者给作者的问题，不是正文命题。
 # 抽数字前整块剥离（连同参数），不参与审计，只计数上报。
 _ANNOTATION_CMDS = ("todoq", "todo", "pkignore", "pknote", "fixme", "note", "tbd")
 
@@ -1033,7 +1033,7 @@ def _source_rel_ok(src: str) -> str:
 
 
 def source_base(cfg: Config) -> Path:
-    """source 的解析根（批 36 D3）。
+    """source 的解析根（v1.1）。
 
     - 配了 project.source_root：source 相对它解析（论文项目指到工作区根，
       原始产物留在 experiments/ 原地，不必为过闸复制）；

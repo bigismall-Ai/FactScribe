@@ -1,6 +1,6 @@
 # paperkit v1 实现记录
 
-日期：2026-11-07　　实现者：蓝队（批 34，D 席 / opencode）
+日期：2026-11-07　　实现者：paperkit contributors
 规格：`SPEC-V1.md`；闸门代码 commit `b9a66e3`。
 
 ---

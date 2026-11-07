@@ -1,9 +1,9 @@
 # paperkit MVP 实现记录
 
-> **v1 见 `IMPLEMENTATION-V1.md`（2026-11-07，批 34）。** 本件是 v0/MVP 的历史记录，
+> **v1 见 `IMPLEMENTATION-V1.md`。** 本件是 v0/MVP 的历史记录，
 > 其中「值级匹配」「46 例」「source 只验存在」等口径已被 v1 取代。
 
-日期：2026-11-07　　实现者：D 席（opencode / DeepSeek-4.1-Flash，批 33）
+日期：2026-11-07　　实现者：paperkit contributors
 规格：`SPEC.md`（v0）；本件只记「做了什么、跑了什么、哪里还不行」。
 
 ## 0. 交付清单

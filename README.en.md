@@ -1,4 +1,4 @@
-# paperkit — a mechanical gate for numbers and citations in papers (v1)
+# FactScribe — a mechanical gate for numbers and citations in AI-written papers (v1)
 
 [中文](README.md) · **English**
 

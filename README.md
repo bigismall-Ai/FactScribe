@@ -1,4 +1,4 @@
-# paperkit — 论文数字与引用的机械闸门（v1）
+# FactScribe — 给 AI 写的论文装一道「数字闸」（v1）
 
 **中文** · [English](README.en.md)
 

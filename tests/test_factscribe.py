@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""paperkit 测试：全部离线（--resolve 不测联网路径，只测它的降级分支靠 mock）。
+"""factscribe 测试：全部离线（--resolve 不测联网路径，只测它的降级分支靠 mock）。
 
 跑法（仓根）：python3 -m unittest discover -s tests -v
 """
@@ -16,9 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import paperkit  # noqa: E402
+import factscribe as paperkit  # noqa: E402
 
-CLI = ROOT / "paperkit.py"
+CLI = ROOT / "factscribe.py"
 
 BIB_OK = """@inproceedings{chen2023,
   title = {A Paper},

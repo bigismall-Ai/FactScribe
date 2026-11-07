@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "paperkit"
+name = "factscribe"
 dynamic = ["version"]
 description = "Mechanical gate for numbers and citations in LaTeX papers: every number bound to a sha256-pinned fact, every citation pinned to a stable identifier. Offline, stdlib only."
 readme = "README.md"
@@ -25,7 +25,7 @@ classifiers = [
 ]
 
 [project.scripts]
-paperkit = "paperkit:main"
+factscribe = "factscribe:main"
 
 # One 87 KB stdlib-only module on purpose: keep it a single file so users can
 # copy `paperkit.py` into any project and run it with no install step. Packaging

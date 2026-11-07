@@ -1519,7 +1519,7 @@ def _resolve_arxiv(arxiv_id: str) -> tuple[str, str]:
     """返回 (status, detail)：verified / not_found / unverified。"""
     url = "https://export.arxiv.org/api/query?" + urllib.parse.urlencode(
         {"id_list": arxiv_id, "max_results": "1"})
-    req = urllib.request.Request(url, headers={"User-Agent": "paperkit/%s" % VERSION})
+    req = urllib.request.Request(url, headers={"User-Agent": "factscribe/%s" % VERSION})
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             body = resp.read().decode("utf-8", "replace")
@@ -1541,7 +1541,7 @@ def _resolve_arxiv(arxiv_id: str) -> tuple[str, str]:
 
 def _resolve_doi(doi: str) -> tuple[str, str]:
     url = "https://doi.org/api/handles/" + urllib.parse.quote(doi, safe="/")
-    req = urllib.request.Request(url, headers={"User-Agent": "paperkit/%s" % VERSION})
+    req = urllib.request.Request(url, headers={"User-Agent": "factscribe/%s" % VERSION})
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             body = resp.read().decode("utf-8", "replace")
@@ -1873,7 +1873,7 @@ def render_matrix(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]
         "# Fact 追溯矩阵",
         "",
         "- 项目：%s" % (cfg.title or "（未命名）"),
-        "- 生成：paperkit %s（schema %s）" % (VERSION, SCHEMA_VERSION),
+        "- 生成：FactScribe %s（schema %s）" % (VERSION, SCHEMA_VERSION),
         "- facts：%d 条；sections：%d 个" % (len(facts), len(sections)),
         "",
         "| fact id | claim | value | source | locator | confidence | 被引用次数 | 被哪些节引用 | kind | source_sha256(前12) |",

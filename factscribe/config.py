@@ -171,13 +171,81 @@ class Config:
     source_root: str = ""        # source 的解析根；空＝只许项目内 results/
     numeric_macro_allow: list = field(default_factory=list)  # 人签登记的数值宏名
 
-def load_config(root: Path) -> Config:
-    path = root / "factscribe.toml"
-    if not path.is_file():
-        path = root / "paperkit.toml"
-    if not path.is_file():
-        raise ConfigError("找不到项目声明 %s（缺 paperkit.toml 不敢跑）" % path)
-    data = load_toml(path)
+    # ---- V3.0 扁平项目声明（schema = "paperkit-project/3.x"）----
+    # v1 配置不写顶层 schema，以下字段保持默认值，行为与旧版完全一致。
+    schema: str = ""
+    name: str = ""
+    root_tex: str = ""           # V3：审计闭包起点（非空即「从 root 文件展开」）
+    output: str = "main.pdf"     # V3：最终 PDF（PDF 回检用）
+    signing_mode: str = ""       # V3：offline_manifest | local_key
+    number_locale: str = "period"  # V3：period | comma
+    approver_keys_file: str = ""   # V3：审批公钥（项目外）
+    release_keys_file: str = ""    # V3：发布公钥（项目外）
+    image_budget_extra: int = 0    # V3：图片预算宽限（人签）
+    frac_allow: list = field(default_factory=list)         # V3：允许的 \frac 登记
+    inline_images_allow: list = field(default_factory=list)  # V3：行内小图登记
+
+    @property
+    def is_v3(self) -> bool:
+        return self.schema.startswith(V3_PROJECT_SCHEMA_PREFIX)
+
+
+V3_PROJECT_SCHEMA_PREFIX = "paperkit-project/3."
+V3_FACT_SCHEMA_PREFIX = "paperkit-fact/3."
+SIGNING_MODES = ("offline_manifest", "local_key")
+NUMBER_LOCALES = ("period", "comma")
+
+
+def _v3_str(data: dict, key: str, path: Path, *, default=None,
+            required: bool = False) -> str:
+    """取 V3 顶层字符串字段：缺省/空白按 default，类型不符直接报错。"""
+    if key not in data:
+        if required:
+            raise ConfigError(
+                "%s 缺少顶层 %s（schema=%r 必填）" % (path, key, data.get("schema")))
+        return "" if default is None else default
+    raw = data[key]
+    if not isinstance(raw, str):
+        raise ConfigError(
+            "%s 的 %s 必须是字符串，现在是 %r" % (path, key, raw))
+    raw = raw.strip()
+    if not raw:
+        if required:
+            raise ConfigError("%s 的 %s 不能为空" % (path, key))
+        return "" if default is None else default
+    return raw
+
+
+def _v3_rel_path(raw: str, key: str, path: Path) -> str:
+    """V3 里的项目内路径：必须是相对路径，不许 absolute / ..。"""
+    p = Path(raw)
+    if p.is_absolute() or ".." in p.parts:
+        raise ConfigError(
+            "%s 的 %s 必须是项目内相对路径（不许绝对路径或 ..）：%s" % (path, key, raw))
+    return p.as_posix()
+
+
+def _v3_str_list(data: dict, key: str, path: Path) -> list:
+    raw = data.get(key)
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raise ConfigError("%s 的 %s 必须是字符串数组，现在是 %r" % (path, key, raw))
+    out: list[str] = []
+    for item in raw:
+        if isinstance(item, dict):
+            item = item.get("name") or item.get("token") or ""
+        if not isinstance(item, str) or not item.strip():
+            raise ConfigError(
+                "%s 的 %s 里有非字符串条目：%r" % (path, key, item))
+        out.append(item.strip())
+    return out
+
+
+def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
+    """旧版：顶层 [project] 表（title/sections/facts/bib/build…），行为不变。"""
     proj = data.get("project")
     if not isinstance(proj, dict):
         raise ConfigError("%s 缺少 [project] 段" % path)
@@ -207,6 +275,81 @@ def load_config(root: Path) -> Config:
         source_root=str(proj.get("source_root") or ""),
         numeric_macro_allow=macro_allow,
     )
+
+
+def _load_v3_config(root: Path, path: Path, data: dict) -> Config:
+    """V3.0 扁平声明：顶层 schema/name/root_tex/output/...（无 [project] 段）。
+
+    本轮只负责「读得到、传得下去」：字段做类型与取值域校验后放进 Config；
+    判据（keys 是否在项目外、locale 是否已签名、图片预算是否被签过等）
+    留到 C 阶段，这里不预先判红。
+    """
+    schema = str(data.get("schema") or "").strip()
+    root_tex = _v3_str(data, "root_tex", path, required=True)
+    root_tex = _v3_rel_path(root_tex, "root_tex", path)
+    output = _v3_str(data, "output", path, default="main.pdf")
+    if output:
+        output = _v3_rel_path(output, "output", path)
+    signing_mode = _v3_str(data, "signing_mode", path, default="offline_manifest")
+    if signing_mode not in SIGNING_MODES:
+        raise ConfigError(
+            "%s 的 signing_mode=%r 不认识（只允许 %s）"
+            % (path, signing_mode, " / ".join(SIGNING_MODES)))
+    number_locale = _v3_str(data, "number_locale", path, default="period")
+    if number_locale not in NUMBER_LOCALES:
+        raise ConfigError(
+            "%s 的 number_locale=%r 不认识（只允许 %s）"
+            % (path, number_locale, " / ".join(NUMBER_LOCALES)))
+    budget = data.get("image_budget_extra", 0)
+    if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0:
+        raise ConfigError(
+            "%s 的 image_budget_extra 必须是非负整数，现在是 %r" % (path, budget))
+    name = _v3_str(data, "name", path)
+    return Config(
+        root=root,
+        title=name,
+        sections_glob=root_tex,
+        facts_glob="facts/*.toml",
+        bib="refs.bib",
+        build="",
+        manifest="results/MANIFEST.toml",
+        schema=schema,
+        name=name,
+        root_tex=root_tex,
+        output=output,
+        signing_mode=signing_mode,
+        number_locale=number_locale,
+        approver_keys_file=_v3_str(data, "approver_keys_file", path),
+        release_keys_file=_v3_str(data, "release_keys_file", path),
+        image_budget_extra=budget,
+        frac_allow=_v3_str_list(data, "frac_allow", path),
+        inline_images_allow=_v3_str_list(data, "inline_images_allow", path),
+    )
+
+
+def load_config(root: Path) -> Config:
+    path = root / "factscribe.toml"
+    if not path.is_file():
+        path = root / "paperkit.toml"
+    if not path.is_file():
+        raise ConfigError("找不到项目声明 %s（缺 paperkit.toml 不敢跑）" % path)
+    data = load_toml(path)
+
+    # schema 自动识别：有顶层 schema 就只认 paperkit-project/3.x；
+    # 没写 schema 的走 v1（[project] 表，行为不变）。未知版本明确报错，不猜。
+    if "schema" in data:
+        schema = data.get("schema")
+        if not isinstance(schema, str) or not schema.strip():
+            raise ConfigError(
+                "%s 的顶层 schema 必须是非空字符串，现在是 %r" % (path, schema))
+        if not schema.strip().startswith(V3_PROJECT_SCHEMA_PREFIX):
+            raise ConfigError(
+                "%s 的 schema=%r 不认识——本工具只认 %sx 的扁平声明；"
+                "旧版配置请去掉顶层 schema、改用 [project] 表"
+                % (path, schema, V3_PROJECT_SCHEMA_PREFIX))
+        return _load_v3_config(root, path, data)
+
+    return _load_v1_config(root, path, data)
 
 
 def _normalise_display(raw) -> list[dict]:
@@ -239,52 +382,71 @@ def _locate_id_line(path: Path, fid: str) -> int:
     return 0
 
 
+def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
+    fid = str(raw.get("id") or "").strip()
+    rel = path.relative_to(cfg.root).as_posix()
+    locator = str(raw.get("locator") or "")
+    if not locator:
+        # V3 用 pointer 指向原始产物内部（如 "/summary/rate"）；落到 locator 供人看。
+        locator = str(raw.get("pointer") or "")
+    f = Fact(
+        id=fid,
+        claim=str(raw.get("claim") or ""),
+        value=str(raw.get("value") or ""),
+        source=str(raw.get("source") or ""),
+        source_sha256=str(raw.get("source_sha256") or "").strip().lower(),
+        locator=locator,
+        confidence=str(raw.get("confidence") or ""),
+        kind=str(raw.get("kind") or "claim"),
+        derived_from=[str(x) for x in (raw.get("derived_from") or [])],
+        supersedes=[str(x) for x in (raw.get("supersedes") or [])],
+        expr=str(raw.get("expr") or "").strip(),
+        metric=str(raw.get("metric") or ""),
+        scope=str(raw.get("scope") or ""),
+        note=str(raw.get("note") or ""),
+        display=_normalise_display(raw.get("display")),
+        co_claim=[str(x) for x in (raw.get("co_claim") or [])],
+        file=rel,
+        line=_locate_id_line(path, fid),
+    )
+    if not f.id:
+        raise ConfigError("%s 里有一条 fact 缺 id（不准匿名入账）" % path)
+    f.value_keys = fact_value_keys(f.value)
+    # display 只允许追加与 value **严格等价**的写法（R-04）；这里先把
+    # 它们的字面规范键并入值域，等价性另由 DISPLAY_INCONSISTENT 检查。
+    for item in f.display:
+        f.value_keys |= fact_value_keys(item["text"])
+        canon = canon_text(item["text"])
+        if canon is not None:
+            f.value_keys.add(canon)
+    return f
+
+
 def load_facts(cfg: Config) -> list[Fact]:
     files = sorted(p for p in cfg.root.glob(cfg.facts_glob) if p.is_file())
     facts: list[Fact] = []
     for path in files:
         data = load_toml(path)
-        entries = data.get("fact")
-        if entries is None:
-            continue
-        if not isinstance(entries, list):
-            raise ConfigError("%s 里 fact 必须是 [[fact]] 表数组" % path)
+        # V3 的 fact 文件是「一文件一条、顶层扁平」；有 schema 就按 3.x 读，
+        # 未知 fact schema 明确报错。没写 schema 的仍是 v1 的 [[fact]] 表数组。
+        if "schema" in data:
+            schema = data.get("schema")
+            if not isinstance(schema, str) or not schema.strip().startswith(
+                    V3_FACT_SCHEMA_PREFIX):
+                raise ConfigError(
+                    "%s 的 schema=%r 不认识——本工具只认 %sx 的扁平 fact 文件"
+                    % (path, schema, V3_FACT_SCHEMA_PREFIX))
+            entries = [data]
+        else:
+            entries = data.get("fact")
+            if entries is None:
+                continue
+            if not isinstance(entries, list):
+                raise ConfigError("%s 里 fact 必须是 [[fact]] 表数组" % path)
         for raw in entries:
             if not isinstance(raw, dict):
                 raise ConfigError("%s 里有一条 fact 不是表" % path)
-            fid = str(raw.get("id") or "").strip()
-            rel = path.relative_to(cfg.root).as_posix()
-            f = Fact(
-                id=fid,
-                claim=str(raw.get("claim") or ""),
-                value=str(raw.get("value") or ""),
-                source=str(raw.get("source") or ""),
-                source_sha256=str(raw.get("source_sha256") or "").strip().lower(),
-                locator=str(raw.get("locator") or ""),
-                confidence=str(raw.get("confidence") or ""),
-                kind=str(raw.get("kind") or "claim"),
-                derived_from=[str(x) for x in (raw.get("derived_from") or [])],
-                supersedes=[str(x) for x in (raw.get("supersedes") or [])],
-                expr=str(raw.get("expr") or "").strip(),
-                metric=str(raw.get("metric") or ""),
-                scope=str(raw.get("scope") or ""),
-                note=str(raw.get("note") or ""),
-                display=_normalise_display(raw.get("display")),
-                co_claim=[str(x) for x in (raw.get("co_claim") or [])],
-                file=rel,
-                line=_locate_id_line(path, fid),
-            )
-            if not f.id:
-                raise ConfigError("%s 里有一条 fact 缺 id（不准匿名入账）" % path)
-            f.value_keys = fact_value_keys(f.value)
-            # display 只允许追加与 value **严格等价**的写法（R-04）；这里先把
-            # 它们的字面规范键并入值域，等价性另由 DISPLAY_INCONSISTENT 检查。
-            for item in f.display:
-                f.value_keys |= fact_value_keys(item["text"])
-                canon = canon_text(item["text"])
-                if canon is not None:
-                    f.value_keys.add(canon)
-            facts.append(f)
+            facts.append(_fact_from_mapping(raw, path, cfg))
     return facts
 
 
@@ -362,7 +524,17 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     文件边界不是句子边界（R-02）；这里只负责把「会被编译进 PDF 的文本文件」
     收齐，拼流与切句交给 texscan。
     """
-    found = _glob_paths(cfg.root, cfg.sections_glob)
+    if cfg.root_tex:
+        # V3：闭包从 root_tex 这个文件出发（不是 glob），避免递归把子目录里
+        # 同名的 main.tex 也卷进来。
+        root_file = cfg.root / cfg.root_tex
+        if not root_file.is_file():
+            raise ConfigError(
+                "root_tex 指向的 %s 不存在——没有起点就无法展开审计闭包"
+                % cfg.root_tex)
+        found = {cfg.root_tex: root_file}
+    else:
+        found = _glob_paths(cfg.root, cfg.sections_glob)
     seen: dict[str, Path] = dict(found)
     queue: list[Path] = list(found.values())
 

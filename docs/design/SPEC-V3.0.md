@@ -937,6 +937,7 @@ number_locale = "dot"
 | `number_locale` | `period`、`dot`、`point`、`comma` | `dot`/`point`→`period`；`comma`→`comma` |
 | `level` | `l0`/`l1`/`l2`（大小写不敏感）、`0`/`1`/`2` | 小写 `l0`/`l1`/`l2` |
 | `facts` | glob 或目录名 | 目录名→`<dir>/*.toml` |
+| `numeric_macro_allow[].body_regex` | `\(linewidth...` 与 `(?:linewidth...` 两种转义写法（baselineskip 重复一次也算） | 视为同一张内置模板（§4 S-08） |
 
 **v1 兼容（不改）**：`[project]` 里 `sections` 是**字符串 glob** 且配了 `facts`
 ＝ v1，`root_tex` 被忽略，行为与 V2.2 完全一致。v3 的 `sections` 不允许 glob。
@@ -981,6 +982,166 @@ facts = "facts"
 bib = "refs.bib"
 level = "l1"
 number_locale = "dot"
+```
+
+---
+
+## 11. 事实账与 `\fact{}` 绑定（冻结）
+
+> 本节冻结**事实账文件**的唯一规范形态与 `\fact{}` 的绑定语义。
+> 起因：盲测 #4 的 24 个项目全部按 §10 写对了项目声明，但事实账
+> 用 `schema` 头＋`[[fact]]` 数组时被实现当成「一文件一条的扁平表」，
+> 24 个项目一起报「缺 id」——§10 只冻了 `factscribe.toml`，没冻
+> `facts/*.toml`。写在这里，实现与夹具同表，下一轮出题直接照抄。
+
+### 11.1 facts 文件形态（写死）
+
+- 文件名/位置：`project.facts` 指定（缺省 `facts`＝`facts/*.toml`）。
+- `schema` 头可选，允许 `paperkit-fact/3.x` 与 `factscribe-fact/3.x`；
+  其它 `schema` → `FACT_SCHEMA_INVALID`（CONFIG，exit 2）。
+- 账体是 **`[[fact]]` 表数组**（一个文件可以有多条）。没有 `fact` 键时，
+  允许「一文件一条、顶层扁平」的兼容形态（v3 下要求出现 `id` 或 `value`）。
+- 未知字段**忽略**（前向兼容），不进判据、不改退出码。
+- v1 的 `[[fact]]` 账继续按原样读，行为不变。
+
+**唯一规范形态（可直接复制）**：
+
+```toml
+schema = "paperkit-fact/3.0"   # 可选；不写也按 v3 读（配 §10 的 [project]）
+
+[[fact]]
+id = "A2"                    # 必需，唯一，[A-Za-z0-9._-]
+claim = "..."                # 必需
+value = "10/16"              # 必需；数字的规范形态
+display = "10/16"            # 可选；与 value 必须严格等价（也可写成数组）
+source = "runs/run-01/result.json"
+source_sha256 = "sha256:..."  # 必需；允许带 sha256: 前缀
+locator = "§二 表 1"          # 可选
+confidence = "high"           # high|med|low
+derived_from = ["A1"]         # 可选；派生时必填
+expr = "..."                  # 可选；派生算式（仅四则+括号）
+note = ""
+```
+
+| 字段 | 必需 | 类型/取值 | 说明 |
+|---|---|---|---|
+| `id` | **是** | `^[A-Za-z0-9._-]+$` | 入账键；**全项目唯一**，按大小写不敏感判重 |
+| `claim` | **是** | string | 一句话断言（报告/审批清单的人读面） |
+| `value` | **是** | string | 数字的规范形态（`10/16`、`62.5%`、`0.625` 都是合法写法） |
+| `display` | 否 | string 或 string[] | 渲染形；缺省回填 `[value]`；每一项必须与 `value` 严格等价 |
+| `source` | 否* | 项目内相对路径 | 证据文件；给了就核 `source_sha256`，且必须在 `runs/`（v3）或 `source_root` 下 |
+| `source_sha256` | **是** | `sha256:<64hex>` 或 `<64hex>` | 内容锚；`sha256:` 前缀可带可不带，大小写不敏感 |
+| `locator` | 否 | string | 人在源里的定位（页码/小节/表号） |
+| `confidence` | 否 | `high`\|`med`\|`low` | 缺省空串；`check` 要求显式合法值 |
+| `derived_from` | 由 `expr` 定 | string[] | 派生事实的父 id 列表 |
+| `expr` | 由 `derived_from` 定 | string | 只允许四则运算、括号、fact id 与 `.num/.den` |
+| `note` | 否 | string | 自由备注 |
+
+\* `source` 与 `observation` 至少给一个：v3 允许只写
+`observation = { run_id, pointer }`＋`source_sha256`（S-03 的 approve_target
+形态）。此时源层（l0/l1）不核本地哈希；若 `runs/<run_id>/summary.json`
+存在，则自动取作 `source` 并核哈希。两者都缺 → `FACT_EVIDENCE_MISSING`（黄，exit 3）。
+
+**归一化（写死）**：
+
+1. `id` 去首尾空白后入账；判重与引用解析都按 `casefold()`。
+2. `source_sha256` 去掉可选的 `sha256:` 前缀后与现算 64 位小写 hex 比较。
+3. `display` 是**渲染形**：比较前先还原 LaTeX 转义（`\%`→`%`、`\,`→`,`、
+   `\;`/`\:`/`\~`→空格、`\!`→空）。`value` 不还原，按规范数字形写。
+4. `display` 缺省时回填 `value`，这条回填**不参与** R-04 的等价判定
+   （按定义等价），也不许被 `\fact{}` 之外的地方当成额外授权。
+5. 一个文件里的多条 fact 按出现顺序读；重复 `id` 不在读取期合并。
+
+### 11.2 `\fact{id}` 的语义（写死）
+
+两种写法都认：
+
+- `\fact{ID}`：单参数标记，绑定**同一句**里的数字；
+- `\fact{ID}{display}`：双参数标记，第二个参数是要渲染的数字，仍留在
+  扫描流里参与数字审计（`display` 参数只是渲染，不单独授权）。
+
+绑定规则（句级 BU）：
+
+1. **标记到句末**：标记所属 BU＝它所在的那一句；句子边界由既有
+   `sentence_spans` 定义（`。！？.!?` 与换行段），跨句不继承。
+2. **段内每个数字都必须落在绑定 fact 的 value token 集内**：句内未被
+   任何标记覆盖的数字 → `UNBOUND_NUMBER`（黄）；被覆盖但不在
+   `value`/`display` 的 token 集内 → `BOUND_MISMATCH`（红，v1 口径）；
+   v3 同时记 `ASSERTION_DRIFT`（句子与账的断言漂移）。
+3. 一个标记组里有多个 id 时：token 数与 fact 数相等且无 `co_claim` →
+   按书写顺序一一归属（`BINDING_ATTRIBUTION`）；否则整段取并集。
+4. 标记了账上没有的 id → `UNKNOWN_FACT_MARKER`（红）。
+5. 只有非定量 fact 来背数字 → `NONQUANT_BACKS_QUANT`（红）。
+6. `\fact` 标记本身不产生数字；同句多个标记按出现顺序闭合，不跨句借数。
+
+### 11.3 `display` 与 `value` 允许不同吗（写死）
+
+**允许，但必须严格等价**：两者按 `canon_text` 收敛到同一个规范键才放行。
+等价类示例：`10/16` ≡ `0.625` ≡ `62.5%` ≡ `62.5\%`（LaTeX 转义先还原）；
+**不等价**：`0.9` ≠ `0.91`（没有四舍五入容差）、`1/16` ≠ `10/16`。
+
+- 不等价 → `DISPLAY_INCONSISTENT`（红，exit 1）；v3 同时记 `ASSERTION_DRIFT`。
+- `round_to` 若给出，必须等于 display 文本的小数位数，否则
+  `DISPLAY_ROUNDTO_INVALID`（红）。
+- 缺省回填的 display 按定义等价，不判 R-04。
+
+### 11.4 错误码与退出码（写死）
+
+| 情形 | code | tier | exit | 实现位置 |
+|---|---|---|---|---|
+| 缺 `id` | `FACT_ID_MISSING` | CONFIG | **2** | `config.py::_fact_from_mapping`（`ConfigError.code`） |
+| `id` 重复（大小写不敏感） | `DUPLICATE_ID` | FACT | **1** | `audit.py::run_check` 与 `run_audit` 各判一次 |
+| `id` 格式不合法（v3） | `BAD_ID_FORMAT` | FACT | **1** | `audit.py`（v3 用 §11.1 字符集；v1 规则不变） |
+| 未知 fact `schema` | `FACT_SCHEMA_INVALID` | CONFIG | **2** | `config.py::load_facts` |
+| `fact` 不是表数组 | `FACT_CONTAINER_INVALID` | CONFIG | **2** | `config.py::load_facts` |
+| `source_sha256` 与现算不符 | `SOURCE_SHA256_MISMATCH` | FACT | **1** | `audit.py::verify_sources`（v3 另记 `APPROVAL_STALE`） |
+| `source_sha256` 缺失（v1） | `MISSING_SOURCE_SHA256` | FACT | **1** | `audit.py::verify_sources`；v3 源层不强制，L2/审批路径必须有 |
+| 既无 `source` 也无 `observation`/`source_sha256`（v3） | `FACT_EVIDENCE_MISSING` | ADVISORY | **3** | `audit.py::verify_sources` |
+| `display` 与 `value` 不等价 | `DISPLAY_INCONSISTENT` | FACT | **1** | `texrules.py::display_hits` |
+| `display` 缺省 | 无（回填 `value`） | — | — | `config.py::_fact_from_mapping` |
+
+CONFIG 类错误在 `--json` 里以 `{"status":"error","exit":2,"code":"..."}` 呈现，
+`message` 必须指向本节（§11.1）。
+
+### 11.5 最小可复制示例（完整项目）
+
+`factscribe.toml`：
+
+```toml
+[project]
+name = "demo"
+root_tex = "sections/main.tex"
+facts = "facts"
+bib = "refs.bib"
+level = "l1"
+number_locale = "period"
+```
+
+`facts/facts.toml`：
+
+```toml
+schema = "paperkit-fact/3.0"
+
+[[fact]]
+id = "A1"
+claim = "On assembly, the resolved rate is 62.5%."
+value = "62.5%"
+display = ["62.5\\%"]
+quantitative = true
+role = "results"
+run_id = "run-01"
+observation = { run_id = "run-01", pointer = "/summary/on_resolved" }
+source_sha256 = "sha256:4b250136cab46bfdd9d94b8136247b0700e2eb93783ae3bf1c1e62b5f8746a5a"
+```
+
+`sections/main.tex`：
+
+```tex
+\documentclass{article}
+\begin{document}
+\section{Results}
+On assembly, the resolved rate reaches \fact{A1}{62.5\%}~\cite{smith2020}.
+\end{document}
 ```
 
 ---

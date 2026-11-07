@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .facts import Fact, canon_text, fact_value_keys
+from .facts import Fact, canon_text, fact_value_keys, latex_display
 from .constants import SEV_INFO
 
 # --------------------------------------------------------------------------
@@ -21,7 +21,18 @@ except ModuleNotFoundError:  # pragma: no cover
 
 
 class ConfigError(Exception):
-    """配置/用法层面的错误 -> 退出码 2。"""
+    """配置/用法层面的错误 -> 退出码 2。
+
+    `code` 供 --json 消费：SPEC-V3.0 §11.4 冻结的事实账错误码（如
+    `FACT_ID_MISSING` 指向 §11.1）。
+    """
+
+    code = "CONFIG_INVALID"
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        if code:
+            self.code = code
 
 
 def _strip_toml_comment(line: str) -> str:
@@ -644,8 +655,12 @@ def load_config(root: Path) -> Config:
     return _load_v1_config(root, path, data)
 
 
-def _normalise_display(raw) -> list[dict]:
-    """display 项：字符串简写或 `{text, round_to?, setting?}` 表。"""
+def _normalise_display(raw, latex: bool = False) -> list[dict]:
+    """display 项：字符串简写或 `{text, round_to?, setting?}` 表。
+
+    SPEC §11.1：display 是**渲染形**（LaTeX 里就是 `62.5\\%`），严格等价
+    比较前先把 `\\%`、`\\,` 这类转义还原成字面数字形。
+    """
     if raw is None:
         return []
     if isinstance(raw, (str, dict)):
@@ -653,13 +668,18 @@ def _normalise_display(raw) -> list[dict]:
     out: list[dict] = []
     for item in raw:
         if isinstance(item, str):
-            out.append({"text": item, "round_to": None, "setting": None})
+            text, round_to, setting = item, None, None
         elif isinstance(item, dict):
-            out.append({
-                "text": str(item.get("text") or ""),
-                "round_to": item.get("round_to"),
-                "setting": item.get("setting"),
-            })
+            text = str(item.get("text") or "")
+            round_to = item.get("round_to")
+            setting = item.get("setting")
+        else:
+            continue
+        out.append({
+            "text": latex_display(text) if latex else text,
+            "round_to": round_to,
+            "setting": setting,
+        })
     return out
 
 
@@ -681,11 +701,31 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
     if not locator:
         # V3 用 pointer 指向原始产物内部（如 "/summary/rate"）；落到 locator 供人看。
         locator = str(raw.get("pointer") or "")
+    source = str(raw.get("source") or "").strip()
+    obs = raw.get("observation")
+    obs = obs if isinstance(obs, dict) else {}
+    obs_run_id = str(raw.get("run_id") or obs.get("run_id") or "").strip()
+    obs_pointer = str(raw.get("pointer") or obs.get("pointer") or "")
+    if not source and cfg.is_v3:
+        # SPEC §11.1：v3 的事实可以只给 observation（run_id/pointer）＋
+        # source_sha256；证据路径缺省推导为 runs/<run_id>/summary.json。
+        if obs_run_id and not locator:
+            locator = obs_pointer
+        if obs_run_id:
+            candidate = "runs/%s/summary.json" % obs_run_id
+            if (cfg.root / candidate).is_file():
+                source = candidate
+    display = _normalise_display(raw.get("display"), latex=cfg.is_v3)
+    if not display and cfg.is_v3 and str(raw.get("value") or "").strip():
+        # SPEC §11.1：display 缺省时回填 value；这条是定义等价的，不参与
+        # R-04 的严格 canon 判定（auto 标记）。
+        display = [{"text": str(raw.get("value")), "round_to": None,
+                    "setting": None, "auto": True}]
     f = Fact(
         id=fid,
         claim=str(raw.get("claim") or ""),
         value=str(raw.get("value") or ""),
-        source=str(raw.get("source") or ""),
+        source=source,
         source_sha256=str(raw.get("source_sha256") or "").strip().lower(),
         locator=locator,
         confidence=str(raw.get("confidence") or ""),
@@ -696,20 +736,23 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         metric=str(raw.get("metric") or ""),
         scope=str(raw.get("scope") or ""),
         note=str(raw.get("note") or ""),
-        display=_normalise_display(raw.get("display")),
+        display=display,
         co_claim=[str(x) for x in (raw.get("co_claim") or [])],
         file=rel,
         line=_locate_id_line(path, fid),
         role=str(raw.get("role") or ""),
         headline=bool(raw.get("headline")),
         quantitative=bool(raw.get("quantitative")),
-        run_id=str(raw.get("run_id") or ""),
-        pointer=str(raw.get("pointer") or ""),
+        run_id=obs_run_id,
+        pointer=obs_pointer,
         assertions=[dict(a) for a in (raw.get("assertions") or [])
                     if isinstance(a, dict)],
     )
     if not f.id:
-        raise ConfigError("%s 里有一条 fact 缺 id（不准匿名入账）" % path)
+        raise ConfigError(
+            "%s 里有一条 fact 缺 id（不准匿名入账）——V3 事实账 schema 见 "
+            "docs/design/SPEC-V3.0.md §11.1，id 是必需且唯一的入账键" % path,
+            code="FACT_ID_MISSING")
     f.value_keys = fact_value_keys(f.value)
     # display 只允许追加与 value **严格等价**的写法（R-04）；这里先把
     # 它们的字面规范键并入值域，等价性另由 DISPLAY_INCONSISTENT 检查。
@@ -733,9 +776,20 @@ def load_facts(cfg: Config) -> list[Fact]:
             if not isinstance(schema, str) or not is_v3_fact_schema(schema.strip()):
                 raise ConfigError(
                     "%s 的 schema=%r 不认识——本工具只认 %s 的扁平 fact 文件"
+                    "（SPEC-V3.0 §11.1）"
                     % (path, schema,
-                       " / ".join(p + "x" for p in V3_FACT_SCHEMA_PREFIXES)))
-            entries = [data]
+                       " / ".join(p + "x" for p in V3_FACT_SCHEMA_PREFIXES)),
+                    code="FACT_SCHEMA_INVALID")
+            # SPEC §11.1：`schema` 只是声明头，账体仍是 `[[fact]]` 表数组；
+            # 「一文件一条、顶层扁平」是兼容形态，只在没有 `fact` 键时成立。
+            if "fact" in data:
+                entries = data.get("fact")
+                if not isinstance(entries, list):
+                    raise ConfigError(
+                        "%s 里 fact 必须是 [[fact]] 表数组（SPEC-V3.0 §11.1）" % path,
+                        code="FACT_CONTAINER_INVALID")
+            else:
+                entries = [data]
         else:
             entries = data.get("fact")
             if entries is None:
@@ -746,10 +800,12 @@ def load_facts(cfg: Config) -> list[Fact]:
                 else:
                     continue
             if not isinstance(entries, list):
-                raise ConfigError("%s 里 fact 必须是 [[fact]] 表数组" % path)
+                raise ConfigError("%s 里 fact 必须是 [[fact]] 表数组" % path,
+                                  code="FACT_CONTAINER_INVALID")
         for raw in entries:
             if not isinstance(raw, dict):
-                raise ConfigError("%s 里有一条 fact 不是表" % path)
+                raise ConfigError("%s 里有一条 fact 不是表" % path,
+                                  code="FACT_SCHEMA_INVALID")
             facts.append(_fact_from_mapping(raw, path, cfg))
     return facts
 

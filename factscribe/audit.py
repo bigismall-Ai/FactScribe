@@ -260,6 +260,19 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
         loc = "%s:%s" % (f.file, f.line or "?")
         src = f.source.strip()
         if not src:
+            if cfg.is_v3:
+                # SPEC §11.1：V3 事实的证据指针可以是 observation（run_id＋
+                # pointer）＋source_sha256，不强制项目内 source 路径。没有
+                # 本地产物时源层（l0/l1）不回核哈希；L2/审批路径由
+                # approve_target 的 source_sha256 承担。
+                if f.run_id or f.pointer or f.source_sha256:
+                    continue
+                yellow.append(Issue(
+                    "FACT_EVIDENCE_MISSING",
+                    "fact %r 既没有 source 也没有 observation/source_sha256——"
+                    "账上的数无法指回任何证据" % f.id,
+                    location=loc, token=f.id, severity=SEV_YELLOW))
+                continue
             red.append(Issue("MISSING_SOURCE_FIELD", "fact %r 缺 source 字段" % f.id,
                              location=loc, token=f.id))
             continue
@@ -434,11 +447,17 @@ def run_check(cfg: Config, facts: list[Fact]):
                 % (f.id, seen[key].file, f.file), location=loc, token=f.id))
         else:
             seen[key] = f
-        if re.search(r"\s", f.id) or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", f.id):
+        if cfg.is_v3:
+            id_ok = re.fullmatch(r"[A-Za-z0-9._-]+", f.id)
+            id_hint = "只允许字母/数字/下划线/点/连字符（SPEC-V3.0 §11.1）"
+        else:
+            id_ok = re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]*", f.id) and not re.search(r"\s", f.id)
+            id_hint = "只允许字母开头，后接字母/数字/_ . : -（不许空白）"
+        if not id_ok:
             issues.append(Issue(
                 "BAD_ID_FORMAT",
-                "fact id %r 不合法：只允许字母开头，后接字母/数字/_ . : -（不许空白）"
-                % f.id, location=loc, token=f.id))
+                "fact id %r 不合法：%s" % (f.id, id_hint),
+                location=loc, token=f.id))
         if f.confidence not in CONFIDENCE_OK:
             issues.append(Issue(
                 "BAD_CONFIDENCE", "fact %r 的 confidence=%r 不合法（只允许 high/med/low）"
@@ -660,6 +679,24 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             token=",".join(ks), severity=SEV_YELLOW))
 
     fact_by_id = {f.id_key: f for f in facts}
+    # SPEC §11.4：id 必须唯一（大小写不敏感）。审计面也要判，否则字典会把
+    # 后一条悄悄覆盖前一条，重复入账就成了「谁最后一次写谁赢」。
+    _seen_ids: dict[str, Fact] = {}
+    for f in facts:
+        loc = "%s:%s" % (f.file, f.line or "?")
+        if f.id_key in _seen_ids:
+            red.append(Issue(
+                "DUPLICATE_ID",
+                "fact id %r 重复（%s 与 %s；id 按大小写不敏感判重）"
+                % (f.id, _seen_ids[f.id_key].file, f.file),
+                location=loc, token=f.id))
+        else:
+            _seen_ids[f.id_key] = f
+        if (cfg.is_v3 and not re.fullmatch(r"[A-Za-z0-9._-]+", f.id)):
+            red.append(Issue(
+                "BAD_ID_FORMAT",
+                "fact id %r 不合法：只允许字母/数字/下划线/点/连字符"
+                "（SPEC-V3.0 §11.1）" % f.id, location=loc, token=f.id))
     # 全局值域只收 claim 事实：config 事实不能当「数字白名单」用（红队 C3/C6）
     key_to_facts: dict[str, list[str]] = {}
     for f in facts:

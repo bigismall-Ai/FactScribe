@@ -357,8 +357,14 @@ _LENGTH_BODY = (r"^[0-9.]+ *(?:linewidth|textwidth|columnwidth|paperwidth|"
                 r"baselineskip|ex|em|pt|mm|cm|in)$")
 _WIDTH_BODY = r"^[0-9.]+ *(?:linewidth|textwidth|columnwidth)$"
 _COUNT_BODY = r"^[0-9]+$"
-_BUILTIN_BODIES = {"length": _LENGTH_BODY, "width": _WIDTH_BODY,
-                   "count": _COUNT_BODY}
+# SPEC-V3.0 §4 S-08 正文里写的那张「长度/宽度」模板（逐字可复制形态）。
+# 它用了 `\(...` 而不是 `(?:...`，且 baselineskip 重复了一次；两处写法
+# 是同一张模板的转义/归一差异，按 §11 的归一说明视为同一形状。
+_SPEC_LENGTH_BODY = (r"^[0-9.]+ *\(linewidth|textwidth|columnwidth|paperwidth|"
+                     r"baselineskip|baselineskip|ex|em|pt|mm|cm|in)$")
+_BUILTIN_BODIES = {"length": {_LENGTH_BODY, _SPEC_LENGTH_BODY},
+                   "width": {_WIDTH_BODY, _SPEC_LENGTH_BODY},
+                   "count": {_COUNT_BODY}}
 _COUNT_NAMES = ("num", "width", "height", "size")
 
 
@@ -370,7 +376,7 @@ def numeric_macro_issues(cfg) -> list[Issue]:
         kind = str(rule.get("parameter_kind") or "").strip()
         body = str(rule.get("body_regex") or "").strip()
         label = "numeric_macro_allow#%d（%s）" % (idx, name or "?")
-        if kind not in _BUILTIN_BODIES or body != _BUILTIN_BODIES[kind]:
+        if kind not in _BUILTIN_BODIES or body not in _BUILTIN_BODIES[kind]:
             out.append(Issue(
                 "NUMERIC_MACRO_SHAPE_INVALID",
                 "%s 的形状不合法：parameter_kind=%r，body_regex=%r——"

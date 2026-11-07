@@ -245,6 +245,9 @@ def display_hits(fact) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     value_canon = canon_text(fact.value)
     for item in getattr(fact, "display", []) or []:
+        if item.get("auto"):
+            # SPEC §11.1：display 缺省回填 value，按定义等价。
+            continue
         text = item.get("text", "")
         canon = canon_text(text)
         if canon is None or value_canon is None or canon != value_canon:

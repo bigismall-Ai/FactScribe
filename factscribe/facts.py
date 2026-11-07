@@ -58,6 +58,26 @@ def _num_key(d: Decimal) -> str:
     return s
 
 
+# LaTeX 渲染形里的转义：display 写的是「读者看到的样子」，比较前要还原。
+#   \% -> %      \, -> ,（千分位）    \; \: \  ~ -> 空格    \! -> 无
+_LATEX_DISPLAY_RE = re.compile(r"\\([%&_#$])|\\[,;:! ]|~")
+
+
+def latex_display(text: str) -> str:
+    """把 display 里的 LaTeX 转义还原成字面数字形（SPEC §11.1）。"""
+    def repl(m: re.Match) -> str:
+        if m.group(1) is not None:
+            return m.group(1)
+        esc = m.group(0)
+        if esc == r"\,":
+            return ","
+        if esc in (r"\;", r"\:", "\\ ", "~"):
+            return " "
+        return ""
+
+    return _LATEX_DISPLAY_RE.sub(repl, str(text or ""))
+
+
 def number_key(token: str, suffix: str | None = None, percent: bool = False) -> str:
     try:
         d = Decimal(str(token).replace(",", ""))

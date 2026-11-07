@@ -185,8 +185,10 @@ def main(argv=None) -> int:
         return handlers[args.command](args)
     except ConfigError as exc:
         if getattr(args, "json", False):
-            print(json.dumps(_payload(args.command, "error", EXIT_CONFIG,
-                                      message=str(exc)), ensure_ascii=False, indent=2))
+            payload = _payload(args.command, "error", EXIT_CONFIG,
+                               message=str(exc))
+            payload["code"] = getattr(exc, "code", "CONFIG_INVALID")
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)
         return EXIT_CONFIG

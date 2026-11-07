@@ -36,6 +36,16 @@ and will not change without a major version bump.
   `APPROVAL_MISSING_ASSERTIONS`.
 - `source_sha256` accepts the canonical `sha256:` prefix; in V3 a mismatch also
   reports `APPROVAL_STALE` (S-03: it is part of `approve_target`).
+- SPEC §11「事实账与 `\fact{}` 绑定（冻结）」: `facts/*.toml` may carry a
+  `schema` header **and** a `[[fact]]` array (the holdout #4 form); `display`
+  defaults to `[value]` and LaTeX escapes are normalized before strict
+  equivalence; V3 facts may anchor evidence via `observation` without a local
+  `source` path; error codes frozen (`FACT_ID_MISSING`, `DUPLICATE_ID`,
+  `FACT_SCHEMA_INVALID`, `FACT_CONTAINER_INVALID`, `FACT_EVIDENCE_MISSING`).
+- `numeric_macro_allow[].body_regex` accepts the §4 S-08 template in both
+  `\(...` and `(?:...` spellings (same built-in shape).
+- `docs/implementation/FACTS-SCHEMA.md`: schema table, error-code mapping,
+  implementation locations, blind-test #4 per-item record.
 
 ## [1.1.0] — 2026-11-07
 

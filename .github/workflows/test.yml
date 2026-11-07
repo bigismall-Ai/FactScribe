@@ -23,9 +23,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # paperkit is stdlib-only: no install, no network, no services.
+      # factscribe is stdlib-only: no install, no network, no services.
       - name: Version
-        run: python paperkit.py --version
+        run: python factscribe.py --version
 
       - name: Unit tests (offline)
         run: python -m unittest discover -s tests -v
@@ -35,7 +35,7 @@ jobs:
       - name: Acceptance sample fails as documented
         run: |
           set +e
-          python paperkit.py audit examples/minimal
+          python factscribe.py audit examples/minimal
           code=$?
           set -e
           if [ "$code" -ne 1 ]; then

@@ -1,0 +1,7 @@
+[manifest]
+signed_by = "redteam-fixture-human"
+signed_at = "2026-11-07T00:00:00Z"
+version = 1
+
+[files]
+"results/run.log" = "eea981d236b45bb5a660252ec2642cc0338c5979c395ffab7eda4a5958f79634"

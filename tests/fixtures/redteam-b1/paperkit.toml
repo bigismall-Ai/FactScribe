@@ -1,0 +1,5 @@
+[project]
+title = "redteam-b1"
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"

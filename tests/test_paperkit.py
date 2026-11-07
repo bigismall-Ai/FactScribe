@@ -4,7 +4,9 @@
 跑法（仓根）：python3 -m unittest discover -s tests -v
 """
 
+import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -23,6 +25,10 @@ BIB_OK = """@inproceedings{chen2023,
   doi = {10.18653/v1/2023.emnlp-main.741}
 }
 """
+
+# 原始产物：所有 fixture 的 fact.value 数字都必须字面出现在这里（value 回查闸）
+RESULT_TEXT = ("open 10/16 closed 8/16 alt 11/16; total 56.25%; "
+               "scale 1234 and 53000; params 3500000; epoch 42 n 4\n")
 
 FACT_A1 = """[[fact]]
 id = "A1"
@@ -52,21 +58,56 @@ source = "results/raw.md"
 locator = "§三"
 confidence = "med"
 derived_from = ["A1", "A3"]
+expr = "(A1.num + A3.num) / (A1.den + A3.den) * 100"
 """
 
 FACTS = FACT_A1 + "\n" + FACT_A3 + "\n" + FACT_A2
 
+FACT_42 = """[[fact]]
+id = "X1"
+claim = "epochs"
+value = "42"
+source = "results/raw.md"
+locator = "§一"
+confidence = "low"
+derived_from = []
+"""
 
-def make_project(tmp, facts=FACTS, sections=None, bib=BIB_OK, build=""):
+
+def _sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _inject_sha(facts, digest):
+    return facts.replace('source = "results/raw.md"',
+                         'source = "results/raw.md"\nsource_sha256 = "%s"' % digest)
+
+
+def _write_manifest(root, files, signed=True):
+    lines = ["[manifest]"]
+    if signed:
+        lines += ['signed_by = "test-human"', 'signed_at = "2026-11-07T00:00:00Z"']
+    lines += ["version = 1", "", "[files]"]
+    for rel, digest in sorted(files.items()):
+        lines.append('"%s" = "%s"' % (rel, digest))
+    (root / "results" / "MANIFEST.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def make_project(tmp, facts=FACTS, sections=None, bib=BIB_OK, build="",
+                 results_text=RESULT_TEXT, manifest=True):
     root = Path(tmp)
     (root / "facts").mkdir(parents=True, exist_ok=True)
     (root / "sections").mkdir(parents=True, exist_ok=True)
     (root / "results").mkdir(parents=True, exist_ok=True)
-    (root / "results" / "raw.md").write_text("open 10/16 closed 8/16\n", encoding="utf-8")
-    (root / "facts" / "f.toml").write_text(facts, encoding="utf-8")
+    raw = root / "results" / "raw.md"
+    raw.write_text(results_text, encoding="utf-8")
+    digest = _sha(raw)
+    (root / "facts" / "f.toml").write_text(_inject_sha(facts, digest), encoding="utf-8")
     if sections:
         for name, text in sections.items():
-            (root / "sections" / name).write_text(text, encoding="utf-8")
+            dest = root / "sections" / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
     if bib is not None:
         (root / "refs.bib").write_text(bib, encoding="utf-8")
     (root / "paperkit.toml").write_text(
@@ -74,6 +115,8 @@ def make_project(tmp, facts=FACTS, sections=None, bib=BIB_OK, build=""):
         'sections = "sections/*.tex"\nfacts = "facts/*.toml"\n'
         'bib = "refs.bib"\nbuild = "%s"\n' % build,
         encoding="utf-8")
+    if manifest:
+        _write_manifest(root, {"results/raw.md": digest})
     return root
 
 
@@ -208,14 +251,15 @@ class TestCheck(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("BAD_DERIVED_FROM", [i["code"] for i in data["issues"]])
 
-    def test_conflict_listed_but_not_red(self):
+    def test_conflict_listed_and_yellow(self):
         rival = FACT_A1.replace('"A1"', '"A9"').replace('"10/16"', '"11/16"')
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(tmp, facts=FACT_A1 + "\n" + rival)
             code, data = run_json(["check", str(root), "--json"])
-            self.assertEqual(code, 0)          # 冲突不是错
+            self.assertEqual(code, 3)          # v1：账本自相矛盾＝黄，不判死但不再算绿
             self.assertEqual(len(data["conflicts"]), 1)
             self.assertIn("A1", data["conflicts"][0]["ids"])
+            self.assertIn("LEDGER_CONFLICT", [w["code"] for w in data["warnings"]])
 
     def test_supersedes_silences_conflict(self):
         new = (FACT_A1.replace('"A1"', '"A9"').replace('"10/16"', '"11/16"')
@@ -251,7 +295,8 @@ class TestAudit(unittest.TestCase):
     def test_percent_and_fraction_and_kilo_matched(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(
-                tmp, sections={"a.tex": "56.25\\% 与 10/16 与 53k 与 1,234 与 3.5M\n"},
+                tmp,
+                sections={"a.tex": "56.25\\% 与 10/16 与 53k 与 1,234 与 3.5M\\fact{A1,A3,A2,B1,B2}\n"},
                 # 加两条只为提供 1234 / 53000 / 3500000
                 facts=FACTS + """
 [[fact]]
@@ -274,6 +319,7 @@ derived_from = []
 """)
             code, data = run_json(["audit", str(root), "--json"])
             self.assertEqual(code, 0, data)
+            self.assertEqual(data["summary"]["numbers_unbound"], 0)
 
     def test_bound_line_ok(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -333,11 +379,12 @@ derived_from = []
             with tempfile.TemporaryDirectory() as tmp:
                 root = make_project(tmp, sections={"a.tex": "见 \\cite{chen2023}。\n"})
                 cfg = paperkit.load_config(root)
-                red, hints, summary, resolved = paperkit.run_audit(
+                red, yellow, hints, summary, resolved = paperkit.run_audit(
                     cfg, paperkit.load_facts(cfg), paperkit.load_sections(cfg), resolve=True)
                 self.assertEqual(red, [])
                 self.assertEqual(resolved[0]["status"], "unverified")
                 self.assertIn("CITE_UNVERIFIED", [h.code for h in hints])
+                self.assertIn("CITE_UNVERIFIED", [y.code for y in yellow])
         finally:
             paperkit._resolve_arxiv, paperkit._resolve_doi = orig_ax, orig_doi
 
@@ -450,6 +497,339 @@ class TestExampleAcceptance(unittest.TestCase):
         code, data = run_json(["matrix", str(self.root), "--json"])
         self.assertEqual(code, 0)
         self.assertEqual(len(data["rows"]), 3)
+
+
+class TestV1InlineBinding(unittest.TestCase):
+    """闸 1：正文数字必须内联绑定，且是该 fact.value 里的 token。"""
+
+    def test_unbound_number_is_yellow_not_green(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_42, sections={"a.tex": "we run 42 epochs\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 3, data)                 # 黄：回得到账但没绑定
+            self.assertEqual(data["issues"], [])
+            self.assertIn("UNBOUND_NUMBER", [w["code"] for w in data["warnings"]])
+
+    def test_strict_upgrades_yellow_to_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_42, sections={"a.tex": "we run 42 epochs\n"})
+            code, _ = run_json(["audit", str(root), "--json", "--strict"])
+            self.assertEqual(code, 1)
+
+    def test_unbound_number_with_no_fact_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_42, sections={"a.tex": "noise 1422 here\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertEqual([i["code"] for i in data["issues"]], ["UNMATCHED_NUMBER"])
+
+    def test_token_equality_not_substring(self):
+        # value=42 不能吃下 1422 / 4242 / 4.2e-5
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp, facts=FACT_42,
+                sections={"a.tex": "1422 42 4242 4.2e-5\\fact{X1}\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertEqual({i["code"] for i in data["issues"]}, {"BOUND_MISMATCH"})
+            self.assertEqual({i["token"] for i in data["issues"]},
+                             {"1422", "4242", "4.2e-5"})
+
+    def test_config_fact_cannot_be_global_whitelist(self):
+        cfg_fact = FACT_42.replace('claim = "epochs"', 'claim = "epochs"\nkind = "config"')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=cfg_fact, sections={"a.tex": "we run 42 epochs\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)        # config 不进全局值域 -> 未绑定即红
+            self.assertEqual([i["code"] for i in data["issues"]], ["UNMATCHED_NUMBER"])
+
+
+class TestV1SourceAnchoring(unittest.TestCase):
+    """闸 2：source_sha256 + 人签清单 + value 回查。"""
+
+    def test_sha_mismatch_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, sections={"a.tex": "16 题里解决 10 道\\fact{A1}\n"})
+            (root / "results" / "raw.md").write_text("tampered\n", encoding="utf-8")
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 1)
+            codes = {i["code"] for i in data["issues"]}
+            self.assertIn("SOURCE_SHA256_MISMATCH", codes)
+            self.assertIn("MANIFEST_HASH_MISMATCH", codes)
+
+    def test_missing_sha_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp)
+            p = root / "facts" / "f.toml"
+            p.write_text(re.sub(r"^source_sha256 = .*$\n?", "", p.read_text(encoding="utf-8"),
+                                flags=re.M), encoding="utf-8")
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("MISSING_SOURCE_SHA256", [i["code"] for i in data["issues"]])
+
+    def test_missing_manifest_is_yellow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, manifest=False)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 3)
+            self.assertIn("NO_MANIFEST", [w["code"] for w in data["warnings"]])
+
+    def test_manifest_unsigned_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp)
+            digest = _sha(root / "results" / "raw.md")
+            _write_manifest(root, {"results/raw.md": digest}, signed=False)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("MANIFEST_UNSIGNED", [i["code"] for i in data["issues"]])
+
+    def test_source_outside_results_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp)
+            notes = root / "notes"
+            notes.mkdir()
+            (notes / "x.md").write_text("10/16\n", encoding="utf-8")
+            digest = _sha(notes / "x.md")
+            (root / "facts" / "f.toml").write_text(
+                FACT_A1.replace('source = "results/raw.md"',
+                                'source = "notes/x.md"\nsource_sha256 = "%s"' % digest),
+                encoding="utf-8")
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("SOURCE_OUTSIDE_RESULTS", [i["code"] for i in data["issues"]])
+
+    def test_value_not_in_source_is_yellow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1.replace('"10/16"', '"77"'))
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 3, data)
+            self.assertIn("VALUE_NOT_IN_SOURCE", [w["code"] for w in data["warnings"]])
+
+
+class TestV1Citations(unittest.TestCase):
+    """闸 3：natbib 全家桶 + fail-closed + 标识格式。"""
+
+    def _audit(self, tex, bib=BIB_OK):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, sections={"a.tex": tex}, bib=bib)
+            return run_json(["audit", str(root), "--json"])
+
+    def test_citep_checked(self):
+        code, data = self._audit("见 \\citep{ghost2024}。\n")
+        self.assertEqual(code, 1)
+        self.assertEqual([i["code"] for i in data["issues"]], ["MISSING_CITE"])
+
+    def test_citet_with_optional_args_checked(self):
+        code, data = self._audit("见 \\citet[see][p.~3]{ghost2024}。\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(data["issues"][0]["token"], "ghost2024")
+
+    def test_citeauthor_checked(self):
+        code, data = self._audit("\\citeauthor{ghost2024} 说过。\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(data["issues"][0]["code"], "MISSING_CITE")
+
+    def test_nocite_key_checked(self):
+        code, data = self._audit("\\nocite{ghost2024}\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(data["issues"][0]["token"], "ghost2024")
+
+    def test_unknown_cite_command_fails_closed(self):
+        code, data = self._audit("\\fancycite{chen2023}\n")
+        self.assertEqual(code, 1)
+        self.assertIn("UNKNOWN_CITE_COMMAND", [i["code"] for i in data["issues"]])
+
+    def test_bad_arxiv_format_is_red(self):
+        bib = "@article{bad2024,\n title = {X},\n arxiv = {not-an-id}\n}\n"
+        code, data = self._audit("\\cite{bad2024}\n", bib=bib)
+        self.assertEqual(code, 1)
+        self.assertIn("BAD_STABLE_ID_FORMAT", [i["code"] for i in data["issues"]])
+
+    def test_misc_with_url_is_ok(self):
+        bib = "@misc{web2020,\n title = {Docs},\n url = {https://example.com/x}\n}\n"
+        code, data = self._audit("\\cite{web2020}\n", bib=bib)
+        self.assertEqual(code, 0, data)
+
+    def test_duplicate_bib_key_is_red(self):
+        bib = BIB_OK + "\n" + BIB_OK
+        code, data = self._audit("\\cite{chen2023}\n", bib=bib)
+        self.assertEqual(code, 1)
+        self.assertIn("DUPLICATE_BIB_KEY", [i["code"] for i in data["issues"]])
+
+    def test_duplicate_stable_id_is_yellow(self):
+        bib = BIB_OK + ("\n@article{other2023,\n title = {Same},\n"
+                        " doi = {10.18653/v1/2023.emnlp-main.741}\n}\n")
+        code, data = self._audit("\\cite{chen2023}\n", bib=bib)
+        self.assertEqual(code, 3)
+        self.assertIn("DUPLICATE_STABLE_ID", [w["code"] for w in data["warnings"]])
+
+    def test_string_macro_and_crossref(self):
+        bib = ("@string{jm = {Journal of ML}}\n"
+               "@proceedings{parent2020,\n doi = {10.1000/parent}\n}\n"
+               "@inproceedings{child2021,\n crossref = {parent2020},\n"
+               " title = {Child}, journal = jm\n}\n")
+        code, data = self._audit("\\cite{child2021}\n", bib=bib)
+        self.assertEqual(code, 0, data)
+
+
+class TestV1DerivedExpr(unittest.TestCase):
+    """闸 5：derived 必须写 expr，工具用 ast 白名单求值。"""
+
+    def test_expr_ok(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+
+    def test_expr_mismatch_is_red(self):
+        bad = FACT_A2.replace('"56.25%"', '"75%"')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1 + "\n" + FACT_A3 + "\n" + bad)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("EXPR_MISMATCH", [i["code"] for i in data["issues"]])
+
+    def test_missing_expr_is_red(self):
+        bad = re.sub(r"^expr = .*$\n?", "", FACT_A2, flags=re.M)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1 + "\n" + FACT_A3 + "\n" + bad)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("MISSING_EXPR", [i["code"] for i in data["issues"]])
+
+    def test_expr_ast_whitelist_blocks_calls(self):
+        bad = FACT_A2.replace(
+            'expr = "(A1.num + A3.num) / (A1.den + A3.den) * 100"',
+            'expr = "__import__(\'os\').system(\'echo pwn\')"')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1 + "\n" + FACT_A3 + "\n" + bad)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("EXPR_INVALID", [i["code"] for i in data["issues"]])
+
+    def test_derived_cycle_is_red(self):
+        c1 = ('[[fact]]\nid = "C1"\nclaim = "c1"\nvalue = "2"\n'
+              'source = "results/raw.md"\nlocator = ""\nconfidence = "low"\n'
+              'derived_from = ["C2"]\nexpr = "C2 + 1"\n')
+        c2 = ('[[fact]]\nid = "C2"\nclaim = "c2"\nvalue = "1"\n'
+              'source = "results/raw.md"\nlocator = ""\nconfidence = "low"\n'
+              'derived_from = ["C1"]\nexpr = "C1 - 1"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=c1 + "\n" + c2)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("DERIVED_CYCLE", [i["code"] for i in data["issues"]])
+
+    def test_superseded_parent_is_red(self):
+        newer = (FACT_A1.replace('"A1"', '"A9"').replace('"10/16"', '"11/16"')
+                 .replace("derived_from = []", 'derived_from = []\nsupersedes = ["A1"]'))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1 + "\n" + newer + "\n" + FACT_A2)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 1)
+            self.assertIn("SUPERSEDED_PARENT", [i["code"] for i in data["issues"]])
+
+
+class TestV1Lexing(unittest.TestCase):
+    """B3/C1/C4 的分词契约：唯一流水线。"""
+
+    def nums(self, tex):
+        s = paperkit.scan_tex(tex)
+        return [n["token"] for n in paperkit._extract_numbers(s.masked, tex)]
+
+    def test_verbatim_percent_is_not_comment(self):
+        tex = "\\begin{verbatim}\nprecision = 50% (raw log)\n\\end{verbatim}\n后面 10 个"
+        self.assertEqual(self.nums(tex), ["10"])
+
+    def test_pkignore_explicit_exemption(self):
+        self.assertEqual(self.nums(r"年份 2024 \pkignore{2024} 与 10 个"), ["2024", "10"])
+
+    def test_superscript_subscript_are_structural(self):
+        tex = r"We report $R^2 = 0.91$, $N = 1{,}024$, $\alpha = 0.05$, $x_{12}$."
+        self.assertEqual(self.nums(tex), ["0.91", "1024", "0.05"])
+
+    def test_scientific_notation_is_one_token(self):
+        self.assertEqual(self.nums("lr 3e-4 and 4.2e-5"), ["3e-4", "4.2e-5"])
+        self.assertEqual(paperkit.number_key("3e-4"), "0.0003")
+
+    def test_latex_thin_space_thousands(self):
+        self.assertEqual(self.nums(r"a corpus of 1\,000\,000 tokens"), ["1000000"])
+
+    def test_percent_word(self):
+        self.assertEqual(self.nums("grew by 3.4 percent"), ["3.4%"])
+        self.assertEqual(paperkit.number_key("3.4", None, True), "0.034")
+
+    def test_cite_optional_args_are_masked(self):
+        s = paperkit.scan_tex(r"\citep[see][p.~3]{chen2023}")
+        self.assertEqual([n["token"] for n in paperkit._extract_numbers(s.masked, "x")], [])
+
+
+class TestV1ExitAndJson(unittest.TestCase):
+    def test_json_schema_and_severity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, sections={"a.tex": "16 题里解决 10 道\\fact{A1}\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+            self.assertEqual(data["schema_version"], "1.0")
+            self.assertEqual(data["severity"], "ok")
+            self.assertEqual(data["status"], "ok")
+
+    def test_yellow_exit_code_and_severity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_42, sections={"a.tex": "42 epochs\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 3)
+            self.assertEqual(data["severity"], "yellow")
+            self.assertTrue(all(w["severity"] == "yellow" for w in data["warnings"]))
+            self.assertTrue(all(i["severity"] == "red" for i in data["issues"]))
+
+    def test_unscanned_tex_is_yellow_with_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, sections={"a.tex": "16 题里解决 10 道\\fact{A1}\n"})
+            (root / "notes").mkdir()
+            (root / "notes" / "extra.tex").write_text("stray 999\n", encoding="utf-8")
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 3)
+            self.assertIn("UNSCANNED_TEX", [w["code"] for w in data["warnings"]])
+            self.assertIn("sections/a.tex", data["coverage"]["files_scanned"])
+
+    def test_duplicate_value_hygiene(self):
+        rival = FACT_A1.replace('"A1"', '"A9"').replace('"开臂 resolved（16 题）"', '"另一件事"')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACT_A1 + "\n" + rival)
+            code, data = run_json(["check", str(root), "--json"])
+            self.assertEqual(code, 3)
+            self.assertIn("DUPLICATE_VALUE", [w["code"] for w in data["warnings"]])
+
+    def test_preamble_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp)
+            code, data = run_json(["preamble", str(root), "--json"])
+            self.assertEqual(code, 0)
+            text = (root / "audit" / "preamble.tex").read_text(encoding="utf-8")
+            self.assertIn(r"\providecommand{\fact}", text)
+
+
+class TestRedTeamCounterexamples(unittest.TestCase):
+    """红队 B1/B4 的反例夹具：v1 里必须真的红。"""
+
+    def setUp(self):
+        self.fix = ROOT / "tests" / "fixtures"
+
+    def test_b1_fabricated_numbers_now_red(self):
+        code, data = run_json(["audit", str(self.fix / "redteam-b1"), "--json"])
+        self.assertEqual(code, 1, data)
+        toks = {i["token"] for i in data["issues"]}
+        self.assertTrue({"1422", "4.2e-5", "4242"} <= toks, toks)
+        self.assertEqual([i["code"] for i in data["issues"]],
+                         ["UNMATCHED_NUMBER"] * 3)
+
+    def test_b4_nested_sections_now_red(self):
+        code, data = run_json(["audit", str(self.fix / "redteam-b4"), "--json"])
+        self.assertEqual(code, 1, data)
+        locs = [i["location"] for i in data["issues"]]
+        self.assertTrue(any(l.startswith("sections/chapters/intro.tex:") for l in locs), locs)
+        self.assertEqual({i["token"] for i in data["issues"]}, {"3.7%", "12"})
 
 
 if __name__ == "__main__":

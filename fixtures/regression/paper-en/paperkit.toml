@@ -7,4 +7,4 @@ bib = "refs.bib"
 build = "tectonic main.tex"
 manifest = "results/MANIFEST.toml"
 # 原始产物解析根：source 写相对它的路径，产物不必搬进 paper/（批 36 D3）
-source_root = "../../../.."
+source_root = "."

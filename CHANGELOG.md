@@ -7,6 +7,19 @@ paperkit is a pre-1.0-grade tool in behaviour but its gate contract is already
 frozen (see `SPEC-V1.md` §5): exit codes and violation codes are the public API
 and will not change without a major version bump.
 
+## [1.2.0] - 2026-11-09
+
+### Added
+- `style` subcommand: nine yellow rules for formulaic prose (dash, heading length and form, term in heading, rhythm, filler). Never blocks, never rewrites.
+- `protect` subcommand: compares six protected surfaces between two drafts (facts, numbers, citations, math, tables, labels); anything changed is red.
+- `verify-pdf`: text-layer and raster checks, bidirectional number multiset, stamp verification.
+- `scripts/preflight-ci.sh`: clean-clone CI equivalent across Python 3.10/3.11/3.12.
+- `scripts/check-readme.py`: README self-check with the same rules.
+
+### Changed
+- Blind-test results and remaining gaps documented in `docs/release/KNOWN-GAPS.md`.
+- README rewritten to match v1.2.0 (short headings, no parenthetical dashes, verified commands and counts).
+
 ## [Unreleased]
 
 ### Added

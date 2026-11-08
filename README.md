@@ -1,161 +1,117 @@
-# FactScribe — 给 AI 写的论文装一道「数字闸」（v1）
+# FactScribe
 
 **中文** · [English](README.en.md)
 
-给 agent（或人）写 LaTeX 论文，但**不许编数字、不许编引用**。
-不依赖 sia-harness，不依赖任何模型 SDK，纯标准库，Python ≥ 3.10。
+FactScribe 是一道闸门，用来拦 AI 写论文时最危险的两类编造：数字没有出处，引用指向不存在的文献。
+它不生成正文，也不改正文；它只回答一件事：**这句话里的每个数，能不能回到一份签过字、算过哈希的原始材料。**
 
-一句话：正文里的每个数字必须**内联绑定**到 `facts/` 里的一条 fact（`\fact{A1}`），
-且是该 fact value 里的 token；每条 fact 必须钉住一个带 `sha256`、并在**人签清单**
-里的 `results/` 原始产物；每个 `\cite` 家族命令必须落到稳定标识（`arxiv`/`doi`）。
-闸门不通过就非零退出。
+不依赖任何模型 SDK，纯标准库，Python ≥ 3.10。
 
-> **绿 = 「账有据、据未改、文有绑」，不是「论文为真」。** 边界见 `docs/design/SPEC-V1.md` §2.3。
+> 绿只说明「账有据、据未改、文有绑」，不说明论文为真。边界见 `docs/design/SPEC-V1.md` §2.3。
 
-## 跑起来
+## 装与跑
 
 ```bash
-python3 -m factscribe check    <项目目录>            # 账本身：id/sha256/清单/expr/冲突
-python3 -m factscribe audit    <项目目录>            # 核心：绑定 + 数字 + 引用 + 覆盖
-python3 -m factscribe audit    <项目目录> --resolve  # 再联网核验 arXiv/DOI（可选）
-python3 -m factscribe matrix   <项目目录>            # 生成 audit/matrix.md
-python3 -m factscribe preamble <项目目录>            # 生成 \fact / \pkignore 宏
-python3 -m factscribe build    <项目目录>            # 跑 project.build
+python3 -m pip install -e .            # 可选；不装也能用 PYTHONPATH 跑
+python3 -m factscribe audit  <项目>    # 核心校验
+python3 -m factscribe style  <项目>    # 文风体检
 ```
 
-全部支持 `--json`（给 agent 用；stdout 只出 JSON）；`check/audit` 还有 `--strict`
-（黄也当红，CI 用）：
+## 六个命令
+
+| 命令 | 干什么 |
+|---|---|
+| `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
+| `audit` | 核心：内联绑定、数字回账、引用落稳定标识、覆盖报告 |
+| `protect` | 改写保护面：改写前后比对六类不许变的内容 |
+| `style` | 文风体检：只报公式化写法，黄牌，不阻断 |
+| `verify-pdf` | PDF 回检：文本层、栅格页、双向多重集、stamp 验签 |
+| `matrix` | 生成追溯矩阵 `audit/matrix.md` |
+
+全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
+
+退出码约定：
+
+| 码 | 含义 |
+|---|---|
+| 0 | 绿，无红无黄 |
+| 1 | 红，有违例 |
+| 2 | 配置或用法错 |
+| 3 | 黄，未核验或未绑定，不判死但不算绿 |
+| 4 | 工具内部错误 |
+
+缺 `factscribe.toml`、事实账为空、正文为空、`refs.bib` 缺失，一律退出码 2 并说清原因，不静默放行。
+
+## 保护面
+
+保护面指的是改写前后**不许变**的六类内容。它防的是"改写顺手把数字或公式改坏"。
+
+| 面 | 内容 |
+|---|---|
+| 事实标记 | 全文 `\fact{}` 的多重集 |
+| 数字 | 归一化后的数字多重集 |
+| 引用 | 全部 `\cite` 家族命令的 key |
+| 公式 | 行内公式与公式环境的内容哈希 |
+| 表格 | `tabular` 每行的单元格数与内容哈希 |
+| 交叉引用 | `\label`／`\ref` 的 key 集合 |
 
 ```bash
-python3 -m factscribe audit examples/minimal --json
+python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ```
 
-退出码：`0`＝绿（无红无黄）；`1`＝红（违例）；`2`＝配置/用法错；`3`＝黄
-（未核验/未绑定/未签名/冲突/覆盖不全，不判死但不算绿）；`4`＝工具内部错误。
-**不静默通过**：缺 `paperkit.toml`、facts 为空、sections 为空、`refs.bib` 缺失
-→ 退出码 2 并说清原因。
+只改标点与断句应当全绿；动了任何一个数字、公式、引用即红，并给出 `文件:行` 与"改成了什么"。
 
-## 目录契约
+## 数字回账
 
-```
-<project>/
-  paperkit.toml            # 项目声明（必需）
-  facts/*.toml             # 事实账，只追加，一条一个 id
-  results/                 # 项目内产物区（只读）；也可用 source_root 指到项目外
-  results/MANIFEST.toml    # 人签清单：路径 -> sha256 + signed_by
-  sections/*.tex           # 正文（递归匹配 + \input 闭包）
-  refs.bib                 # 参考文献，只放已核实条目
-  audit/                   # 生成物（matrix.md / preamble.tex，不入库）
-```
+正文里写 `\fact{A1}`，就表示这一行的数字属于 `A1`。审计会反查：该行每个数字都必须落在 `A1` 的值域里。
 
-```toml
-[project]
-title = "..."
-authors = ["..."]
-sections = "sections/*.tex"      # 默认递归（同时匹配 sections/**/*.tex）
-facts = "facts/*.toml"
-bib = "refs.bib"
-manifest = "results/MANIFEST.toml"
-source_root = "/abs/workspace"   # 可选：source 相对它解析（不配＝只许项目内 results/）
-build = "tectonic -X compile main.tex"   # 留空＝跳过编译
-```
+| 情形 | 结果 |
+|---|---|
+| 绑了且命中 | 绿 |
+| 没绑但能命中某条事实 | 黄 `UNBOUND_NUMBER` |
+| 谁都命中不了 | 红 `UNMATCHED_NUMBER` |
+| 绑了但对不上 | 红 `BOUND_MISMATCH` |
 
-```toml
-[[fact]]
-id = "A2"
-claim = "两臂合计准确率"
-value = "56.25%"
-source = "results/swb16.md"           # 相对 source_root（未配＝项目内 results/ 下）
-source_sha256 = "0147ea0c…"           # 现算比对；缺/不符判红
-locator = "§三 平均行"
-confidence = "high"                   # high | med | low
-kind = "claim"                        # claim | config（config 不进全局值域）
-derived_from = ["A1", "A3"]           # 非空 ⇒ expr 必填
-expr = "(A1.num + A3.num) / (A1.den + A3.den) * 100"   # 只允许四则/括号
-supersedes = []
-metric = ""
-scope = ""
-note = ""
-```
+归一化口径：`1,234` 等于 `1234`，`0.90` 等于 `0.9`，`10\%` 等于 `10%`，`53k` 等于 `53000`。
 
-人签清单 `results/MANIFEST.toml`（工具不生成，人写）：
+## 引用落标识
 
-```toml
-[manifest]
-signed_by = "alice"
-signed_at = "2026-11-07T12:00:00Z"
-version = 1
+所有 `\cite` 家族命令的 key 必须出现在 `refs.bib`，否则红 `MISSING_CITE`。
+bib 条目按类型必须有 `arxiv` 或 `doi`，`@misc` 类可以用 `url`。
+`--resolve` 会联网核验，网络失败记黄，远端明确说不存在记红。
 
-[files]
-"results/swb16.md" = "0147ea0c…"
-```
+## 黄牌规则
 
-## 数字怎么算「回到账上」
+黄牌不阻断构建，但会让退出码变成 3。
 
-- **先绑后算**：正文写 `\fact{A1}`（或 `[[fact:A1]]`，多 id 用逗号）＝「这一行的
-  数字属于 A1」。审计反查：该行**每个**数字都必须在所绑 fact 的 value 值域里，否则
-  红 `BOUND_MISMATCH`。
-- **不绑不算绿**：没绑定但能命中某条 claim fact → 黄 `UNBOUND_NUMBER`（退出码 3）；
-  谁都命中不了 → 红 `UNMATCHED_NUMBER`。
-- **token 锚定**：`value = "42"` 只接受 `42`，不吃 `1422`/`4242`/`4.2e-5`。
-- **唯一词法流水线**：verbatim/verb/`\pkignore` → 注释（`\%` 不是注释）→ 命令参数
-  → 上下标（`R^2`、`x_{12}` 是结构量）→ 数字。
-- **归一化**：`1,234`＝`1234`、`0.90`＝`0.9`、`10\%`＝`10%`、`53k`＝`53000`、
-  `3.5M`＝`3500000`、`3e-4` 整体成 token、`1\,000\,000`＝`1000000`；
-  `value = "10/16"` 接受 `10`、`16`、`0.625`。
-- **显式豁免**：`\pkignore{...}` 或 `\begin{pkignore}…\end{pkignore}`（内容照排，
-  不进审计）。宏由 `factscribe preamble` 生成。
-- 未匹配一律报 `文件:行:列 | 数字 | 所在整行`。
+- `UNBOUND_NUMBER`：回得到账但没绑定；
+- `NO_MANIFEST` 与 `UNSIGNED_RESULT`：缺人签清单，或有未签产物；
+- `VALUE_NOT_IN_SOURCE`：事实里的数字没在源文件里出现；
+- `LEDGER_CONFLICT` 与 `DUPLICATE_VALUE`：账本自相矛盾，或同值多 claim；
+- `CITE_UNVERIFIED`：联网核验没成；
+- `UNUSED_FACT` 与 `UNUSED_BIB`：账上有没用上，bib 里有没引用。
 
-## 引用怎么算「落到稳定标识」
+文风黄牌共九条，分四类：破折号插入解释、标题过长或格式不对、术语首现在标题、节奏与套话。
+每条都给具体行号与改法，工具不改正文。
 
-- `\cite / \citep / \citet / \citealp / \citeauthor / \citeyear / \upcite /
-  \parencite / \textcite / \autocite / \nocite …` 的 key 都必须在 bib 里，否则
-  `MISSING_CITE`（红）；认不出的 `*cite*` 命令 fail-closed：`UNKNOWN_CITE_COMMAND`；
-- bib 每条按类型要有 `arxiv`/`doi`（`@misc/@online/@software/@dataset` 可用 `url`），
-  且格式必须像真的（arXiv 新旧式 / `10.xxxx/...`），否则 `BAD_STABLE_ID_FORMAT`；
-- 支持 `\bibliography`/`\addbibresource` 多 bib、`@string` 宏、crossref 一层继承；
-- `--resolve` 时查 arXiv API / doi.org（超时 5 秒）：网络失败 → `unverified`（黄）；
-  远端明确说不存在 → `UNRESOLVED_CITE`（红）。
+## 已知缺口
 
-## 黄级提示（退出码 3，不判死但不算绿）
+盲测一共九套，真盲三套合计命中 30/36，误报 0。剩余缺口如实写在 `docs/release/KNOWN-GAPS.md`：
 
-- `UNBOUND_NUMBER`：回得到账但没内联绑定；
-- `NO_MANIFEST` / `UNSIGNED_RESULT`：没清单，或 results/ 下有未签文件；
-- `VALUE_NOT_IN_SOURCE`：fact 的数字没在 source 里出现；
-- `LEDGER_CONFLICT` / `DUPLICATE_VALUE`：账本自相矛盾 / 同值多 claim；
-- `UNSCANNED_TEX` / `LOW_BINDING_RATE` / `FIGURE_UNVERIFIED`；
-- `CITE_UNVERIFIED` / `RESOLVE_DEGRADED`：联网核验没成。
+- 派生事实的表达式与实际值不符时未判红；
+- `\input` 动态目标未判红；
+- 部分错误码只影响分诊，不影响判定。
 
-## 提示（info，不影响退出码）
+三条结构性边界也写在那里：信任根是人签；同机出题属弱盲测；不做 OCR，图片承载定量一律红。
 
-- `UNUSED_FACT`：账上有、文里没用（正文的 marker 才算「用」）；
-- `UNUSED_BIB`：bib 里有、文里没引。
-
-## 测试
+## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests -v     # 93 例，全离线，约 5 秒
+python3 -m unittest discover -s tests     # 326 例，全离线
+./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 
-`examples/minimal/` 是验收样例：3 条 fact、2 节 tex，故意混入 **1 个编造数字**
-（`47.3 ms`）和 **1 个假引用**（`\cite{ghost2024}`）；`audit` 必须报出且只报这
-**2 处红**（另有黄项）。红队 B1/B4 反例在 `tests/fixtures/`，现在都红。
+`examples/minimal/` 是验收样例：三条事实、两节正文，故意混入一个编造数字与一个假引用，`audit` 必须只报这两处红。
 
-裁决与边界见 `docs/design/SPEC-V1.md`；改动与已知漏洞见 `docs/implementation/IMPLEMENTATION-V1.md`、
-`docs/implementation/IMPLEMENTATION-V2.md`。历史见 `CHANGELOG.md`。
-
-## 安装（可选）
-
-```bash
-python3 -m pip install -e .    # 之后可用 factscribe check <项目目录>
-```
-
-不装也行：把 `factscribe/` 包目录拷进项目（或把仓根加入 `PYTHONPATH`），
-再跑 `python3 -m factscribe <子命令> ...`。
-
-## 参与
-
-`CONTRIBUTING.md`：怎么跑测试、怎么加一个闸门、PR 必须带测试。5 分钟上手见
-`examples/minimal/README.md`。
-
+规范在 `docs/design/`，实现记录在 `docs/implementation/`，历史在 `CHANGELOG.md`。
+提交前请读 `CONTRIBUTING.md`，PR 必须带测试。

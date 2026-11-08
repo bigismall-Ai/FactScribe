@@ -181,6 +181,7 @@ class ScanResult:
     bindings: dict[int, list[str]]  # 行号 -> [fact id]（兼容旧口径；审计按 BU 归属）
     markers: list[tuple[str, int]]  # (fact id, 行号)
     cites: list[tuple[str, int, int]]  # (key, 行号, 列)
+    nocite_all: bool = False        # 正文出现 \nocite{*}（整库引用）
     unknown_cites: list[tuple[str, int, int]] = field(default_factory=list)
     bib_files: list[str] = field(default_factory=list)
     figures: list[tuple[str, int]] = field(default_factory=list)
@@ -242,6 +243,7 @@ def scan_tex(tex: str) -> ScanResult:
 
     # ---- pass 2：引用 / 图 / bib 文件（在参数被抹掉之前）----
     cites: list[tuple[str, int, int]] = []
+    nocite_all = False
     unknown_cites: list[tuple[str, int, int]] = []
     for m in _CITE_RE.finditer(s):
         name = m.group(1)
@@ -255,7 +257,8 @@ def scan_tex(tex: str) -> ScanResult:
             unknown_cites.append((name, line, col))
         if lname == "nocite":
             # \nocite{*} = 整库；具体 key 仍要核
-            pass
+            if any(key.strip() == "*" for _off, key in keys):
+                nocite_all = True
         for off, key in keys:
             if key == "*":
                 continue
@@ -409,7 +412,8 @@ def scan_tex(tex: str) -> ScanResult:
     masked2 = "".join(chars)
 
     return ScanResult(masked=masked2, bindings=bindings, markers=markers,
-                      cites=cites, unknown_cites=unknown_cites,
+                      cites=cites, nocite_all=nocite_all,
+                      unknown_cites=unknown_cites,
                       bib_files=bib_files, figures=figures,
                       annotations=annotations, annotation_args=annotation_args,
                       marker_groups=marker_groups, adjacency=adjacency_text)

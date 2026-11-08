@@ -128,6 +128,35 @@ def parse_bib(path: Path, root: Path) -> list[BibEntry]:
     return entries
 
 
+def unused_bib_entries(entries: list[BibEntry], used_keys, nocite_all: bool = False,
+                       allow=()) -> list[BibEntry]:
+    """R-11：bib 里有、闭包内从未被 `\\cite*` 家族引用的条目（UNUSED_BIB）。
+
+    三条豁免（窄，写死）：
+
+    - `\\nocite{*}`：整库引用，所有条目都算「被引用」；
+    - `\\nocite{key}`：逐条引用，该 key 已由扫描器记进 `used_keys`；
+    - `bib_allow_unused = ["key", ...]`：人签白名单（大小写不敏感）。
+
+    返回按 key 去重后的条目（同一 key 定义多次已由 DUPLICATE_BIB_KEY 判红）。
+    """
+    allowed = {str(k).strip().casefold() for k in (allow or ()) if str(k).strip()}
+    if nocite_all:
+        return []
+    out: list[BibEntry] = []
+    seen: set[str] = set()
+    for e in entries:
+        if e.key in seen:
+            continue
+        seen.add(e.key)
+        if e.key in used_keys:
+            continue
+        if e.key.casefold() in allowed:
+            continue
+        out.append(e)
+    return out
+
+
 def bib_duplicates(entries: list[BibEntry]) -> tuple[list[str], list[tuple[str, list[str]]]]:
     """返回 (重复 key 列表, [(稳定标识, [key...]), ...])。
 

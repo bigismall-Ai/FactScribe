@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
-                        valid_stable_id)
+                        unused_bib_entries, valid_stable_id)
 from .config import (Config, ConfigError, _glob_paths, all_tex_files,
                      facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, KINDS_OK, SEV_INFO, SEV_RED,
@@ -1213,11 +1213,21 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             hints.append(Issue(
                 "UNUSED_FACT", "账上有、文里没用：fact %r（%s）" % (f.id, f.claim),
                 location="%s:%s" % (f.file, f.line or "?"), token=f.id, severity=SEV_INFO))
-    for e in bib_entries:
-        if e.key not in used_keys:
-            hints.append(Issue(
-                "UNUSED_BIB", "bib 里有、文里没引：%r" % e.key,
-                location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_INFO))
+
+    # R-11：bib 里有、闭包内从未被 \cite* 家族引用 → 黄（exit 3）。
+    # 引用卫生不是编造风险，--strict/L2 也保持黄（§8.1 UNUSED_BIB）。
+    # 三条窄豁免：\nocite{*}（整库）、\nocite{key}（该 key 已进 used_keys）、
+    # 配置里的 bib_allow_unused 人签白名单。
+    nocite_all = any(scan.nocite_all for scan in scanned.values())
+    unused_bib = unused_bib_entries(bib_entries, used_keys, nocite_all,
+                                    cfg.bib_allow_unused)
+    for e in unused_bib:
+        yellow.append(Issue(
+            "UNUSED_BIB",
+            "bib 条目 %r 在审计闭包内从未被 \\cite 引用——参考文献里有它、正文没用它"
+            "（R-11）；确属保留请写 bib_allow_unused = [%r] 或在正文 \\nocite{%s}"
+            % (e.key, e.key, e.key),
+            location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_YELLOW))
 
     # 覆盖：闭包外还有 .tex 从未被审计 -> 黄（红队 B4/B8）
     all_tex = all_tex_files(cfg)
@@ -1299,6 +1309,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         "bib_entries": len(bib_entries),
         "bib_files": [p.relative_to(cfg.root).as_posix() for p in bib_paths],
         "bib_used": len([k for k in used_keys if k in bib_by_key]),
+        "bib_unused": [e.key for e in unused_bib],
         "red": len(red),
         "yellow": len(yellow),
         "hints": len(hints),

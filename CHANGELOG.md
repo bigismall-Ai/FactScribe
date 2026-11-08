@@ -10,6 +10,12 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- `UNUSED_BIB` (yellow/3, R-11): a bib entry that the scan closure never cites is
+  now a yellow finding (previously an info hint). Exemptions: `\nocite{*}`,
+  per-key `\nocite{key}`, and the new `bib_allow_unused = ["key", ...]` field
+  (SPEC §10). Severity stays yellow even under `--strict`/L2; `--json.summary.bib_unused`
+  lists the exact keys. `tests/test_unused_bib.py` (10 cases) and
+  `docs/implementation/UNUSED-BIB.md`.
 - SPEC §8「多码原则」: when several criteria hold at once, **all** codes are
   reported (no more "report only the first"); `EXPECT` matches if any one is
   present. "Most specific code only" now applies only inside a single

@@ -916,7 +916,7 @@ python3 tools/spec_lint.py --no-construction
 | UNRESOLVED_CITE | 引用远端不存在 | `--resolve` 明确返回 not_found | red | 1 | R-11 |
 | CITE_UNVERIFIED | 引用远端未核验 | `--resolve` 超时/限流 | yellow | 3 | R-11 |
 | UNKNOWN_CITE_COMMAND | 未知引用命令 | 不在 natbib 家族的引用命令 | red | 1 | R-11 |
-| UNUSED_BIB | bib 条目未引用 | 未被 `\cite/\nocite` 引用 | yellow | 3 | R-11 |
+| UNUSED_BIB | bib 条目未引用 | bib 里有条目、审计闭包内从未被 `\cite*` 家族引用（`\nocite{key}` 算引用；`\nocite{*}` 或 `bib_allow_unused` 命中的条目豁免）。**severity 固定 yellow，L2/`--strict` 不改级**（引用卫生不是编造风险；`--strict` 只按全局口径把黄项当失败，`severity` 仍是 yellow） | yellow | 3 | R-11 |
 | UNUSED_FACT | fact 未被正文使用 | 账上 fact 没有对应断言 | yellow | 3 | R-03 |
 | UNSIGNED_RESULT | 结果未签 | 结果文件没有签名 | red | 1 | R-11 |
 | FIGURE_UNVERIFIED | 图未核验 | 图只声明未核验 | yellow | 3 | R-06 |
@@ -1148,6 +1148,7 @@ number_locale = "dot"
 | `numeric_macro_allow` | 否 | 表数组或字符串数组 | `[]` | S-08；两种形态都认 |
 | `frac_allow` | 否 | string[] | `[]` | P-06 的 `\frac` 登记 |
 | `inline_images_allow` | 否 | string[] | `[]` | P-06 的行内小图登记 |
+| `bib_allow_unused` | 否 | string[] | `[]` | R-11：`UNUSED_BIB` 的人签白名单（列出的 bib key 不算未引用；大小写不敏感） |
 | `image_budget_extra` | 否 | 非负整数 | `0` | 图片预算宽限（人签） |
 | `authors` | 否 | string[] | `[]` | 仅展示 |
 
@@ -1173,6 +1174,7 @@ number_locale = "dot"
 
 **v1 兼容（不改）**：`[project]` 里 `sections` 是**字符串 glob** 且配了 `facts`
 ＝ v1，`root_tex` 被忽略，行为与 V2.2 完全一致。v3 的 `sections` 不允许 glob。
+`bib_allow_unused` 在 v1 与 v3 都认（同一字段、同一语义，§8.1 `UNUSED_BIB`）。
 
 ### 10.3 形态判定（自上而下，先命中先用）
 

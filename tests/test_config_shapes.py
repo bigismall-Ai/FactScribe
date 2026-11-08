@@ -35,8 +35,7 @@ def write_base(root: Path, toml_text: str, body: str = None,
         "\\documentclass{article}\n\\begin{document}\n"
         "\\section{Results}\nThe effect is \\fact{A1}0.91.\n\\end{document}\n",
         encoding="utf-8")
-    (root / "refs.bib").write_text(
-        "@article{smith2026, year={2026}, title={t}}\n", encoding="utf-8")
+    (root / "refs.bib").write_text("", encoding="utf-8")
     (root / "runs" / "r1").mkdir(parents=True, exist_ok=True)
     summary = root / "runs" / "r1" / "result.json"
     summary.write_text('{"run_id": "r1", "clause_count_effect": 0.91}\n',

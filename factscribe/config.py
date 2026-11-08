@@ -202,6 +202,7 @@ class Config:
     image_budget_extra: int = 0    # V3：图片预算宽限（人签）
     frac_allow: list = field(default_factory=list)         # V3：允许的 \frac 登记
     inline_images_allow: list = field(default_factory=list)  # V3：行内小图登记
+    bib_allow_unused: list = field(default_factory=list)     # R-11：UNUSED_BIB 人签白名单
 
     @property
     def is_v3(self) -> bool:
@@ -320,6 +321,9 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
         source_root=str(proj.get("source_root") or ""),
         numeric_macro_allow=macro_allow,
+        bib_allow_unused=_v3_str_list(
+            {"bib_allow_unused": proj.get("bib_allow_unused")},
+            "bib_allow_unused", path),
         config_shape="v1",
     )
     # v1 的未知字段同样不静默（判据仍不看它们，行为不变）。
@@ -391,6 +395,7 @@ V3_KNOWN_FIELDS = {
     "output", "level", "number_locale", "signing_mode", "approver_keys_file",
     "release_keys_file", "image_budget_extra", "frac_allow", "inline_images_allow",
     "numeric_macro_allow", "authors", "build", "manifest", "source_root",
+    "bib_allow_unused",
 }
 
 # `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
@@ -405,7 +410,7 @@ V3_MARKER_FIELDS = {
 # 因为 v1 的判据从来不看它）。
 V1_KNOWN_FIELDS = {
     "title", "authors", "sections", "facts", "bib", "build", "manifest",
-    "source_root", "numeric_macro_allow", "root_tex",
+    "source_root", "numeric_macro_allow", "root_tex", "bib_allow_unused",
 }
 
 LEVELS = ("l0", "l1", "l2")
@@ -565,6 +570,9 @@ def _load_v3_config(root: Path, path: Path, data: dict,
         inline_images_allow=_v3_str_list(
             {"inline_images_allow": _v3_get(data, "inline_images_allow")},
             "inline_images_allow", path),
+        bib_allow_unused=_v3_str_list(
+            {"bib_allow_unused": _v3_get(data, "bib_allow_unused")},
+            "bib_allow_unused", path),
         numeric_macro_allow=macro_names,
         numeric_macro_rules=macro_rules,
         facts_dirs=not any(ch in str(_v3_get(data, "facts", "facts"))

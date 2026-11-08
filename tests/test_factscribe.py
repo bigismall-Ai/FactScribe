@@ -93,7 +93,7 @@ def _write_manifest(root, files, signed=True):
     (root / "results" / "MANIFEST.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def make_project(tmp, facts=FACTS, sections=None, bib=BIB_OK, build="",
+def make_project(tmp, facts=FACTS, sections=None, bib="", build="",
                  results_text=RESULT_TEXT, manifest=True):
     root = Path(tmp)
     (root / "facts").mkdir(parents=True, exist_ok=True)
@@ -276,7 +276,8 @@ class TestAudit(unittest.TestCase):
     def test_clean_numbers_and_cites(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(
-                tmp, sections={"a.tex": "16 题里解决 10 道\\fact{A1}，见 \\cite{chen2023}。"})
+                tmp, sections={"a.tex": "16 题里解决 10 道\\fact{A1}，见 \\cite{chen2023}。"},
+                bib=BIB_OK)
             code, data = run_json(["audit", str(root), "--json"])
             self.assertEqual(code, 0, data)
             self.assertEqual(data["summary"]["red"], 0)
@@ -378,7 +379,8 @@ derived_from = []
         paperkit._resolve_doi = lambda _id: ("unverified", "离线（测试桩）")
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                root = make_project(tmp, sections={"a.tex": "见 \\cite{chen2023}。\n"})
+                root = make_project(tmp, sections={"a.tex": "见 \\cite{chen2023}。\n"},
+                                    bib=BIB_OK)
                 cfg = paperkit.load_config(root)
                 red, yellow, hints, summary, resolved = paperkit.run_audit(
                     cfg, paperkit.load_facts(cfg), paperkit.load_sections(cfg), resolve=True)
@@ -669,7 +671,7 @@ class TestV1Citations(unittest.TestCase):
                "@proceedings{parent2020,\n doi = {10.1000/parent}\n}\n"
                "@inproceedings{child2021,\n crossref = {parent2020},\n"
                " title = {Child}, journal = jm\n}\n")
-        code, data = self._audit("\\cite{child2021}\n", bib=bib)
+        code, data = self._audit("\\cite{child2021,parent2020}\n", bib=bib)
         self.assertEqual(code, 0, data)
 
 

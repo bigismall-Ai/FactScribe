@@ -191,6 +191,9 @@ class Fact:
     role: str = ""
     headline: bool = False
     quantitative: bool = False
+    # 批 58：显式承认「这个值和另一条是同一个数」——R-04 的 DUPLICATE_VALUE
+    # 豁免位（§11.1）。人签，不是推断。
+    dup_ok: bool = False
     run_id: str = ""
     pointer: str = ""
     assertions: list = field(default_factory=list)  # [{claim_id,value_canon,...}]

@@ -743,6 +743,7 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         role=str(raw.get("role") or ""),
         headline=bool(raw.get("headline")),
         quantitative=bool(raw.get("quantitative")),
+        dup_ok=bool(raw.get("dup_ok")),
         run_id=obs_run_id,
         pointer=obs_pointer,
         assertions=[dict(a) for a in (raw.get("assertions") or [])

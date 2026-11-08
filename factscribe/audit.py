@@ -16,8 +16,8 @@ from .config import (Config, ConfigError, _glob_paths, all_tex_files,
                      facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, KINDS_OK, SEV_INFO, SEV_RED,
                         SEV_YELLOW, VERSION)
-from .facts import (Fact, ExprError, _cycles, _declared_number, eval_expr,
-                    literal_tokens, number_key, sha256_file)
+from .facts import (Fact, ExprError, _cycles, _declared_number, canon_text,
+                    eval_expr, literal_tokens, number_key, sha256_file)
 from .texrules import (adjacency_hits, arith_hits, display_hits,
                        numeric_macro_hits, pkignore_quant_hits,
                        tabular_regions)
@@ -174,6 +174,49 @@ def _v3_source_issues(cfg: Config, facts: list[Fact],
     report = _load_json(rpath) if rpath.is_file() else None
     out += approval_issues(cfg, facts, report)
     out += approval_report_issues(cfg)
+    return out
+
+
+def _duplicate_value_issues(facts: list[Fact]) -> list[Issue]:
+    r"""批 58（§8.1 DUPLICATE_VALUE / R-04）：同值重复入账判黄。
+
+    「同值」按 `canon_text` 归一化后比较（`62.5\%`≡`0.625`≡`10/16`），不是
+    字符串比较——否则换个写法就绕过。判定只看 **kind=claim** 的条目：
+
+    - `claim` 相同的同值不算本码（同一句话重复两次由 DUPLICATE_ID 管）；
+    - `dup_ok = true` 显式承认「这两个值本来就是一个数」→ 免判（人签豁免）；
+    - `supersedes` 指向组内任一条（父值已被替换）→ 整组免判；
+    - `derived_from`/`expr` 的派生值不算独立授权票（父值与换算值本来就同值）。
+
+    误报边界：派生值、supersedes、dup_ok 是三条窄豁免，其余一律报黄——
+    因为「第二张授权票」正是用第二个 id 把同一个数再登记一次。
+    """
+    superseded = {s.strip().casefold() for f in facts for s in f.supersedes}
+    groups: dict[str, list[Fact]] = {}
+    for f in facts:
+        if f.kind != "claim" or not f.value.strip():
+            continue
+        if f.dup_ok or f.is_derived or f.id_key in superseded:
+            continue
+        key = canon_text(f.value) or f.value.strip()
+        groups.setdefault(key, []).append(f)
+
+    out: list[Issue] = []
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+        ids = {f.id_key for f in group}
+        if any(s.strip().casefold() in ids for f in group for s in f.supersedes):
+            continue           # 组内互相 supersedes：旧值已被替换，不算重复
+        if len({f.claim.strip() for f in group}) < 2:
+            continue           # 同一句话的同值：不是「第二张授权票」
+        out.append(Issue(
+            "DUPLICATE_VALUE",
+            "同一个值（归一后 %s）挂在 %s 上，claim 却各不相同——像在拿第二张"
+            "授权票把同一个数重复登记；确属同值的请显式写 dup_ok = true（R-04）"
+            % (key, "、".join(f.id for f in group)),
+            location="%s:%s" % (group[0].file, group[0].line or "?"),
+            token=",".join(f.id for f in group), severity=SEV_YELLOW))
     return out
 
 
@@ -712,7 +755,8 @@ def run_check(cfg: Config, facts: list[Fact]):
     # 账本卫生：同一 value 挂在多条不同 claim 上 -> 疑似「数字白名单」（红队 C6）
     by_value: dict[str, list[Fact]] = {}
     for f in facts:
-        if f.kind == "claim" and f.value.strip() and f.id_key not in superseded:
+        if (f.kind == "claim" and f.value.strip() and f.id_key not in superseded
+                and not f.dup_ok):
             by_value.setdefault(f.value.strip(), []).append(f)
     for value, group in by_value.items():
         if len(group) > 1 and len({f.claim.strip() for f in group}) > 1:
@@ -894,6 +938,9 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     red += _source_rule_issues(cfg, sections)
     if cfg.is_v3:
         red += _v3_source_issues(cfg, facts, sections)
+        # 批 58：同值重复入账（§8.1 DUPLICATE_VALUE）也进审计面；v1 保持
+        # 旧行为（只在 check 里判），避免改动已冻结的 v1 审计读数。
+        yellow += _duplicate_value_issues(facts)
 
     for rel, text in sections:
         scan = scanned[rel]

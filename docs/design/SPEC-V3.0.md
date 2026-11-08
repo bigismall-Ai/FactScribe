@@ -789,7 +789,13 @@ python3 tools/spec_lint.py --no-construction
 
 > 本节是**唯一权威码表**：V2.2 §19.2 的码不再另建第二份注册表，全部并入本表。
 > 合并规则：同一 code 在 §8.1 与 §8.2 出现时，以 §8.1 的 tier/exit 为准；§8.2 对应行标「见 §8.1」。
-> 每个 code 必须唯一映射一个现象：实现只能按「最具体的码」报一次，不许同一现象同时出两个码。
+> 每个 code 必须唯一映射一个现象。
+>
+> **多码原则（批 58，取代「只报第一条」）**：当多条判据同时成立时，**全部报出**，
+> 不得只报第一条；`EXPECT` 命中其中任一码即算命中。「只能按最具体的码报一次」
+> 只约束**同一判据内部的阶梯**（例如证据链在多个节点断开时，按最具体的那个
+> 节点报一次），不约束**跨判据并发**——「正文断言被搬进附录」同时满足
+> `FACT_OUT_OF_SPAN` 与 `ASSERTION_DRIFT` 时，两个码都要出现在 findings 里。
 > `severity=red` 进红账；`yellow` 进黄账；`info` 只进配置告警，不驱动 exit。
 
 ### 8.1 核心码（V3.0 + §11 + 批 56 新增）
@@ -899,7 +905,7 @@ python3 tools/spec_lint.py --no-construction
 | MISSING_EXPR | 派生事实缺算式 | 有 `derived_from` 但无 `expr` | red | 1 | §11.1 |
 | MISSING_SOURCE_FIELD | v1 fact 缺 source | v1 条目录入时没有 source | red | 1 | v1 沿用 |
 | SUPERSEDED_PARENT | 父 fact 已失效 | `supersedes` 指向已被替换的条目 | red | 1 | §11.1 |
-| DUPLICATE_VALUE | 同值重复 | 同值 fact 在同一账重复出现 | yellow | 3 | R-04 |
+| DUPLICATE_VALUE | 同值重复入账（第二张授权票） | 两条 `kind=claim` 的 fact，`value` 按 `canon_text` 归一后相同、`claim` 不同，且未写 `dup_ok=true`、组内无 `supersedes`、非派生值（§11.1） | yellow | 3 | R-04 |
 | LEDGER_CONFLICT | 账本冲突 | 同 id/同值出现不一致 | yellow | 3 | R-04 |
 | BIB_FILE_MISSING | bib 文件缺失 | 正文声明的 bib 不存在 | red | 1 | R-05 |
 | BIB_NO_STABLE_ID | bib 缺稳定标识 | 条目无 DOI/arXiv（v3 记 info，v1 红） | info（v1 red） | 0（v1 1） | R-11 |
@@ -936,8 +942,8 @@ python3 tools/spec_lint.py --no-construction
 | BINDING_ATTRIBUTION | 顺序归属不符 | 一句多 fact 时第 k 个数字不属第 k 条 | 见 §8.1 | 见 §8.1 | R-03（2-S1） |
 | FACT_SET_OVERLAP | 标记组 fact 集合重叠 | 同句多组指向有交集 | red | 1 | R-03（2-S1） |
 | CO_CLAIM_ASYMMETRIC | co_claim 非对称 | 只有一侧声明 co_claim | red | 1 | R-03 |
-| FACT_UNUSED_IN_SPAN | 标记的 fact 在本句无数字可背 | 空绑定 | red | 1 | R-03 |
-| FACT_OUT_OF_SPAN | fact 出现在不应出现的跨度 | 角色/跨度不符 | red | 1 | R-03 |
+| FACT_UNUSED_IN_SPAN | 正文里只剩指代 | 定量 fact 的 `\fact{}` 留在正文，但正文该句没有任何数字承载它、数字只在 `\appendix` 之后出现（另记 `ASSERTION_DRIFT`，多码原则见 §8 开头） | yellow | 3 | R-03 |
+| FACT_OUT_OF_SPAN | fact 出现在不应出现的跨度 | `role` ∈ 正文角色（abstract/introduction/methods/results/discussion/conclusion/background/related/analysis），而它的标记只在 `\appendix` 之后出现（另记 `ASSERTION_DRIFT`） | red | 1 | R-03 |
 | NONQUANT_BACKS_QUANT | 非定量 fact 背定量数字 | 机制陈述授权数字 | 见 §8.1 | 见 §8.1 | R-03 |
 | FACT_UNKNOWN_ID | 引用账上不存在的 fact id | id 缺失 | 见 §8.1（合并到 `UNKNOWN_FACT_MARKER`） | 见 §8.1 | R-03 |
 | DISPLAY_ORDER | display 顺序不符 | 出现顺序与规范不一致 | red | 1 | R-03 |
@@ -1072,6 +1078,9 @@ python3 tools/spec_lint.py --no-construction
 | 回执 `facts[]` 指向账上不存在的 id | `EVIDENCE_CHAIN_BROKEN` | red / 1 |
 | 数字回得到账但句内无标记 | `UNBOUND_NUMBER` | yellow / 3 |
 | 数字回不到任何 fact 且不属于上面任何专属码 | `UNMATCHED_NUMBER` | red / 1 |
+| 定量 fact 在正文只剩指代、数字只在附录 | `FACT_UNUSED_IN_SPAN`（另记 `ASSERTION_DRIFT`） | yellow / 3（红码在，整体 exit 1） |
+| 正文角色事实的标记只在 `\appendix` 之后 | `FACT_OUT_OF_SPAN`（另记 `ASSERTION_DRIFT`） | red / 1 |
+| 两条 fact 同值不同 claim（无 `dup_ok`/`supersedes`） | `DUPLICATE_VALUE` | yellow / 3 |
 
 ### 8.5 fixture 总表（实现时按此建目录）
 
@@ -1258,6 +1267,8 @@ note = ""
 | `confidence` | 否 | `high`\|`med`\|`low` | 缺省空串；`check` 要求显式合法值 |
 | `derived_from` | 由 `expr` 定 | string[] | 派生事实的父 id 列表 |
 | `expr` | 由 `derived_from` 定 | string | 只允许四则运算、括号、fact id 与 `.num/.den` |
+| `role` | 否 | 正文角色名 | `abstract`/`introduction`/`methods`/`results`/`discussion`/`conclusion`/`background`/`related`/`analysis`；声明后若标记只在 `\appendix` 之后 → `FACT_OUT_OF_SPAN` |
+| `dup_ok` | 否 | bool | 显式承认「本值与另一条 fact 本来就是同一个数」，`DUPLICATE_VALUE` 的人签豁免；缺省 `false` |
 | `note` | 否 | string | 自由备注 |
 
 \* `source` 与 `observation` 至少给一个：v3 允许只写
@@ -1275,6 +1286,8 @@ note = ""
 4. `display` 缺省时回填 `value`，这条回填**不参与** R-04 的等价判定
    （按定义等价），也不许被 `\fact{}` 之外的地方当成额外授权。
 5. 一个文件里的多条 fact 按出现顺序读；重复 `id` 不在读取期合并。
+6. `dup_ok` 是布尔豁免位，不参与数字归一化；它只关掉 `DUPLICATE_VALUE`，
+   不改变 `value` 的值域，也不授权多写一次数字。
 
 ### 11.2 `\fact{id}` 的语义（写死）
 

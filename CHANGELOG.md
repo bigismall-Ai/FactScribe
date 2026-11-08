@@ -10,6 +10,22 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- SPEC §8「多码原则」: when several criteria hold at once, **all** codes are
+  reported (no more "report only the first"); `EXPECT` matches if any one is
+  present. "Most specific code only" now applies only inside a single
+  criterion's ladder (e.g. evidence-chain nodes).
+- `FACT_UNUSED_IN_SPAN` (yellow/3): a quantitative fact's `\fact{}` stays in the
+  body but the body sentence carries no number for it, the number living only
+  after `\appendix`; also reports `ASSERTION_DRIFT` (multi-code), so the
+  composite run exits 1. `FACT_OUT_OF_SPAN` (red/1) is now reported alongside
+  `ASSERTION_DRIFT` when a body-role fact's markers live only in the appendix.
+- `DUPLICATE_VALUE` now also fires on the `audit` path (v3), not just `check`:
+  two `kind=claim` facts whose `value` normalises to the same number
+  (`canon_text`) with different `claim`s. New `dup_ok = true` field (§11.1)
+  exempts a pair, as do an in-group `supersedes` and derived values.
+- `tests/test_multi_code.py` (9 cases) and
+  `docs/implementation/MULTI-CODE-AND-TWO-RULES.md` (holdout #6 diagnosis,
+  false-positive boundaries).
 - SPEC §8「错误码总表（唯一注册表）」: V2.2 §19.2 + V3.0 + §11 codes merged into
   one table with meaning/trigger/severity/exit; §8.4 pins one code per phenomenon.
   New dedicated codes: `COMPUTED_VALUE_UNREGISTERED`, `NUMBER_AS_CROSSREF`,
@@ -58,6 +74,10 @@ and will not change without a major version bump.
   `\(...` and `(?:...` spellings (same built-in shape).
 - `docs/implementation/FACTS-SCHEMA.md`: schema table, error-code mapping,
   implementation locations, blind-test #4 per-item record.
+
+### Changed
+- SPEC §8.2: `FACT_UNUSED_IN_SPAN` is now yellow/3 (was red/1);
+  `FACT_OUT_OF_SPAN` and `DUPLICATE_VALUE` triggers are spelled out.
 
 ## [1.1.0] — 2026-11-07
 

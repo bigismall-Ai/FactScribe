@@ -126,8 +126,24 @@ OK
    本地等价 CI 全绿——可以推。
 ```
 
-干净克隆版 `./scripts/preflight-ci.sh` 在同一代码树上同样全绿（3.10/3.11/3.12
-均 `Ran 326 tests`，验收样例 exit=1）；本文件随后仅追加文档，不进测试矩阵。
+干净克隆版 `./scripts/preflight-ci.sh`（HEAD `ff140c0`）同样全绿：
+
+```text
+== 步骤 1/4：外部依赖 ==
+   ✓ pdftotext / pdfinfo 齐备
+== 步骤 2/4：干净克隆 ==
+   ✓ 克隆到 …/repo（HEAD ff140c0）
+== 步骤 3/4：测试矩阵（CI 是 3.10 / 3.11 / 3.12）==
+   ✓ Python 3.10：Ran 326 tests
+   ✓ Python 3.11：Ran 326 tests
+   ✓ Python 3.12：Ran 326 tests
+== 步骤 4/4：验收样例必须 exit 1 ==
+   ✓ examples/minimal audit exit=1（红，符合预期）
+== 结论 ==
+   本地等价 CI 全绿——可以推。
+```
+
+本文件随后的提交只追加上述门禁记录，不进测试矩阵。
 
 ## 7. 落位
 

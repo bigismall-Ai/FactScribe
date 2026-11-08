@@ -12,7 +12,7 @@ import importlib as _importlib
 __version__ = "1.1.0"
 
 _MODULES = ("constants", "facts", "config", "texscan", "texrules",
-            "citations", "audit", "pdfgate", "report", "cli")
+            "citations", "audit", "pdfgate", "report", "style", "cli")
 
 for _mod_name in _MODULES:
     _mod = _importlib.import_module("." + _mod_name, __name__)

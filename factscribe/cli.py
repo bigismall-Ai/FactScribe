@@ -15,6 +15,8 @@ from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
 from .pdfgate import verify_pdf
 from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
+from .style import (DISCLAIMER, analyze, build_prompt, load_style_rules,
+                    render_human)
 
 # --------------------------------------------------------------------------
 # build
@@ -43,7 +45,7 @@ def _exit_code(red: int, yellow: int, strict: bool = False) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="factscribe",
-        description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble）")
+        description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble / style）")
     p.add_argument("--version", action="version", version="factscribe %s" % VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -73,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--stamp", default=None, help="audit/stamp.json（有则必须先验信任链）")
     sp.add_argument("--keys", default=None, help="项目外公钥登记 approver_keys.json")
     sp.add_argument("--json", action="store_true", help="（本命令默认只输出 JSON）")
+    sp = sub.add_parser(
+        "style", help="文风闸：只报公式化写作特征（黄牌 exit 3），不阻断、不改正文")
+    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
+    sp.add_argument("--prompt", action="store_true",
+                    help="只输出给 LLM 的改写指令（≤ 400 字）")
+    sp.add_argument("--rules", default=None,
+                    help="style-rules.toml 路径（默认项目根，其次仓根）")
     return p
 
 
@@ -176,11 +186,42 @@ def cmd_build(args) -> int:
     return code
 
 
+def cmd_style(args) -> int:
+    cfg = load_config(Path(args.project))
+    sections = load_sections(cfg)
+    rules, rules_path = load_style_rules(cfg.root, args.rules)
+    result = analyze(cfg, sections, rules, rules_path=rules_path)
+    code = result.exit_code
+
+    if args.prompt and not args.json:
+        print(build_prompt(result))
+        return code
+
+    human = render_human(result, cfg.root)
+    if cfg.warnings:
+        human += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
+    payload = _payload("style", _severity_of(code), code,
+                       metrics=result.metrics,
+                       thresholds=dict(result.thresholds),
+                       findings=[f.as_dict() for f in result.findings],
+                       paragraphs=[p.as_dict() for p in result.paragraphs],
+                       fired=result.fired,
+                       summary=result.summary,
+                       disclaimer=DISCLAIMER,
+                       rules=rules_path)
+    if args.prompt:
+        payload["prompt"] = build_prompt(result)
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, human, args.json)
+    return code
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
-                "verify-pdf": cmd_verify_pdf}
+                "verify-pdf": cmd_verify_pdf, "style": cmd_style}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

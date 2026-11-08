@@ -10,6 +10,18 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- `style` subcommand (batch 64): a **style-gate prototype** that flags
+  mechanically checkable formulaic writing (connective density, sentence-length
+  uniformity, empty adjectives, triads, paragraph templates, hedge stacks,
+  repeated openers, extreme sentence length). It emits **yellow only** (exit 3),
+  never blocks or edits the text, and explicitly does **not** evaluate or attempt
+  to evade any AI detector. Output is file:line + original + concrete suggestion;
+  `--json` for machines; `--prompt` emits a ≤400-character rewrite instruction
+  for an LLM. Thresholds/vocabulary live in `style-rules.toml`
+  (project → repo → built-in fallback). `tests/test_style.py` (26 cases),
+  `docs/implementation/STYLE-GATE.md` (definitions, threshold rationale,
+  zero-model baselines for `paper/` and `paper-zh/`). `check`/`audit` semantics
+  and exit codes unchanged.
 - `INPUT_TARGET_MISSING` (red/5, R-05): `\input`/`\include`/`\subfile`
   closure targets are now checked for existence (`.tex` auto-appended);
   a missing target is red (exit 5) instead of silently dropped. Targets inside

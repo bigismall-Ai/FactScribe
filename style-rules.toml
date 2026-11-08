@@ -1,0 +1,79 @@
+# factscribe style — 文风闸的阈值与词表（全部可机械复算）
+#
+# 本文件是默认配置。项目根放一份同名文件即覆盖本文件的同名键；
+# `factscribe style <project> --rules <path>` 可显式指定。
+# 指标定义与阈值依据见 docs/implementation/STYLE-GATE.md。
+#
+# 定位：本工具不评估、也不试图规避任何 AI 检测器；它检测的是可机械判定的
+# 公式化写作特征，只出黄牌（exit 3），不阻断、不改正文。
+
+[thresholds]
+# 每千词（中文按字）套话连接词数；> 触发
+connective_density = 8.0
+# 句长标准差 / 均值；< 触发（越低＝句长越整齐）
+sentence_uniformity = 0.45
+# 每千词空泛形容词数；> 触发
+empty_adjective = 6.0
+# 每千词三项并列数；> 触发
+triad_density = 4.0
+# 段末以 Therefore/Overall/Thus/综上/因此 收尾的段落占比；> 触发
+paragraph_template = 0.5
+# 双重以上模糊限定出现次数；>= 触发
+hedge_stack = 1
+# 相邻段落首词相同的次数；>= 触发
+repeated_opener = 2
+# 单句长度上限（词 / 字）；超过即逐处报告
+sentence_length_extreme_en = 45
+sentence_length_extreme_zh = 80
+
+[limits]
+# 每个指标最多列多少条具体改法（防止报告淹没）
+max_findings_per_metric = 20
+# 段级统计的最小段长（词/字），过滤标题、残片与图表残留
+min_paragraph_units = 8
+# 少于这么多句不判「句长均匀」（短文本的 CV 无意义）
+uniformity_min_sentences = 10
+
+[connectives]
+# 套话连接词：句首或句中都算，按词边界匹配
+english = ["Moreover", "Furthermore", "Additionally", "In addition",
+           "Overall", "In conclusion"]
+chinese = ["首先", "其次", "此外", "综上所述", "总而言之"]
+
+[empty_adjectives]
+# 空泛形容词：不承载可核验信息
+english = ["crucial", "robust", "comprehensive", "significant",
+           "essential", "vital"]
+chinese = ["至关重要", "显著", "全面", "深入"]
+# 这些搭配里形容词是术语的一部分，不算空泛（避免误伤）
+exempt_phrases = ["statistically significant", "robust standard error",
+                  "robust to", "more robust", "less robust",
+                  "significant at the"]
+
+[paragraph_closers]
+# 段末套话收尾词（看最后一句的句首）
+english = ["Therefore", "Overall", "Thus", "In conclusion"]
+chinese = ["综上", "因此", "总之", "总而言之", "总体而言"]
+
+[hedge_stacks]
+# 双重以上模糊限定（两层限定叠在同一处）
+english = ["may potentially", "might potentially", "could potentially",
+           "may possibly", "might possibly", "could possibly",
+           "may conceivably", "could conceivably",
+           "seems to suggest", "appears to indicate",
+           "appears to suggest", "seems to indicate"]
+chinese = ["可能会", "或许会", "或许能够", "也许可能", "似乎可能",
+           "大概可能", "可能会是"]
+
+[repeated_opener]
+# 以虚词开头的相邻段不算「模板化同头」（否则正常学术写作会被大量误伤）
+# 只报实词/短语开头的重复，例如连续三段都以 "Assembly" / "Second" 开头。
+stopwords = ["the", "a", "an", "this", "that", "these", "those",
+             "it", "its", "they", "their", "we", "our", "i", "in",
+             "on", "for", "to", "as", "at", "by", "with", "from",
+             "there", "and", "but", "or", "if", "when", "while",
+             "because", "since", "of",
+             "如果", "那么", "因为", "所以", "但是", "因此", "并且",
+             "而且", "这", "那", "我们", "它", "其", "在", "对",
+             "从", "当", "为了", "通过", "由", "被", "把", "让",
+             "使", "一个", "一种", "本文", "本节", "每一", "每"]

@@ -95,19 +95,26 @@ fi
 # ---------------------------------------------------------------- 5. 可选：真 Linux
 if [ "$LINUX" -eq 1 ]; then
   say "附加：在 siinfer 的 ubuntu 容器里跑（真 Linux，含 poppler）"
+  # 规矩：siinfer 上的仓一律放 /git（可用 FS_GIT_ROOT 覆盖），不要丢 /tmp
+  GIT_ROOT="${FS_GIT_ROOT:-/git}"
+  REMOTE_DIR="${GIT_ROOT}/factscribe-preflight"
   if ! command -v ssh >/dev/null 2>&1; then
     bad "本机没有可用的 ssh（沙箱环境），--linux 跳过"
   else
     BUNDLE=$(mktemp -t fs.XXXXXX.bundle)
     if git -C "$WORK" bundle create "$BUNDLE" --all >/dev/null 2>&1; then
-      if scp -q "$BUNDLE" siinfer-si:/tmp/factscribe.bundle 2>/dev/null; then
-        ssh siinfer-si 'sudo -u moc bash -lc "
-          rm -rf /tmp/fs-linux && git clone -q /tmp/factscribe.bundle /tmp/fs-linux &&
-          docker run --rm -v /tmp/fs-linux:/w -w /w python:3.12-slim bash -lc \"
+      if scp -q "$BUNDLE" siinfer-si:"${REMOTE_DIR}.bundle" 2>/dev/null; then
+        ssh siinfer-si "sudo -u moc bash -lc '
+          set -e
+          mkdir -p \"${GIT_ROOT}\"
+          rm -rf \"${REMOTE_DIR}\"
+          git clone -q \"${REMOTE_DIR}.bundle\" \"${REMOTE_DIR}\"
+          docker run --rm -v \"${REMOTE_DIR}\":/w -w /w python:3.12-slim bash -lc \"
             apt-get update -qq && apt-get install -y -qq poppler-utils git >/dev/null &&
-            python -m unittest discover -s tests 2>&1 | tail -3\""' 2>&1 | sed 's/^/      /'
+            python -m unittest discover -s tests 2>&1 | tail -3\"'" 2>&1 | sed 's/^/      /'
+        ok "远端仓位置：siinfer:${REMOTE_DIR}（按规矩落在 ${GIT_ROOT}）"
       else
-        bad "scp 到 siinfer 失败（--linux 跳过）"
+        bad "scp 到 siinfer 失败（--linux 跳过；检查 ${GIT_ROOT} 是否可写）"
       fi
     else
       bad "git bundle 失败（--linux 跳过）"

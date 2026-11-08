@@ -169,14 +169,76 @@ OPENER_NEG = (
 )
 
 EXTREME_POS = (
-    "We compare the first method with the second method and the third method because the "
-    "fourth method is slower than the fifth method while the sixth method is faster than the "
-    "seventh method and the eighth method is stable under load, which means that the "
-    "comparison is informative but not conclusive in this setting."
+    "We compare the first method with the second method and the third method against the "
+    "fourth method and the fifth method on the same task set with the same inputs and the same "
+    "budget, and we then repeat every comparison on a second machine with a slower disk and a "
+    "warmer cache, and we record the wall time and the peak memory and the cache size for every "
+    "single run in a shared ledger, and we report the median of five repetitions for each method "
+    "and each bucket and each machine."
+)
+# 又长又有结构（从句/分号/破折号/括号）：专家写法，不该报
+EXTREME_STRUCTURED = (
+    "We compare the first method with the second method and the third method against the fourth "
+    "method, which is slower than the fifth method, while the sixth method is faster; and the "
+    "seventh method is stable under load (measured twice on the same machine), so the comparison "
+    "is informative but not conclusive in this setting, and we therefore report exact counts "
+    "instead of a single average for the whole task set."
 )
 EXTREME_NEG = (
     "We compare the first method with the second method on the same task and report every "
     "failure in the appendix, where the raw logs are kept for replay."
+)
+
+# 句长节奏平台：正例四句都落在 10–19 词区间；负例中间一句跳出该区间
+PLATEAU_POS = (
+    "The first run finished on time and kept every record in the shared ledger.\n"
+    "The second run finished early and wrote the output to a separate file.\n"
+    "The third run finished late and left a clear table of measured values.\n"
+    "The fourth run closed the loop and saved the raw log for replay."
+)
+PLATEAU_NEG = (
+    "The first run finished on time and kept every record in the shared ledger.\n"
+    "The second run finished early and wrote the output to a separate file.\n"
+    "The third run finished late and left a clear table of measured values on the shared disk "
+    "for review by the whole team after the batch closed.\n"
+    "The fourth run closed the loop and saved the raw log for replay."
+)
+
+# 句长分布极端散：一半 2 词、一半 80+ 词，CV > 0.80（散不是 AI 特征，不报）
+_LONG_A = (
+    "The first experiment ran for forty-one minutes on a single node while every request was "
+    "logged and the second pass reused the same inputs and changed only the provider key and "
+    "produced a very different tail latency profile under the same load and the same budget and "
+    "the same cache state for two hours and then we repeated the whole sequence on a second "
+    "machine with a slower disk and a warmer cache and a different kernel and recorded every "
+    "request body for replay in the shared ledger for this batch of runs."
+)
+_LONG_B = (
+    "A third pass measured memory and disk and network use under the same load and the same "
+    "budget and the same cache state for two hours and then we repeated the whole sequence on a "
+    "third machine with a slower disk and a warmer cache and a different kernel and recorded "
+    "every request body for replay in the shared ledger for this batch of runs and kept the raw "
+    "logs as well for anyone who wants to recompute."
+)
+UNIFORM_SPREAD = " ".join([
+    "Short run.", _LONG_A, "It failed.", _LONG_B, "We stopped.", _LONG_A,
+    "Noise.", _LONG_B, "End.", _LONG_A,
+])
+# 健康区间内的正常起伏（CV ≈ 0.50）
+UNIFORM_MID = (
+    "The run finished on time. "
+    "The first experiment ran for forty-one minutes on a single node while every request was "
+    "logged and the provider key stayed fixed. "
+    "It failed at the end of the second hour. "
+    "A second pass reused the same inputs and produced a very different tail latency profile. "
+    "We stopped the pass. "
+    "The third pass measured memory and disk use under the same load for two hours and reported "
+    "the median. "
+    "The numbers were stable across five repetitions of the whole sequence. "
+    "After that we repeated the sequence on a second machine with a slower disk. "
+    "The gap between the two machines was small and the raw logs are in the appendix. "
+    "We report exact counts for every bucket instead of one average. "
+    "The result holds."
 )
 
 NORMAL_1 = (
@@ -229,6 +291,22 @@ class TestMetrics(unittest.TestCase):
             result = analyze_text(tmp, UNIFORM_NEG)
         self.assertNotIn("SENTENCE_UNIFORMITY", codes(result))
         self.assertGreaterEqual(result.metrics["sentence_uniformity"], 0.45)
+
+    def test_uniformity_mid_range_not_reported(self):
+        """健康区间 [0.45, 0.80] 内的正常起伏不报。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, UNIFORM_MID)
+        cv = result.metrics["sentence_uniformity"]
+        self.assertGreaterEqual(cv, 0.45)
+        self.assertLessEqual(cv, 0.80)
+        self.assertNotIn("SENTENCE_UNIFORMITY", codes(result))
+
+    def test_uniformity_high_end_not_reported(self):
+        """CV > 0.80 是散，散不是 AI 特征：不报。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, UNIFORM_SPREAD)
+        self.assertGreater(result.metrics["sentence_uniformity"], 0.80)
+        self.assertNotIn("SENTENCE_UNIFORMITY", codes(result))
 
     def test_empty_adjective_positive(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -309,13 +387,37 @@ class TestMetrics(unittest.TestCase):
         self.assertIn("SENTENCE_LENGTH_EXTREME", codes(result))
         self.assertEqual(result.metrics["sentence_length_extreme"], 1)
         hit = next(f for f in result.findings if f.code == "SENTENCE_LENGTH_EXTREME")
-        self.assertIn("断成两句", hit.suggestion)
+        self.assertIn("保留", hit.suggestion)
+        self.assertIn("换气", hit.suggestion)
+        self.assertNotIn("断成两句", hit.suggestion)
 
     def test_sentence_length_extreme_negative(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, EXTREME_NEG)
         self.assertNotIn("SENTENCE_LENGTH_EXTREME", codes(result))
         self.assertEqual(result.metrics["sentence_length_extreme"], 0)
+
+    def test_long_structured_sentence_not_reported(self):
+        """长而有结构（从句/分号/括号）的长句是专家写法，不报。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, EXTREME_STRUCTURED)
+        self.assertNotIn("SENTENCE_LENGTH_EXTREME", codes(result))
+        self.assertEqual(result.metrics["sentence_length_extreme"], 0)
+
+    def test_rhythm_plateau_positive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, PLATEAU_POS)
+        self.assertIn("RHYTHM_PLATEAU", codes(result))
+        self.assertEqual(result.metrics["rhythm_plateau"], 1)
+        hit = next(f for f in result.findings if f.code == "RHYTHM_PLATEAU")
+        self.assertIn("短句", hit.suggestion)
+        self.assertIn("合并", hit.suggestion)
+
+    def test_rhythm_plateau_negative(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, PLATEAU_NEG)
+        self.assertNotIn("RHYTHM_PLATEAU", codes(result))
+        self.assertEqual(result.metrics["rhythm_plateau"], 0)
 
 
 class TestThresholdsAndLang(unittest.TestCase):
@@ -348,7 +450,10 @@ class TestThresholdsAndLang(unittest.TestCase):
             "这个结论至关重要，而且它看起来可能会在更长的运行中发生变化，所以我们把全部原始数据都留在附录里，"
             "让读者能够自己重新计算每一个数字而不是只看我们给出的汇总比例，每一个表格与每一处引用也都能追溯到原始记录。\n\n"
             "这项工作提供了全面的分析，也做了深入的讨论，读者可以据此复核每一个实验设置与数据口径。\n\n"
-            "我们比较甲、乙、丙三种做法，并逐一报告它们的结果。\n"
+            "我们比较甲、乙、丙三种做法，并逐一报告它们的结果。\n\n"
+            "我们在第一台机器上运行第一个方法，记录每次调用的输入、输出与时延，在第二台机器上运行第二个方法，"
+            "记录每次调用的输入、输出与时延，在第三台机器上运行第三个方法，记录每次调用的输入、输出与时延，"
+            "最后把所有原始记录整理成一张表放进附录，让读者能逐项复算每一个数字与每一处设置。\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, body)
@@ -409,6 +514,8 @@ class TestCLI(unittest.TestCase):
         self.assertLessEqual(len(prompt), 400)
         self.assertIn("不得删数字", prompt)
         self.assertIn("不得删引用", prompt)
+        self.assertIn("禁止整段拆短", prompt)
+        self.assertIn("RHYTHM_PLATEAU", prompt)
         self.assertIn("→", prompt)
 
     def test_prompt_json_embeds_prompt(self):

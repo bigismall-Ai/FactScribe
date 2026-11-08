@@ -10,8 +10,10 @@
 [thresholds]
 # 每千词（中文按字）套话连接词数；> 触发
 connective_density = 8.0
-# 句长标准差 / 均值；< 触发（越低＝句长越整齐）
+# 句长标准差 / 均值。健康区间 [0.45, 0.80]：
+#   < 0.45 触发（太整齐／太平）；> 0.80 不报（散不是 AI 特征）
 sentence_uniformity = 0.45
+sentence_uniformity_high = 0.80
 # 每千词空泛形容词数；> 触发
 empty_adjective = 6.0
 # 每千词三项并列数；> 触发
@@ -22,9 +24,13 @@ paragraph_template = 0.5
 hedge_stack = 1
 # 相邻段落首词相同的次数；>= 触发
 repeated_opener = 2
-# 单句长度上限（词 / 字）；超过即逐处报告
-sentence_length_extreme_en = 45
-sentence_length_extreme_zh = 80
+# 单句长度上限（词 / 字）；超过且句内没有任何从句/分号/破折号/括号断点才报。
+# 又长又有结构的长句是专家写法，不报。
+sentence_length_extreme_en = 60
+sentence_length_extreme_zh = 110
+# 节奏平台：连续 N 句长度都落在同一 W 词（字）区间即触发
+rhythm_plateau_run = 3
+rhythm_plateau_window = 10
 
 [limits]
 # 每个指标最多列多少条具体改法（防止报告淹没）

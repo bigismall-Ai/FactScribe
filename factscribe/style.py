@@ -38,14 +38,19 @@ STYLE_RULES_NAME = "style-rules.toml"
 DEFAULT_RULES: dict = {
     "thresholds": {
         "connective_density": 8.0,
+        # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
+        # 只有低于下界才算「太平」——高于上界是散，散不是 AI 特征。
         "sentence_uniformity": 0.45,
+        "sentence_uniformity_high": 0.80,
         "empty_adjective": 6.0,
         "triad_density": 4.0,
         "paragraph_template": 0.5,
         "hedge_stack": 1,
         "repeated_opener": 2,
-        "sentence_length_extreme_en": 45,
-        "sentence_length_extreme_zh": 80,
+        "sentence_length_extreme_en": 60,
+        "sentence_length_extreme_zh": 110,
+        "rhythm_plateau_run": 3,
+        "rhythm_plateau_window": 10,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -104,6 +109,7 @@ DIRECTIONS = {
     "hedge_stack": "at_least",
     "repeated_opener": "at_least",
     "sentence_length_extreme": "at_least",
+    "rhythm_plateau": "at_least",
 }
 
 CODE_OF = {
@@ -115,11 +121,12 @@ CODE_OF = {
     "hedge_stack": "HEDGE_STACK",
     "repeated_opener": "REPEATED_OPENER",
     "sentence_length_extreme": "SENTENCE_LENGTH_EXTREME",
+    "rhythm_plateau": "RHYTHM_PLATEAU",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "HEDGE_STACK", "CONNECTIVE_DENSITY",
                  "EMPTY_ADJECTIVE", "TRIAD_DENSITY", "PARAGRAPH_TEMPLATE",
-                 "REPEATED_OPENER", "SENTENCE_UNIFORMITY"]
+                 "REPEATED_OPENER", "RHYTHM_PLATEAU", "SENTENCE_UNIFORMITY"]
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9'’\-]*")
@@ -541,6 +548,27 @@ def _extreme_split(sentence: str) -> str:
     return left + ". " + right
 
 
+# 长句里的「结构断点」：从句引导词、分号、破折号、括号。
+# 有断点的长句是专家写法，不报；只有「又长又平铺」才报。
+_EN_BREAK_RE = re.compile(
+    r"\b(?:which|that|who|whom|whose|because|although|though|while|whereas"
+    r"|since|unless|if|when|whenever|where|wherever|after|before|as|whether"
+    r"|despite|given|provided|such\s+that|so\s+that|in\s+order\s+that"
+    r"|not\s+only|thereby|hence|thus)\b"
+    r"|[;()\[\]]|—|–|--", re.IGNORECASE)
+_CN_BREAK_RE = re.compile(
+    r"因为|由于|虽然|尽管|如果|若是|只要|只有|无论|不论|即使|即便"
+    r"|但是|然而|而且|并且|同时|因此|因而|从而|于是|以便|以致|甚至"
+    r"|尤其|其中|以及|则|却|而|；|：|—|（|）|《|》|「|」")
+
+
+def _has_structural_break(sentence: str) -> bool:
+    """句内是否有从句/分号/破折号/括号这类换气点。"""
+    if _cjk_heavy(sentence):
+        return bool(_CN_BREAK_RE.search(sentence))
+    return bool(_EN_BREAK_RE.search(sentence))
+
+
 def _first_word(text: str) -> str:
     m = re.search(r"[A-Za-z][A-Za-z'’\-]*|[\u4e00-\u9fff]{1,4}", text)
     return m.group(0).lower() if m else ""
@@ -611,11 +639,16 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     total_units = sum(units_of(d.prose) for d in docs)
     all_sentences = []          # [(doc, start, end, units)]
     all_paragraphs = []         # [(doc, start, end, units)]
+    paragraph_sentences = []    # 每段的句子序列（节奏平台按段判，不跨段）
     for doc in docs:
         for start, end in _paragraphs(doc, min_units):
             all_paragraphs.append((doc, start, end, units_of(doc.prose[start:end])))
+            seq = []
             for s, e in _sentences(doc.prose[start:end], start):
-                all_sentences.append((doc, s, e, units_of(doc.prose[s:e])))
+                item = (doc, s, e, units_of(doc.prose[s:e]))
+                all_sentences.append(item)
+                seq.append(item)
+            paragraph_sentences.append(seq)
 
     instances: dict[str, list[Finding]] = {code: [] for code in CODE_OF.values()}
     paragraph_infos: dict[tuple[str, int], ParagraphInfo] = {}
@@ -738,7 +771,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "双重限定叠在一起：把「%s」减成一层「%s」；能给出证据就删掉限定"
                 % (token, short), "hedge_stack"))
 
-    # ---- 7. 超长句 ----
+    # ---- 7. 超长句（只报「又长又没有结构」的；长而有结构的句子不报） ----
     extreme_hits = 0
     sentence_units = []
     for doc, start, end, units in all_sentences:
@@ -746,14 +779,50 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         sentence_units.append((units, doc, start, sentence))
         limit = (thresholds["sentence_length_extreme_zh"] if _cjk_heavy(sentence)
                  else thresholds["sentence_length_extreme_en"])
-        if units > limit:
+        if units > limit and not _has_structural_break(sentence):
             extreme_hits += 1
             instances["SENTENCE_LENGTH_EXTREME"].append(Finding(
                 "SENTENCE_LENGTH_EXTREME", doc.file, _line_of(doc, start),
                 _clip(sentence, 220),
-                "这句 %d 词超过 %d：在逗号或 and 处断成两句（例：%s）"
+                "这句 %d 词超过 %d，且句内没有从句/分号/破折号/括号断点：这一句"
+                "又长又平铺，保留原有结构，考虑在语义边界换气（例：%s）；"
+                "长而有结构的句子不必改，也不要整段拆短"
                 % (units, limit, _clip(_extreme_split(sentence), 120)),
                 "sentence_length_extreme"))
+
+    # ---- 7b. 节奏平台：连续 >=N 句落在同一 10 词区间 ----
+    plateau_run = int(thresholds["rhythm_plateau_run"])
+    plateau_window = int(thresholds["rhythm_plateau_window"])
+    plateau_hits = 0
+    for seq in paragraph_sentences:
+        i = 0
+        while i < len(seq):
+            bucket = seq[i][3] // plateau_window
+            j = i + 1
+            while j < len(seq) and seq[j][3] // plateau_window == bucket:
+                j += 1
+            if j - i >= plateau_run:
+                plateau_hits += 1
+                first = seq[i]
+                last = seq[j - 1]
+                joined = " ".join(_norm_space(first[0].prose[it[1]:it[2]])
+                                  for it in seq[i:j])
+                unit = "字" if _cjk_heavy(joined) else "词"
+                l1 = _line_of(first[0], first[1])
+                l2 = _line_of(last[0], last[2])
+                where = ("第 %d 行" % l1) if l1 == l2 else ("第 %d–%d 行" % (l1, l2))
+                instances["RHYTHM_PLATEAU"].append(Finding(
+                    "RHYTHM_PLATEAU", first[0].file, l1, _clip(joined, 220),
+                    "%s连续 %d 句长度都在 %d–%d %s：节奏成了平台，"
+                    "在其中插入一句 8–15 %s的短句，或把相邻两句合并，"
+                    "让长短有起伏；内容与结构不动"
+                    % (where, j - i, bucket * plateau_window,
+                       bucket * plateau_window + plateau_window - 1, unit,
+                       unit),
+                    "rhythm_plateau"))
+                i = j
+            else:
+                i += 1
 
     # ---- 8. 句长均匀度 ----
     sizes = [u for u, _d, _s, _t in sentence_units]
@@ -782,6 +851,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "hedge_stack": hedge_hits,
         "repeated_opener": repeated,
         "sentence_length_extreme": extreme_hits,
+        "rhythm_plateau": plateau_hits,
     }
 
     fired = []
@@ -792,6 +862,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         if metric == "sentence_length_extreme":
             limit = 1
             hit = extreme_hits >= 1
+            shown = limit
+        elif metric == "rhythm_plateau":
+            limit = int(thresholds["rhythm_plateau_run"])
+            hit = plateau_hits >= 1
             shown = limit
         elif metric in ("hedge_stack", "repeated_opener"):
             limit = thresholds[metric]
@@ -804,8 +878,12 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         else:
             limit = thresholds[metric]
             hit = value < limit
-            if metric == "sentence_uniformity" and len(sizes) < min_sentences:
-                hit = False
+            if metric == "sentence_uniformity":
+                if len(sizes) < min_sentences:
+                    hit = False
+                # 上界只做健康区间说明：CV 高＝散，散不是 AI 特征，不报
+                if value > thresholds["sentence_uniformity_high"]:
+                    hit = False
             shown = limit
         if hit:
             fired.append({"code": CODE_OF[metric], "metric": metric,
@@ -814,7 +892,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     # 句长均匀度：整篇一条，指出最短/最长句的位置，便于具体改
     if (len(sizes) >= min_sentences
-            and uniformity < thresholds["sentence_uniformity"] and sentence_units):
+            and uniformity < thresholds["sentence_uniformity"]
+            and uniformity <= thresholds["sentence_uniformity_high"]
+            and sentence_units):
         short = min(sentence_units, key=lambda x: x[0])
         long = max(sentence_units, key=lambda x: x[0])
         doc = max(docs, key=lambda d: len(d.prose)) if docs else None
@@ -822,9 +902,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             "SENTENCE_UNIFORMITY", doc.file if doc else "", 1,
             "全文 %d 句：句长均值 %.1f，标准差 %.1f，CV=%.2f"
             % (len(sizes), mean, std, uniformity),
-            "句长太整齐：把最短句（%s:%d，%d 词）与相邻句合并，或把最长句"
-            "（%s:%d，%d 词）拆成两句，让长短有起伏"
-            % (short[1].file, _line_of(short[1], short[2]), short[0],
+            "句长太整齐（CV=%.2f，低于健康下界 %.2f）：交替长短句，"
+            "插入一句 8–15 词的短句，或把相邻短句合并；"
+            "最短句在 %s:%d（%d 词），最长句在 %s:%d（%d 词）"
+            % (uniformity, thresholds["sentence_uniformity"],
+               short[1].file, _line_of(short[1], short[2]), short[0],
                long[1].file, _line_of(long[1], long[2]), long[0]),
             "sentence_uniformity"))
 
@@ -865,12 +947,13 @@ PROMPT_LIMIT = 400
 
 def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
     if not result.findings:
-        text = ("未发现需要改写的公式化痕迹。不要为改写而改写；保持事实、数字、"
-                "引用原样。")
+        text = ("未发现需要改写的公式化痕迹。不要为改写而改写；优先保留原有结构"
+                "与修辞，事实、数字、引用保持原样。")
         return text[:limit]
 
     head = ("只改下列标记句；不改事实、数字、引用；不得删数字、不得删引用、"
-            "不得整段删除。逐条处理后重新提交。")
+            "不得整段删除。优先保留原有结构与修辞，禁止整段拆短；"
+            "只在 RHYTHM_PLATEAU 处调节奏。逐条处理后重新提交。")
     items = []
     # 先每个指标取一条，保证覆盖面，再补其余
     seen = set()
@@ -929,12 +1012,18 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("hedge_stack", "HEDGE_STACK", ">="),
         ("repeated_opener", "REPEATED_OPENER", ">="),
         ("sentence_length_extreme", "SENTENCE_LENGTH_EXTREME", ">="),
+        ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
     ]
     fired_codes = {f["code"] for f in result.fired}
     for key, label, op in labels:
         if key == "sentence_length_extreme":
-            threshold = "%d/%d" % (result.thresholds["sentence_length_extreme_en"],
-                                   result.thresholds["sentence_length_extreme_zh"])
+            threshold = ">%d/%d" % (result.thresholds["sentence_length_extreme_en"],
+                                    result.thresholds["sentence_length_extreme_zh"])
+        elif key == "sentence_uniformity":
+            threshold = "%s-%s" % (_fmt(result.thresholds["sentence_uniformity"]),
+                                   _fmt(result.thresholds["sentence_uniformity_high"]))
+        elif key == "rhythm_plateau":
+            threshold = "run>=%d" % result.thresholds["rhythm_plateau_run"]
         else:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]

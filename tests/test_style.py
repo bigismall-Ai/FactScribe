@@ -324,18 +324,24 @@ class TestMetrics(unittest.TestCase):
         self.assertNotIn("EMPTY_ADJECTIVE", codes(result))
         self.assertEqual(result.metrics["empty_adjective"], 0.0)
 
-    def test_triad_positive(self):
+    def test_colloquial_triad_positive(self):
+        body = (
+            "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
+            "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TRIAD_POS)
-        self.assertIn("TRIAD_DENSITY", codes(result))
-        self.assertGreater(result.metrics["triad_density"], 4)
-        hit = next(f for f in result.findings if f.code == "TRIAD_DENSITY")
-        self.assertIn("三项并列", hit.suggestion)
+            result = analyze_text(tmp, body)
+        self.assertIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertGreaterEqual(result.metrics["colloquial_triad"], 2)
+        hit = next(f for f in result.findings if f.code == "COLLOQUIAL_TRIAD")
+        self.assertIn("相邻段落", hit.suggestion)
 
-    def test_triad_negative(self):
+    def test_colloquial_triad_negative(self):
+        body = ("We compare alpha, beta, and gamma on the same task under the same load "
+                "and report every failure in the appendix for replay.\n")
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TRIAD_NEG)
-        self.assertNotIn("TRIAD_DENSITY", codes(result))
+            result = analyze_text(tmp, body)
+        self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
 
     def test_paragraph_template_positive(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -432,15 +438,19 @@ class TestThresholdsAndLang(unittest.TestCase):
         self.assertNotIn("CONNECTIVE_DENSITY", codes(raised))
         self.assertNotIn("CONNECTIVE_DENSITY", {f["code"] for f in raised.fired})
 
-    def test_threshold_override_disables_triad(self):
+    def test_threshold_override_disables_colloquial_triad(self):
+        body = (
+            "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
+            "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            base = analyze_text(tmp, TRIAD_POS)
-        self.assertIn("TRIAD_DENSITY", codes(base))
+            base = analyze_text(tmp, body)
+        self.assertIn("COLLOQUIAL_TRIAD", codes(base))
         with tempfile.TemporaryDirectory() as tmp:
-            rules = "[thresholds]\ntriad_density = 1000.0\n"
-            result = analyze_text(tmp, TRIAD_POS, rules)
-        self.assertNotIn("TRIAD_DENSITY", codes(result))
-        self.assertNotIn("TRIAD_DENSITY", {f["code"] for f in result.fired})
+            rules = "[thresholds]\ncolloquial_triad_repeats = 99\n"
+            result = analyze_text(tmp, body, rules)
+        self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertNotIn("COLLOQUIAL_TRIAD", {f["code"] for f in result.fired})
 
     def test_chinese_metrics(self):
         body = (

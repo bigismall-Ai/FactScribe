@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-"""文风闸原型：机械检测「公式化写作特征」，只出黄牌、不阻断、不改正文。
+"""文风闸 v4：机械检测「公式化写作特征」，只出黄牌、不阻断、不改正文。
 
-定位（写进 docs/implementation/STYLE-GATE.md）：
+规则清单见 ``docs/design/SPEC-V3.0.md`` §13：
+
+* 插入语破折号、标题过长/带解释、标题术语未在首句定义；
+* 节奏平台、同构三点并列在相邻段重复、套话连接词、空泛形容词、超长句。
 
 * 本工具**不评估、也不试图规避任何 AI 检测器**。它只检测可机械复算的
-  写法：套话连接词、句长过齐、空泛形容词、三项并列、段末套话收尾、
-  双重模糊限定、相邻段同头、超长句。
-* 输出是「文件:行 + 原文 + 具体改法」，不是「像 AI」的分数。
+  写法；输出是「文件:行 + 原文 + 具体改法」，不是「像 AI」的分数。
 * 退出码只有 0（无触发）与 3（黄牌，仍是提示）；永不返回 1。
-* 阈值与词表来自 ``style-rules.toml``（项目根优先，其次仓根，最后内置
-  默认值），改阈值即改判定。
+  本模块只服务 ``style`` 子命令，不改 ``audit`` 的判据与退出码。
+* 阈值、词表与术语白名单来自 ``style-rules.toml``（项目根优先，其次
+  仓根，最后内置默认值），改阈值即改判定。
 
 LaTeX 正文的遮罩保持原长度、保留换行，所以任何位置都能直接换算回
 源文件行号；公式、图表、文献表、verbatim 与批注宏不参与文风统计。
@@ -36,6 +38,8 @@ STYLE_RULES_NAME = "style-rules.toml"
 # --------------------------------------------------------------------------
 
 DEFAULT_RULES: dict = {
+    # 术语白名单：两层——项目内 GLOSSARY.md ＋ 用户自维护纯文本（一行一个词）
+    "term_allow_files": ["GLOSSARY.md", "term-allow.txt"],
     "thresholds": {
         "connective_density": 8.0,
         # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
@@ -43,7 +47,6 @@ DEFAULT_RULES: dict = {
         "sentence_uniformity": 0.45,
         "sentence_uniformity_high": 0.80,
         "empty_adjective": 6.0,
-        "triad_density": 4.0,
         "paragraph_template": 0.5,
         "hedge_stack": 1,
         "repeated_opener": 2,
@@ -51,6 +54,11 @@ DEFAULT_RULES: dict = {
         "sentence_length_extreme_zh": 110,
         "rhythm_plateau_run": 3,
         "rhythm_plateau_window": 10,
+        # v4 新规则
+        "dash_budget": 0,
+        "heading_max_chars_zh": 12,
+        "heading_max_words_en": 8,
+        "colloquial_triad_repeats": 2,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -104,29 +112,42 @@ DIRECTIONS = {
     "connective_density": "above",
     "sentence_uniformity": "below",
     "empty_adjective": "above",
-    "triad_density": "above",
     "paragraph_template": "above",
     "hedge_stack": "at_least",
     "repeated_opener": "at_least",
     "sentence_length_extreme": "at_least",
     "rhythm_plateau": "at_least",
+    # v4
+    "dash_parenthetical": "above",
+    "heading_too_long": "at_least",
+    "heading_malformed": "at_least",
+    "term_first_in_heading": "at_least",
+    "colloquial_triad": "at_least",
 }
 
 CODE_OF = {
     "connective_density": "CONNECTIVE_DENSITY",
     "sentence_uniformity": "SENTENCE_UNIFORMITY",
     "empty_adjective": "EMPTY_ADJECTIVE",
-    "triad_density": "TRIAD_DENSITY",
     "paragraph_template": "PARAGRAPH_TEMPLATE",
     "hedge_stack": "HEDGE_STACK",
     "repeated_opener": "REPEATED_OPENER",
     "sentence_length_extreme": "SENTENCE_LENGTH_EXTREME",
     "rhythm_plateau": "RHYTHM_PLATEAU",
+    # v4
+    "dash_parenthetical": "DASH_PARENTHETICAL",
+    "heading_too_long": "HEADING_TOO_LONG",
+    "heading_malformed": "HEADING_MALFORMED",
+    "term_first_in_heading": "TERM_FIRST_IN_HEADING",
+    "colloquial_triad": "COLLOQUIAL_TRIAD",
 }
 
-FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "HEDGE_STACK", "CONNECTIVE_DENSITY",
-                 "EMPTY_ADJECTIVE", "TRIAD_DENSITY", "PARAGRAPH_TEMPLATE",
-                 "REPEATED_OPENER", "RHYTHM_PLATEAU", "SENTENCE_UNIFORMITY"]
+FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
+                 "HEADING_TOO_LONG", "HEADING_MALFORMED",
+                 "TERM_FIRST_IN_HEADING", "HEDGE_STACK",
+                 "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE", "COLLOQUIAL_TRIAD",
+                 "PARAGRAPH_TEMPLATE", "REPEATED_OPENER", "RHYTHM_PLATEAU",
+                 "SENTENCE_UNIFORMITY"]
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9'’\-]*")
@@ -441,9 +462,11 @@ class Finding:
     text: str
     suggestion: str
     metric: str = ""
+    severity: str = "yellow"
 
     def as_dict(self) -> dict:
-        return {"code": self.code, "file": self.file, "line": self.line,
+        return {"code": self.code, "severity": self.severity,
+                "file": self.file, "line": self.line,
                 "text": self.text, "suggestion": self.suggestion}
 
 
@@ -495,6 +518,7 @@ class _Doc:
     file: str
     prose: str
     newlines: list
+    raw: str = ""
 
 
 def _line_of(doc: _Doc, pos: int) -> int:
@@ -651,6 +675,164 @@ def _valid_triad(groups: tuple[str, ...]) -> bool:
 
 
 # --------------------------------------------------------------------------
+# v4：破折号插入语、标题、术语白名单、同构三点并列
+# --------------------------------------------------------------------------
+
+_EM_DASH_RE = re.compile(r"——|—")
+_HEADING_CMD_RE = re.compile(
+    r"\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?"
+    r"\s*(?:\[[^\]]*\])?\s*\{")
+_HEADING_MALFORMED_RE = re.compile(r"[：:？?。！!]|——|—|[（(][^）)]*[）)]")
+_TERM_SEP_RE = re.compile(r"[的和与及在对从为是]")
+_TERM_STOP = {
+    "a", "an", "the", "of", "for", "and", "or", "to", "in", "on", "with",
+    "by", "from", "as", "at", "is", "are", "be", "this", "that", "these",
+    "those", "how", "why", "what", "when", "where", "which", "who", "its",
+    "our", "their", "we", "you", "i", "via", "using", "toward", "towards",
+}
+
+
+def _line_start(doc: _Doc, line: int) -> int:
+    """第 ``line`` 行（1 起）在 prose 中的起点；越界返回文末。"""
+    if line <= 1:
+        return 0
+    idx = line - 2
+    if idx < len(doc.newlines):
+        return doc.newlines[idx] + 1
+    return len(doc.prose)
+
+
+def _is_range_dash(prose: str, start: int, end: int) -> bool:
+    """破折号是否属于数值范围或文献页码（这些不算插入语）。"""
+    left = prose[max(0, start - 32):start]
+    right = prose[end:end + 32]
+    left_num = re.search(r"(\d+)\s*$", left)
+    right_num = re.match(r"\s*(\d+)", right)
+    if left_num and right_num:
+        return True
+    if right_num:
+        if re.search(r"(?:pp?\.?|pages?)\s*\d+\s*$", left.lower()):
+            return True
+        if re.search(r"第\s*\d+\s*$", left) and re.match(r"\s*\d+\s*页", right):
+            return True
+    return False
+
+
+def _heading_title(tex: str, brace: int) -> tuple[str, int]:
+    """从 ``\\section{`` 的左花括号位置取出清理后的标题与闭合后的位置。"""
+    end = _balanced_end(tex, brace, "{", "}")
+    raw = tex[brace + 1:max(brace + 1, end - 1)]
+    raw = re.sub(r"\\(?:label|thanks|footnote)\s*\{[^{}]*\}", " ", raw)
+    raw = re.sub(r"\\[A-Za-z]+\*?", " ", raw)
+    raw = re.sub(r"[$~{}\\^_]", " ", raw)
+    return _norm_space(raw), end
+
+
+def _headings(tex: str) -> list[dict]:
+    """扫描源文件的章节标题（``\\title{}`` 不在其中，因此天然豁免）。"""
+    out = []
+    for m in _HEADING_CMD_RE.finditer(tex):
+        brace = m.end() - 1          # 正则以 `{` 结尾
+        title, end = _heading_title(tex, brace)
+        if not title:
+            continue
+        out.append({
+            "cmd": m.group(1),
+            "title": title,
+            "start": m.start(),
+            "end": end,
+            "line": tex.count("\n", 0, m.start()) + 1,
+            "end_line": tex.count("\n", 0, end) + 1,
+        })
+    return out
+
+
+def _term_candidates(title: str) -> list[str]:
+    """从标题抽「术语样」词：中文 ≥4 字段；英文 ≥2 词短语。"""
+    raw: list[str] = []
+    for run in re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]{4,}", title):
+        for seg in _TERM_SEP_RE.split(run):
+            if len(seg) >= 4:
+                raw.append(seg)
+    words = re.findall(r"[A-Za-z][A-Za-z0-9'’\-]*", title)
+    run: list[str] = []
+    for word in words:
+        if word.lower() in _TERM_STOP:
+            if len(run) >= 2:
+                raw.append(" ".join(run))
+            run = []
+        else:
+            run.append(word)
+    if len(run) >= 2:
+        raw.append(" ".join(run))
+    out: list[str] = []
+    seen: set[str] = set()
+    for cand in raw:
+        norm = _norm_space(cand)
+        key = norm.lower()
+        if norm and key not in seen:
+            seen.add(key)
+            out.append(norm)
+    return out
+
+
+def _term_allowlist(rules: dict, project_root: Path) -> set[str]:
+    """读取术语白名单：大小写不敏感、去首尾空白、忽略空行与 # 注释。"""
+    names = rules.get("term_allow_files", DEFAULT_RULES["term_allow_files"])
+    if not isinstance(names, (list, tuple)):
+        names = [names]
+    allow: set[str] = set()
+    for name in names:
+        path = project_root / str(name)
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            allow.add(_norm_space(line).lower())
+    return allow
+
+
+def _first_sentence_after(doc: _Doc, line: int) -> str:
+    """标题结束行之后的第一个非空句子（标题在 prose 里已被等长遮罩）。"""
+    if line < 1:
+        line = 1
+    base = _line_start(doc, line)
+    for start, end in _sentences(doc.prose[base:], base):
+        text = _norm_space(doc.prose[start:end])
+        if text:
+            return text
+    return ""
+
+
+def _shape_bucket(n: int) -> int:
+    return 1 if n <= 2 else (2 if n <= 4 else 3)
+
+
+def _paragraph_triads(text: str, triad_re: re.Pattern, base: int) -> list[tuple]:
+    """返回段内三点并列的 (绝对起点, 绝对终点, 原文, 结构指纹)。"""
+    hits = []
+    for m in triad_re.finditer(text):
+        if not _valid_triad(m.groups()):
+            continue
+        items = [_norm_space(g) for g in m.groups()]
+        shape = tuple(_shape_bucket(len(re.findall(r"[A-Za-z][A-Za-z0-9'’\-]*", it)))
+                      for it in items)
+        hits.append((base + m.start(), base + m.end(),
+                     _norm_space(m.group(0)), ("en", shape)))
+    for m in _CN_TRIAD_RE.finditer(text):
+        raw = m.group(0)
+        items = [x.strip() for x in raw.split("、")]
+        if len(items) != 3 or any(not x for x in items):
+            continue
+        shape = tuple(_shape_bucket(len(x)) for x in items)
+        hits.append((base + m.start(), base + m.end(),
+                     _norm_space(raw), ("cn", shape)))
+    return sorted(hits)
+
+
+# --------------------------------------------------------------------------
 # 阶段判断：初稿 vs 成品稿
 # --------------------------------------------------------------------------
 
@@ -720,7 +902,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     docs: list[_Doc] = []
     for rel, text in sections:
         prose = prose_of(text)
-        docs.append(_Doc(rel, prose, [i for i, c in enumerate(prose) if c == "\n"]))
+        live, _defs = _live_text(text)   # 标题扫描走活跃正文（注释里的标题不算）
+        docs.append(_Doc(rel, prose,
+                         [i for i, c in enumerate(prose) if c == "\n"], live))
 
     total_units = sum(units_of(d.prose) for d in docs)
     all_sentences = []          # [(doc, start, end, units)]
@@ -773,21 +957,93 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "'This step raises resolved instances from 5 to 10'）" % (phrase, token),
                 "empty_adjective"))
 
-    # ---- 3. 三项并列 ----
-    triad_hits = 0
+    # ---- 3. 插入语破折号（逐处报；数值范围/页码/数学环境排除）----
+    dash_hits = 0
     for doc in docs:
-        text = doc.prose
-        hits = [(m.start(), m.end(), _norm_space(m.group(0)))
-                for m in triad_re.finditer(text)
-                if _valid_triad(m.groups())]
-        for m in _CN_TRIAD_RE.finditer(text):
-            hits.append((m.start(), m.end(), _norm_space(m.group(0))))
-        for start, end, raw in sorted(hits):
-            triad_hits += 1
-            instances["TRIAD_DENSITY"].append(Finding(
-                "TRIAD_DENSITY", doc.file, _line_of(doc, start), _clip(raw, 160),
-                "三项并列改成两项或拆成两句（例：'A, B, and C' → 'A and B. C ...'），"
-                "只留有信息的两项", "triad_density"))
+        for m in _EM_DASH_RE.finditer(doc.prose):
+            if _is_range_dash(doc.prose, m.start(), m.end()):
+                continue
+            dash_hits += 1
+            excerpt = _norm_space(doc.prose[max(0, m.start() - 40):
+                                            min(len(doc.prose), m.end() + 40)])
+            instances["DASH_PARENTHETICAL"].append(Finding(
+                "DASH_PARENTHETICAL", doc.file, _line_of(doc, m.start()),
+                _clip(excerpt, 180),
+                "插入语破折号：按优先级改 ① 去掉「——」，改成逗号从属句；"
+                "② 改用括号括起；③ 拆成独立一句。三种都不改事实与数字。",
+                "dash_parenthetical"))
+
+    # ---- 3b. 标题：过长 / 带解释 / 术语未在首句定义 ----
+    heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
+                      "TERM_FIRST_IN_HEADING": 0}
+    term_allow = _term_allowlist(rules, cfg.root)
+    for doc in docs:
+        for head in _headings(doc.raw):
+            title, line = head["title"], head["line"]
+            if _cjk_heavy(title):
+                too_long = (len(_CJK_RE.findall(title))
+                            > thresholds["heading_max_chars_zh"])
+                limit_txt = "%d 字" % thresholds["heading_max_chars_zh"]
+            else:
+                too_long = (len(_LATIN_WORD_RE.findall(title))
+                            > thresholds["heading_max_words_en"])
+                limit_txt = "%d 词" % thresholds["heading_max_words_en"]
+            if too_long:
+                heading_counts["HEADING_TOO_LONG"] += 1
+                instances["HEADING_TOO_LONG"].append(Finding(
+                    "HEADING_TOO_LONG", doc.file, line, _clip(title, 160),
+                    "标题压到 %s 以内：把副标题或解释移到正文首句，标题只留"
+                    "名词短语；不改正文事实。" % limit_txt,
+                    "heading_too_long"))
+            if _HEADING_MALFORMED_RE.search(title):
+                heading_counts["HEADING_MALFORMED"] += 1
+                instances["HEADING_MALFORMED"].append(Finding(
+                    "HEADING_MALFORMED", doc.file, line, _clip(title, 160),
+                    "标题不用冒号/破折号/括号解释/问号/句号：把解释移到正文"
+                    "首句，标题只留名词短语；不改正文事实。",
+                    "heading_malformed"))
+            first = _first_sentence_after(doc, head["end_line"]).lower()
+            for cand in _term_candidates(title):
+                key = cand.lower()
+                if key in term_allow or key in first:
+                    continue
+                heading_counts["TERM_FIRST_IN_HEADING"] += 1
+                instances["TERM_FIRST_IN_HEADING"].append(Finding(
+                    "TERM_FIRST_IN_HEADING", doc.file, line, _clip(title, 160),
+                    "标题里的「%s」第一次出现时，请在该节首句用一句话定义或"
+                    "点明（例：本节讨论 %s）；可在 term-allow.txt 登记白名单，"
+                    "只改措辞，不改事实。" % (cand, cand),
+                    "term_first_in_heading"))
+
+    # ---- 3c. 同构三点并列：相邻段落重复才算 ----
+    para_triads = []
+    for doc, start, end, _units in all_paragraphs:
+        hits = _paragraph_triads(doc.prose[start:end], triad_re, start)
+        para_triads.append((doc, hits))
+    repeated_triads = []
+    seen_triad = set()
+    prev_sigs: dict = {}
+    prev_file = None
+    for doc, hits in para_triads:
+        if prev_file != doc.file:
+            prev_sigs = {}
+        cur_sigs: dict = {}
+        for start, end, raw, sig in hits:
+            cur_sigs.setdefault(sig, []).append((doc, start, end, raw))
+            if sig in prev_sigs:
+                for occ in prev_sigs[sig] + [(doc, start, end, raw)]:
+                    key = (occ[0].file, occ[1])
+                    if key not in seen_triad:
+                        seen_triad.add(key)
+                        repeated_triads.append(occ)
+        prev_sigs = cur_sigs
+        prev_file = doc.file
+    for doc, start, _end, raw in repeated_triads:
+        instances["COLLOQUIAL_TRIAD"].append(Finding(
+            "COLLOQUIAL_TRIAD", doc.file, _line_of(doc, start), _clip(raw, 160),
+            "同构三点并列在相邻段落重复：把其中一段的三项改成两项或拆成两句，"
+            "只留有信息的两项；结构跟着内容走，不改事实。",
+            "colloquial_triad"))
 
     # ---- 4. 段末套话收尾 / 5. 相邻段同头 ----
     template_flags = 0
@@ -940,12 +1196,16 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "connective_density": density(connective_hits),
         "sentence_uniformity": round(uniformity, 3),
         "empty_adjective": density(adjective_hits),
-        "triad_density": density(triad_hits),
         "paragraph_template": template_ratio,
         "hedge_stack": hedge_hits,
         "repeated_opener": repeated,
         "sentence_length_extreme": extreme_hits,
         "rhythm_plateau": plateau_hits,
+        "dash_parenthetical": dash_hits,
+        "heading_too_long": heading_counts["HEADING_TOO_LONG"],
+        "heading_malformed": heading_counts["HEADING_MALFORMED"],
+        "term_first_in_heading": heading_counts["TERM_FIRST_IN_HEADING"],
+        "colloquial_triad": len(repeated_triads),
     }
 
     fired = []
@@ -963,6 +1223,19 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric in ("hedge_stack", "repeated_opener"):
             limit = thresholds[metric]
+            hit = value >= limit
+            shown = limit
+        elif metric == "dash_parenthetical":
+            limit = int(thresholds["dash_budget"])
+            hit = dash_hits > limit
+            shown = limit
+        elif metric == "colloquial_triad":
+            limit = int(thresholds["colloquial_triad_repeats"])
+            hit = len(repeated_triads) >= limit
+            shown = limit
+        elif metric in ("heading_too_long", "heading_malformed",
+                        "term_first_in_heading"):
+            limit = 1
             hit = value >= limit
             shown = limit
         elif direction == "above":
@@ -1052,9 +1325,9 @@ def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
                 "与修辞，事实、数字、引用保持原样。")
         return text[:limit]
 
-    head = ("只改下列标记句；不改事实、数字、引用；不得删数字、不得删引用、"
-            "不得整段删除。优先保留原有结构与修辞，禁止整段拆短；"
-            "只在 RHYTHM_PLATEAU 处调节奏。逐条处理后重新提交。")
+    head = ("下列均为黄牌提示，只改措辞，不改事实、数字、引用；"
+            "不得删数字、不得删引用、不得整段删除。优先保留原有结构与修辞，"
+            "禁止整段拆短；只在 RHYTHM_PLATEAU 处调节奏。逐条处理后重新提交。")
     items = []
     # 先每个指标取一条，保证覆盖面，再补其余
     seen = set()
@@ -1114,15 +1387,19 @@ def render_human(result: StyleResult, project: Path) -> str:
               "指标                    读数      阈值     状态",
               "-----------------------  --------  -------  ----"]
     labels = [
+        ("sentence_length_extreme", "SENTENCE_LENGTH_EXTREME", ">="),
+        ("dash_parenthetical", "DASH_PARENTHETICAL", ">"),
+        ("heading_too_long", "HEADING_TOO_LONG", ">="),
+        ("heading_malformed", "HEADING_MALFORMED", ">="),
+        ("term_first_in_heading", "TERM_FIRST_IN_HEADING", ">="),
+        ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
+        ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
-        ("sentence_uniformity", "SENTENCE_UNIFORMITY", "<"),
         ("empty_adjective", "EMPTY_ADJECTIVE", ">"),
-        ("triad_density", "TRIAD_DENSITY", ">"),
+        ("sentence_uniformity", "SENTENCE_UNIFORMITY", "<"),
         ("paragraph_template", "PARAGRAPH_TEMPLATE", ">"),
         ("hedge_stack", "HEDGE_STACK", ">="),
         ("repeated_opener", "REPEATED_OPENER", ">="),
-        ("sentence_length_extreme", "SENTENCE_LENGTH_EXTREME", ">="),
-        ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
     ]
     fired_codes = {f["code"] for f in result.fired}
     for key, label, op in labels:
@@ -1134,6 +1411,16 @@ def render_human(result: StyleResult, project: Path) -> str:
                                    _fmt(result.thresholds["sentence_uniformity_high"]))
         elif key == "rhythm_plateau":
             threshold = "run>=%d" % result.thresholds["rhythm_plateau_run"]
+        elif key == "dash_parenthetical":
+            threshold = "<=%d" % result.thresholds["dash_budget"]
+        elif key == "heading_too_long":
+            threshold = "<=%d字/%d词" % (
+                result.thresholds["heading_max_chars_zh"],
+                result.thresholds["heading_max_words_en"])
+        elif key == "colloquial_triad":
+            threshold = "repeat>=%d" % result.thresholds["colloquial_triad_repeats"]
+        elif key in ("heading_malformed", "term_first_in_heading"):
+            threshold = ">=1"
         else:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]

@@ -1498,6 +1498,162 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 
 ---
 
+## 13. 文风规则 v4（批 82 增补）
+
+> 本节只约束 `factscribe style` 子命令。**不改 `audit` 的判据与退出码**：文风闸
+> 始终只出黄牌（exit 3），永不返回 1。阈值与词表全部来自 `style-rules.toml`，
+> 改文件即改判定；本节与仓根 `style-rules.toml` 同表。
+
+### 13.0 共同输入与输出
+
+- **输入**：`project.*` 收齐的正文 `.tex`（`load_sections` 闭包）。先经
+  `prose_of()` 做等长遮罩：公式、图表、文献表、verbatim、批注宏、引用与
+  标题命令都不参与正文统计，但**换行保留**，因此任何位置都能换算回源文件行号。
+- **标题规则**（13.2–13.4）单独扫描源文件的 `\part/\chapter/\section/
+  \subsection/\subsubsection/\paragraph`，不用遮罩后的正文。`\title{}` 是论文
+  主标题，**三条规定全部豁免**。
+- **输出**：每条 finding 固定五字段＋严重级别：
+  `code / severity / file / line / text / suggestion`。severity 恒为 `yellow`。
+  同一位置多条规则各出各的条目。
+- **退出码**：无黄牌 0，有黄牌 3，永不 1；`--json` 与 `--prompt` 同步反映同一
+  批黄牌（`--prompt` 只列黄牌，且明确不改正文事实）。
+
+### 13.1 `DASH_PARENTHETICAL`（黄）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 遮罩后的正文 |
+| 算法 | 匹配 `——` 与 `—`（整段 `——` 算一处）；左右最近的非空 token 都是数字（含 `第 3——5 章`）判数值范围，排除；左侧 24 字内出现 `p.`/`pp.`/`page(s)`/`第 N` 且右侧以数字开头判文献页码，排除；数学环境在遮罩阶段已消失 |
+| 阈值 | `thresholds.dash_budget`，默认 `0`；出现数 `>` 预算即触发，**逐处报** |
+| 误报边界 | 数值范围、文献页码、数学环境里的 `-`/`—` 不报；ASCII `--` 不匹配，永不报 |
+| 漏报边界 | 行首/行尾单独一个 `—` 仍按插入语报（保守方向）；无 |
+| 对应码 | `DASH_PARENTHETICAL` |
+| 建议文案 | 按优先级给三种改法：①改成逗号从属句；②改用括号；③拆成独立一句 |
+
+### 13.2 `HEADING_TOO_LONG`（黄）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 源文件的章节标题（`\title{}` 豁免） |
+| 算法 | 中文标题按汉字数、英文标题按词数计；混排按汉字多于拉丁词判中文 |
+| 阈值 | `thresholds.heading_max_chars_zh` 默认 `12`；`thresholds.heading_max_words_en` 默认 `8`；严格大于才报 |
+| 误报边界 | `\title{}` 豁免；标题里的数学/命令参数先剥掉再计数 |
+| 漏报边界 | 纯数字标题按中文口径计汉字数（0），不报；无 |
+| 对应码 | `HEADING_TOO_LONG` |
+
+### 13.3 `HEADING_MALFORMED`（黄）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 源文件的章节标题（`\title{}` 豁免） |
+| 算法 | 标题含中文/英文冒号 `：:`、破折号 `——`/`—`、括号解释 `（…）`/`(…)`、问号 `？?`、句号 `。.`、叹号 `！!` 即报 |
+| 阈值 | 出现即报（单点） |
+| 误报边界 | 论文主标题 `\title{}` 除外；连字符 `-`（如 `End-to-End`）不算破折号 |
+| 漏报边界 | 无标点但语义是问句的标题不报；属启发式接受 |
+| 对应码 | `HEADING_MALFORMED` |
+
+### 13.4 `TERM_FIRST_IN_HEADING`（黄，启发式）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 源文件的章节标题＋该节首句（标题后第一句正文） |
+| 算法 | 从标题抽「术语样」词：中文按 `的/和/与/及/在/对/从/为/是` 切段后取 ≥4 字段；英文取连续非停用词 ≥2 词的短语。候选术语不在该节首句出现即报。大小写不敏感、去首尾空白 |
+| 阈值 | 出现即报（单点） |
+| 白名单 | 两层：①项目内 `GLOSSARY.md`；②用户自维护的纯文本（默认 `term-allow.txt`，一行一个词）。文件清单由 `term_allow_files` 配置，默认 `["GLOSSARY.md", "term-allow.txt"]`。解析：忽略空行与 `#` 注释行、去首尾空白、大小写不敏感。白名单命中不报 |
+| 误报边界 | 只黄不红；无分词器，中文按分隔字粗切；首句包含候选词即视为已定义 |
+| 漏报边界 | 标题术语与首句用同义词替换时不报；属启发式接受 |
+| 对应码 | `TERM_FIRST_IN_HEADING` |
+
+### 13.5 `RHYTHM_PLATEAU`（黄，保留）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 段内句子长度序列 |
+| 算法 | 同一段连续 ≥N 句长度落在同一 `rhythm_plateau_window` 词区间 |
+| 阈值 | `thresholds.rhythm_plateau_run` 默认 `3`；`rhythm_plateau_window` 默认 `10` |
+| 误报边界 | 不跨段；短句/长句交界自然打断平台 |
+| 对应码 | `RHYTHM_PLATEAU` |
+
+### 13.6 `COLLOQUIAL_TRIAD`（黄，替代旧 `TRIAD_DENSITY`）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 相邻段落的句子 |
+| 算法 | 识别三点并列（英文 `A, B, and C`；中文 `A、B、C`），按语言＋每项长度桶生成结构指纹；**只有同指纹在相邻段落重复**才计入 |
+| 阈值 | `thresholds.colloquial_triad_repeats` 默认 `2`：相邻段落的同构三点并列累计出现 ≥2 次即触发 |
+| 误报边界 | 单段单次、非相邻、或结构指纹不同（如 `alpha, beta, and gamma` 与 `the first model, the second model, and the third model`）不报 |
+| 漏报边界 | 三项用逗号而非 `、` 的中文变体可能漏；接受 |
+| 对应码 | `COLLOQUIAL_TRIAD` |
+
+### 13.7 `CONNECTIVE_DENSITY`（黄，保留）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 遮罩后正文的句子 |
+| 算法 | 句首/分句首的套话连接词（`connectives` 表）计数，按每千词（字）折算密度 |
+| 阈值 | `thresholds.connective_density` 默认 `8.0`，严格大于才报 |
+| 误报边界 | 句中定语用法（`overall accuracy`）不算；大小写不敏感 |
+| 对应码 | `CONNECTIVE_DENSITY` |
+
+### 13.8 `EMPTY_ADJECTIVE`（黄，保留）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 遮罩后正文的句子 |
+| 算法 | `empty_adjectives` 表中的空泛形容词计数，每千词（字）折算密度；`exempt_phrases` 内的搭配排除 |
+| 阈值 | `thresholds.empty_adjective` 默认 `6.0`，严格大于才报 |
+| 误报边界 | `statistically significant`、`robust standard error` 等术语搭配不报 |
+| 对应码 | `EMPTY_ADJECTIVE` |
+
+### 13.9 `SENTENCE_LENGTH_EXTREME`（黄，保留窄版）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 单句长度 |
+| 算法 | 英文 >60 词或中文 >110 字，**且句内无任何断点**（从句引导词、分号、破折号、括号等）才报 |
+| 阈值 | `thresholds.sentence_length_extreme_en` 默认 `60`；`..._zh` 默认 `110` |
+| 误报边界 | 长而有结构的句子是专家写法，不报 |
+| 对应码 | `SENTENCE_LENGTH_EXTREME` |
+
+### 13.10 阈值总表（与 `style-rules.toml` 同表）
+
+| TOML 键 | 类型 | 默认 | 服务规则 |
+|---|---|---|---|
+| `thresholds.dash_budget` | 非负整数 | `0` | `DASH_PARENTHETICAL` |
+| `thresholds.heading_max_chars_zh` | 非负数字 | `12` | `HEADING_TOO_LONG` |
+| `thresholds.heading_max_words_en` | 非负数字 | `8` | `HEADING_TOO_LONG` |
+| `thresholds.colloquial_triad_repeats` | 非负数字 | `2` | `COLLOQUIAL_TRIAD` |
+| `thresholds.rhythm_plateau_run` | 非负数字 | `3` | `RHYTHM_PLATEAU` |
+| `thresholds.rhythm_plateau_window` | 非负数字 | `10` | `RHYTHM_PLATEAU` |
+| `thresholds.connective_density` | 非负数 | `8.0` | `CONNECTIVE_DENSITY` |
+| `thresholds.empty_adjective` | 非负数 | `6.0` | `EMPTY_ADJECTIVE` |
+| `thresholds.sentence_length_extreme_en` | 非负数字 | `60` | `SENTENCE_LENGTH_EXTREME` |
+| `thresholds.sentence_length_extreme_zh` | 非负数字 | `110` | `SENTENCE_LENGTH_EXTREME` |
+| `term_allow_files` | 字符串数组 | `["GLOSSARY.md", "term-allow.txt"]` | `TERM_FIRST_IN_HEADING` |
+
+`thresholds` 里出现未知键不报错（向前兼容）；已知键必须是数字且非负，否则
+`CONFIG_INVALID`（exit 2）。
+
+### 13.11 不采用（写死，避免后人再加）
+
+以下五条在 v4 评审中被明确否决，**不得再实现**：
+
+1. **排比限两项**——三项并列本身不是问题，重复的同构排比才是（13.6）。
+2. **冒号只许引原话**——冒号在正文里可合法引出列表或定义。
+3. **长句必拆**——长而有结构的句子是专家写法（13.9）。
+4. **标题数量限制**——章节数量由论文结构决定，不是文风指标。
+5. **引用式长标题白名单**——已撤销，改由用户自维护 `term_allow_files` 处理。
+
+### 13.12 验收
+
+- `tests/test_style_v4.py`：每条规则至少 3 例（正例/负例/白名单或豁免例）；
+- 阈值来自 `style-rules.toml` 的验证（改阈值即改判定）；
+- `dash_budget` 调大后不再报；数值范围 `1--2`、文献页码、数学环境里的 `-` 不计；
+- 标题术语命中白名单不报；
+- `python3 -m unittest discover -s tests` 与 `./scripts/preflight-ci.sh` 全绿。
+
+---
+
 ## 附录 A｜V2.2 → V3.0 差异速查
 
 | 主题 | V2.2 | V3.0 |

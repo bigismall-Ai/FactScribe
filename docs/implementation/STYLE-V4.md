@@ -102,5 +102,17 @@ OK
    本地等价 CI 全绿——可以推。
 ```
 
-干净克隆版 `./scripts/preflight-ci.sh`（提交后跑）结果见提交说明；三条 Python
-版本与验收步同上。
+干净克隆版 `./scripts/preflight-ci.sh`（HEAD `faa5590`）同样全绿：
+
+```text
+== 步骤 2/4：干净克隆 ==
+   ✓ 克隆到 …/repo（HEAD faa5590）
+== 步骤 3/4：测试矩阵 ==
+   ✓ Python 3.10：Ran 293 tests
+   ✓ Python 3.11：Ran 293 tests
+   ✓ Python 3.12：Ran 293 tests
+== 步骤 4/4：验收样例 ==
+   ✓ examples/minimal audit exit=1（红，符合预期）
+== 结论 ==
+   本地等价 CI 全绿——可以推。
+```

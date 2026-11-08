@@ -24,6 +24,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # factscribe is stdlib-only: no install, no network, no services.
+      # PDF 回检依赖 poppler（pdftotext/pdfinfo）；GitHub 的 ubuntu 镜像默认没有，
+      # 不装的话 PDF 相关测试在 CI 会红、在本机（homebrew 装了）却绿。
+      - name: Install poppler (pdftotext)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+
       - name: Version
         run: python -m factscribe --version
 

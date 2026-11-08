@@ -168,3 +168,21 @@ After: annotations are masked; audit lists annotation_sites in --json.
 paperkit is published under the license in `LICENSE` (currently a placeholder
 pending the owner's decision — do not rely on it yet). By contributing you agree
 your work is released under that license.
+
+## Before you push: run the local CI equivalent
+
+```bash
+./scripts/preflight-ci.sh          # clean clone + Python 3.10/3.11/3.12 + external deps + acceptance step
+./scripts/preflight-ci.sh --linux  # also run inside an ubuntu container on the siinfer host
+```
+
+Three CI failures so far came from **environment differences**, not code:
+
+| difference | symptom |
+|---|---|
+| CI is a clean clone | fixtures referenced experiment files that were never committed → `MISSING_SOURCE` |
+| ubuntu has no poppler | PDF tests green on macOS, red on CI |
+| the runner has network | a resolver test assumed offline and flipped `unverified → verified` |
+
+The preflight script checks all three locally before you push.
+

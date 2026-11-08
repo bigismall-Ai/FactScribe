@@ -13,6 +13,8 @@ from .config import (ConfigError, load_config, load_facts, load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .pdfgate import verify_pdf
+from .protect import compare as compare_protect
+from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
 from .style import (DISCLAIMER, analyze, build_prompt, load_style_rules,
@@ -45,7 +47,7 @@ def _exit_code(red: int, yellow: int, strict: bool = False) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="factscribe",
-        description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble / style）")
+        description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble / style / protect）")
     p.add_argument("--version", action="version", version="factscribe %s" % VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -83,6 +85,13 @@ def build_parser() -> argparse.ArgumentParser:
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
     sp.add_argument("--rules", default=None,
                     help="style-rules.toml 路径（默认项目根，其次仓根）")
+    sp = sub.add_parser(
+        "protect", help="改写保护面比对：前后目录的 facts/数字/引用/公式/表格/交叉引用")
+    sp.add_argument("--before", required=True, help="改写前目录")
+    sp.add_argument("--after", required=True, help="改写后目录")
+    sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
+    sp.add_argument("--allow-renames", action="store_true",
+                    help="章节标题变化降为信息（不让它拉黄）")
     return p
 
 
@@ -218,11 +227,25 @@ def cmd_style(args) -> int:
     return code
 
 
+def cmd_protect(args) -> int:
+    result = compare_protect(Path(args.before), Path(args.after),
+                             allow_renames=args.allow_renames)
+    code = result.exit_code
+    payload = _payload("protect", _severity_of(code), code,
+                       before=str(result.before), after=str(result.after),
+                       allow_renames=bool(result.allow_renames),
+                       summary=result.summary(),
+                       findings=[f.as_dict() for f in result.findings])
+    _emit(payload, render_protect(result), args.json)
+    return code
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
-                "verify-pdf": cmd_verify_pdf, "style": cmd_style}
+                "verify-pdf": cmd_verify_pdf, "style": cmd_style,
+                "protect": cmd_protect}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

@@ -1654,6 +1654,82 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 
 ---
 
+## 14. 改写保护面（批 83 增补）
+
+> 本节只约束 `factscribe protect` 子命令。**不改 `audit` / `style` 的判据与
+> 退出码**。用途：文档被改写（换句、润色、重排）之后，机械比对「不许变」的
+> 内容有没有被动过——凡保护面上的东西变了就报红，只改措辞则全绿。
+
+### 14.1 命令
+
+```bash
+python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--allow-renames]
+```
+
+两个目录各自递归收集 `*.tex`（跳过隐藏目录与隐藏文件），按相对路径配对比较。
+不做配置加载：保护面是独立旁路，不要求项目里有 `paperkit.toml`。
+
+### 14.2 保护面（硬，变了即红）
+
+| 项 | 抽取规则 | 码 |
+|---|---|---|
+| 事实标记 | 全文 `\fact{...}` 的 id 多重集（含 `[[fact:...]]`；注释/verbatim/批注宏里的不算） | `PROTECT_FACT_CHANGED` |
+| 数字 | 与 `audit` 同一 tokenizer（`texscan.scan_tex` → `_extract_numbers`）抽出的数字多重集，按 `number_key` 归一（`1,234` ≡ `1234`，`53k` ≡ `53000`，`62.5\%` ≡ `0.625`） | `PROTECT_NUMBER_CHANGED` |
+| 引用 | `\cite`/`\citep`/`\citet`/`\citealp`/`\citeauthor`/`\nocite` 等 cite 家族命令的 key 多重集 | `PROTECT_CITE_CHANGED` |
+| 公式 | 行内 `$...$`、`$$...$$`、`\[...\]`、`equation/align`（含星号）环境的内容哈希；内容**去掉全部空白**后做 sha256 | `PROTECT_MATH_CHANGED` |
+| 表格 | `tabular`（含 `tabular*`）环境里每一行的单元格数 + 行内容哈希（单元格按 `&` 切分、去空白后哈希） | `PROTECT_TABLE_CHANGED` |
+| 交叉引用 | `\label{}`／`\ref{}`／`\eqref{}` 的 key 集合，按命令分别比较 | `PROTECT_LABEL_CHANGED` |
+
+多重集（multiset）判等：同一数字/标记写两次，删掉一次也算变；集合语义的
+交叉引用只判「键在不在」，不判出现次数。
+
+### 14.3 软面（黄）
+
+| 项 | 抽取规则 | 码 |
+|---|---|---|
+| 章节标题文字 | `\part`/`\chapter`/`\section`/`\subsection`/`\subsubsection`/`\paragraph` 的标题文字按出现顺序配对；标题层级不同或数量不同不判重命名 | `PROTECT_HEADING_RENAMED` |
+| 文件集合 | 相对路径下 `.tex` 文件的新增/删除 | `PROTECT_FILE_SET_CHANGED` |
+
+- 标题变化默认**黄**；带 `--allow-renames` 时降为**信息**（不进黄计数）。
+- 新增/删除文件恒为黄（改名等于一删一增，也报）。
+
+### 14.4 判定与输出
+
+- 任一条红 → exit 1；只有黄 → exit 3；全同（或只剩信息）→ exit 0。
+- 每条发现必须给 `文件:行: 多/少/改成了什么`，不许只报总数。行号规则：
+  - 「改成了」用**改写前**位置，消息里注明改后行号；
+  - 「多出」用改写后位置；「少了」用改写前位置。
+- 人读输出每行形如：
+
+```text
+[红] PROTECT_NUMBER_CHANGED sections/03.tex:12: 数字 "53" 改成了 "54"（改后第 12 行）
+[黄] PROTECT_HEADING_RENAMED sections/03.tex:5: 标题 "Experiments" 改成了 "Evaluation"（改后第 5 行）
+```
+
+- `--json` 的 `findings[]` 固定字段：`severity / code / file / line / message /
+  before / after`；顶层给 `before/after/summary/exit`。
+- 目录不存在或不是目录 → `CONFIG_INVALID`（exit 2），不许当成「全同」。
+
+### 14.5 误报边界（写死）
+
+- 只改标点、断句、换行、空格、同义措辞 → 全绿（公式内容哈希去空白，数字按
+  `number_key` 归一）。
+- 注释、verbatim、`\pkignore`/`\todo` 等批注宏里的内容不参与保护面。
+- 表格只读 `tabular` 家族；`booktabs` 的横线命令不产生单元格。
+- 数字保护面会把表格 cell、公式里被 `audit` 抽到的数字一并计入；这是
+  「多报不漏报」的保守方向，确属改写噪声时用 `--allow-renames` 只降标题，
+  不降数字。
+- `\multicolumn` 的跨列不折成实际列数；单元格数按 `&` 切分（保守方向）。
+
+### 14.6 验收
+
+- `tests/test_protect.py`：六条硬保护面各 1 正 1 负；只改标点全绿；改一个
+  数字报位置；`\fact{A1}`→`\fact{A2}` 报；加表行报；文件增删黄；
+  `--allow-renames` 时标题变化不黄。
+- `python3 -m unittest discover -s tests` 与 `./scripts/preflight-ci.sh` 全绿。
+
+---
+
 ## 附录 A｜V2.2 → V3.0 差异速查
 
 | 主题 | V2.2 | V3.0 |

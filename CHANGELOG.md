@@ -10,6 +10,18 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- `protect` subcommand (batch 83): **rewrite protection-surface comparison**.
+  `factscribe protect --before DIR --after DIR` recursively pairs `*.tex` files
+  and reports anything on the protected surfaces that changed. Hard surfaces
+  (red, exit 1): `\fact{}` markers, numbers (same tokenizer/`number_key` as
+  `audit`, so `1,234`≡`1234`, `53k`≡`53000`), cite keys, math content hashes
+  (inline/display/equation/align, whitespace-insensitive), tabular row cell
+  counts + hashes, and label/ref keys. Soft surfaces (yellow, exit 3): heading
+  text (downgraded to info by `--allow-renames`) and file additions/removals.
+  Every finding gives `file:line: what was added/removed/changed`, never just a
+  count. `tests/test_protect.py` (33 cases),
+  `docs/implementation/PROTECT.md`. `audit`/`style` criteria and exit codes
+  unchanged.
 - `style` subcommand (batch 64): a **style-gate prototype** that flags
   mechanically checkable formulaic writing (connective density, sentence-length
   uniformity, empty adjectives, triads, paragraph templates, hedge stacks,

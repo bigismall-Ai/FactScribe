@@ -184,10 +184,16 @@ def main(argv=None) -> int:
     try:
         return handlers[args.command](args)
     except ConfigError as exc:
+        code = getattr(exc, "code", "CONFIG_INVALID")
         if getattr(args, "json", False):
             payload = _payload(args.command, "error", EXIT_CONFIG,
                                message=str(exc))
-            payload["code"] = getattr(exc, "code", "CONFIG_INVALID")
+            payload["code"] = code
+            # §8：CONFIG 类码也必须出现在 findings/issues 里，判卷器不用
+            # 猜顶层 code 字段。唯一映射：一个错误一个码。
+            finding = {"severity": "red", "code": code, "message": str(exc)}
+            payload["findings"] = [finding]
+            payload["issues"] = [finding]
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)

@@ -79,7 +79,7 @@ note = ""
 | `fact` 不是表数组 | `FACT_CONTAINER_INVALID` | CONFIG | 2 | `factscribe/config.py::load_facts` |
 | `source_sha256` 与现算不符 | `SOURCE_SHA256_MISMATCH` | FACT | 1 | `factscribe/audit.py::verify_sources`（v3 另记 `APPROVAL_STALE`） |
 | `source_sha256` 缺失（v1） | `MISSING_SOURCE_SHA256` | FACT | 1 | `factscribe/audit.py::verify_sources`（v3 源层不强制） |
-| 既无 `source` 也无 `observation`/`source_sha256` | `FACT_EVIDENCE_MISSING` | ADVISORY | 3 | `factscribe/audit.py::verify_sources` |
+| 既无 `source` 也无 `observation`/`source_sha256` | `EVIDENCE_CHAIN_BROKEN`（批 56 起；原 `FACT_EVIDENCE_MISSING`） | FACT | 1 | `factscribe/audit.py::verify_sources`（§11.6） |
 | `display` 与 `value` 不等价 | `DISPLAY_INCONSISTENT` | FACT | 1 | `factscribe/texrules.py::display_hits` |
 | `display` 缺省 | 无（回填 `value`，不判 R-04） | — | — | `factscribe/config.py::_fact_from_mapping` |
 

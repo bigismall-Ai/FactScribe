@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -36,14 +37,22 @@ def write_base(root: Path, toml_text: str, body: str = None,
         encoding="utf-8")
     (root / "refs.bib").write_text(
         "@article{smith2026, year={2026}, title={t}}\n", encoding="utf-8")
-    (root / "runs").mkdir(exist_ok=True)
-    (root / "runs" / "A1.json").write_text('{"clause_count_effect": 0.91}\n',
-                                           encoding="utf-8")
+    (root / "runs" / "r1").mkdir(parents=True, exist_ok=True)
+    summary = root / "runs" / "r1" / "result.json"
+    summary.write_text('{"run_id": "r1", "clause_count_effect": 0.91}\n',
+                       encoding="utf-8")
+    digest = hashlib.sha256(summary.read_bytes()).hexdigest()
+    (root / "runs" / "r1" / "record.json").write_text(
+        json.dumps({"run_id": "r1", "source": "runs/r1/result.json",
+                    "source_sha256": "sha256:" + digest, "facts": ["A1"]}),
+        encoding="utf-8")
     (root / "facts").mkdir(exist_ok=True)
     (root / "facts" / "A1.toml").write_text(
         'id = "A1"\nclaim = "effect"\nvalue = "%s"\nquantitative = true\n'
         'role = "results"\nsetting = "assembly"\nanchor = ["assembly"]\n'
-        'source = "runs/A1.json"\n' % fact_value, encoding="utf-8")
+        'source = "runs/r1/result.json"\n'
+        'source_sha256 = "sha256:%s"\n' % (fact_value, digest),
+        encoding="utf-8")
     return root
 
 

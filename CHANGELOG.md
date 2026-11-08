@@ -10,6 +10,18 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- SPEC §8「错误码总表（唯一注册表）」: V2.2 §19.2 + V3.0 + §11 codes merged into
+  one table with meaning/trigger/severity/exit; §8.4 pins one code per phenomenon.
+  New dedicated codes: `COMPUTED_VALUE_UNREGISTERED`, `NUMBER_AS_CROSSREF`,
+  `EVIDENCE_CHAIN_BROKEN`; `FACT_SCHEMA_INVALID` is pinned to exit 2 and now
+  appears in `--json.findings`.
+- SPEC §11.6「证据链完整性」: `facts.source` → `runs/` record → same-directory
+  `record.json` → fact id; any broken node is red (`EVIDENCE_CHAIN_BROKEN`),
+  with more specific `MISSING_SOURCE` / `SOURCE_SHA256_MISMATCH` taking precedence.
+- `tests/test_evidence_chain.py` (10 cases: benign chain + breaks at each node)
+  and `docs/implementation/CODES-AND-CHAIN.md` (code diff, chain criterion,
+  holdout #5 diagnostic).
+
 - V3.0 evidence model in `factscribe/v3.py`: `runs/` as the source root,
   `root_tex`-rooted closure, BU sentence fingerprints, assertion/approval
   verification, external key roots (`STAMP_KEY_UNTRUSTED`), and structured

@@ -2,6 +2,7 @@
 """源头锚定、check/audit 各类检查、报告模型与错误码。"""
 from __future__ import annotations
 
+import json
 import re
 import urllib.error
 import urllib.parse
@@ -110,9 +111,12 @@ def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
         for name, line in arith_hits(_mask_fact_bodies(text) if cfg.is_v3 else text):
             if name in counter_setup:
                 continue
+            computed = cfg.is_v3 and name in {"numexpr", "dimexpr", "inteval"}
             out.append(Issue(
-                "ARITH_IN_BODY",
-                "算术/计数器命令 \\%s 会产生账上没有的数字——数值不可寻址（R-01A-A）"
+                "COMPUTED_VALUE_UNREGISTERED" if computed else "ARITH_IN_BODY",
+                ("现场计算命令 \\%s 会生成账上没有的数字且未登记——计算值不可寻址（P-06）"
+                 if computed else
+                 "算术/计数器命令 \\%s 会产生账上没有的数字——数值不可寻址（R-01A-A）")
                 % name, location="%s:%s" % (rel, line), token="\\" + name))
         for name, line, digit in numeric_macro_hits(text, cfg.numeric_macro_allow):
             out.append(Issue(
@@ -246,6 +250,170 @@ def _source_text_keys(text: str) -> set[str]:
     return keys
 
 
+def _source_line(text: str, line: int) -> str:
+    lines = text.split("\n")
+    return lines[line - 1] if 1 <= line <= len(lines) else ""
+
+
+_FRAC_RE = re.compile(r"\\[dt]?frac\s*\{\s*([^{}]+?)\s*\}\s*\{\s*([^{}]+?)\s*\}")
+_COMPUTED_RE = re.compile(r"\\(?:numexpr|dimexpr|inteval)\b")
+_CROSSREF_BEFORE_RE = re.compile(
+    r"(?i)(?:^|[^A-Za-z])(Table|Figure|Fig\.?|Section|Sec\.?|Equation|Eq\.?|"
+    r"Algorithm|Appendix|Theorem|Lemma|Corollary|Listing)\s*[~ ]?\s*\(?\s*$")
+
+
+def _computed_construct(text: str, tok: dict, cfg: Config) -> str:
+    """若 token 由 `\\frac`/`\\numexpr` 这类现场计算产生且未登记，返回专属码。"""
+    line = _source_line(text, int(tok.get("line") or 0))
+    pos = max(int(tok.get("col") or 1) - 1, 0)
+    allowed = {str(x).strip() for x in cfg.frac_allow}
+    for m in _FRAC_RE.finditer(line):
+        if not (m.start() <= pos <= m.end()):
+            continue
+        form = "frac:%s/%s" % (m.group(1).strip(), m.group(2).strip())
+        if form in allowed:
+            return ""
+        return "COMPUTED_VALUE_UNREGISTERED"
+    numexpr = _COMPUTED_RE.search(line)
+    if numexpr is not None and numexpr.start() <= pos:
+        return "COMPUTED_VALUE_UNREGISTERED"
+    return ""
+
+
+def _crossref_construct(text: str, tok: dict) -> str:
+    """手写的结构编号（`Table 3`、`Figure 2`）不是数据，给专属码。"""
+    line = _source_line(text, int(tok.get("line") or 0))
+    prefix = line[:max(int(tok.get("col") or 1) - 1, 0)]
+    if _CROSSREF_BEFORE_RE.search(prefix):
+        return "NUMBER_AS_CROSSREF"
+    return ""
+
+
+def _rel_to_root(cfg: Config, path: Path) -> str:
+    try:
+        return path.relative_to(cfg.root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
+    """§11.6 证据链：fact.source → runs/ 记录 → 回执 record.json。
+
+    断链按最具体的既有码报（MISSING_SOURCE / SOURCE_SHA256_MISMATCH）；
+    没有更具体码的节点断口统一报 EVIDENCE_CHAIN_BROKEN。
+    """
+    out: list[Issue] = []
+    known = {f.id_key for f in facts}
+    for f in facts:
+        loc = "%s:%s" % (f.file, f.line or "?")
+        src = f.source.strip()
+        if not src:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 没有 source/observation——证据链第 1 节（事实→运行记录）断开"
+                % f.id, location=loc, token=f.id))
+            continue
+        full = source_path(cfg, src)
+        if not full.is_file():
+            # 文件存在性已有 MISSING_SOURCE（唯一映射：更具体的码优先）。
+            continue
+        try:
+            digest = sha256_file(full)
+        except OSError:
+            continue
+        if not f.source_sha256:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 缺 source_sha256——证据链第 2 节（运行记录→内容锚）断开"
+                % f.id, location=loc, token=f.id))
+            continue
+        if f.source_sha256.removeprefix("sha256:").strip() != digest:
+            # 哈希不符已有 SOURCE_SHA256_MISMATCH（唯一映射）。
+            continue
+        rec_path = full.parent / "record.json"
+        if not rec_path.is_file():
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 缺回执 %s——证据链第 3 节（运行记录→回执）断开"
+                % (f.id, _rel_to_root(cfg, rec_path)),
+                location=loc, token=f.id))
+            continue
+        try:
+            rec = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执 %s 不可读或不是 JSON"
+                % (f.id, _rel_to_root(cfg, rec_path)),
+                location=loc, token=f.id))
+            continue
+        if not isinstance(rec, dict):
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执不是对象" % f.id, location=loc, token=f.id))
+            continue
+        run_id = f.run_id.strip() or full.parent.name
+        if str(rec.get("run_id") or "").strip() != run_id:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执 run_id=%r 与运行目录 %r 不符"
+                % (f.id, rec.get("run_id"), run_id),
+                location=loc, token=f.id))
+            continue
+        ids = rec.get("facts")
+        if not isinstance(ids, list):
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执缺 facts[]——无法证明回执指向哪条事实"
+                % f.id, location=loc, token=f.id))
+            continue
+        id_set = {str(x).strip().casefold() for x in ids}
+        if f.id_key not in id_set:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 不在回执 facts[] 里（回执没有指向这条事实）"
+                % f.id, location=loc, token=f.id))
+            continue
+        rec_src = str(rec.get("source") or "").strip()
+        if rec_src and rec_src != src:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执 source=%r 与 fact.source=%r 不符"
+                % (f.id, rec_src, src), location=loc, token=f.id))
+            continue
+        rec_sha = str(rec.get("source_sha256") or "").strip().lower()
+        if rec_sha.startswith("sha256:"):
+            rec_sha = rec_sha[7:].strip()
+        if rec_sha and rec_sha != digest:
+            out.append(Issue(
+                "EVIDENCE_CHAIN_BROKEN",
+                "fact %r 的回执 source_sha256 与磁盘现算不符" % f.id,
+                location=loc, token=f.id))
+            continue
+
+    # 反向指针：回执里列出的 fact id 必须在账上存在。
+    receipt_paths = sorted((cfg.root / cfg.source_dir).glob("*/record.json"))
+    flat = cfg.root / cfg.source_dir / "record.json"
+    if flat.is_file():
+        receipt_paths.append(flat)
+    for rec_path in receipt_paths:
+        try:
+            rec = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(rec, dict) or not isinstance(rec.get("facts"), list):
+            continue
+        for raw_id in rec["facts"]:
+            fid = str(raw_id).strip().casefold()
+            if fid and fid not in known:
+                out.append(Issue(
+                    "EVIDENCE_CHAIN_BROKEN",
+                    "回执 %s 指向账上不存在的 fact id %r"
+                    % (_rel_to_root(cfg, rec_path), raw_id),
+                    location=_rel_to_root(cfg, rec_path)))
+    return out
+
+
 def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Issue]]:
     red: list[Issue] = []
     yellow: list[Issue] = []
@@ -261,17 +429,9 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
         src = f.source.strip()
         if not src:
             if cfg.is_v3:
-                # SPEC §11.1：V3 事实的证据指针可以是 observation（run_id＋
-                # pointer）＋source_sha256，不强制项目内 source 路径。没有
-                # 本地产物时源层（l0/l1）不回核哈希；L2/审批路径由
-                # approve_target 的 source_sha256 承担。
-                if f.run_id or f.pointer or f.source_sha256:
-                    continue
-                yellow.append(Issue(
-                    "FACT_EVIDENCE_MISSING",
-                    "fact %r 既没有 source 也没有 observation/source_sha256——"
-                    "账上的数无法指回任何证据" % f.id,
-                    location=loc, token=f.id, severity=SEV_YELLOW))
+                # SPEC §11.6：V3 的证据链由 `_evidence_chain_issues` 统一判。
+                # 只有 observation／source_sha256 但没有可定位的运行记录，
+                # 同样算第 1 节断开；这里不重复出码。
                 continue
             red.append(Issue("MISSING_SOURCE_FIELD", "fact %r 缺 source 字段" % f.id,
                              location=loc, token=f.id))
@@ -360,6 +520,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
     if cfg.is_v3:
         # V3 没有 results/MANIFEST.toml：证据是项目外审批目标 + runs/ 产物，
         # 由 v3.approval_issues / key_trust_issues 单独判。
+        red += _evidence_chain_issues(cfg, facts)
         return red, yellow
 
     # ---- 人签清单 ----
@@ -904,9 +1065,26 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                         severity=SEV_YELLOW))
                 else:
                     unmatched += 1
-                    red.append(Issue(
-                        "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value" % tok["token"],
-                        location=loc, token=tok["token"], context=tok["text"]))
+                    computed = _computed_construct(text, tok, cfg) if cfg.is_v3 else ""
+                    crossref = _crossref_construct(text, tok) if cfg.is_v3 else ""
+                    if computed:
+                        red.append(Issue(
+                            computed,
+                            "数字 %s 由现场计算（\\frac/\\numexpr 等）生成且未登记——"
+                            "计算出的值不可寻址（P-06）" % tok["token"],
+                            location=loc, token=tok["token"], context=tok["text"]))
+                    elif crossref:
+                        yellow.append(Issue(
+                            crossref,
+                            "数字 %s 是手写的结构编号（Table/Figure 等），不是数据，"
+                            "也不能替代 \\ref 的稳定标识" % tok["token"],
+                            location=loc, token=tok["token"], context=tok["text"],
+                            severity=SEV_YELLOW))
+                    else:
+                        red.append(Issue(
+                            "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value"
+                            % tok["token"], location=loc, token=tok["token"],
+                            context=tok["text"]))
         matched = bound + unbound_yellow
 
         for key, line, col in scan.cites:

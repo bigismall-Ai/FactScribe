@@ -150,7 +150,7 @@ C13 输出 token：{raw, key(s), span, file/page, line, col}。
 | `9\u200b1.4` | `91.4` | **不同 key**（零宽保留为分隔，防拼接洗白） |
 | `0.9` | `0.91` | 不同 key（不许舍入） |
 
-**误报**：数学排版 `\frac{10}{16}` 抽成上下两行时无法稳定还原 → 源层 `MATH_FRAC_UNVERIFIABLE` 阻断（P-06），不靠 PDF 层猜。
+**误报**：数学排版 `\frac{10}{16}` 抽成上下两行时无法稳定还原 → 源层 `COMPUTED_VALUE_UNREGISTERED` 阻断（P-06），不靠 PDF 层猜。
 **漏报**：PDF 中字形映射错误、ActualText 篡改导致抽出的字符串与视觉不同 → 由 P-02/P-04 的「缺 token」与 P-03 的「图片/栅格」兜底；纯矢量描字不可判（§7-R1）。
 **失败等级**：源层歧义 `CANON_AMBIGUOUS` 黄（若该 token 已绑定则红）；两份实现哈希不一致 `CANON_DRIFT` exit 4。
 **fixture**：`FX-CANON-01`（等价类正例）、`FX-CANON-02`（漂移，内部）、`FX-CANON-03`（歧义）。
@@ -293,9 +293,9 @@ C13 输出 token：{raw, key(s), span, file/page, line, col}。
 | 项 | 内容 |
 |---|---|
 | 输入 | 源层 AST（`\includegraphics` 位置、所在环境、所在 BU）；`report.number_ledger` |
-| 算法 | 1) `\includegraphics` 不在 `figure`/`table` 浮动环境内，且所在 BU 还有其它文字 → `INLINE_IMAGE_IN_TEXT`。2) 浮动体内的图必须有 sidecar（R-06）且进 `coverage.figures`；否则 `FIGURE_UNBOUND`。3) 含绑定 token 的 BU 里出现 `\frac/\dfrac/\tfrac` 且未登记 `project.frac_allow` → `MATH_FRAC_UNVERIFIABLE` |
+| 算法 | 1) `\includegraphics` 不在 `figure`/`table` 浮动环境内，且所在 BU 还有其它文字 → `INLINE_IMAGE_IN_TEXT`。2) 浮动体内的图必须有 sidecar（R-06）且进 `coverage.figures`；否则 `FIGURE_UNBOUND`。3) 含绑定 token 的 BU 里出现 `\frac/\dfrac/\tfrac` 且未登记 `project.frac_allow` → `COMPUTED_VALUE_UNREGISTERED` |
 | 误报/漏报 | 误报：行内小图标（logo、checkmark）→ 登记 `project.inline_images_allow`（签名，逐条带理由）。漏报：数字烧进已声明图的像素；矢量描字（§7-R1） |
-| 失败等级 | `INLINE_IMAGE_IN_TEXT`/`MATH_FRAC_UNVERIFIABLE` → 红/FACT，exit 1；`FIGURE_UNBOUND` → 红/COVERAGE，exit 5 |
+| 失败等级 | `INLINE_IMAGE_IN_TEXT`/`COMPUTED_VALUE_UNREGISTERED` → 红/FACT，exit 1；`FIGURE_UNBOUND` → 红/COVERAGE，exit 5 |
 | fixture | `FX-PDF-09`（行内图片＋数字）、`FX-PDF-09b`（合法浮动图）、`FX-PDF-11`（`\frac` 承载绑定值） |
 
 **判定（写死）**：不做 OCR，不做渲染层数字识别。正文与表格里的定量必须走文本层；图片只允许作为 `figure`/`table` 浮动体出现，必须有 sidecar（数据→图），图中的定量由 sidecar 从账取数生成。图内烧死的数字视为「不可判」，进 §7-R1，靠人工复核与盲测兜底。
@@ -785,73 +785,295 @@ python3 tools/spec_lint.py --no-construction
 
 ---
 
-## 8. 注册表增量与 fixture 映射
+## 8. 错误码总表（唯一注册表）
 
-> V2.2 §19.2 的 code 继续有效（tier/exit 不变），本表只列**新增/改级**。每个 code 必须在 `tests/fixtures/v30/` 有至少一个 hostile 与一个 benign 近邻（T-03）。
-> 构建时 `tools/registry_merge.py` 把 V2.2 §19.2 与本表合并成唯一 `TOKEN_REGISTRY`；同 code 不同 tier/exit → 构建失败（以本表为准，V2.2 不另建第二份注册表）。
-> 表中 `fixture` 列的是 hostile；对应 benign 近邻用同号加 `b` 后缀（如 `FX-PDF-02b`），由 T-03 强制存在；已有 `b` 的条目另配 `c` 近邻。
+> 本节是**唯一权威码表**：V2.2 §19.2 的码不再另建第二份注册表，全部并入本表。
+> 合并规则：同一 code 在 §8.1 与 §8.2 出现时，以 §8.1 的 tier/exit 为准；§8.2 对应行标「见 §8.1」。
+> 每个 code 必须唯一映射一个现象：实现只能按「最具体的码」报一次，不许同一现象同时出两个码。
+> `severity=red` 进红账；`yellow` 进黄账；`info` 只进配置告警，不驱动 exit。
 
-### 8.1 新增/改级 code
+### 8.1 核心码（V3.0 + §11 + 批 56 新增）
 
-| code | tier | exit | 规则 | fixture |
-|---|---|---|---|---|
-| `PDF_PAGE_NO_TEXT` | INTEGRITY | 5 | P-02 | FX-PDF-01 |
-| `PDF_PAGE_RASTERIZED` | INTEGRITY | 5 | P-03 | FX-PDF-02 |
-| `PDF_IMAGE_UNDECLARED` | INTEGRITY | 5 | P-03 | FX-PDF-03 |
-| `PDF_PAGE_IMAGE_DOMINANT` | ADVISORY | 3 | P-03 | FX-PDF-10 |
-| `PDF_FIGURE_MISSING` | ADVISORY | 3 | P-03 | FX-PDF-10b |
-| `PAGE_SIZE_FALLBACK` | ADVISORY | 3 | P-01/P-03 | FX-PDF-14 |
-| `PDF_LEDGER_TOKEN_MISSING` | INTEGRITY | 5 | P-04 | FX-PDF-04 |
-| `PDF_UNACCOUNTED_NUMBER` | INTEGRITY | 5 | P-05（由 COVERAGE 改级） | FX-PDF-05 |
-| `PDF_STRUCTURAL_BUDGET_EXCEEDED` | INTEGRITY | 5 | P-05 | FX-PDF-06 |
-| `PDF_WHITELIST_UNPROVENANCED` | INTEGRITY | 5 | P-05 | FX-PDF-07 |
-| `PDF_WHITELIST_UNUSED` | ADVISORY | 3 | P-05 | FX-PDF-08 |
-| `INLINE_IMAGE_IN_TEXT` | FACT | 1 | P-06 | FX-PDF-09 |
-| `MATH_FRAC_UNVERIFIABLE` | FACT | 1 | P-06 | FX-PDF-11 |
-| `CANON_AMBIGUOUS` | ADVISORY | 3 | §2.1 | FX-CANON-03 |
-| `CANON_DRIFT` | INTERNAL | 4 | P-07 | FX-CANON-02 |
-| `STAMP_MISSING` | INTEGRITY | 5 | P-08 | FX-SIG-01 |
-| `STAMP_SIGNATURE_INVALID` | INTEGRITY | 5 | P-08 | FX-SIG-02 |
-| `STAMP_KEY_UNTRUSTED` | INTEGRITY | 5 | P-08 | FX-SIG-03 |
-| `STAMP_REPORT_MISMATCH` | INTEGRITY | 5 | P-08 | FX-SIG-04 |
-| `STAMP_PDF_MISMATCH` | STALE | 7 | P-08 | FX-SIG-05 |
-| `STAMP_METADATA_MISSING` | INTEGRITY | 5 | P-08 | FX-SIG-06 |
-| `STAMP_NONCE_REUSED` | STALE | 7 | S-04 | FX-SIG-07 |
-| `STAMP_TIME_INVALID` | STALE | 7 | S-04 | FX-SIG-21 |
-| `STAMP_UNVERIFIED` | **删除** | — | 由上面具体 code 替代 | — |
-| `APPROVAL_REPLAY` | FACT | 1 | S-04 | FX-SIG-08 |
-| `ASSERTION_DRIFT` | FACT | 1 | S-03 | FX-SIG-09 |
-| `APPROVAL_MISSING_ASSERTIONS` | FACT | 1 | S-03 | FX-SIG-09b |
-| `APPROVAL_MISSING` | COVERAGE | 5 | S-06 | FX-SIG-23 |
-| `APPROVAL_MANIFEST_MISSING` | ADVISORY | 3 | S-05 | FX-SIG-22 |
-| `KEY_UNREGISTERED` | FACT | 1 | S-01 | FX-SIG-10 |
-| `KEY_REVOKED` | FACT | 1 | S-01 | FX-SIG-11 |
-| `KEY_PERMISSION_UNVERIFIED` | ADVISORY | 3 | S-01 | FX-SIG-12 |
-| `KEY_PERMISSION_UNSAFE` | FACT | 1 | S-01 | FX-SIG-27 |
-| `SIGNING_MODE_UNSAFE` | FACT | 1 | S-02 | FX-SIG-13 |
-| `SIGNING_API_PRESENT` | CONFIG | 2 | S-02 | FX-SIG-26 |
-| `NUMERIC_MACRO_SHAPE_INVALID` | FACT | 1 | S-08 | FX-SIG-14 |
-| `NUMERIC_MACRO_DOUBLE_SIGN` | FACT | 1 | S-08 | FX-SIG-15 |
-| `NUMERIC_MACRO_EXPIRED` | FACT | 1 | S-08 | FX-SIG-24 |
-| `TOOL_MODIFIED` | CONFIG | 2 | S-09 | FX-SIG-16 |
-| `TOOL_UNATTESTED` | ADVISORY | 3 | S-09 | FX-SIG-17 |
-| `RELEASE_TOOL_UNATTESTED` | INTEGRITY | 5 | S-09 | FX-SIG-17 |
-| `APPROVAL_BATCH_CRITICAL` | FACT | 1 | S-07 | FX-SIG-20 |
-| `FIXTURE_COVERAGE_GAP` | CONFIG | 2 | T-03 | FX-FIX-02 |
-| `XFAIL_EXPIRED` | CONFIG | 2 | T-04 | FX-FIX-03 |
-| `FIXTURE_SPECIAL_CASE` | CONFIG | 2 | T-04 | FX-FIX-08 |
-| `UNKNOWN_CODE` | INTERNAL | 4 | §2.6 | FX-FIX-06 |
-| `ATTACK_OPEN_BLOCKING` | ATTACK | 9 | T-08 | FX-FIX-07 |
-| `REPORT_SCHEMA_INVALID` | CONFIG | 2 | S-10 | FX-SIG-25 |
+> 「本批新增/改名」标 ⟡：`COMPUTED_VALUE_UNREGISTERED`、`NUMBER_AS_CROSSREF`、`EVIDENCE_CHAIN_BROKEN`。
+> `MATH_FRAC_UNVERIFIABLE` 与 `FACT_EVIDENCE_MISSING` 不再作为独立码：前者并入 `COMPUTED_VALUE_UNREGISTERED`，后者并入 `EVIDENCE_CHAIN_BROKEN`（见 §8.3）。
 
-### 8.2 被删除的规则
+| code | 含义 | 触发条件（唯一映射） | severity | exit | 规则 |
+|---|---|---|---|---|---|
+| ⟡ COMPUTED_VALUE_UNREGISTERED | 现场计算生成且未登记的数字 | `\frac/\dfrac/\tfrac/\numexpr/\dimexpr/\inteval` 产生 token；`\frac` 未在该行的 `frac_allow` 登记 | red | 1 | P-06／§2.1 |
+| ⟡ NUMBER_AS_CROSSREF | 把手写结构编号当数据 | `Table/Figure/Section/Eq./Algorithm/Appendix` 等后跟字面数字，且没有 `\ref` 稳定标识 | yellow | 3 | P-05 W4／§11.2 |
+| ⟡ EVIDENCE_CHAIN_BROKEN | 证据链断节 | `source`／运行记录／`source_sha256`／`record.json`／回执 `facts[]` 任一节缺失或不符（更具体码优先） | red | 1 | §11.6 |
+| FACT_SCHEMA_INVALID | facts 文件 schema 不认识 | `schema` 不是 `paperkit-fact/3.x` 或 `factscribe-fact/3.x`；大小写敏感 | red | 2 | §11.1 |
+| FACT_CONTAINER_INVALID | facts 容器形态错 | `fact` 不是 `[[fact]]` 表数组，或条目不是表 | red | 2 | §11.1 |
+| FACT_ID_MISSING | fact 缺 id | 条目录入时没有非空 `id` | red | 2 | §11.1 |
+| BAD_ID_FORMAT | fact id 格式不合法 | `id` 不匹配 `^[A-Za-z0-9._-]+$`（v3） | red | 1 | §11.1 |
+| DUPLICATE_ID | fact id 重复 | 跨文件按 `casefold()` 后重复 | red | 1 | §11.1 |
+| SOURCE_SHA256_MISMATCH | 源文件哈希不符 | `source_sha256` 去 `sha256:` 前缀后 ≠ 磁盘现算 | red | 1 | §11.1／§11.6 |
+| MISSING_SOURCE_SHA256 | 缺 source_sha256（v1） | v1 fact 有 source 但没有内容锚 | red | 1 | §11.1 |
+| MISSING_SOURCE | source 文件不存在 | `source` 解析后的路径不是普通文件 | red | 1 | §11.6 |
+| BAD_SOURCE_PATH | source 路径非法 | URL、绝对路径或含 `..` 越界 | red | 1 | §11.1 |
+| SOURCE_OUTSIDE_RUNS | source 不在 runs/ 下 | v3 未配 `source_root`，source 越出 `runs/` | red | 1 | §11.6 |
+| SOURCE_OUTSIDE_RESULTS | source 不在 results/ 下 | v1 未配 `source_root`，source 越出 `results/` | red | 1 | v1 沿用 |
+| SOURCE_OUTSIDE_SOURCE_ROOT | source 越出 source_root | 配置了 `source_root` 但路径仍越界 | red | 1 | v1／v3 |
+| UNREADABLE_SOURCE | source 读不了 | OSError／UnicodeDecodeError | red | 1 | §11.6 |
+| VALUE_NOT_IN_SOURCE | value 数字未在 source 出现 | 非派生 claim 的值域回查失败 | yellow | 3 | §11.1 |
+| UNBOUND_NUMBER | 数字回得到账但未内联绑定 | 该 token 在账的值域内，但所在句没有覆盖它的 `\fact{}` | yellow | 3 | §11.2 |
+| UNMATCHED_NUMBER | 数字回不到任何 fact | token 不在任何 fact 的 value/display 值域内，且不属于更具体码 | red | 1 | §11.2 |
+| UNKNOWN_FACT_MARKER | 引用不存在的 fact id | `\fact{ID}` 的 ID 不在账上 | red | 1 | §11.2 |
+| BOUND_MISMATCH | 绑定数字不在值域内 | 被 `\fact{}` 覆盖的 token 不在该 fact 的 value/display 值域 | red | 1 | §11.2 |
+| BINDING_ATTRIBUTION | 顺序归属不符 | 一句多 fact 时第 k 个 token 不属第 k 条 fact | red | 1 | §11.2 |
+| NONQUANT_BACKS_QUANT | 非定量 fact 背定量数字 | 标记组里没有定量 fact，却有数字 token | red | 1 | §11.2 |
+| TABLE_UNBOUND | 表格 cell 回不到账 | 表格内数字不在任何 fact 值域，且没有 cell→fact 映射 | red | 5 | R-06 |
+| UNSCANNED_TEX | tex 未被扫描 | 文件在 glob 命中集但不在审计闭包 | yellow | 3 | R-05 |
+| LOW_BINDING_RATE | 内联绑定率过低 | 绑定率 < 50% 且分母 ≥ 4 | yellow | 3 | R-03 |
+| ARITH_IN_BODY | 算术/计数器命令产生数字 | v1 的 `\the/\value/\setcounter` 等；v3 的 `\numexpr/\dimexpr/\inteval` 改报 COMPUTED_VALUE_UNREGISTERED | red | 1 | R-01A |
+| NUMERIC_IN_MACRO | 宏定义体携带数字 | `\newcommand` 等宏体出现数字且未登记 | red | 1 | R-01A |
+| NUM_ADJACENT_MACRO | 数字与宏相邻拼接 | 数字 token 紧邻宏调用，可能拼成新数 | red | 1 | R-01A |
+| NUM_AFTER_GROUP | 数字紧跟分组 | 数字后紧接 `{}` 分组，可能被拼接 | red | 1 | R-01A |
+| NUM_ADJACENT_GROUP | 数字与分组相邻 | 数字与 `{}` 分组相邻且会被拼成新数 | red | 1 | R-01A |
+| DISPLAY_INCONSISTENT | display 与 value 不等价 | 两者按 `canon_text` 不收敛到同一规范键 | red | 1 | §11.3 |
+| DISPLAY_ROUNDTO_INVALID | round_to 与 display 不符 | `round_to` ≠ display 文本的小数位 | red | 2 | §11.3 |
+| ASSERTION_DRIFT | 断言漂移 | 句子指纹、值域或 display 与已签断言不符 | red | 1 | S-03 |
+| APPROVAL_STALE | 审批对象过期 | target/inputs/source_sha256 与签名时不同 | red | 1 | S-03 |
+| APPROVAL_MISSING_ASSERTIONS | 审批缺断言 | approve_target 没有 `assertions[]` | red | 1 | S-03 |
+| APPROVAL_MISSING | L2 缺批准 | `REF_SET` 内 fact 没有有效批准 | red | 5 | S-06 |
+| APPROVAL_MANIFEST_MISSING | 缺人读 manifest | `approvals/<id>.manifest.md` 不存在 | yellow | 3（L2 升 1） | S-05 |
+| APPROVAL_REPLAY | 审批 nonce 重放 | nonce 已在 `nonces.ndjson` | red | 1 | S-04 |
+| APPROVAL_BATCH_LARGE | 同 key 24h 批签 >10 | 按 key 汇总，不按 batch id | yellow | 3 | S-07 |
+| APPROVAL_BATCH_CRITICAL | 批签 >50 或头条 >5 | 同 key 24h；`headline`/abstract/results 更严 | red | 1 | S-07 |
+| KEY_UNREGISTERED | 公钥未登记 | key_id 不在 registry | red | 1 | S-01 |
+| KEY_REVOKED | 公钥已吊销 | registry 有 `revoked_at` | red | 1 | S-01 |
+| KEY_PERMISSION_UNSAFE | key 权限不安全 | `mode & 0o022 != 0` | red | 1 | S-01 |
+| KEY_PERMISSION_UNVERIFIED | key 权限不可判 | owner 与运行 uid 不同 | yellow | 3 | S-01 |
+| SIGNING_MODE_UNSAFE | 签名模式不安全 | `local_key` 在 L2/release | red | 1 | S-02 |
+| SIGNING_API_PRESENT | 源码出现签名 API | 扫描到 `ssh-keygen -Y sign`/`minisign` 等 | red | 2 | S-02 |
+| NUMERIC_MACRO_SHAPE_INVALID | 数值宏登记形状不符 | `body_regex` 不逐字命中内置模板，或 `parameter_kind` 不符 | red | 1 | S-08 |
+| NUMERIC_MACRO_DOUBLE_SIGN | 数值宏双签同 key | 两条 `signed_by` 相同 | red | 1 | S-08 |
+| NUMERIC_MACRO_EXPIRED | 数值宏登记过期 | `expires` 早于今天（L2 红） | red | 1 | S-08 |
+| TOOL_MODIFIED | 工具被改 | 自身模块哈希 ≠ `release.json` | red | 2 | S-09 |
+| TOOL_UNATTESTED | 工具无发布证明 | 缺 `release.json` | yellow | 3 | S-09 |
+| RELEASE_TOOL_UNATTESTED | release 路径缺工具证明 | release 时无签名发布清单 | red | 5 | S-09 |
+| REPORT_SCHEMA_INVALID | 报告 schema 缺字段 | 缺 report/3.0 必填字段 | red | 2 | S-10 |
+| REPORT_STALE | 报告过期 | `report.inputs` 与磁盘现值不符 | red | 7 | P-09 |
+| STAMP_MISSING | 缺发布 stamp | `audit/stamp.json` 不存在 | red | 5 | P-08 |
+| STAMP_SIGNATURE_INVALID | stamp 验签失败 | 项目外公钥验 ed25519 失败 | red | 5 | P-08 |
+| STAMP_KEY_UNTRUSTED | stamp key 不可信 | key 文件位于项目内或未登记 | red | 5 | P-08 |
+| STAMP_REPORT_MISMATCH | stamp 与 report 不符 | report/rules/assertions/inputs/tool 摘要不符 | red | 5 | P-08 |
+| STAMP_PDF_MISMATCH | stamp 与 PDF 字节不符 | `sha256(pdf)` ≠ `payload.compiled.pdf_sha256` | red | 7 | P-08 |
+| STAMP_METADATA_MISSING | PDF 元数据指针缺失 | 缺 `paperkit-stamp:<report_sha256>` | red | 5 | P-08 |
+| STAMP_NONCE_REUSED | stamp nonce 重放 | nonce 已在账本 | red | 7 | S-04 |
+| STAMP_TIME_INVALID | stamp 时间窗不符 | `signed_at` 越出规定窗口 | red | 7 | S-04 |
+| PDF_TOOL_MISSING | 缺 PDF 工具链 | `pdftotext/pdfinfo/pdfimages` 不可用 | red | 2 | P-01 |
+| PDF_PAGE_NO_TEXT | 页面无可抽取文本层 | 该页非空白字符 < 20 | red | 5 | P-02 |
+| PDF_PAGE_RASTERIZED | 页面被栅格化 | 图片覆盖 ≥ 50% 且文本 < 400 | red | 5 | P-03 |
+| PDF_IMAGE_UNDECLARED | 图片未声明 | 图片数 > `coverage.figures + image_budget_extra` | red | 5 | P-03 |
+| PDF_PAGE_IMAGE_DOMINANT | 图片主导页面 | 图片覆盖 ≥ 50% 且文本 ≥ 400 | yellow | 3 | P-03 |
+| PDF_FIGURE_MISSING | 声明了图但 PDF 无图 | `coverage.figures` 非空而 PDF 图片数为 0 | yellow | 3 | P-03 |
+| PAGE_SIZE_FALLBACK | 页尺寸回退 | 逐页 `pdfinfo` 取不到，回退第一页 | yellow | 3 | P-01 |
+| PDF_LEDGER_TOKEN_MISSING | PDF 缺账上 token | `pdf_counts[k] < ledger_counts[k]` | red | 5 | P-04 |
+| PDF_UNACCOUNTED_NUMBER | PDF 多出未授权数字 | `pdf_counts[k] > ledger+whitelist` | red | 5 | P-05 |
+| PDF_STRUCTURAL_BUDGET_EXCEEDED | 结构号超预算 | W4 编号数超过 pages+sections+figures+tables+equations+refs | red | 5 | P-05 |
+| PDF_WHITELIST_UNPROVENANCED | 白名单缺出处 | 白名单条目缺 `source`/`count`，或 key 不在 PDF | red | 5 | P-05 |
+| PDF_WHITELIST_UNUSED | 白名单声明未出现 | 白名单条目在 PDF 中计数为 0 | yellow | 3 | P-05 |
+| INLINE_IMAGE_IN_TEXT | 正文内联图片 | `\includegraphics` 不在浮动体内且所在 BU 有其它文字 | red | 1 | P-06 |
+| CANON_AMBIGUOUS | 数字歧义 | 同时出现 `.` 与 `,` 的小数 token；已绑定时升红 | yellow | 3（已绑定 1） | §2.1 |
+| CANON_DRIFT | 归一化实现漂移 | 源层/PDF 层 canon 版本或哈希不一致 | red | 4 | P-07 |
+| UNKNOWN_CODE | 报告含未注册码 | 报告里的 code 不在 `TOKEN_REGISTRY` | red | 4 | §2.6 |
+| FIXTURE_COVERAGE_GAP | 夹具覆盖缺口 | 可红/可黄 code 缺 hostile 或 benign 近邻 | red | 2 | T-03 |
+| XFAIL_EXPIRED | xfail 过期 | `expires` < 今天 | red | 2 | T-04 |
+| FIXTURE_SPECIAL_CASE | 规则特判夹具 | 源码/规则出现 `FX-*`/`BT-*` 字面量分支 | red | 2 | T-04 |
+| RULE_CHANGE_UNREVIEWED | 规则变更未复核 | hostile 由红转绿但 `rules_sha256` 未变 | red | 2 | T-07 |
+| ATTACK_OPEN_BLOCKING | blocking 攻击未关闭 | `ATTACKS.md` 有 blocking/open | red | 9 | T-08 |
+| SPEC_LINT | 规范自检失败 | 正文标识符未在注册表/schema 中闭合 | red | 2 | §19.3 |
+| CONFIG_INVALID | 配置错误兜底 | 未归类的配置/用法错 | red | 2 | §10 |
+| CONFIG_UNKNOWN_FIELD | 未知配置字段（提示） | 字段不在 §10.1/§10.2 闭集，忽略但记 info | info | 0 | §10.4 |
+| CONFIG_ALIAS | 配置别名归一（提示） | 旧名/同义值被归一 | info | 0 | §10.2 |
+| CONFIG_SCHEMA_IMPLICIT | 隐式 schema（提示） | 未写 schema 但按 v3 读 | info | 0 | §10.2 |
+| BAD_CONFIDENCE | confidence 取值非法 | 不是 high/med/low | red | 1 | §11.1 |
+| BAD_KIND | kind 取值非法 | 不是 claim/config | red | 1 | §11.1 |
+| BAD_SUPERSEDES | supersedes 指向不存在 | 父 fact id 不在账上 | red | 1 | §11.1 |
+| BAD_DERIVED_FROM | derived_from 指向不存在 | 派生父 id 不在账上 | red | 1 | §11.1 |
+| EMPTY_VALUE | value 为空 | `value` 去空白后为空 | red | 2 | §11.1 |
+| EXPR_INVALID | 派生算式非法 | 含四则/括号/id/`.num/.den` 之外的字符 | red | 1 | §11.1 |
+| EXPR_MISMATCH | 派生结果与 value 不符 | `expr` 求值 ≠ `value` | red | 1 | §11.1 |
+| DERIVED_CYCLE | 派生关系成环 | `derived_from` 图有环 | red | 1 | §11.1 |
+| MISSING_EXPR | 派生事实缺算式 | 有 `derived_from` 但无 `expr` | red | 1 | §11.1 |
+| MISSING_SOURCE_FIELD | v1 fact 缺 source | v1 条目录入时没有 source | red | 1 | v1 沿用 |
+| SUPERSEDED_PARENT | 父 fact 已失效 | `supersedes` 指向已被替换的条目 | red | 1 | §11.1 |
+| DUPLICATE_VALUE | 同值重复 | 同值 fact 在同一账重复出现 | yellow | 3 | R-04 |
+| LEDGER_CONFLICT | 账本冲突 | 同 id/同值出现不一致 | yellow | 3 | R-04 |
+| BIB_FILE_MISSING | bib 文件缺失 | 正文声明的 bib 不存在 | red | 1 | R-05 |
+| BIB_NO_STABLE_ID | bib 缺稳定标识 | 条目无 DOI/arXiv（v3 记 info，v1 红） | info（v1 red） | 0（v1 1） | R-11 |
+| BAD_STABLE_ID_FORMAT | 稳定标识格式非法 | DOI/arXiv 不能解析成真实标识 | red | 1 | R-11 |
+| MISSING_CITE | 引用 key 不在 bib | `\cite{}` 的 key 无条目 | red | 1 | R-11 |
+| DUPLICATE_BIB_KEY | bib key 重复 | 同一 key 定义多次 | red | 1 | R-11 |
+| DUPLICATE_STABLE_ID | 稳定标识挂多个 key | 同一 DOI/arXiv 对应多个条目 | yellow | 3 | R-11 |
+| UNRESOLVED_CITE | 引用远端不存在 | `--resolve` 明确返回 not_found | red | 1 | R-11 |
+| CITE_UNVERIFIED | 引用远端未核验 | `--resolve` 超时/限流 | yellow | 3 | R-11 |
+| UNKNOWN_CITE_COMMAND | 未知引用命令 | 不在 natbib 家族的引用命令 | red | 1 | R-11 |
+| UNUSED_BIB | bib 条目未引用 | 未被 `\cite/\nocite` 引用 | yellow | 3 | R-11 |
+| UNUSED_FACT | fact 未被正文使用 | 账上 fact 没有对应断言 | yellow | 3 | R-03 |
+| UNSIGNED_RESULT | 结果未签 | 结果文件没有签名 | red | 1 | R-11 |
+| FIGURE_UNVERIFIED | 图未核验 | 图只声明未核验 | yellow | 3 | R-06 |
+| NO_MANIFEST | 缺人签清单 | v1 `manifest` 文件不存在 | yellow | 3 | R-14 |
+| MANIFEST_INVALID | 人签清单无效 | TOML 解析失败或无 `[manifest]` | red | 1 | R-14 |
+| MANIFEST_UNSIGNED | 人签清单未签 | 缺 `signed_by` | red | 1 | R-14 |
+| MANIFEST_HASH_MISMATCH | 清单哈希不符 | 清单记录的哈希 ≠ 现算 | red | 1 | R-14 |
+| MANIFEST_NO_FILES | 清单无文件 | `[files]` 为空 | red | 1 | R-14 |
+| MANIFEST_NO_TIMESTAMP | 清单无时间戳 | 缺 `signed_at` | red | 1 | R-14 |
+| RESOLVE_DEGRADED | 联网核验大面积失败 | unverified 占比 > 50% 且条目 ≥ 3 | yellow | 3 | R-11 |
+| SOURCE_NOT_SIGNED | source 未签 | source 不在人签清单里 | red | 1 | R-14 |
+| PKIGNORE_QUANT | \pkignore 内出现定量 | 被豁免文本里含数字 | red | 1 | R-07 |
 
-| 旧 code | 处理 | 原因 |
+### 8.2 V2.2 §19.2 沿用码（逐条列全）
+
+> 未在 §8.1 列出的旧码全部继续有效；`severity` 由 tier 机械派生：ADVISORY→yellow，其余→red。
+> 标「见 §8.1」的行表示该 code 已在 §8.1 改级或被替换，以 §8.1 为准。
+
+| code | 含义 | 触发条件 | severity | exit | 规则 |
+|---|---|---|---|---|---|
+| UNBOUND_QUANT | 定量数字未内联绑定 | 数字回得到账但没有 fact 标记覆盖 | 见 §8.1（合并到 `UNBOUND_NUMBER`） | 见 §8.1 | R-03 |
+| BOUND_MISMATCH | 绑定数字不在值域 | 被标记覆盖的 token 不在 value/display 内 | 见 §8.1 | 见 §8.1 | R-03 |
+| BINDING_ATTRIBUTION | 顺序归属不符 | 一句多 fact 时第 k 个数字不属第 k 条 | 见 §8.1 | 见 §8.1 | R-03（2-S1） |
+| FACT_SET_OVERLAP | 标记组 fact 集合重叠 | 同句多组指向有交集 | red | 1 | R-03（2-S1） |
+| CO_CLAIM_ASYMMETRIC | co_claim 非对称 | 只有一侧声明 co_claim | red | 1 | R-03 |
+| FACT_UNUSED_IN_SPAN | 标记的 fact 在本句无数字可背 | 空绑定 | red | 1 | R-03 |
+| FACT_OUT_OF_SPAN | fact 出现在不应出现的跨度 | 角色/跨度不符 | red | 1 | R-03 |
+| NONQUANT_BACKS_QUANT | 非定量 fact 背定量数字 | 机制陈述授权数字 | 见 §8.1 | 见 §8.1 | R-03 |
+| FACT_UNKNOWN_ID | 引用账上不存在的 fact id | id 缺失 | 见 §8.1（合并到 `UNKNOWN_FACT_MARKER`） | 见 §8.1 | R-03 |
+| DISPLAY_ORDER | display 顺序不符 | 出现顺序与规范不一致 | red | 1 | R-03 |
+| ANCHOR_MISSING | 断言缺 anchor | 需要锚点的角色没有 anchor | red | 1 | R-03（2-S2） |
+| PAIR_MISSING | 缺 pair_with 对端 | 成对断言不完整 | red | 1 | R-03（2-S2） |
+| MARKER_TRAILING | 尾随标记未绑定 | 标记在句末/数字后没有闭合 | yellow | 3 | R-02 |
+| FACT_WITHOUT_QUANT | fact 无定量值 | 定量句里出现无值 fact | yellow | 3 | R-03 |
+| DUPLICATE_BINDING | 同一 token 被多条 fact 绑定 | 重复绑定 | yellow | 3 | R-03 |
+| FACT_AMBIGUOUS_BINDING | 归属歧义 | 同一数字可归多条 fact | yellow | 3 | R-03 |
+| FACT_MULTISETTING | 同一位置多次设定 fact | 多重赋值 | red | 1 | R-03（2-S8，结构性判据） |
+| SPAN_TOO_LONG | 绑定跨度超句界 | 跨句绑定 | yellow | 3 | R-02 |
+| DISPLAY_INCONSISTENT | display 与 value 不等价 | 值域不收敛 | 见 §8.1 | 见 §8.1 | R-04 |
+| DISPLAY_ROUNDTO_INVALID | round_to 与 display 不符 | 舍入声明错 | 见 §8.1 | 见 §8.1 | R-04（2-B2） |
+| DISPLAY_APPROX | display 是近似形 | 约等号/近似写法 | yellow | 3 | R-04 |
+| VALUE_NOT_STRING | value 不是字符串 | 类型错 | red | 2 | R-04 |
+| VALUE_NOT_QUANT | value 不是可解析数字 | 非定量 | red | 1 | R-04 |
+| STALE_LEDGER | 账与源不一致 | 账过期 | red | 1 | R-04 |
+| `DUPLICATE_ID` / `LEDGER_CONFLICT` / `DUPLICATE_VALUE` | id/账/值重复或冲突 | 重复或冲突 | red / yellow | 1 / 3 | R-04（v1 沿用） |
+| LEDGER_MUTATED | 账本被事后改写 | append-only 被破坏 | red | 1 | R-14 |
+| LEDGER_CHAIN_BROKEN | 账本哈希链断 | 链断 | red | 1 | R-14 |
+| LEDGER_EDIT_UNEVIDENCED | 账本编辑无证据 | 缺 reason/evidence | red | 1 | R-14 |
+| LEDGER_CONCURRENT_EDIT | 并发编辑冲突 | 版本冲突 | red | 1 | R-14 |
+| APPROVAL_STALE | 审批对象过期 | inputs/source 变化 | 见 §8.1 | 见 §8.1 | R-14（2-B5） |
+| LEDGER_TEXT_COCHANGE | 账与正文同步改动（已删除） | 启发式不可判 | — | — | R-14（已删除） |
+| APPROVAL_BATCH_LARGE | 同 key 24h 批签 >10 | 批量 | 见 §8.1 | 见 §8.1 | R-14 |
+| CONFIG_UNSIGNED | 配置未签 | L2 | yellow | 3 / 5 | R-14 |
+| SIGNATURE_TOOL_MISSING | 缺签名工具 | 环境 | red | 2 | R-14 |
+| INPUT_TARGET_MISSING | 闭包输入缺失 | \input 目标不存在 | red | 5 | R-05 |
+| INPUT_OUTSIDE_PROJECT | 闭包输入越界 | 路径越出项目 | red | 5 | R-05 |
+| INPUT_DYNAMIC_TARGET | 输入目标动态不可解析 | 宏/变量 | red | 5 | R-05（2-S6） |
+| UNREGISTERED_INPUT_WRAPPER | 未登记输入包装宏 | 自定义 \input | red | 5 | R-05（2-S6） |
+| ROOT_TEX_CHANGED | root_tex 被改 | 起点变化 | red | 5 | R-05（2-S6） |
+| ORPHAN_TEX | 孤儿 tex | 未被闭包引用 | red | 5 | R-05 |
+| APPENDIX_UNREACHABLE | 附录不可达 | 闭包缺口 | red | 5 | R-05 |
+| UNSCANNED_TEX | tex 未被扫描 | glob/闭包缺口 | 见 §8.1 | 见 §8.1 | R-05 |
+| TABLE_UNBOUND | 表格 cell 回不到账 | 表格未映射 | 见 §8.1 | 见 §8.1 | R-06 |
+| TABLE_DRIFT | 表格与账漂移 | cell 值不符 | red | 5 | R-06 |
+| TABLE_BARE_LITERAL | 表格裸字面量 | 未绑定 | red | 5 | R-06（2-S4） |
+| FIGURE_UNBOUND | 图未声明/sidecar 缺失 | 图无绑定 | red | 5 | R-06 |
+| FIGURE_UNVERIFIED | 图未核验 | 仅声明 | 见 §8.1 | 见 §8.1 | R-06 |
+| PKIGNORE_QUANT | \pkignore 内出现定量 | 豁免区藏数 | 见 §8.1 | 见 §8.1 | R-07 |
+| EXEMPTION_MACRO_SUSPECT | 豁免宏可疑 | 宏可执行 | red | 1 | R-07 |
+| IGNORE_NOT_TRACKED | 忽略项未跟踪 | 缺台账 | yellow | 3 | R-07 |
+| TODO_IN_PDF | PDF 含 TODO | 未完成标记 | red | 1 | R-08 |
+| TODO_MACRO_DEF | TODO 宏定义 | 宏 | yellow | 3 | R-08 |
+| TODO_REQUIRED_OPEN | 必需 TODO 仍开 | 未关闭 | red | 5 | R-08 |
+| TODO_CLOSED_WITHOUT_EVIDENCE | TODO 关闭无证据 | 缺证据 | red | 1 | R-08 |
+| TODO_NOT_TRACKED | TODO 未跟踪 | 缺台账 | red | 5 | R-08 |
+| TODO_COMMENT | TODO 在注释 | 注释 | yellow | 3 | R-08 |
+| TODO_ORPHANED | TODO 孤立 | 无归属 | yellow | 3 | R-08 |
+| CODENAME_IN_BODY | 内部代号进正文 | 代号 | red | 1 | R-09 |
+| CODENAME_UNREGISTERED | 代号未登记 | 未注册 | red | 1 | R-09 |
+| NAKED_FACT_ID | 裸 fact id 进正文 | 未渲染 | red | 1 | R-09 |
+| LIMITATION_OUTSIDE | 局限声明位置错 | 不在指定节 | red | 1 | R-10 |
+| DISCLAIMER_IN_RESULTS | 免责声明进结果 | 位置错 | red | 1 | R-10 |
+| LIMITATION_BAD_FACT | 局限绑定错误 fact | 值不符 | red | 1 | R-10 |
+| DISCLAIMER_FRAGMENTED | 免责声明碎片化 | 被拆分 | yellow | 3 | R-10 |
+| LIMITATION_UNBOUND | 局限未绑定 | 缺标记 | yellow | 3 | R-10 |
+| LIMITATION_POINTER_IN_RESULTS | 局限指针进结果 | 位置 | yellow | 3 | R-10 |
+| RUN_RECORD_INVALID | 运行记录无效 | 缺字段/evidence none | red | 1 | R-11 |
+| INVALID_FACT_CITED | 引用无效 fact | 状态 invalid | red | 1 | R-11 |
+| OBSERVATION_DIGEST_MISMATCH | observation 摘要不符 | 哈希 | red | 1 | R-11 |
+| OBSERVATION_POINTER_MISSING | observation pointer 缺失 | 路径 | red | 1 | R-11 |
+| OBSERVATION_VALUE_MISMATCH | observation 值与 fact 不符 | 值 | red | 1 | R-11 |
+| RECEIPT_SCOPE_MISMATCH | 回执范围不符 | request/response/run/attempt 四字段不全 | red | 1 | R-11（2-B3） |
+| RECEIPT_SIGNATURE_INVALID | 回执签名无效 | 验签失败 | red | 1 | R-11（2-B3） |
+| TRUSTED_KEYS_IN_PROJECT | 信任根在项目内 | key 路径位于项目内 | red | 1 | R-11（2-B3） |
+| RUNNER_UNPINNED | 运行器未钉版本 | 环境 | red | 5 | R-11 |
+| ATTEMPT_COUNT_MISMATCH | 尝试数与记录不符 | 计数 | red | 1 | R-11（2-S5） |
+| SELECTION_UNREGISTERED | 选择规则未登记 | 选样 | red | 1 | R-11（2-S5） |
+| AGGREGATION_MISMATCH | 聚合与记录不符 | 统计 | red | 1 | R-11（2-S5） |
+| PROOF_MISSING | 缺证明 | 未提供 proof | none | 0 / 8 | R-11 |
+| PROOF_COVERAGE_GAP | 证明覆盖缺口 | 部分未证 | red | 5 | R-11（2-S4） |
+| PROOF_CLASS_INSUFFICIENT | 证明等级不足 | self_report | red | 5 | R-11 |
+| AUDIT_WRITES_NOTHING | 审计不写任何东西 | 产物缺失 | red | 4 | R-11（2-S3） |
+| REPORT_STALE | 报告过期 | inputs 变 | 见 §8.1 | 见 §8.1 | R-13 |
+| SECTION_ROLE_UNKNOWN | 节角色未知 | 无法识别 | red | 5 | R-15 |
+| SHELL_ESCAPE | shell 逃逸 | 命令执行 | red | 1 | R-05 |
+| ARITH_IN_BODY | 算术/计数器命令产生数字 | \the/\setcounter 等 | 见 §8.1 | 见 §8.1 | R-01A（2-B1） |
+| NUMERIC_IN_MACRO | 宏体携带数字 | 宏定义 | 见 §8.1 | 见 §8.1 | R-01A（2-B1） |
+| NUMERIC_MACRO_IN_BODY | 未登记数值宏在正文 | 宏调用 | red | 1 | R-01A |
+| NUM_ADJACENT_MACRO | 数字与宏相邻拼接 | 邻接 | 见 §8.1 | 见 §8.1 | R-01A（2-B1） |
+| NUM_AFTER_GROUP` / `NUM_ADJACENT_GROUP | R-01A（2-B1） | R-01A（2-B1） | red | 1 | R-01A（2-B1） |
+| PDF_UNACCOUNTED_NUMBER | PDF 多出未授权数字 | 多重集多 | 见 §8.1 | 见 §8.1 | R-01A（2-B1） |
+| PDF_TOOL_MISSING | 缺 PDF 工具 | PATH | 见 §8.1 | 见 §8.1 | R-01A |
+| LOW_CONF_IN_HEADLINE | 头条 fact 置信度低 | confidence | red | 1 | R-04 |
+| VALUE_HAS_PROSE | value 混入散文 | 非纯数字 | yellow | 3 | R-04 |
+| ABSOLUTE_SOURCE_ROOT | source_root 绝对路径 | 路径 | red | 1 | R-04 / S5 |
+| EXTRACT_FORBIDDEN_SOURCE | 禁止的提取源 | 来源 | red | 2 | R-04 |
+| SPELLED_QUANT | 英文拼写数字 | ten 等 | yellow | 3 / 1 | R-01 |
+| CJK_QUANT_SUSPECT | 中文数字可疑 | 中文数词 | yellow | 3 | R-01 |
+| APPROX_UNBOUND | 约数未绑定 | ~/approx | red | 1 | R-01 |
+| QUANT_TOKEN_OVERLAP | 定量 token 重叠 | 内部 | red | 4 | R-01 |
+| LIMITATION_UNMACROED | 局限未宏化 | 手写 | yellow | 3 / 5 | R-10 |
+| CONDITIONAL_TEXT | 条件文本 | \if | yellow | 3 | R-08 |
+| NONCE_ABSENT | 缺 nonce | 审批/stamp | yellow | 3 / 1 | R-11（2-S5） |
+| STAMP_MISSING | 缺 stamp | 发布件 | 见 §8.1 | 见 §8.1 | R-13 |
+| STAMP_UNVERIFIED | stamp 未验（V3 已删除） | 由具体 STAMP_* 替代 | — | — | R-13（已删除） |
+| COMPILE_SCOPE_MISMATCH | 编译范围不符 | inputs | red | 1 | R-13（2-S7） |
+| SPEC_LINT | 规范自检失败 | 标识符未登记 | 见 §8.1 | 见 §8.1 | §19.3（2-S2） |
+| RULE_CHANGE_UNREVIEWED | 规则变更未复核 | hostile 转绿 | 见 §8.1 | 见 §8.1 | §14.3（2-G4） |
+| `SOURCE_SHA256_MISMATCH` / `MISSING_SOURCE` / `SOURCE_NOT_SIGNED` | source 哈希不符 / 文件缺失 / 未签 | 证据锚断 | red | 1 | v1 沿用 |
+
+### 8.3 本批码表 diff（新增/改名/删除）
+
+| 处理 | code | 说明 |
 |---|---|---|
-| `LEDGER_TEXT_COCHANGE` | 删除 | 启发式阈值可规避、方向可反；见 §1.2 M2 |
-| `STAMP_UNVERIFIED` | 删除，拆成 `STAMP_*` 具体 code | 一个 code 同时表示「没验」与「验不过」无法分诊 |
+| **新增** | `COMPUTED_VALUE_UNREGISTERED` | `\frac/\numexpr` 等现场计算生成且未登记的数字。替代 V3.0 §8.1 的 `MATH_FRAC_UNVERIFIABLE`（后者不再单独发射）。 |
+| **新增** | `NUMBER_AS_CROSSREF` | 手写 `Table 3`/`Figure 2` 这类结构编号当数据；不再落到 `UNBOUND_NUMBER`。 |
+| **新增** | `EVIDENCE_CHAIN_BROKEN` | 证据链三节任一断开；替代 §11.4 的 `FACT_EVIDENCE_MISSING`（后者不再单独发射）。 |
+| **改名/合并** | `MATH_FRAC_UNVERIFIABLE` → `COMPUTED_VALUE_UNREGISTERED` | 一个现象一个码；`\frac` 未登记与 `\numexpr` 未登记统一口径。 |
+| **改名/合并** | `FACT_EVIDENCE_MISSING` → `EVIDENCE_CHAIN_BROKEN` | 证据缺失从黄升红：链断即红（§11.6）。 |
+| **合并** | `UNBOUND_QUANT` → `UNBOUND_NUMBER` | 同一现象（数字回得到账但未内联绑定）只保留 `UNBOUND_NUMBER`。 |
+| **合并** | `FACT_UNKNOWN_ID` → `UNKNOWN_FACT_MARKER` | 同一现象（引用账上不存在的 id）只保留 `UNKNOWN_FACT_MARKER`。 |
+| **沿用** | `UNKNOWN_FACT_MARKER` | 引用缺稳定标识（`\fact{A9}` 指向不存在的 id）沿用旧码。 |
+| **固定** | `FACT_SCHEMA_INVALID` | 未知 facts schema 固定 **exit 2**（CONFIG），不是 3；并在 `--json.findings` 里出现。 |
+| **删除** | `LEDGER_TEXT_COCHANGE` | V3.0 §1.2 M2 整条删除。 |
+| **删除** | `STAMP_UNVERIFIED` | 拆成具体 `STAMP_*` 码。 |
 
-### 8.3 fixture 总表（实现时按此建目录）
+### 8.4 唯一映射（判卷只看这张表）
+
+| 现象 | 唯一 code | severity/exit |
+|---|---|---|
+| 未知 facts `schema`（含 `2.9` 降级） | `FACT_SCHEMA_INVALID` | red / 2 |
+| `\frac`/`\numexpr` 现场计算且未登记 | `COMPUTED_VALUE_UNREGISTERED` | red / 1 |
+| 手写 `Table 3`/`Figure 2` 当数据 | `NUMBER_AS_CROSSREF` | yellow / 3 |
+| `\fact{A9}` 指向账上不存在的 id | `UNKNOWN_FACT_MARKER` | red / 1 |
+| 无 `source`/`observation`，链第 1 节断 | `EVIDENCE_CHAIN_BROKEN` | red / 1 |
+| `source` 文件不存在 | `MISSING_SOURCE` | red / 1 |
+| `source_sha256` 与现算不符 | `SOURCE_SHA256_MISMATCH` | red / 1 |
+| 缺 `record.json`／run_id 不符／`facts[]` 不含本 fact | `EVIDENCE_CHAIN_BROKEN` | red / 1 |
+| 回执 `facts[]` 指向账上不存在的 id | `EVIDENCE_CHAIN_BROKEN` | red / 1 |
+| 数字回得到账但句内无标记 | `UNBOUND_NUMBER` | yellow / 3 |
+| 数字回不到任何 fact 且不属于上面任何专属码 | `UNMATCHED_NUMBER` | red / 1 |
+
+### 8.5 fixture 总表（实现时按此建目录）
 
 | 组 | 编号 | 覆盖 |
 |---|---|---|
@@ -859,6 +1081,7 @@ python3 tools/spec_lint.py --no-construction
 | 归一化 | FX-CANON-01..03 | §2.1、P-07 |
 | 签名 | FX-SIG-01..27 | S-01..S-10、P-08 |
 | 治理 | FX-FIX-01..10、FX-PROP-01..05 | T-01..T-09 |
+| 事实账 | FX-FACT-01..05 | §11、证据链三节 |
 | 真实语料 | FX-PAPER-01..03 | 绑定 token 多重集、0 红、已知迁移红 |
 | 盲测 | BT-01..12 | 封存，不入仓 |
 
@@ -1039,8 +1262,9 @@ note = ""
 
 \* `source` 与 `observation` 至少给一个：v3 允许只写
 `observation = { run_id, pointer }`＋`source_sha256`（S-03 的 approve_target
-形态）。此时源层（l0/l1）不核本地哈希；若 `runs/<run_id>/summary.json`
-存在，则自动取作 `source` 并核哈希。两者都缺 → `FACT_EVIDENCE_MISSING`（黄，exit 3）。
+形态）。若 `runs/<run_id>/summary.json` 存在，则自动取作 `source` 并核哈希。
+两者都缺、或推导不出 `runs/` 里的运行记录 → `EVIDENCE_CHAIN_BROKEN`（红，exit 1），
+定义见 §11.6。
 
 **归一化（写死）**：
 
@@ -1095,8 +1319,8 @@ note = ""
 | 未知 fact `schema` | `FACT_SCHEMA_INVALID` | CONFIG | **2** | `config.py::load_facts` |
 | `fact` 不是表数组 | `FACT_CONTAINER_INVALID` | CONFIG | **2** | `config.py::load_facts` |
 | `source_sha256` 与现算不符 | `SOURCE_SHA256_MISMATCH` | FACT | **1** | `audit.py::verify_sources`（v3 另记 `APPROVAL_STALE`） |
-| `source_sha256` 缺失（v1） | `MISSING_SOURCE_SHA256` | FACT | **1** | `audit.py::verify_sources`；v3 源层不强制，L2/审批路径必须有 |
-| 既无 `source` 也无 `observation`/`source_sha256`（v3） | `FACT_EVIDENCE_MISSING` | ADVISORY | **3** | `audit.py::verify_sources` |
+| `source_sha256` 缺失（v1） | `MISSING_SOURCE_SHA256` | FACT | **1** | `audit.py::verify_sources`；v3 源层由 §11.6 证据链强制 |
+| 既无 `source` 也无 `observation`，或证据链任一节断开（v3） | `EVIDENCE_CHAIN_BROKEN` | FACT | **1** | `audit.py::verify_sources`→`_evidence_chain_issues`（§11.6） |
 | `display` 与 `value` 不等价 | `DISPLAY_INCONSISTENT` | FACT | **1** | `texrules.py::display_hits` |
 | `display` 缺省 | 无（回填 `value`） | — | — | `config.py::_fact_from_mapping` |
 
@@ -1130,9 +1354,29 @@ display = ["62.5\\%"]
 quantitative = true
 role = "results"
 run_id = "run-01"
+source = "runs/run-01/result.json"
 observation = { run_id = "run-01", pointer = "/summary/on_resolved" }
 source_sha256 = "sha256:4b250136cab46bfdd9d94b8136247b0700e2eb93783ae3bf1c1e62b5f8746a5a"
 ```
+
+`runs/run-01/result.json`：
+
+```json
+{"run_id": "run-01", "summary": {"on_resolved": 0.625}}
+```
+
+`runs/run-01/record.json`（回执，与运行记录同目录）：
+
+```json
+{
+  "run_id": "run-01",
+  "source": "runs/run-01/result.json",
+  "source_sha256": "sha256:4b250136cab46bfdd9d94b8136247b0700e2eb93783ae3bf1c1e62b5f8746a5a",
+  "facts": ["A1"]
+}
+```
+
+> 示例里的 `source_sha256` 必须按 `result.json` 的实际字节重算后写死；照抄示例哈希而文件不同 → `SOURCE_SHA256_MISMATCH`。
 
 `sections/main.tex`：
 
@@ -1143,6 +1387,47 @@ source_sha256 = "sha256:4b250136cab46bfdd9d94b8136247b0700e2eb93783ae3bf1c1e62b5
 On assembly, the resolved rate reaches \fact{A1}{62.5\%}~\cite{smith2020}.
 \end{document}
 ```
+
+### 11.6 证据链完整性（写死）
+
+一条 v3 fact 的证据必须连成三节链；**断任一节即红**：
+
+```
+facts.source ──①──> runs/ 里的运行记录 ──②──> 回执 runs/<run_id>/record.json ──③──> 账上的 fact id
+```
+
+| 节 | 检查 | 通过条件 | 断开的码 |
+|---|---|---|---|
+| ① 指针 | `facts.source` 非空，解析后是 `runs/` 下的普通文件 | 文件存在 | 无 source/observation → `EVIDENCE_CHAIN_BROKEN`；文件不存在 → `MISSING_SOURCE` |
+| ② 内容锚 | `source_sha256` 与文件现算 sha256 相等 | 64 位 hex 相同（`sha256:` 前缀忽略） | 缺 `source_sha256` → `EVIDENCE_CHAIN_BROKEN`；值不符 → `SOURCE_SHA256_MISMATCH` |
+| ③ 回执 | 与运行记录**同目录**的 `record.json` 存在、可解析、`run_id` 对齐、`facts[]` 含本 fact id | 全部成立 | `EVIDENCE_CHAIN_BROKEN` |
+
+**`record.json` 唯一规范形态**（与运行记录同目录，如 `runs/run-01/record.json`）：
+
+```json
+{
+  "run_id": "run-01",
+  "source": "runs/run-01/result.json",
+  "source_sha256": "sha256:...",
+  "facts": ["A1", "A2"]
+}
+```
+
+- `run_id` 必须等于运行目录名（或 fact 的 `run_id`）。
+- `facts[]` 必须列出所有由该运行记录背书的 fact id；列出的 id 必须在账上存在，否则反向指针断。
+- `source`/`source_sha256` 若给出，必须与 fact 的 `source`/现算哈希一致。
+
+**唯一映射**：① 的文件存在性用更具体的 `MISSING_SOURCE`，② 的哈希不符用更具体的
+`SOURCE_SHA256_MISMATCH`；只有没有更具体码的节点（无 source、缺哈希、缺回执、
+run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EVIDENCE_CHAIN_BROKEN`。
+不允许同一现象同时出两个码。
+
+**适用范围**：只对 v3 生效；v1 仍走 `results/`＋`MANIFEST.toml` 旧路径，行为不变。
+`l0/l1` 也执行本节（源层就能断链），不等到 L2。
+
+**fixture**：`FX-FACT-01`（benign，链完整）、`FX-FACT-02`（断①：无 source）、
+`FX-FACT-03`（断②：哈希不符）、`FX-FACT-04`（断③：缺 `record.json`）、
+`FX-FACT-05`（断③：`facts[]` 指向不存在的 id）。
 
 ---
 

@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -77,10 +78,18 @@ def make_v3(root: Path, body: str = "We resolved \\fact{A1}{10/16} tasks.\n",
         "\\documentclass{article}\\begin{document}\n\\input{sections/body}\n"
         "\\end{document}\n", encoding="utf-8")
     (root / "sections" / "body.tex").write_text(body, encoding="utf-8")
-    (root / "facts" / "A1.toml").write_text(fact, encoding="utf-8")
     (root / "runs" / "r1" / "summary.json").write_text(
         '{"run_id": "r1", "summary": {"on_resolved": 10, "n": 16}}\n',
         encoding="utf-8")
+    summary_path = root / "runs" / "r1" / "summary.json"
+    digest = hashlib.sha256(summary_path.read_bytes()).hexdigest()
+    (root / "runs" / "r1" / "record.json").write_text(
+        json.dumps({"run_id": "r1", "source": "runs/r1/summary.json",
+                    "source_sha256": "sha256:" + digest, "facts": ["A1"]}),
+        encoding="utf-8")
+    if "source_sha256" not in fact:
+        fact += '\nsource_sha256 = "sha256:%s"\n' % digest
+    (root / "facts" / "A1.toml").write_text(fact, encoding="utf-8")
     (root / "refs.bib").write_text(bib, encoding="utf-8")
     if pdf_from is not None:
         shutil.copyfile(pdf_from, root / "main.pdf")

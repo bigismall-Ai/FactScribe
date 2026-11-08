@@ -1447,6 +1447,57 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 
 ---
 
+## 12. 文风闸阶段判断（批 71 增补）
+
+`factscribe style` 在指标之外必须输出 `stage_assessment`，用来决定「要不要给
+改写指令」。依据是三轮盲评：文风闸对 LLM 初稿有效（盲评 9/10），对已打磨稿
+有害（3–5/24 被盲评判为改写后更差）。
+
+### 12.1 输出
+
+```json
+{"stage": "draft|polished", "advice": "rewrite|report_only",
+ "reason": "...", "triggers": 3, "cv": 0.52}
+```
+
+- `triggers`：触发指标项数（`fired` 的长度），不是 findings 条数；
+- `cv`：句长（词/字）标准差除以均值；阶段判断用原始 CV，句数少于
+  `uniformity_min_sentences` 时也照算（指标侧的 1.0「不判」哨兵不参与）。
+
+### 12.2 判据（写死）
+
+| 条件 | stage | advice | 输出行为 |
+|---|---|---|---|
+| `triggers >= 3` 或 `cv < 0.45` | `draft` | `rewrite` | 给逐条改写清单（沿用 V2） |
+| `triggers <= 2` 且 `0.45 <= cv <= 0.80` | `polished` | `report_only` | 明确输出「建议不改」 |
+| `triggers <= 2` 且 `cv > 0.80` | `polished` | `report_only` | 句长散落不是公式化特征，只报告 |
+
+### 12.3 `--prompt` 约束
+
+`advice=report_only` 时，`--prompt` **只输出一句**：
+
+```text
+指标健康，建议不改；强行改写有降低自然度风险
+```
+
+不得输出任何逐条改写指令（不得出现 `文件:行 → 改法`、编号条目、「逐条」、
+「rewrite」类指令）。`draft` 时保持 V2 行为，输出 ≤400 字的逐条清单。
+
+### 12.4 人读报告
+
+人读报告必须显示阶段（`polished（建议不改）` / `draft（建议改写）`）与判断
+理由；`report_only` 下的具体清单标为 `[观察]`，并注明「建议不改，以下只作
+报告」。退出码语义不变：无触发 0，有触发 3，永不 1。
+
+### 12.5 验收
+
+- 测试覆盖三种组合（多触发 / 低 CV / 健康稿）各 1 例；
+- `report_only` 的 `--prompt` 恰好等于上述一句、不含改写条目；
+- 真实基线：`paper/` 与 `paper-zh/` 均判 `polished/report_only`；
+- 同一份 `\$` 修复后的基线读数见 `docs/implementation/STYLE-V3.md`。
+
+---
+
 ## 附录 A｜V2.2 → V3.0 差异速查
 
 | 主题 | V2.2 | V3.0 |

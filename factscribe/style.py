@@ -247,29 +247,62 @@ def _blank(chars: list, start: int, stop: int) -> None:
             chars[i] = " "
 
 
+def _find_math_closer(s: str, start: int, closer: str) -> int:
+    """从 start 起找未转义的数学闭合符（\\) 或 \\]）；找不到返回 -1。
+
+    反斜杠一律按「转义下一个字符」跳过，因此 `\\\\)`（换行命令后跟右括号）
+    不会被误认为闭合符。
+    """
+    i, n = start, len(s)
+    while i < n:
+        if s.startswith(closer, i):
+            return i
+        if s[i] == "\\":
+            i += 2
+            continue
+        i += 1
+    return -1
+
+
 def _mask_inline_math(chars: list) -> None:
-    """把 $...$、$$...$$、\\(...\\)、\\[...\\] 抹成空白（保留换行）。"""
+    """把 $...$、$$...$$、\\(...\\)、\\[...\\] 抹成空白（保留换行）。
+
+    转义序列必须先于定界符处理：`\\$` 是**字面美元符号**（价格），不是数学
+    模式起点；`\\\\` 是换行命令，后面的 `[` 也不能被当成 `\\[` 数学定界符。
+    否则正文里出现一个 `\\$0.05` 就会把后面整段吞进数学模式，导致词数、句数
+    与句长统计系统性偏低（批 71）。
+    """
     s = "".join(chars)
     i, n = 0, len(s)
     while i < n:
         c = s[i]
-        if c == "\\" and i + 1 < n and s[i + 1] in "([":
-            closer = "\\)" if s[i + 1] == "(" else "\\]"
-            end = s.find(closer, i + 2)
-            if end < 0:
-                end = n
-            else:
-                end += 2
-            _blank(chars, i, end)
-            i = end
-            continue
-        if c == "$":
-            if i + 1 < n and s[i + 1] == "$":
-                end = s.find("$$", i + 2)
+        if c == "\\":
+            nxt = s[i + 1] if i + 1 < n else ""
+            if nxt in ("(", "["):
+                closer = "\\)" if nxt == "(" else "\\]"
+                end = _find_math_closer(s, i + 2, closer)
                 if end < 0:
                     end = n
                 else:
                     end += 2
+                _blank(chars, i, end)
+                i = end
+                continue
+            # `\$`、`\%`、`\\`、`\{` 等：转义后是字面字符或换行命令，
+            # 都不是数学模式；连反斜杠一起跳过。
+            i += 2
+            continue
+        if c == "$":
+            if i + 1 < n and s[i + 1] == "$":
+                j = i + 2
+                while j < n:
+                    if s[j] == "\\":
+                        j += 2
+                        continue
+                    if s.startswith("$$", j):
+                        break
+                    j += 1
+                end = n if j >= n else j + 2
             else:
                 j = i + 1
                 while j < n:
@@ -340,6 +373,9 @@ def prose_of(tex: str) -> str:
         _blank(out, m.start(), j)
         pos = m.end()
     prose = "".join(out)
+    # 换行命令 \\ 与其可选间距参数（\\[2pt]）是排版结构，不参与文风统计
+    prose = re.sub(r"\\\\\*?(?:\[[^\]]*\])?",
+                   lambda m: " " * len(m.group(0)), prose)
     # 残余的转义与结构字符：等长替换
     prose = re.sub(r"\\%", "%", prose)
     prose = re.sub(r"\\&", "&", prose)
@@ -434,6 +470,7 @@ class StyleResult:
     instances: dict
     summary: dict
     rules_path: str = ""
+    stage_assessment: dict = field(default_factory=dict)
 
     @property
     def exit_code(self) -> int:
@@ -447,6 +484,7 @@ class StyleResult:
             "paragraphs": [p.as_dict() for p in self.paragraphs],
             "fired": self.fired,
             "summary": self.summary,
+            "stage_assessment": dict(self.stage_assessment),
             "rules": self.rules_path,
             "disclaimer": DISCLAIMER,
         }
@@ -610,6 +648,54 @@ def _valid_triad(groups: tuple[str, ...]) -> bool:
         if any(w.lower() in ("and", "or") for w in words):
             return False
     return True
+
+
+# --------------------------------------------------------------------------
+# 阶段判断：初稿 vs 成品稿
+# --------------------------------------------------------------------------
+
+STAGE_DRAFT = "draft"
+STAGE_POLISHED = "polished"
+ADVICE_REWRITE = "rewrite"
+ADVICE_REPORT_ONLY = "report_only"
+
+# 盲评结论（批 67–70）：文风闸对 LLM 初稿有效，对已打磨的人写稿有害。
+# 因此只在「初稿特征明显」时给逐条改写指令；成品稿只报告、明确建议不改。
+DRAFT_TRIGGER_FLOOR = 3
+DRAFT_CV_LOW = 0.45
+POLISHED_CV_HIGH = 0.80
+
+REPORT_ONLY_PROMPT = "指标健康，建议不改；强行改写有降低自然度风险"
+
+
+def assess_stage(triggers: int, cv: float, fired: list) -> dict:
+    """按「触发项数 + 句长 CV」判初稿/成品稿。
+
+    * ``triggers >= 3`` 或 ``cv < 0.45`` → draft + rewrite；
+    * 其余（``triggers <= 2`` 且 CV 不在「太整齐」区）→ polished + report_only。
+
+    CV 高于 0.80 是「散」，散不是公式化特征，同样按成品稿只报告。
+    """
+    codes = "、".join(f["code"] for f in fired) or "无"
+    cv_shown = round(cv, 3)
+    if triggers >= DRAFT_TRIGGER_FLOOR or cv < DRAFT_CV_LOW:
+        parts = []
+        if triggers >= DRAFT_TRIGGER_FLOOR:
+            parts.append("触发 %d 项指标（%s）" % (triggers, codes))
+        if cv < DRAFT_CV_LOW:
+            parts.append("句长 CV=%.2f 低于 0.45（句子过于整齐）" % cv)
+        reason = "；".join(parts) + "：呈现初稿的公式化特征，建议按改写清单处理。"
+        return {"stage": STAGE_DRAFT, "advice": ADVICE_REWRITE,
+                "reason": reason, "triggers": triggers, "cv": cv_shown}
+    if cv > POLISHED_CV_HIGH:
+        reason = ("仅 %d 项指标触发（%s）；句长 CV=%.2f 高于 0.80，属自然散落"
+                  "（散不是公式化特征）：稿子已到打磨阶段，建议不改。"
+                  % (triggers, codes, cv))
+    else:
+        reason = ("仅 %d 项指标触发（%s），句长 CV=%.2f 在健康区间 [0.45, 0.80]："
+                  "稿子已到打磨阶段，建议不改。" % (triggers, codes, cv))
+    return {"stage": STAGE_POLISHED, "advice": ADVICE_REPORT_ONLY,
+            "reason": reason, "triggers": triggers, "cv": cv_shown}
 
 
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
@@ -827,6 +913,12 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     # ---- 8. 句长均匀度 ----
     sizes = [u for u, _d, _s, _t in sentence_units]
     min_sentences = limits["uniformity_min_sentences"]
+    if sizes:
+        raw_mean = sum(sizes) / len(sizes)
+        raw_variance = sum((x - raw_mean) ** 2 for x in sizes) / len(sizes)
+        raw_cv = (raw_variance ** 0.5 / raw_mean) if raw_mean else 0.0
+    else:
+        raw_cv = 1.0
     if len(sizes) >= min_sentences:
         mean = sum(sizes) / len(sizes)
         variance = sum((x - mean) ** 2 for x in sizes) / len(sizes)
@@ -835,7 +927,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     else:
         mean = sum(sizes) / len(sizes) if sizes else 0.0
         std = 0.0
-        uniformity = 1.0   # 句太少不判「整齐」——避免短文本误伤
+        # 句太少不判「整齐」（避免短文本误伤）：指标侧用 1.0 表示「不判」。
+        # 阶段判断仍用 raw_cv（能算就算），否则 6 句高度同构的初稿会被误判成品。
+        uniformity = 1.0
 
     # ---- 指标汇总与触发判定 ----
     def density(count: int) -> float:
@@ -923,6 +1017,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                                  f.file, f.line))
 
     paragraphs = sorted(paragraph_infos.values(), key=lambda p: (p.file, p.line))
+    stage = assess_stage(len(fired), raw_cv, fired)
     summary = {
         "files": len(docs),
         "words": total_units,
@@ -931,11 +1026,13 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "triggered": len(fired),
         "findings": len(findings),
         "exit_code": EXIT_YELLOW if fired else EXIT_OK,
+        "stage": stage["stage"],
+        "advice": stage["advice"],
     }
     return StyleResult(metrics=metrics, thresholds=dict(thresholds), fired=fired,
                        findings=findings, paragraphs=paragraphs,
                        instances=instances, summary=summary,
-                       rules_path=rules_path)
+                       rules_path=rules_path, stage_assessment=stage)
 
 
 # --------------------------------------------------------------------------
@@ -946,6 +1043,10 @@ PROMPT_LIMIT = 400
 
 
 def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
+    # 成品稿（polished）只输出一句「建议不改」，不给逐条改写指令——盲评显示
+    # 对已打磨的稿子强行改写会降低自然度（批 67–70）。
+    if (result.stage_assessment or {}).get("advice") == ADVICE_REPORT_ONLY:
+        return REPORT_ONLY_PROMPT[:limit]
     if not result.findings:
         text = ("未发现需要改写的公式化痕迹。不要为改写而改写；优先保留原有结构"
                 "与修辞，事实、数字、引用保持原样。")
@@ -992,17 +1093,26 @@ def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
 
 def render_human(result: StyleResult, project: Path) -> str:
     m = result.metrics
+    stage = result.stage_assessment or {}
+    stage_line = ""
+    if stage:
+        verdict = "建议不改" if stage.get("advice") == ADVICE_REPORT_ONLY else "建议改写"
+        stage_line = "阶段    : %s（%s，triggers=%d，cv=%.2f）\n判断    : %s" % (
+            stage.get("stage", "?"), verdict, stage.get("triggers", 0),
+            stage.get("cv", 0.0), stage.get("reason", ""))
     lines = ["== factscribe style ==",
              "project : %s" % project,
              "正文    : %d 个文件，%d 词/字，%d 句，%d 段"
              % (result.summary["files"], result.summary["words"],
                 result.summary["sentences"], result.summary["paragraphs"]),
-             "规则    : %s" % result.rules_path,
-             "",
-             "注意：" + DISCLAIMER,
-             "",
-             "指标                    读数      阈值     状态",
-             "-----------------------  --------  -------  ----"]
+             "规则    : %s" % result.rules_path]
+    if stage_line:
+        lines.append(stage_line)
+    lines += ["",
+              "注意：" + DISCLAIMER,
+              "",
+              "指标                    读数      阈值     状态",
+              "-----------------------  --------  -------  ----"]
     labels = [
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
         ("sentence_uniformity", "SENTENCE_UNIFORMITY", "<"),
@@ -1031,15 +1141,19 @@ def render_human(result: StyleResult, project: Path) -> str:
         lines.append("%-23s  %-8s  %-7s  %s"
                      % (label, _fmt(value), threshold, status))
     lines.append("")
-    if result.fired:
+    if result.fired and stage.get("advice") == ADVICE_REPORT_ONLY:
+        lines.append("[观察] %d 处清单（成品稿：建议不改，以下只作报告）"
+                     % len(result.findings))
+    elif result.fired:
         lines.append("[黄] %d 处具体改法（只提示，不阻断；退出码 3）"
                      % len(result.findings))
+    else:
+        lines.append("[黄] 0 处——所有指标在阈值内。")
+    if result.fired:
         for idx, f in enumerate(result.findings, 1):
             lines.append(" %2d. %-22s %s:%d" % (idx, f.code, f.file, f.line))
             lines.append("     原文：" + _clip(f.text, 160))
             lines.append("     改法：" + f.suggestion)
-    else:
-        lines.append("[黄] 0 处——所有指标在阈值内。")
     flagged = [p for p in result.paragraphs if p.flags]
     if flagged:
         lines.append("")

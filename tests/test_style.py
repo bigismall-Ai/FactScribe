@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from factscribe.config import load_config, load_sections  # noqa: E402
-from factscribe.style import (analyze, build_prompt, load_style_rules,  # noqa: E402
-                              prose_of)
+from factscribe.style import (REPORT_ONLY_PROMPT, analyze, build_prompt,  # noqa: E402
+                              load_style_rules, prose_of, units_of,
+                              _sentences)
 
 PROJECT_TOML = """[project]
 title = "t"
@@ -482,6 +483,114 @@ class TestNoFalsePositive(unittest.TestCase):
         self.assertIn("The result is stable", prose)
 
 
+class TestEscapedDollarParsing(unittest.TestCase):
+    """批 71：`\\$` 是字面美元符号，不是数学模式起点。
+
+    修复前，正文里一个 `\\$0.05` 会把后面整段吞进数学模式，词数/句数/句长
+    统计系统性偏低。这里正例两条（字面美元、成对转义美元）、负例两条
+    （真数学仍要遮罩；`\\(...\\)` 与 `\\[...\\]` 对称处理）。
+    """
+
+    def test_escaped_dollar_keeps_number_and_following_text(self):
+        tex = ("The price is \\$100 for 5 tasks. "
+               "The follow-up sentence has 7 words and stays here.\n")
+        prose = prose_of(tex)
+        self.assertIn("$100 for 5 tasks", prose)
+        self.assertIn("follow-up sentence has 7 words", prose)
+        self.assertEqual(len(_sentences(prose)), 2)
+        # 转义美元只是去掉反斜杠，不改变任何计数单元
+        self.assertEqual(units_of(prose), units_of(tex.replace("\\$", "$")))
+
+    def test_escaped_dollar_pair_is_not_math(self):
+        tex = ("The variable costs \\$x\\$ and 42 tasks remain. "
+               "The tail sentence is intact.\n")
+        prose = prose_of(tex)
+        self.assertIn("$x$ and 42 tasks remain", prose)
+        self.assertIn("tail sentence is intact", prose)
+        self.assertEqual(len(_sentences(prose)), 2)
+        self.assertEqual(units_of(prose), units_of(tex.replace("\\$", "$")))
+
+    def test_real_inline_math_still_masked_after_escaped_dollar(self):
+        tex = ("The price is \\$100 and the formula $a+b$ is masked. "
+               "This tail stays.\n")
+        prose = prose_of(tex)
+        self.assertIn("$100", prose)
+        self.assertNotIn("a+b", prose)
+        self.assertIn("is masked", prose)
+        self.assertIn("This tail stays", prose)
+        self.assertEqual(len(_sentences(prose)), 2)
+
+    def test_paren_and_bracket_math_symmetric(self):
+        tex = ("Inline \\(x+1\\) math and 7 tasks. "
+               "Display \\[y=2\\] math and 8 tasks. "
+               "A line break \\\\[2pt] keeps the tail.\n")
+        prose = prose_of(tex)
+        self.assertNotIn("x+1", prose)
+        self.assertNotIn("y=2", prose)
+        for kept in ("math and 7 tasks", "math and 8 tasks",
+                     "A line break", "keeps the tail"):
+            self.assertIn(kept, prose)
+        self.assertEqual(len(_sentences(prose)), 3)
+        # \\[2pt] 是换行命令，不是 \[ 数学起点：后面的 2pt 也不该留下
+        self.assertNotIn("2pt", prose)
+
+
+class TestStageAssessment(unittest.TestCase):
+    """判据：triggers>=3 或 cv<0.45 → draft/rewrite；否则 polished/report_only。"""
+
+    def test_many_triggers_is_draft(self):
+        body = (
+            "Moreover, this is a crucial, robust, and comprehensive method.\n\n"
+            "Furthermore, the pipeline is significant, essential, and vital.\n\n"
+            "Additionally, we test alpha, beta, and gamma under the same load.\n\n"
+            "In addition, we compare red, green, and blue on one machine.\n\n"
+            "Overall, the approach delivers a comprehensive, robust gain.\n\n"
+            "Moreover, the system provides significant and essential support.\n\n"
+            "Furthermore, we measure width, height, and depth for each sample.\n\n"
+            "Additionally, the results are crucial and comprehensive.\n\n"
+            "In conclusion, the method is essential and significant.\n\n"
+            "Overall, we log input, output, and cache counts for every call.\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, body)
+        stage = result.stage_assessment
+        self.assertGreaterEqual(stage["triggers"], 3)
+        self.assertEqual(stage["stage"], "draft")
+        self.assertEqual(stage["advice"], "rewrite")
+
+    def test_low_cv_is_draft_even_with_few_triggers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, UNIFORM_POS)
+        stage = result.stage_assessment
+        self.assertLess(stage["cv"], 0.45)
+        self.assertEqual(stage["stage"], "draft")
+        self.assertEqual(stage["advice"], "rewrite")
+
+    def test_healthy_polished_is_report_only(self):
+        body = NORMAL_1 + "\n\n" + NORMAL_2 + "\n\n" + NORMAL_3
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, body)
+        stage = result.stage_assessment
+        self.assertLessEqual(stage["triggers"], 2)
+        self.assertGreaterEqual(stage["cv"], 0.45)
+        self.assertLessEqual(stage["cv"], 0.80)
+        self.assertEqual(stage["stage"], "polished")
+        self.assertEqual(stage["advice"], "report_only")
+        self.assertIn("建议不改", stage["reason"])
+        self.assertIn("建议不改", build_prompt(result))
+
+    def test_report_only_prompt_has_no_rewrite_items(self):
+        body = NORMAL_1 + "\n\n" + NORMAL_2 + "\n\n" + NORMAL_3
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, body)
+        prompt = build_prompt(result)
+        self.assertEqual(prompt, REPORT_ONLY_PROMPT)
+        self.assertIn("建议不改", prompt)
+        for banned in ("→", "逐条", "改法", "替换", "重写", "rewrite"):
+            self.assertNotIn(banned, prompt)
+        self.assertNotIn("\n1.", prompt)
+
+
 class TestCLI(unittest.TestCase):
     def test_exit_three_and_json_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -491,8 +600,11 @@ class TestCLI(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["tool"], "factscribe")
         self.assertEqual(payload["command"], "style")
-        for key in ("metrics", "findings", "paragraphs", "thresholds", "disclaimer"):
+        for key in ("metrics", "findings", "paragraphs", "thresholds", "disclaimer",
+                    "stage_assessment"):
             self.assertIn(key, payload)
+        self.assertEqual(set(payload["stage_assessment"]),
+                         {"stage", "advice", "reason", "triggers", "cv"})
         self.assertIn("CONNECTIVE_DENSITY", {f["code"] for f in payload["findings"]})
         self.assertIn("不评估", payload["disclaimer"])
         self.assertIn("规避", payload["disclaimer"])
@@ -525,6 +637,17 @@ class TestCLI(unittest.TestCase):
         payload = json.loads(proc.stdout)
         self.assertIn("prompt", payload)
         self.assertLessEqual(len(payload["prompt"]), 400)
+        self.assertEqual(payload["stage_assessment"]["advice"], "rewrite")
+
+    def test_report_only_prompt_cli_is_one_sentence(self):
+        body = NORMAL_1 + "\n\n" + NORMAL_2 + "\n\n" + NORMAL_3
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, body)
+            proc = run_style(root, "--prompt")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stdout.strip(), REPORT_ONLY_PROMPT)
+        self.assertEqual(len(proc.stdout.strip().splitlines()), 1)
+        self.assertNotIn("→", proc.stdout)
 
     def test_paragraphs_payload(self):
         with tempfile.TemporaryDirectory() as tmp:

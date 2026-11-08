@@ -207,6 +207,7 @@ def cmd_style(args) -> int:
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
+                       stage_assessment=dict(result.stage_assessment),
                        disclaimer=DISCLAIMER,
                        rules=rules_path)
     if args.prompt:

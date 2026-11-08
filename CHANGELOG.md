@@ -100,6 +100,22 @@ and will not change without a major version bump.
 ### Changed
 - SPEC §8.2: `FACT_UNUSED_IN_SPAN` is now yellow/3 (was red/1);
   `FACT_OUT_OF_SPAN` and `DUPLICATE_VALUE` triggers are spelled out.
+- `style` (batch 71): adds `stage_assessment`
+  (`draft|polished` / `rewrite|report_only`). Draft (`triggers >= 3` or
+  `cv < 0.45`) keeps the itemised rewrite prompt; polished reports only and
+  `--prompt` emits the single sentence
+  `指标健康，建议不改；强行改写有降低自然度风险`. Blind reviews showed the
+  rewrite prompt helps LLM drafts but harms polished prose. See SPEC-V3.0 §12
+  and `docs/implementation/STYLE-V3.md`.
+
+### Fixed
+- `style` (batch 71): `\$` is now treated as a literal dollar sign, not the
+  start of math mode. Previously a price such as `\$0.0486` masked the rest of
+  the paragraph/file, undercounting words, sentences, paragraphs, rhythm
+  plateaus and shifting sentence-length CV. `\(...\)`, `\[...\]` and the
+  `\\[2pt]` line break now share the same escape-first rule. Corrected
+  baselines: `paper/` 6390→6924 words and 368→397 sentences; `paper-zh/`
+  10059→10893 words and 390→421 sentences. `tests/test_style.py` (256 cases).
 
 ## [1.1.0] — 2026-11-07
 

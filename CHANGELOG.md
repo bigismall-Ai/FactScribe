@@ -10,6 +10,10 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- `INPUT_TARGET_MISSING` (red/5, R-05): `\input`/`\include`/`\subfile`
+  closure targets are now checked for existence (`.tex` auto-appended);
+  a missing target is red (exit 5) instead of silently dropped. Targets inside
+  comments/verbatim are ignored. Registered in SPEC §8.1.
 - `UNUSED_BIB` (yellow/3, R-11): a bib entry that the scan closure never cites is
   now a yellow finding (previously an info hint). Exemptions: `\nocite{*}`,
   per-key `\nocite{key}`, and the new `bib_allow_unused = ["key", ...]` field

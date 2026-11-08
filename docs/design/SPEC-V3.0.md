@@ -829,6 +829,7 @@ python3 tools/spec_lint.py --no-construction
 | BINDING_ATTRIBUTION | 顺序归属不符 | 一句多 fact 时第 k 个 token 不属第 k 条 fact | red | 1 | §11.2 |
 | NONQUANT_BACKS_QUANT | 非定量 fact 背定量数字 | 标记组里没有定量 fact，却有数字 token | red | 1 | §11.2 |
 | TABLE_UNBOUND | 表格 cell 回不到账 | 表格内数字不在任何 fact 值域，且没有 cell→fact 映射 | red | 5 | R-06 |
+| INPUT_TARGET_MISSING | 闭包目标缺失 | `\input`/`\include`/`\subfile` 展开时目标文件（含自动补 `.tex`）不存在 | red | 5 | R-05 |
 | UNSCANNED_TEX | tex 未被扫描 | 文件在 glob 命中集但不在审计闭包 | yellow | 3 | R-05 |
 | LOW_BINDING_RATE | 内联绑定率过低 | 绑定率 < 50% 且分母 ≥ 4 | yellow | 3 | R-03 |
 | ARITH_IN_BODY | 算术/计数器命令产生数字 | v1 的 `\the/\value/\setcounter` 等；v3 的 `\numexpr/\dimexpr/\inteval` 改报 COMPUTED_VALUE_UNREGISTERED | red | 1 | R-01A |
@@ -942,7 +943,7 @@ python3 tools/spec_lint.py --no-construction
 | BINDING_ATTRIBUTION | 顺序归属不符 | 一句多 fact 时第 k 个数字不属第 k 条 | 见 §8.1 | 见 §8.1 | R-03（2-S1） |
 | FACT_SET_OVERLAP | 标记组 fact 集合重叠 | 同句多组指向有交集 | red | 1 | R-03（2-S1） |
 | CO_CLAIM_ASYMMETRIC | co_claim 非对称 | 只有一侧声明 co_claim | red | 1 | R-03 |
-| FACT_UNUSED_IN_SPAN | 正文里只剩指代 | 定量 fact 的 `\fact{}` 留在正文，但正文该句没有任何数字承载它、数字只在 `\appendix` 之后出现（另记 `ASSERTION_DRIFT`，多码原则见 §8 开头） | yellow | 3 | R-03 |
+| FACT_UNUSED_IN_SPAN | 正文里只剩指代 | 定量 fact 的 `\fact{}` 留在正文，但正文该句没有任何数字承载它、数字只在 `\appendix` 之后出现（带标记或同值裸数字皆算；另记 `ASSERTION_DRIFT`，多码原则见 §8 开头） | yellow | 3 | R-03 |
 | FACT_OUT_OF_SPAN | fact 出现在不应出现的跨度 | `role` ∈ 正文角色（abstract/introduction/methods/results/discussion/conclusion/background/related/analysis），而它的标记只在 `\appendix` 之后出现（另记 `ASSERTION_DRIFT`） | red | 1 | R-03 |
 | NONQUANT_BACKS_QUANT | 非定量 fact 背定量数字 | 机制陈述授权数字 | 见 §8.1 | 见 §8.1 | R-03 |
 | FACT_UNKNOWN_ID | 引用账上不存在的 fact id | id 缺失 | 见 §8.1（合并到 `UNKNOWN_FACT_MARKER`） | 见 §8.1 | R-03 |

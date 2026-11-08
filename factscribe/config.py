@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .facts import Fact, canon_text, fact_value_keys, latex_display
 from .constants import SEV_INFO
+from .texrules import strip_comments_and_verbatim
 
 # --------------------------------------------------------------------------
 # TOML 读写（3.11+ 用 tomllib；3.10 用内置极简解析器兜底）
@@ -203,6 +204,9 @@ class Config:
     frac_allow: list = field(default_factory=list)         # V3：允许的 \frac 登记
     inline_images_allow: list = field(default_factory=list)  # V3：行内小图登记
     bib_allow_unused: list = field(default_factory=list)     # R-11：UNUSED_BIB 人签白名单
+    # R-05：闭包展开时找不到的 \input/\include/\subfile 目标，
+    # 元素为 (声明文件, 目标, 行号)。由 load_sections 填充，audit 判红。
+    missing_inputs: list = field(default_factory=list)
 
     @property
     def is_v3(self) -> bool:
@@ -883,7 +887,8 @@ def _wrapper_calls(text: str, wrappers: dict[str, tuple[str, str]]):
     for name, (argn, template) in wrappers.items():
         pat = re.compile(r"\\%s\s*(?:\[[^\]]*\])?\s*\{([^{}]*)\}" % re.escape(name))
         for m in pat.finditer(text):
-            yield template.replace("#" + argn, m.group(1).strip())
+            line = text.count("\n", 0, m.start()) + 1
+            yield template.replace("#" + argn, m.group(1).strip()), line
 
 
 def load_sections(cfg: Config) -> list[tuple[str, str]]:
@@ -891,8 +896,10 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     + 纯 `\\input` 包装宏展开（V2.2 R-05 / 内部 B1）。
 
     文件边界不是句子边界（R-02）；这里只负责把「会被编译进 PDF 的文本文件」
-    收齐，拼流与切句交给 texscan。
+    收齐，拼流与切句交给 texscan。闭包目标不存在时记进 ``cfg.missing_inputs``，
+    由 audit 判 ``INPUT_TARGET_MISSING``（R-05）：不存在的目标不会静默放行。
     """
+    cfg.missing_inputs = []
     if cfg.section_files:
         # V3 形态 C：显式章节清单（不是 glob）。闭包仍从这些文件各自的
         # `\input` 展开，但不会把目录里同名的无关 main.tex 也卷进来。
@@ -917,32 +924,38 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     seen: dict[str, Path] = dict(found)
     queue: list[Path] = list(found.values())
 
-    def add_ref(ref: str, base_dir: Path) -> bool:
+    def add_ref(ref: str, bases: list[Path], src_rel: str, line: int) -> bool:
         ref = ref.strip()
         if not ref or "\\" in ref or "#" in ref:
             return False
-        for candidate in (base_dir / ref, base_dir / (ref + ".tex")):
-            if not candidate.is_file():
-                continue
-            try:
-                rel = candidate.resolve().relative_to(cfg.root.resolve()).as_posix()
-            except ValueError:
-                return False
-            if rel in seen:
-                continue
-            seen[rel] = candidate
-            queue.append(candidate)
-            return True
+        for base_dir in bases:
+            for candidate in (base_dir / ref, base_dir / (ref + ".tex")):
+                if not candidate.is_file():
+                    continue
+                try:
+                    rel = candidate.resolve().relative_to(cfg.root.resolve()).as_posix()
+                except ValueError:
+                    return False
+                if rel in seen:
+                    return False
+                seen[rel] = candidate
+                queue.append(candidate)
+                return True
+        entry = (src_rel, ref, line)
+        if entry not in cfg.missing_inputs:
+            cfg.missing_inputs.append(entry)
         return False
 
     while True:
-        # 普通 \input 闭包
+        # 普通 \input 闭包（注释/verbatim 里的 \input 不算引用，避免误判）
         while queue:
             p = queue.pop(0)
             text = _read_text(p, cfg.root)
-            for m in _INPUT_RE.finditer(text):
-                add_ref(m.group(1), p.parent)
-                add_ref(m.group(1), cfg.root)
+            body = strip_comments_and_verbatim(text)
+            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            for m in _INPUT_RE.finditer(body):
+                line = body.count("\n", 0, m.start()) + 1
+                add_ref(m.group(1), [p.parent, cfg.root], src_rel, line)
         # 包装宏：定义可能出现在后加载的文件里，故反复扫到稳定为止
         wrappers: dict[str, tuple[str, str]] = {}
         for p in list(seen.values()):
@@ -951,9 +964,10 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
             break
         grew = False
         for p in list(seen.values()):
-            text = _read_text(p, cfg.root)
-            for ref in _wrapper_calls(text, wrappers):
-                if add_ref(ref, p.parent) or add_ref(ref, cfg.root):
+            text = strip_comments_and_verbatim(_read_text(p, cfg.root))
+            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            for ref, line in _wrapper_calls(text, wrappers):
+                if add_ref(ref, [p.parent, cfg.root], src_rel, line):
                     grew = True
         if not grew:
             break

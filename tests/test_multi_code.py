@@ -244,5 +244,58 @@ class DuplicateValueTest(unittest.TestCase):
         self.assertNotIn("DUPLICATE_VALUE", codes)
 
 
+BODY_POINTER_NAKED = """\\section{Results}
+The resolved count is \\fact{A1} as detailed in the appendix.
+
+\\appendix
+The measured count was 0.625.
+"""
+
+BODY_COUNT = {"id": "A1", "claim": "On assembly the resolved count is 0.625.",
+              "value": "0.625", "display": ["0.625"], "role": "results"}
+
+
+class FactUnusedInSpanNakedNumberTest(unittest.TestCase):
+    """批 62：附录里的同值数字可以不带 \\fact{} 标记。"""
+
+    def test_naked_number_in_appendix_still_unused_in_span(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(Path(tmp), BODY_POINTER_NAKED,
+                                [dict(BODY_COUNT)])
+            code, codes = audit(root)
+        self.assertIn("FACT_UNUSED_IN_SPAN", codes)
+        self.assertIn("ASSERTION_DRIFT", codes)
+        self.assertNotEqual(code, 0)
+
+
+BODY_MISSING_INPUT = """\\section{Results}
+On assembly the resolved count is \\fact{A1}{0.625}.
+\\input{sections/not-here}
+"""
+
+
+class InputTargetMissingTest(unittest.TestCase):
+    """批 62：闭包展开时目标不存在 → 红，exit 5（覆盖缺口）。"""
+
+    def test_missing_input_target_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(Path(tmp), BODY_MISSING_INPUT,
+                                [dict(BODY_COUNT)])
+            code, codes = audit(root)
+        self.assertIn("INPUT_TARGET_MISSING", codes)
+        self.assertEqual(code, 5)
+
+    def test_existing_input_target_is_clean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(Path(tmp), BODY_MISSING_INPUT.replace(
+                "\\input{sections/not-here}",
+                "\\input{sections/extra}"), [dict(BODY_COUNT)])
+            (root / "sections" / "extra.tex").write_text(
+                "The replication agrees.\n", encoding="utf-8")
+            code, codes = audit(root)
+        self.assertNotIn("INPUT_TARGET_MISSING", codes)
+        self.assertEqual(code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

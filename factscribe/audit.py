@@ -14,8 +14,8 @@ from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
                         unused_bib_entries, valid_stable_id)
 from .config import (Config, ConfigError, _glob_paths, all_tex_files,
                      facts_digest, git_commit, load_toml)
-from .constants import (CONFIDENCE_OK, KINDS_OK, SEV_INFO, SEV_RED,
-                        SEV_YELLOW, VERSION)
+from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
+                        SEV_RED, SEV_YELLOW, VERSION)
 from .facts import (Fact, ExprError, _cycles, _declared_number, canon_text,
                     eval_expr, literal_tokens, number_key, sha256_file)
 from .texrules import (adjacency_hits, arith_hits, display_hits,
@@ -936,6 +936,15 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
 
     red += _display_issues(facts)
     red += _source_rule_issues(cfg, sections)
+    # R-05：闭包展开时 \input/\include/\subfile 指向不存在的文件——正文
+    # 可能整段没进审计，属覆盖缺口（exit 5），不许静默放行。
+    for src_rel, ref, line in getattr(cfg, "missing_inputs", []):
+        red.append(Issue(
+            "INPUT_TARGET_MISSING",
+            "\\input 目标 %r 不存在（%s:%s）——闭包展开失败，"
+            "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
+            location="%s:%s" % (src_rel, line), token=ref,
+            exit_code=EXIT_INTEGRITY))
     if cfg.is_v3:
         red += _v3_source_issues(cfg, facts, sections)
         # 批 58：同值重复入账（§8.1 DUPLICATE_VALUE）也进审计面；v1 保持

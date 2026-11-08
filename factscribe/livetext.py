@@ -16,9 +16,9 @@
    `ASSERTION_DRIFT`（红，多码原则见 SPEC §8）。
 4. 定量 fact 的标记留在正文，但正文那一句里没有任何数字承载它（只剩
    「见附录／见 Table X／如前述」这类指代），数字只在 `\\appendix` 之后
-   出现 → `FACT_UNUSED_IN_SPAN`（黄，exit 3）＋ `ASSERTION_DRIFT`（红）。
-   良性近邻（正文句带数字、附录只是同值复述）不触发：判据看「正文有没有
-   数字承载」，不看有没有附录。
+   出现（带 `\\fact{}` 标记或同值裸数字都算） → `FACT_UNUSED_IN_SPAN`
+   （黄，exit 3）＋ `ASSERTION_DRIFT`（红）。良性近邻（正文句带数字、
+   附录只是同值复述）不触发：判据看「正文有没有数字承载」，不看有没有附录。
 """
 from __future__ import annotations
 
@@ -154,10 +154,13 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
     body_carries: dict[str, bool] = {}
     appendix_carries: dict[str, bool] = {}
     appendix_line: dict[str, int] = {}
+    appendix_texts: list[str] = []
     for rel, text in sections:
         stripped = _strip_comments(text)
         app = re.search(r"\\appendix\b", stripped)
         appendix_line[rel] = (stripped.count("\n", 0, app.start()) + 1) if app else 0
+        if app:
+            appendix_texts.append(stripped[app.end():])
         live_tex, marks = _live_markers(text)
         for m in marks:
             line = stripped.count("\n", 0, m["pos"]) + 1
@@ -192,6 +195,7 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
             continue
 
         # 规则 2：标记活着，但句子里没有任何数字，也没有 \\fact{ID}{值} 的第二参数。
+        drift_emitted = False
         if f.quantitative and not any(has_value for _rel, _line, has_value in marks):
             sentences = live_sentences.get(f.id, [])
             if sentences and not any(fact_value_keys(s) for s in sentences):
@@ -200,6 +204,7 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                     "fact %r 的标记所在句子没有任何数字——定量值不是源文本字面量"
                     "（计数器/表达式算出来的数无法核对）" % f.id,
                     location=loc, token=f.id))
+                drift_emitted = True
 
         # 规则 3：正文角色的事实，标记只在 \\appendix 之后出现。
         role = (f.role or "").strip().lower()
@@ -218,19 +223,27 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                     "结论被搬进附录，正文角色对不上（S-03）" % (f.id, f.role),
                     location=loc, token=f.id))
 
-        # 规则 4（批 58）：定量 fact 的标记在正文只剩指代，数字只在附录里。
+        # 规则 4（批 58/62）：定量 fact 的标记在正文只剩指代，数字只在附录里。
+        # 附录里的数字可以带 \fact{} 标记，也可以只是同值的裸数字
+        # （「The measured count was 42.」）——两种都算「正文跨度没承载」。
         has_quant = bool(f.quantitative or f.value.strip())
+        appendix_has_value = False
+        if has_quant:
+            keys = set(f.value_keys or fact_value_keys(f.value))
+            appendix_has_value = any(
+                keys & fact_value_keys(region) for region in appendix_texts)
         if (has_quant and body_marker_count.get(f.id)
                 and not body_carries.get(f.id)
-                and appendix_carries.get(f.id)):
+                and (appendix_carries.get(f.id) or appendix_has_value)):
             out.append(Issue(
                 "FACT_UNUSED_IN_SPAN",
                 "fact %r 的 \\fact{} 标记留在正文，但正文这一句没有任何数字承载 "
                 "value=%r（只剩指代）——定量断言不在正文跨度里，数字只出现在 "
                 "\\appendix 之后（R-03）" % (f.id, f.value),
                 location=loc, token=f.id, severity=SEV_YELLOW))
-            out.append(Issue(
-                "ASSERTION_DRIFT",
-                "fact %r 的定量断言不在正文跨度里：正文只剩指代，数字落在附录"
-                % f.id, location=loc, token=f.id))
+            if not drift_emitted:
+                out.append(Issue(
+                    "ASSERTION_DRIFT",
+                    "fact %r 的定量断言不在正文跨度里：正文只剩指代，数字落在附录"
+                    % f.id, location=loc, token=f.id))
     return out

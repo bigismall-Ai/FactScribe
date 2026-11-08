@@ -374,9 +374,13 @@ derived_from = []
 
     def test_resolve_failure_degrades_to_unverified(self):
         # 进程内打桩：subprocess 里改不了全局，故直接调 run_audit
-        orig_ax, orig_doi = paperkit._resolve_arxiv, paperkit._resolve_doi
-        paperkit._resolve_arxiv = lambda _id: ("unverified", "离线（测试桩）")
-        paperkit._resolve_doi = lambda _id: ("unverified", "离线（测试桩）")
+        # 批 64：拆包后 run_audit 用的是 factscribe.audit 里的函数，
+        # 打桩必须打在真正被调用的模块上，否则 CI（有网）会走真请求、把
+        # unverified 变成 verified，测试失败。
+        from factscribe import audit as audit_mod
+        orig_ax, orig_doi = audit_mod._resolve_arxiv, audit_mod._resolve_doi
+        audit_mod._resolve_arxiv = lambda _id: ("unverified", "离线（测试桩）")
+        audit_mod._resolve_doi = lambda _id: ("unverified", "离线（测试桩）")
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 root = make_project(tmp, sections={"a.tex": "见 \\cite{chen2023}。\n"},
@@ -389,7 +393,7 @@ derived_from = []
                 self.assertIn("CITE_UNVERIFIED", [h.code for h in hints])
                 self.assertIn("CITE_UNVERIFIED", [y.code for y in yellow])
         finally:
-            paperkit._resolve_arxiv, paperkit._resolve_doi = orig_ax, orig_doi
+            audit_mod._resolve_arxiv, audit_mod._resolve_doi = orig_ax, orig_doi
 
 
 class TestNotSilentlyPassing(unittest.TestCase):

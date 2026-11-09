@@ -13,6 +13,8 @@ from .config import (ConfigError, load_config, load_facts, load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .pdfgate import verify_pdf
+from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
+                        priority_payload, render_bundle, resolve_conflicts)
 from .protect import compare as compare_protect
 from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
@@ -111,6 +113,16 @@ def build_parser() -> argparse.ArgumentParser:
                          "；fnmatch 对相对路径匹配")
     sp.add_argument("--no-default-ignore", action="store_true",
                     help="关掉默认忽略表（排查用）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "prescribe",
+        help="处方层：只给可执行改法（数据文件），不参与判据、不产生分数")
+    sp.add_argument("names", nargs="*", metavar="NAME",
+                    help="处方名（可多个；多个一起输出时按优先序裁决并标「让位」）")
+    sp.add_argument("--list", action="store_true", help="列出全部处方")
+    sp.add_argument("--for", dest="for_code", default=None, metavar="CODE",
+                    help="按错误码查处方（例：HEADING_ECHO）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
@@ -306,12 +318,89 @@ def cmd_tide(args) -> int:
     return code
 
 
+def cmd_prescribe(args) -> int:
+    """处方层：只输出处方原文或清单；成功永远 EXIT_OK，不产生 findings。"""
+    prescriptions = load_prescriptions()
+    names = list(getattr(args, "names", None) or [])
+    for_code = (getattr(args, "for_code", None) or "").strip().upper()
+
+    if args.list and (names or for_code):
+        raise ConfigError("--list 不能与处方名或 --for 同时使用")
+    if for_code and names:
+        raise ConfigError("--for 不能与处方名同时使用")
+
+    if args.list:
+        ordered = sorted(prescriptions.values(),
+                         key=lambda p: (p.level_number, p.name))
+        payload = _payload(
+            "prescribe", "ok", EXIT_OK,
+            prescriptions=[p.as_dict(include_text=False) for p in ordered],
+            priority=priority_payload(),
+            conflicts=[], suppressed={}, note=NOTE)
+        lines = ["== factscribe prescribe ==",
+                 "处方：%d 条（只给改法；不参与判据、不产生分数）"
+                 % len(ordered), ""]
+        for p in ordered:
+            lines.append("%-22s 优先 %d %-8s %s"
+                         % (p.name, p.level_number, p.level_label,
+                            "、".join(p.target_codes)))
+        _emit(payload, "\n".join(lines), args.json)
+        return EXIT_OK
+
+    if for_code:
+        matched = prescriptions_for(for_code, prescriptions)
+        resolution = resolve_conflicts([p.name for p in matched],
+                                       prescriptions)
+        payload = _payload(
+            "prescribe", "ok", EXIT_OK,
+            for_code=for_code,
+            prescriptions=[p.as_dict() for p in matched],
+            conflicts=resolution["conflicts"],
+            suppressed=resolution["suppressed"], note=NOTE)
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif not matched:
+            print("没有处方治 %s（处方层不处理该码）" % for_code)
+        else:
+            print(render_bundle([p.name for p in matched], prescriptions))
+        return EXIT_OK
+
+    if not names:
+        raise ConfigError(
+            "prescribe 需要处方名、--list 或 --for <错误码>"
+            "（例：factscribe prescribe heading-shorten）")
+    unknown = [n for n in names if n not in prescriptions]
+    if unknown:
+        raise ConfigError(
+            "没有处方 %s；可用：%s"
+            % ("、".join(repr(n) for n in unknown),
+               "、".join(sorted(prescriptions))))
+
+    if len(names) == 1 and not args.json:
+        print(prescriptions[names[0]].text.rstrip())
+        return EXIT_OK
+
+    resolution = resolve_conflicts(names, prescriptions)
+    if args.json:
+        payload = _payload(
+            "prescribe", "ok", EXIT_OK,
+            prescriptions=[prescriptions[n].as_dict()
+                           for n in resolution["order"]],
+            conflicts=resolution["conflicts"],
+            suppressed=resolution["suppressed"], note=NOTE)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(render_bundle(names, prescriptions))
+    return EXIT_OK
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
-                "protect": cmd_protect, "tide": cmd_tide}
+                "protect": cmd_protect, "tide": cmd_tide,
+                "prescribe": cmd_prescribe}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

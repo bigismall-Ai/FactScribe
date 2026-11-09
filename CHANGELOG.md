@@ -7,6 +7,19 @@ paperkit is a pre-1.0-grade tool in behaviour but its gate contract is already
 frozen (see `SPEC-V1.md` §5): exit codes and violation codes are the public API
 and will not change without a major version bump.
 
+## [1.3.0] - 2026-11-10
+
+### Added
+- `tide`: a transactional change record. Rise, fall, blast radius and closure are all derived from file hashes; if anything does not close, nothing is written and the command exits 1.
+- `prescribe`: six executable prescriptions with forbidden moves and counterexamples. This layer adds no criteria and produces no score.
+- `style --doc`: Markdown and plain-text documents can be checked without a `paperkit.toml` project.
+- Term layer: 33 paper terms and 153 workspace process terms, with variant detection and synonym normalisation.
+- Rewrite rechecks: `HEADING_ECHO`, `HEADING_RELATION_CHANGED`, `HEADING_SUBJECT_LOST`, and `TERM_VARIANT`.
+
+### Changed
+- Both READMEs rewritten against measured facts: ten commands, 18 prose rules, 538 tests, and the 1.3.0 exit-code table.
+- `scripts/check-readme.py` now delegates prose and heading checks to `style --doc` instead of keeping a second copy of the rules.
+
 ## [1.2.0] - 2026-11-09
 
 ### Added

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""README 自检：用我们自己的规则检查两份 README。
+"""README 自检：事实项自己查，文风项交给 `style --doc`。
 
-检查项（与文风闸 v4、事实闸同口径）：
-  1. 命令名必须真实存在（对照 `factscribe --help`）；
-  2. 标题：中文 ≤12 字、英文 ≤8 词，且不含冒号/破折号/括号/问号；
-  3. 正文不出现插入式破折号（—— / —）；
+分工：
+  1. 文风与标题规则一律调用 `python3 -m factscribe style --doc README.md README.en.md`，
+     本脚本不再重复实现第二套判据；
+  2. 命令名必须真实存在（对照 `factscribe --help`）；
+  3. 十个命令必须都写进两份 README；
   4. 相对链接的目标文件必须存在；
   5. README 里写的测试数必须等于实际跑出来的数。
 
@@ -18,6 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = ["README.md", "README.en.md"]
+COMMANDS = ["check", "audit", "matrix", "build", "preamble",
+            "verify-pdf", "style", "protect", "tide", "prescribe"]
 ok = True
 
 
@@ -31,10 +34,23 @@ def good(msg):
     print(f"  \u2713 {msg}")
 
 
+def run(args):
+    return subprocess.run([sys.executable, *args], cwd=ROOT,
+                          capture_output=True, text=True)
+
+
 def main():
-    help_txt = subprocess.run([sys.executable, "-m", "factscribe", "--help"],
-                              cwd=ROOT, capture_output=True, text=True).stdout
-    for cmd in ("check", "audit", "protect", "style", "verify-pdf", "matrix"):
+    print("[文风与标题：交给 style --doc]")
+    styled = run(["-m", "factscribe", "style", "--doc", *FILES])
+    if styled.returncode == 0:
+        good("style --doc 两份 README 均为 0 条")
+    else:
+        bad(f"style --doc 退出码 {styled.returncode}")
+        print(styled.stdout)
+        print(styled.stderr)
+
+    help_txt = run(["-m", "factscribe", "--help"]).stdout
+    for cmd in COMMANDS:
         (good if cmd in help_txt else bad)(f"命令 {cmd}")
 
     for name in FILES:
@@ -44,35 +60,25 @@ def main():
             continue
         text = path.read_text(encoding="utf-8")
         print(f"[{name}]")
-        for line in text.splitlines():
-            m = re.match(r"^(#{1,3}) (.+)$", line)
-            if not m or m.group(1) == "#":
-                continue
-            head = m.group(2).strip()
-            cn = len(re.findall(r"[\u4e00-\u9fff]", head))
-            words = len(re.findall(r"[A-Za-z][A-Za-z'-]*", head))
-            if cn and cn > 12:
-                bad(f"标题过长（中文 {cn} 字）：{head}")
-            if words and not cn and words > 8:
-                bad(f"标题过长（英文 {words} 词）：{head}")
-            if re.search(r"[：:—–（）()？?。]", head):
-                bad(f"标题含标点或解释：{head}")
-        if "——" in text or "—" in text:
-            bad(f"{name} 出现破折号")
+        missing = [cmd for cmd in COMMANDS if f"`{cmd}`" not in text]
+        if missing:
+            bad(f"命令未写入：{', '.join(missing)}")
+        else:
+            good(f"十个命令已写齐（{len(COMMANDS)} 条）")
         for link in re.findall(r"\]\(([^)]+)\)", text):
             if link.startswith("http"):
                 continue
             if not (ROOT / link).exists():
                 bad(f"{name} 链接失效：{link}")
-        good(f"{name} 结构检查完成")
+        good(f"{name} 链接检查完成")
 
-    out = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"],
-                         cwd=ROOT, capture_output=True, text=True).stderr
+    out = run(["-m", "unittest", "discover", "-s", "tests"]).stderr
     m = re.search(r"Ran (\d+) tests", out)
     actual = int(m.group(1)) if m else -1
     claimed = set()
     for name in FILES:
-        claimed |= {int(x) for x in re.findall(r"(\d+) tests", (ROOT / name).read_text(encoding="utf-8"))}
+        text = (ROOT / name).read_text(encoding="utf-8")
+        claimed |= {int(x) for x in re.findall(r"(\d+)\s*(?:tests|例)", text)}
     if actual > 0 and claimed and actual not in claimed:
         bad(f"README 写 {sorted(claimed)} 例，实际 {actual}")
     else:

@@ -2,7 +2,7 @@
 """版本号、退出码分层与严重级别常量。"""
 from __future__ import annotations
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 SCHEMA_VERSION = "1.0"
 
 CONFIDENCE_OK = {"high", "med", "low"}

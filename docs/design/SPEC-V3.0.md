@@ -1730,6 +1730,110 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 
 ---
 
+## 15. 改写后复检（批 87 增补）
+
+> 本节只约束 `factscribe style` 子命令。**不改 `audit` / `protect` 的判据与退出码**；
+> 新增规则全部黄牌，退出码仍只有 0（无新违规）与 3（有黄牌），永不返回 1。
+> 起因：批 84 用 v4 规则改写两篇论文，盲评发现 6 处退步。v4 的 `TERM_FIRST_IN_HEADING`
+> 只查「词在不在首句」，于是**复述标题、加垫话、删关系词**都能过关；v4 也没有
+> 「这次编辑引入了什么新病」的回路。
+
+### 15.0 共同输入与输出
+
+- 输入同 §13.0：`prose_of()` 等长遮罩后的正文；标题规则单独扫描源文件标题。
+- **首句**＝标题结束后第一个非空句子。标题若没有自己的正文（下一节标题先出现），
+  本节不判 `HEADING_ECHO`；行内 `\paragraph` 与首句同在一行时仍算本节正文。
+- **改写前目录**：`style <after> --diff <before>`。`before` 必须是可加载的
+  paperkit 项目（含 `paperkit.toml`），相对路径按当前工作目录解析；缺失或坏配置
+  → `CONFIG_INVALID`（exit 2）。
+- 每条 finding 固定六字段：`code / severity / file / line / text / suggestion`；
+  severity 恒为 `yellow`。
+
+### 15.1 `HEADING_ECHO`（黄）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 该节标题＋标题后第一个非空句 |
+| 算法 | 取首句实义词减去标题实义词、再减去 `[heading_echo]` 的泛化词，得到「新实义」；数量 `< heading_echo_min_new_terms` 即报。英文按词（大小写、所有格、常见复数归一），中文按字（先删停用短语/停用字与泛化词）。另两种伪满足直接报：①首句以标题开头后紧跟垫话（中文 `里/中/方面/来说/而言/要先/先要/先问/首先要/需要先/本节讨论/这里讨论…`；英文 `is about/is concerned with/is discussed/we discuss/this section/here we…`）；②纯设问（「什么是 X？」这类没有新实义的设问，会先被上面的阈值分支抓住） |
+| 阈值 | `thresholds.heading_echo_min_new_terms` 默认 `1`；严格小于才报 |
+| 误报边界 | 真正的定义式/断言式首句会引入新实义，不报；例：「预注册是在收集数据前固定假设与分析计划的做法」「Preregistration is fixing the hypotheses and the analysis plan before data collection」 |
+| 漏报边界 | 同义改写或用代词替换标题词时不报；属启发式接受 |
+| 对应码 | `HEADING_ECHO` |
+| 建议文案 | 「首句只是复述标题；改成一句定义或可检验的断言（例：预注册是在收集数据前固定假设与分析计划的做法）。复述标题、垫话（「相关工作里，」）与设问都不算定义。」 |
+
+泛化词（`[heading_echo] generic_terms_en/generic_terms_zh`）只用于「新实义」计数，
+例如 `limitations` / `限制` 不算新实义；标题本身仍然保留这些词。
+
+### 15.2 `TERM_FIRST_IN_HEADING` 文案修订（判定逻辑不变）
+
+- **删除**旧建议里的 `本节讨论 X` 范例——它本身就是复述式，会教模型写垫话。
+- 定义式范例改为：「预注册是在收集数据前固定假设与分析计划的做法」。
+- 建议文案**明写禁止三种伪满足**：复述标题、垫话（「相关工作里，」）、设问。
+- 判定逻辑（术语抽取、首句包含、白名单、单点阈值）不变；复述式首句由
+  §15.1 的 `HEADING_ECHO` 接手报黄。
+
+### 15.3 `HEADING_RELATION_CHANGED`（黄，需 `--before`）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 改写前/后的标题，按文件、按标题出现顺序配对；命令层级（`\section`/`\subsection`…）不同则不配对 |
+| 算法 | 从标题抽关系词集合（配置项 `heading_relation_words`，默认 `versus / vs / and / or / not / without / 对 / 与 / 及 / 不是`；英文按词边界，中文按子串）。旧集合非空且与新集合不相等 → 报。只新增关系词（旧集合为空）不报；标题文字完全未变则不判 |
+| 阈值 | 出现即报（单点） |
+| 误报边界 | 只改措辞、保留原关系词不报；标题层级/数量变化时不强行配对 |
+| 漏报边界 | 用同义词替换关系词（如 `and`→`以及`）可能漏；启发式接受 |
+| 对应码 | `HEADING_RELATION_CHANGED` |
+
+### 15.4 `HEADING_SUBJECT_LOST`（黄，需 `--before`）
+
+| 项 | 判据 |
+|---|---|
+| 输入 | 改写前/后的标题＋改后该节首句 |
+| 算法 | 抽旧标题的实义成分：中文按分隔字（`的/和/与/及/在/对/从/为/是`）切段，去停用字/短语与泛化词，保留 ≥2 字段；英文按词、去停用词/泛化词/关系词，做轻量复数归一。某成分在新标题与改后首句里**都不出现** → 报。标题文字完全未变则不判 |
+| 阈值 | 出现即报（单点；一个标题一条，列出全部丢失成分） |
+| 误报边界 | 成分在新标题保留、或在新首句里写回来，都不报；改写前目录缺失时不运行 |
+| 漏报边界 | 同义词替换（`机制`→`机理`）不报；启发式接受 |
+| 对应码 | `HEADING_SUBJECT_LOST` |
+
+### 15.5 `style --diff <before 目录>`
+
+| 项 | 判据 |
+|---|---|
+| 命令 | `factscribe style <after> --diff <before> [--json] [--rules …]` |
+| 算法 | 先按常规跑改后全文，再按同一规则跑改前全文；按 `(code, file, 规范化 text)` 做**多重集差**，只留下改后多出来的条目。改前有、改后同样有 → 不报；改前有、改后更多 → 只报多出来的条目 |
+| 输出 | `findings/fired/summary/exit_code` 都以「新增」为准；改后全文指标仍原样输出；`--json` 顶层多一个 `diff` 块：`{"before": "...", "baseline_findings": N, "new_findings": M}` |
+| 退出码 | 无新增 → 0；有新增 → 3；永不 1 |
+| 兼容 | **不传 `--diff` 时行为与 v4 完全一致**（除 §15.1/§15.2 的新增与文案）；`HEADING_RELATION_CHANGED` 与 `HEADING_SUBJECT_LOST` 只在传 `--diff` 时运行 |
+
+### 15.6 明确不实现（写死）
+
+1. **标题语义相似度模型**——需要向量/模型，违背零 LLM 与可机械复算。
+2. **LLM 判分**——不引入任何模型调用；本闸保持离线、确定性。
+
+### 15.7 阈值总表（与 `style-rules.toml` 同表）
+
+| TOML 键 | 类型 | 默认 | 服务规则 |
+|---|---|---|---|
+| `thresholds.heading_echo_min_new_terms` | 非负整数 | `1` | `HEADING_ECHO` |
+| `heading_relation_words` | 字符串数组 | `["versus","vs","and","or","not","without","对","与","及","不是"]` | `HEADING_RELATION_CHANGED` |
+| `heading_echo.generic_terms_en` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
+| `heading_echo.generic_terms_zh` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
+| `heading_echo.meta_openers_en` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
+| `heading_echo.meta_openers_zh` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
+
+### 15.8 验收
+
+- `tests/test_style_v5.py`：四条新判据各 ≥3 例（正例/负例/边界）；
+- 批 84 的 6 个真实退步（EN-06、EN-10、ZH-04、ZH-06、ZH-08、ZH-09）各一个
+  3–5 行 LaTeX 最小复现夹具，断言被对应规则抓到；
+- 真正的定义式首句（中英各一）不被 `HEADING_ECHO` 报；
+- `--diff`：改前改后都不违规 → 不报；改前有、改后更多 → 只报新增；CLI 退出码 0/3；
+- 阈值可配：`heading_echo_min_new_terms`、`heading_relation_words` 改文件即改判定；
+- 对 `/tmp/v4-regen/en` 与 `/tmp/v4-regen/zh` 跑 `--diff` 能抓到上述 6 例，
+  且 `paper/`、`paper-zh/` 原文新增违规 ≤10 条（批 87 实测 0 条）；
+- `python3 -m unittest discover -s tests` 与 `./scripts/preflight-ci.sh` 全绿。
+
+---
+
 ## 附录 A｜V2.2 → V3.0 差异速查
 
 | 主题 | V2.2 | V3.0 |

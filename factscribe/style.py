@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""文风闸 v4：机械检测「公式化写作特征」，只出黄牌、不阻断、不改正文。
+"""文风闸 v4/v5：机械检测「公式化写作特征」，只出黄牌、不阻断、不改正文。
 
-规则清单见 ``docs/design/SPEC-V3.0.md`` §13：
+规则清单见 ``docs/design/SPEC-V3.0.md`` §13 与 §15：
 
 * 插入语破折号、标题过长/带解释、标题术语未在首句定义；
-* 节奏平台、同构三点并列在相邻段重复、套话连接词、空泛形容词、超长句。
+* 节奏平台、同构三点并列在相邻段重复、套话连接词、空泛形容词、超长句；
+* 改写后复检：首句复述标题（``HEADING_ECHO``）、标题关系词变化
+  （``HEADING_RELATION_CHANGED``）、旧标题主语丢失（``HEADING_SUBJECT_LOST``），
+  以及只报新增违规的 ``style --diff <before>``。
 
 * 本工具**不评估、也不试图规避任何 AI 检测器**。它只检测可机械复算的
   写法；输出是「文件:行 + 原文 + 具体改法」，不是「像 AI」的分数。
@@ -59,6 +62,8 @@ DEFAULT_RULES: dict = {
         "heading_max_chars_zh": 12,
         "heading_max_words_en": 8,
         "colloquial_triad_repeats": 2,
+        # v5 改写后复检：首句至少要引入这么多个新实义词，否则视为复述标题
+        "heading_echo_min_new_terms": 1,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -105,6 +110,27 @@ DEFAULT_RULES: dict = {
                       "从", "当", "为了", "通过", "由", "被", "把", "让",
                       "使", "一个", "一种", "本文", "本节", "每一", "每"],
     },
+    # v5：标题关系词。改写前后标题的这组词发生替换或删除即报黄。
+    "heading_relation_words": ["versus", "vs", "and", "or", "not", "without",
+                               "对", "与", "及", "不是"],
+    # v5：HEADING_ECHO 的可配词表（泛化词不算「新实义」；垫话开头视为复述式）
+    "heading_echo": {
+        "generic_terms_en": ["limitation", "problem", "issue", "result",
+                             "question", "thing", "aspect", "case", "point",
+                             "claim", "matter", "area", "topic", "subject",
+                             "part", "example", "work", "study", "approach",
+                             "method", "way"],
+        "generic_terms_zh": ["限制", "问题", "结果", "内容", "方面", "部分",
+                             "事情", "情况", "因素", "要点", "工作", "研究",
+                             "方法", "做法", "角度", "例子"],
+        "meta_openers_en": ["is about", "is concerned with", "is discussed",
+                            "we discuss", "this section", "this subsection",
+                            "in this section", "in this subsection", "here we"],
+        "meta_openers_zh": ["里", "中", "方面", "来说", "而言", "要先", "先要",
+                            "先问", "首先要", "需要先", "本节讨论", "本节讲",
+                            "这里讨论", "这一节讨论", "我们讨论", "本文讨论",
+                            "讨论的是", "讲的是", "谈的是"],
+    },
 }
 
 # 指标方向：True = 超过阈值触发；False = 低于阈值触发；单点指标用下限。
@@ -123,6 +149,10 @@ DIRECTIONS = {
     "heading_malformed": "at_least",
     "term_first_in_heading": "at_least",
     "colloquial_triad": "at_least",
+    # v5 改写后复检
+    "heading_echo": "at_least",
+    "heading_relation_changed": "at_least",
+    "heading_subject_lost": "at_least",
 }
 
 CODE_OF = {
@@ -140,14 +170,19 @@ CODE_OF = {
     "heading_malformed": "HEADING_MALFORMED",
     "term_first_in_heading": "TERM_FIRST_IN_HEADING",
     "colloquial_triad": "COLLOQUIAL_TRIAD",
+    # v5 改写后复检
+    "heading_echo": "HEADING_ECHO",
+    "heading_relation_changed": "HEADING_RELATION_CHANGED",
+    "heading_subject_lost": "HEADING_SUBJECT_LOST",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_TOO_LONG", "HEADING_MALFORMED",
-                 "TERM_FIRST_IN_HEADING", "HEDGE_STACK",
-                 "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE", "COLLOQUIAL_TRIAD",
-                 "PARAGRAPH_TEMPLATE", "REPEATED_OPENER", "RHYTHM_PLATEAU",
-                 "SENTENCE_UNIFORMITY"]
+                 "HEADING_ECHO", "HEADING_RELATION_CHANGED",
+                 "HEADING_SUBJECT_LOST", "TERM_FIRST_IN_HEADING",
+                 "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
+                 "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "REPEATED_OPENER",
+                 "RHYTHM_PLATEAU", "SENTENCE_UNIFORMITY"]
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9'’\-]*")
@@ -794,16 +829,299 @@ def _term_allowlist(rules: dict, project_root: Path) -> set[str]:
     return allow
 
 
-def _first_sentence_after(doc: _Doc, line: int) -> str:
-    """标题结束行之后的第一个非空句子（标题在 prose 里已被等长遮罩）。"""
+def _first_sentence_span_after(doc: _Doc, line: int,
+                               stop_line: int | None = None
+                               ) -> tuple[str, int]:
+    """标题结束行之后的第一个非空句子；返回 (文本, 绝对起点)。
+
+    ``stop_line`` 给定时，若该句落在下一个标题之后（本标题没有自己的正文），
+    返回空——避免拿下一节的句子判本节。
+    """
     if line < 1:
         line = 1
     base = _line_start(doc, line)
     for start, end in _sentences(doc.prose[base:], base):
         text = _norm_space(doc.prose[start:end])
-        if text:
-            return text
-    return ""
+        if not text:
+            continue
+        if stop_line is not None and _line_of(doc, start) >= stop_line:
+            return "", -1
+        return text, start
+    return "", -1
+
+
+def _first_sentence_after(doc: _Doc, line: int) -> str:
+    """标题结束行之后的第一个非空句子（标题在 prose 里已被等长遮罩）。"""
+    return _first_sentence_span_after(doc, line)[0]
+
+
+# --------------------------------------------------------------------------
+# v5：改写后复检（HEADING_ECHO / HEADING_RELATION_CHANGED /
+#     HEADING_SUBJECT_LOST / style --diff）
+# --------------------------------------------------------------------------
+
+_ECHO_STOP_EN = set(_TERM_STOP) | {
+    "these", "those", "this", "that", "there", "here", "it", "its", "they",
+    "their", "them", "we", "our", "us", "you", "your", "i", "my", "me",
+    "he", "she", "his", "her", "are", "is", "was", "were", "be", "been",
+    "being", "am", "do", "does", "did", "done", "have", "has", "had",
+    "having", "will", "would", "can", "could", "should", "may", "might",
+    "must", "shall", "not", "no", "nor", "only", "just", "also", "so",
+    "then", "than", "but", "if", "because", "as", "at", "by", "for", "from",
+    "in", "into", "of", "on", "or", "to", "with", "without", "and", "via",
+    "using", "toward", "towards", "about", "all", "any", "each", "every",
+    "some", "such", "same", "more", "most", "less", "least", "very",
+    "which", "who", "whom", "whose", "what", "when", "where", "why", "how",
+    "whether", "section", "subsection", "chapter", "paragraph", "paper",
+    "one", "two", "three", "first", "second", "third", "per",
+}
+
+_ECHO_STOP_ZH_PHRASES = (
+    "这些", "那些", "这个", "那个", "本节", "本文", "本小节", "这一节", "该节",
+    "我们", "你们", "他们", "它们", "什么", "为什么", "如何", "以及", "或者",
+    "并且", "可以", "需要", "应当", "应该", "已经", "正在", "还是", "不是",
+    "没有", "一个", "一种", "一份", "一套", "方面", "来说", "而言", "说明",
+)
+
+_ECHO_STOP_ZH_CHARS = set(
+    "的了着过吗呢吧啊呀哦嗯是在和与及对从为且而并或把被让使由向其之此该"
+    "本我你他她它们这那就都也还又再很更最则即等有要会能可应需先将")
+
+_ECHO_PUNCT_RE = re.compile(r"[\s。．.!！?？:：;；,，、\"'“”‘’()（）\[\]【】]+")
+
+# 这些垫话单独出现在句首就是元话语，不需要先复述标题；
+# 「里/中/方面/来说/而言」只在标题后紧跟时才算（见 _heading_echo）。
+_DIRECT_META_ZH = ("本节讨论", "本节讲", "这里讨论", "这一节讨论", "我们讨论",
+                   "本文讨论", "讨论的是", "讲的是", "谈的是", "要先", "先要",
+                   "先问", "首先要", "需要先")
+
+
+def _stem_en(word: str) -> str:
+    """极轻量英文归一：大小写、所有格、常见复数。只为「同词」比较服务。"""
+    w = word.lower().strip("'-")
+    if w.endswith("'s"):
+        w = w[:-2]
+    if len(w) > 3 and w.endswith("ies"):
+        return w[:-3] + "y"
+    if len(w) > 3 and w.endswith("s") and not w.endswith(("ss", "us", "is")):
+        return w[:-1]
+    return w
+
+
+def _en_terms(text: str, stop: set | None = None) -> list[str]:
+    stop = _ECHO_STOP_EN if stop is None else stop
+    out = []
+    for raw in _LATIN_WORD_RE.findall(text):
+        word = _stem_en(raw)
+        if word and word not in stop:
+            out.append(word)
+    return out
+
+
+def _echo_generic(rules: dict) -> tuple[set, list]:
+    cfg = rules.get("heading_echo") or {}
+    en = {_stem_en(str(x)) for x in (cfg.get("generic_terms_en") or [])}
+    zh = [str(x) for x in (cfg.get("generic_terms_zh") or [])]
+    return en, zh
+
+
+def _cjk_content_chars(text: str, generic_zh: list) -> set:
+    s = text
+    for term in sorted(generic_zh, key=len, reverse=True):
+        if term:
+            s = s.replace(term, " ")
+    for phrase in _ECHO_STOP_ZH_PHRASES:
+        s = s.replace(phrase, " ")
+    for ch in _ECHO_STOP_ZH_CHARS:
+        s = s.replace(ch, " ")
+    return set(_CJK_RE.findall(s))
+
+
+def _new_content_terms(title: str, sentence: str, rules: dict) -> list[str]:
+    """首句相对标题「新引入」的实义词；中文按字，英文按词。"""
+    generic_en, generic_zh = _echo_generic(rules)
+    if _cjk_heavy(title) or _cjk_heavy(sentence):
+        head = _cjk_content_chars(title, generic_zh)
+        sent = _cjk_content_chars(sentence, generic_zh)
+        return sorted(sent - head)
+    head = {t for t in _en_terms(title) if t not in generic_en}
+    sent = {t for t in _en_terms(sentence) if t not in generic_en}
+    return sorted(sent - head)
+
+
+def _heading_key(text: str) -> str:
+    return _ECHO_PUNCT_RE.sub(" ", text).strip().lower()
+
+
+def _echo_meta_openers(rules: dict) -> tuple[tuple, tuple]:
+    cfg = rules.get("heading_echo") or {}
+    en = tuple(str(x).lower() for x in (cfg.get("meta_openers_en") or []))
+    zh = tuple(str(x) for x in (cfg.get("meta_openers_zh") or []))
+    return en, zh
+
+
+def _heading_echo(title: str, sentence: str, rules: dict,
+                  thresholds: dict) -> bool:
+    """首句是否只是复述标题（复述 / 垫话 / 纯设问三种伪满足）。"""
+    if not sentence:
+        return False
+    min_new = int(thresholds["heading_echo_min_new_terms"])
+    if len(_new_content_terms(title, sentence, rules)) < min_new:
+        return True
+    meta_en, meta_zh = _echo_meta_openers(rules)
+    sent_key = _heading_key(sentence)
+    # 「This section is about ...」「本节讨论……」这类垫话不依赖标题复述。
+    if any(sent_key.startswith(op) for op in meta_en):
+        return True
+    stripped = sentence.strip()
+    if any(stripped.startswith(op) for op in _DIRECT_META_ZH):
+        return True
+    key = _heading_key(title)
+    if key and sent_key.startswith(key):
+        rest = sent_key[len(key):].lstrip()
+        if any(rest.startswith(op) for op in meta_zh):
+            return True
+        if any(rest.startswith(op) for op in meta_en):
+            return True
+    # 纯设问（「什么是 X？」「X 是什么？」）没有引入新实义，已被上面的
+    # 「新实义词 < 阈值」分支抓住；带新信息的设问式开场不算伪满足。
+    return False
+
+
+def _relation_words(rules: dict) -> list[str]:
+    raw = rules.get("heading_relation_words")
+    if raw is None:
+        raw = DEFAULT_RULES["heading_relation_words"]
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]
+    return [str(x) for x in raw if str(x).strip()]
+
+
+def _relation_hits(title: str, words: list[str]) -> list[str]:
+    hits = []
+    low = title.lower()
+    for word in words:
+        if _CJK_RE.search(word):
+            if word in title:
+                hits.append(word)
+        elif re.search(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(word.lower()), low):
+            hits.append(word.lower())
+    return sorted(set(hits))
+
+
+def _heading_subjects(title: str, rules: dict) -> list[str]:
+    """旧标题里的实义成分（中文按分隔字切段、英文按词），用于判「主语丢失」。"""
+    generic_en, generic_zh = _echo_generic(rules)
+    if _cjk_heavy(title):
+        out = []
+        for seg in _TERM_SEP_RE.split(title):
+            seg = re.sub(r"[\s。．.!！?？:：;；,，、\"'“”‘’()（）\[\]【】]+",
+                         "", seg)
+            for phrase in _ECHO_STOP_ZH_PHRASES:
+                seg = seg.replace(phrase, "")
+            seg = "".join(ch for ch in seg if ch not in _ECHO_STOP_ZH_CHARS)
+            for term in generic_zh:
+                seg = seg.replace(term, "")
+            if len(seg) >= 2 and seg not in out:
+                out.append(seg)
+        return out
+    out = []
+    relation = {w.lower() for w in _relation_words(rules)}
+    for word in _en_terms(title):
+        if word in generic_en or word in relation or word in out:
+            continue
+        out.append(word)
+    return out
+
+
+def _lost_subjects(old_title: str, new_title: str, new_first: str,
+                   rules: dict) -> list[str]:
+    lost = []
+    if _cjk_heavy(old_title):
+        probe = (new_title + " " + new_first)
+        for seg in _heading_subjects(old_title, rules):
+            if seg not in probe:
+                lost.append(seg)
+    else:
+        probe = set(_en_terms(new_title + " " + new_first))
+        for word in _heading_subjects(old_title, rules):
+            if word not in probe:
+                lost.append(word)
+    return lost
+
+
+def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
+                              rules: dict) -> list[Finding]:
+    """改写前后按文件、按标题出现顺序配对，报关系词变化与主语丢失。"""
+    relation_words = _relation_words(rules)
+    before_by_file = {d.file: _headings(d.raw) for d in before_docs}
+    findings: list[Finding] = []
+    for doc in docs:
+        old_heads = before_by_file.get(doc.file)
+        if not old_heads:
+            continue
+        new_heads = _headings(doc.raw)
+        for idx, (old, new) in enumerate(zip(old_heads, new_heads)):
+            if old["cmd"] != new["cmd"]:
+                continue
+            old_title, new_title = old["title"], new["title"]
+            if old_title == new_title:
+                continue
+            old_rel = _relation_hits(old_title, relation_words)
+            new_rel = _relation_hits(new_title, relation_words)
+            if old_rel and old_rel != new_rel:
+                findings.append(Finding(
+                    "HEADING_RELATION_CHANGED", doc.file, new["line"],
+                    _clip(new_title, 160),
+                    "标题里的关系词变了（旧：%s；新：%s）。关系词承载论证方向，"
+                    "替换或删除前先确认结论没变；要改就连正文一起改。"
+                    % ("、".join(old_rel), "、".join(new_rel) or "无"),
+                    "heading_relation_changed"))
+            stop_line = None
+            if idx + 1 < len(new_heads) and new_heads[idx + 1]["cmd"] not in (
+                    "paragraph", "subparagraph"):
+                stop_line = new_heads[idx + 1]["line"]
+            first, _pos = _first_sentence_span_after(doc, new["end_line"],
+                                                     stop_line=stop_line)
+            lost = _lost_subjects(old_title, new_title, first, rules)
+            if lost:
+                findings.append(Finding(
+                    "HEADING_SUBJECT_LOST", doc.file, new["line"],
+                    _clip(new_title, 160),
+                    "旧标题的实义成分在新标题与新首句里都消失了（%s）：要么写回"
+                    "新标题，要么在新首句里交代它去了哪里。" % "、".join(lost),
+                    "heading_subject_lost"))
+    return findings
+
+
+def _finding_signature(f: Finding) -> tuple[str, str, str]:
+    return (f.code, f.file, _norm_space(f.text))
+
+
+def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
+    """``style --diff``：只保留改后新增的违规（改前没有、改后有）。"""
+    allowance: dict = {}
+    for f in before.findings:
+        key = _finding_signature(f)
+        allowance[key] = allowance.get(key, 0) + 1
+    new_findings = []
+    for f in after.findings:
+        key = _finding_signature(f)
+        if allowance.get(key, 0) > 0:
+            allowance[key] -= 1
+            continue
+        new_findings.append(f)
+    fired_codes = {f.code for f in new_findings}
+    fired = [item for item in after.fired if item["code"] in fired_codes]
+    summary = dict(after.summary)
+    summary["findings"] = len(new_findings)
+    summary["triggered"] = len(fired)
+    summary["exit_code"] = EXIT_YELLOW if new_findings else EXIT_OK
+    return StyleResult(metrics=after.metrics, thresholds=after.thresholds,
+                       fired=fired, findings=new_findings,
+                       paragraphs=after.paragraphs, instances=after.instances,
+                       summary=summary, rules_path=after.rules_path,
+                       stage_assessment=after.stage_assessment)
 
 
 def _shape_bucket(n: int) -> int:
@@ -881,7 +1199,9 @@ def assess_stage(triggers: int, cv: float, fired: list) -> dict:
 
 
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
-            rules_path: str = "") -> StyleResult:
+            rules_path: str = "",
+            before: tuple[Config, list[tuple[str, str]]] | None = None
+            ) -> StyleResult:
     thresholds = _thresholds(rules)
     limits = _limits(rules)
     min_units = limits["min_paragraph_units"]
@@ -905,6 +1225,14 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         live, _defs = _live_text(text)   # 标题扫描走活跃正文（注释里的标题不算）
         docs.append(_Doc(rel, prose,
                          [i for i, c in enumerate(prose) if c == "\n"], live))
+    before_docs: list[_Doc] = []
+    if before is not None:
+        for rel, text in before[1]:
+            prose = prose_of(text)
+            live, _defs = _live_text(text)
+            before_docs.append(_Doc(rel, prose,
+                                    [i for i, c in enumerate(prose) if c == "\n"],
+                                    live))
 
     total_units = sum(units_of(d.prose) for d in docs)
     all_sentences = []          # [(doc, start, end, units)]
@@ -973,12 +1301,14 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "② 改用括号括起；③ 拆成独立一句。三种都不改事实与数字。",
                 "dash_parenthetical"))
 
-    # ---- 3b. 标题：过长 / 带解释 / 术语未在首句定义 ----
+    # ---- 3b. 标题：过长 / 带解释 / 术语未在首句定义 / 首句复述标题 ----
     heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
-                      "TERM_FIRST_IN_HEADING": 0}
+                      "HEADING_ECHO": 0, "HEADING_RELATION_CHANGED": 0,
+                      "HEADING_SUBJECT_LOST": 0, "TERM_FIRST_IN_HEADING": 0}
     term_allow = _term_allowlist(rules, cfg.root)
     for doc in docs:
-        for head in _headings(doc.raw):
+        heads = _headings(doc.raw)
+        for idx, head in enumerate(heads):
             title, line = head["title"], head["line"]
             if _cjk_heavy(title):
                 too_long = (len(_CJK_RE.findall(title))
@@ -1011,9 +1341,35 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 instances["TERM_FIRST_IN_HEADING"].append(Finding(
                     "TERM_FIRST_IN_HEADING", doc.file, line, _clip(title, 160),
                     "标题里的「%s」第一次出现时，请在该节首句用一句话定义或"
-                    "点明（例：本节讨论 %s）；可在 term-allow.txt 登记白名单，"
-                    "只改措辞，不改事实。" % (cand, cand),
+                    "点明它是什么（例：预注册是在收集数据前固定假设与分析"
+                    "计划的做法）；复述标题、垫话（如「相关工作里，」）与设问"
+                    "都不算定义。可在 term-allow.txt 登记白名单，只改措辞，"
+                    "不改事实。" % cand,
                     "term_first_in_heading"))
+            # v5：首句只是复述标题（复述/垫话/设问）——只判本节自己的正文。
+            # 下一标题若是行内 \paragraph，它的首句可能和标题同在一行，
+            # 仍算本节正文，不能用 stop_line 跳过。
+            stop_line = None
+            if idx + 1 < len(heads) and heads[idx + 1]["cmd"] not in (
+                    "paragraph", "subparagraph"):
+                stop_line = heads[idx + 1]["line"]
+            first_txt, first_pos = _first_sentence_span_after(
+                doc, head["end_line"], stop_line=stop_line)
+            if first_txt and _heading_echo(title, first_txt, rules, thresholds):
+                heading_counts["HEADING_ECHO"] += 1
+                instances["HEADING_ECHO"].append(Finding(
+                    "HEADING_ECHO", doc.file, _line_of(doc, first_pos),
+                    _clip(first_txt, 180),
+                    "首句只是复述标题；改成一句定义或可检验的断言（例：预注册"
+                    "是在收集数据前固定假设与分析计划的做法）。复述标题、"
+                    "垫话（「相关工作里，」）与设问都不算定义。",
+                    "heading_echo"))
+
+    # v5：改写前后标题比对（只在 style --diff 传入 --before 时运行）
+    if before is not None:
+        for finding in _rewrite_heading_findings(docs, before_docs, rules):
+            heading_counts[finding.code] += 1
+            instances[finding.code].append(finding)
 
     # ---- 3c. 同构三点并列：相邻段落重复才算 ----
     para_triads = []
@@ -1204,6 +1560,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "dash_parenthetical": dash_hits,
         "heading_too_long": heading_counts["HEADING_TOO_LONG"],
         "heading_malformed": heading_counts["HEADING_MALFORMED"],
+        "heading_echo": heading_counts["HEADING_ECHO"],
+        "heading_relation_changed": heading_counts["HEADING_RELATION_CHANGED"],
+        "heading_subject_lost": heading_counts["HEADING_SUBJECT_LOST"],
         "term_first_in_heading": heading_counts["TERM_FIRST_IN_HEADING"],
         "colloquial_triad": len(repeated_triads),
     }
@@ -1234,7 +1593,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             hit = len(repeated_triads) >= limit
             shown = limit
         elif metric in ("heading_too_long", "heading_malformed",
-                        "term_first_in_heading"):
+                        "term_first_in_heading", "heading_echo",
+                        "heading_relation_changed", "heading_subject_lost"):
             limit = 1
             hit = value >= limit
             shown = limit
@@ -1391,6 +1751,9 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("dash_parenthetical", "DASH_PARENTHETICAL", ">"),
         ("heading_too_long", "HEADING_TOO_LONG", ">="),
         ("heading_malformed", "HEADING_MALFORMED", ">="),
+        ("heading_echo", "HEADING_ECHO", ">="),
+        ("heading_relation_changed", "HEADING_RELATION_CHANGED", ">="),
+        ("heading_subject_lost", "HEADING_SUBJECT_LOST", ">="),
         ("term_first_in_heading", "TERM_FIRST_IN_HEADING", ">="),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
@@ -1419,7 +1782,8 @@ def render_human(result: StyleResult, project: Path) -> str:
                 result.thresholds["heading_max_words_en"])
         elif key == "colloquial_triad":
             threshold = "repeat>=%d" % result.thresholds["colloquial_triad_repeats"]
-        elif key in ("heading_malformed", "term_first_in_heading"):
+        elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
+                     "heading_relation_changed", "heading_subject_lost"):
             threshold = ">=1"
         else:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))

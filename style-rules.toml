@@ -11,6 +11,11 @@
 # 再用户自维护的纯文本（一行一个词）；忽略空行与 # 注释，大小写不敏感。
 term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 
+# 标题关系词：改写前后标题里的这组词发生替换或删除即报
+# HEADING_RELATION_CHANGED。英文按词边界，中文按子串。
+heading_relation_words = ["versus", "vs", "and", "or", "not", "without",
+                          "对", "与", "及", "不是"]
+
 [thresholds]
 # 每千词（中文按字）套话连接词数；> 触发
 connective_density = 8.0
@@ -42,6 +47,29 @@ heading_max_chars_zh = 12
 heading_max_words_en = 8
 # 同构三点并列在相邻段落重复 >= N 次才报（不是按条数判）
 colloquial_triad_repeats = 2
+
+# ---- v5 新增（SPEC-V3.0 §15 改写后复检）----
+# 首句去掉停用词后，至少要引入这么多个标题里没有的实义词；
+# 少于该数视为「首句只是复述标题」（HEADING_ECHO）。
+heading_echo_min_new_terms = 1
+
+# HEADING_ECHO 的辅助词表：泛化词不算「新实义」；标题后紧跟这些垫话
+# 开头视为复述式。只影响 v5 判据，顺序无关。
+[heading_echo]
+generic_terms_en = ["limitation", "problem", "issue", "result", "question",
+                    "thing", "aspect", "case", "point", "claim", "matter",
+                    "area", "topic", "subject", "part", "example", "work",
+                    "study", "approach", "method", "way"]
+generic_terms_zh = ["限制", "问题", "结果", "内容", "方面", "部分", "事情",
+                    "情况", "因素", "要点", "工作", "研究", "方法", "做法",
+                    "角度", "例子"]
+meta_openers_en = ["is about", "is concerned with", "is discussed",
+                   "we discuss", "this section", "this subsection",
+                   "in this section", "in this subsection", "here we"]
+meta_openers_zh = ["里", "中", "方面", "来说", "而言", "要先", "先要",
+                   "先问", "首先要", "需要先", "本节讨论", "本节讲",
+                   "这里讨论", "这一节讨论", "我们讨论", "本文讨论",
+                   "讨论的是", "讲的是", "谈的是"]
 
 [limits]
 # 每个指标最多列多少条具体改法（防止报告淹没）

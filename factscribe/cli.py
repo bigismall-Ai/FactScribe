@@ -17,8 +17,8 @@ from .protect import compare as compare_protect
 from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
-from .style import (DISCLAIMER, analyze, build_prompt, load_style_rules,
-                    render_human)
+from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
+                    load_style_rules, render_human)
 
 # --------------------------------------------------------------------------
 # build
@@ -85,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
     sp.add_argument("--rules", default=None,
                     help="style-rules.toml 路径（默认项目根，其次仓根）")
+    sp.add_argument("--diff", default=None, metavar="BEFORE",
+                    help="改写前目录：只报本次改写新增的违规，并启用标题"
+                         "关系词/主语丢失比对（需该目录有 paperkit.toml）")
     sp = sub.add_parser(
         "protect", help="改写保护面比对：前后目录的 facts/数字/引用/公式/表格/交叉引用")
     sp.add_argument("--before", required=True, help="改写前目录")
@@ -199,7 +202,17 @@ def cmd_style(args) -> int:
     cfg = load_config(Path(args.project))
     sections = load_sections(cfg)
     rules, rules_path = load_style_rules(cfg.root, args.rules)
-    result = analyze(cfg, sections, rules, rules_path=rules_path)
+    before = None
+    baseline = None
+    if getattr(args, "diff", None):
+        before_cfg = load_config(Path(args.diff))
+        before_sections = load_sections(before_cfg)
+        before = (before_cfg, before_sections)
+    result = analyze(cfg, sections, rules, rules_path=rules_path,
+                     before=before)
+    if before is not None:
+        baseline = analyze(before[0], before[1], rules, rules_path=rules_path)
+        result = filter_new_findings(result, baseline)
     code = result.exit_code
 
     if args.prompt and not args.json:
@@ -207,6 +220,10 @@ def cmd_style(args) -> int:
         return code
 
     human = render_human(result, cfg.root)
+    if before is not None:
+        human += ("\n对比    : %s（改前 %d 处 → 只报新增 %d 处）"
+                  % (Path(args.diff), len(baseline.findings),
+                     len(result.findings)))
     if cfg.warnings:
         human += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
     payload = _payload("style", _severity_of(code), code,
@@ -219,6 +236,10 @@ def cmd_style(args) -> int:
                        stage_assessment=dict(result.stage_assessment),
                        disclaimer=DISCLAIMER,
                        rules=rules_path)
+    if before is not None:
+        payload["diff"] = {"before": str(Path(args.diff)),
+                           "baseline_findings": len(baseline.findings),
+                           "new_findings": len(result.findings)}
     if args.prompt:
         payload["prompt"] = build_prompt(result)
     payload["config"] = _config_block(cfg)

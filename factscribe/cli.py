@@ -19,6 +19,8 @@ from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
 from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
                     load_style_rules, render_human)
+from .tide import render_human as render_tide
+from .tide import run_tide
 
 # --------------------------------------------------------------------------
 # build
@@ -95,6 +97,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
     sp.add_argument("--allow-renames", action="store_true",
                     help="章节标题变化降为信息（不让它拉黄）")
+    sp = sub.add_parser(
+        "tide", help="潮汐式改动账：涨/落/波及面/闭合三条件，全成或全退")
+    sp.add_argument("--before", required=True, help="改前目录")
+    sp.add_argument("--after", required=True, help="改后目录")
+    sp.add_argument("--out", default=None,
+                    help="事件账本（默认 <after>/audit/tide-events.ndjson）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
     return p
 
 
@@ -261,12 +271,33 @@ def cmd_protect(args) -> int:
     return code
 
 
+def cmd_tide(args) -> int:
+    result = run_tide(Path(args.before), Path(args.after),
+                      Path(args.out) if args.out else None)
+    code = result.exit_code
+    payload = _payload("tide", "ok" if code == EXIT_OK else "violation", code,
+                       tx=result.tx,
+                       criteria=result.criteria(),
+                       reasons=list(result.reasons),
+                       rises=[r.as_dict() for r in result.rises],
+                       falls=[f.as_dict() for f in result.falls],
+                       affect=list(result.affect),
+                       findings=[f.as_dict() for f in result.findings],
+                       ledger=str(result.ledger_path),
+                       view=(str(result.view_path)
+                             if result.view_written else None),
+                       events=len(result.rises) + len(result.falls) + 1)
+    payload["status"] = result.status      # 事务状态：commit / rollback
+    _emit(payload, render_tide(result), args.json)
+    return code
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
-                "protect": cmd_protect}
+                "protect": cmd_protect, "tide": cmd_tide}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

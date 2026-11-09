@@ -29,6 +29,7 @@ from pathlib import Path
 from .config import Config, ConfigError, load_toml
 from .constants import EXIT_OK, EXIT_YELLOW
 from .livetext import _live_text
+from .terms import Glossary, key_of, load_glossary
 from .texscan import sentence_spans
 
 DISCLAIMER = ("本工具不评估、也不试图规避任何 AI 检测器；它检测的是可机械判定的"
@@ -43,6 +44,8 @@ STYLE_RULES_NAME = "style-rules.toml"
 DEFAULT_RULES: dict = {
     # 术语白名单：两层——项目内 GLOSSARY.md ＋ 用户自维护纯文本（一行一个词）
     "term_allow_files": ["GLOSSARY.md", "term-allow.txt"],
+    # 项目术语表覆盖（相对项目根）；空串＝用仓内 factscribe/terms/glossary.tsv
+    "term_glossary": "",
     "thresholds": {
         "connective_density": 8.0,
         # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
@@ -64,6 +67,8 @@ DEFAULT_RULES: dict = {
         "colloquial_triad_repeats": 2,
         # v5 改写后复检：首句至少要引入这么多个新实义词，否则视为复述标题
         "heading_echo_min_new_terms": 1,
+        # 术语层：同一 canonical 在一篇里出现多少种不同表面形式才报 TERM_VARIANT
+        "term_variant_min_forms": 2,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -154,6 +159,8 @@ DIRECTIONS = {
     "heading_echo": "at_least",
     "heading_relation_changed": "at_least",
     "heading_subject_lost": "at_least",
+    # 批 90 术语层（TERM_UNREGISTERED 只提示，不进本表）
+    "term_variant": "at_least",
 }
 
 CODE_OF = {
@@ -175,12 +182,16 @@ CODE_OF = {
     "heading_echo": "HEADING_ECHO",
     "heading_relation_changed": "HEADING_RELATION_CHANGED",
     "heading_subject_lost": "HEADING_SUBJECT_LOST",
+    # 批 90 术语层
+    "term_variant": "TERM_VARIANT",
+    "term_unregistered": "TERM_UNREGISTERED",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_TOO_LONG", "HEADING_MALFORMED",
                  "HEADING_ECHO", "HEADING_RELATION_CHANGED",
                  "HEADING_SUBJECT_LOST", "TERM_FIRST_IN_HEADING",
+                 "TERM_VARIANT", "TERM_UNREGISTERED",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "REPEATED_OPENER",
                  "RHYTHM_PLATEAU", "SENTENCE_UNIFORMITY"]
@@ -812,12 +823,35 @@ def _term_candidates(title: str) -> list[str]:
     return out
 
 
-def _term_allowlist(rules: dict, project_root: Path) -> set[str]:
-    """读取术语白名单：大小写不敏感、去首尾空白、忽略空行与 # 注释。"""
+def _glossary_for(rules: dict, project_root: Path) -> Glossary:
+    """解析顺序：rules.term_glossary → 项目根 glossary.tsv → 仓内默认词表。"""
+    configured = str(rules.get("term_glossary") or "").strip()
+    if configured:
+        path = Path(configured)
+        if not path.is_absolute():
+            path = project_root / path
+        if not path.is_file():
+            raise ConfigError("style-rules.toml 的 term_glossary 指向的 %s 不存在"
+                              % path)
+        return load_glossary(path)
+    project = project_root / "glossary.tsv"
+    if project.is_file():
+        return load_glossary(project)
+    return load_glossary()
+
+
+def _term_allowlist(rules: dict, project_root: Path,
+                    glossary: Glossary | None = None
+                    ) -> tuple[set[str], set[str]]:
+    """读取术语白名单，返回（归一化匹配键, canonical）两个集合。
+
+    条目先做归一化，再分别以匹配键与 canonical 入册；查白名单时两者都比。
+    """
     names = rules.get("term_allow_files", DEFAULT_RULES["term_allow_files"])
     if not isinstance(names, (list, tuple)):
         names = [names]
-    allow: set[str] = set()
+    keys: set[str] = set()
+    canonicals: set[str] = set()
     for name in names:
         path = project_root / str(name)
         if not path.is_file():
@@ -826,8 +860,12 @@ def _term_allowlist(rules: dict, project_root: Path) -> set[str]:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            allow.add(_norm_space(line).lower())
-    return allow
+            keys.add(key_of(line))
+            if glossary is not None:
+                canon = glossary.canonical_of(line)
+                if canon:
+                    canonicals.add(canon)
+    return keys, canonicals
 
 
 def _first_sentence_span_after(doc: _Doc, line: int,
@@ -954,15 +992,32 @@ def _cjk_content_chars(text: str, generic_zh: list) -> set:
     return set(_CJK_RE.findall(s))
 
 
-def _new_content_terms(title: str, sentence: str, rules: dict) -> list[str]:
-    """首句相对标题「新引入」的实义词；中文按字，英文按词。"""
+def _new_content_terms(title: str, sentence: str, rules: dict,
+                       glossary: Glossary | None = None) -> list[str]:
+    """首句相对标题「新引入」的实义词；中文按字，英文按词。
+
+    术语先归一：命中的表面形式从文本里删掉，canonical 作为独立单位参与
+    比较。于是「预注册」与「事前登记」（同 canonical）互相抵消，不再被
+    当成新信息；不同 canonical 仍然各算一个新单位。
+    """
+    def prepared(text: str) -> tuple[str, set]:
+        if glossary is None:
+            return text, set()
+        return glossary.strip_terms(text)
+
+    title_text, title_can = prepared(title)
+    sentence_text, sentence_can = prepared(sentence)
     generic_en, generic_zh = _echo_generic(rules)
     if _cjk_heavy(title) or _cjk_heavy(sentence):
-        head = _cjk_content_chars(title, generic_zh)
-        sent = _cjk_content_chars(sentence, generic_zh)
+        head = {("§" + c) for c in title_can}
+        sent = {("§" + c) for c in sentence_can}
+        head |= _cjk_content_chars(title_text, generic_zh)
+        sent |= _cjk_content_chars(sentence_text, generic_zh)
         return sorted(sent - head)
-    head = {t for t in _en_terms(title) if t not in generic_en}
-    sent = {t for t in _en_terms(sentence) if t not in generic_en}
+    head = {("§" + c) for c in title_can}
+    sent = {("§" + c) for c in sentence_can}
+    head |= {t for t in _en_terms(title_text) if t not in generic_en}
+    sent |= {t for t in _en_terms(sentence_text) if t not in generic_en}
     return sorted(sent - head)
 
 
@@ -978,22 +1033,28 @@ def _echo_meta_openers(rules: dict) -> tuple[tuple, tuple]:
 
 
 def _heading_echo(title: str, sentence: str, rules: dict,
-                  thresholds: dict) -> bool:
-    """首句是否只是复述标题（复述 / 垫话 / 纯设问三种伪满足）。"""
+                  thresholds: dict,
+                  glossary: Glossary | None = None) -> bool:
+    """首句是否只是复述标题（复述 / 垫话 / 纯设问三种伪满足）。
+
+    标题与首句先做术语归一（同义词视同同词），再走原有判据。
+    """
     if not sentence:
         return False
     min_new = int(thresholds["heading_echo_min_new_terms"])
-    if len(_new_content_terms(title, sentence, rules)) < min_new:
+    if len(_new_content_terms(title, sentence, rules, glossary)) < min_new:
         return True
+    canon_title = glossary.canonicalize(title) if glossary else title
+    canon_sentence = glossary.canonicalize(sentence) if glossary else sentence
     meta_en, meta_zh = _echo_meta_openers(rules)
-    sent_key = _heading_key(sentence)
+    sent_key = _heading_key(canon_sentence)
     # 「This section is about ...」「本节讨论……」这类垫话不依赖标题复述。
     if any(sent_key.startswith(op) for op in meta_en):
         return True
     stripped = sentence.strip()
     if any(stripped.startswith(op) for op in _DIRECT_META_ZH):
         return True
-    key = _heading_key(title)
+    key = _heading_key(canon_title)
     if key and sent_key.startswith(key):
         rest = sent_key[len(key):].lstrip()
         if any(rest.startswith(op) for op in meta_zh):
@@ -1174,6 +1235,78 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                     "新标题，要么在新首句里交代它去了哪里。" % "、".join(lost),
                     "heading_subject_lost"))
     return findings
+
+
+def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
+                           min_forms: int) -> list[Finding]:
+    """同一 canonical 在一篇里出现 ≥ min_forms 种不同表面形式即报。"""
+    findings: list[Finding] = []
+    if not glossary or min_forms < 2:
+        return findings
+    for doc in docs:
+        groups: dict = {}
+
+        def add(match, line: int) -> None:
+            forms = groups.setdefault(match.canonical, {})
+            entry = forms.setdefault(match.form, {"lines": set(),
+                                                  "surface": match.surface})
+            entry["lines"].add(line)
+
+        for match in glossary.matches(doc.prose):
+            add(match, _line_of(doc, match.start))
+        for head in _headings(doc.raw):
+            for match in glossary.matches(head["title"]):
+                add(match, head["line"])
+        for canonical in sorted(groups):
+            forms = groups[canonical]
+            if len(forms) < min_forms:
+                continue
+            ordered = sorted(forms.values(),
+                             key=lambda item: (min(item["lines"]),
+                                               item["surface"]))
+            pieces = []
+            lines = []
+            for item in ordered:
+                line_txt = "、".join(str(x) for x in sorted(item["lines"]))
+                pieces.append("%s（第%s行）" % (item["surface"], line_txt))
+                lines.extend(item["lines"])
+            line = min(lines) if lines else 1
+            findings.append(Finding(
+                "TERM_VARIANT", doc.file, line,
+                _clip("%s：%s" % (canonical, "、".join(pieces)), 180),
+                "同一概念在一篇里用了 %d 种写法；统一用规范形「%s」，"
+                "其余写法改回它（只改措辞，不改事实）。"
+                % (len(forms), canonical),
+                "term_variant"))
+    return findings
+
+
+def _unregistered_findings(doc: "_Doc", line: int, text: str,
+                           glossary: Glossary, allow_keys: set,
+                           allow_canon: set, seen: set) -> list[Finding]:
+    """术语样候选归一化后不在册 → 只提示（不参与任何计数门槛）。"""
+    out: list[Finding] = []
+    if not glossary or not text:
+        return out
+    for cand in _term_candidates(text):
+        if glossary.canonical_of(cand) is not None:
+            continue
+        if glossary.covers(cand):
+            continue
+        cand_key = key_of(cand)
+        canon = glossary.canonical_of(cand)
+        if cand_key in allow_keys or (canon and canon in allow_canon):
+            continue
+        signature = (doc.file, line, cand_key)
+        if signature in seen:
+            continue
+        seen.add(signature)
+        out.append(Finding(
+            "TERM_UNREGISTERED", doc.file, line, _clip(cand, 160),
+            "「%s」不在术语表内：建议登记到 glossary.tsv，或换用已登记"
+            "的规范形。本条只提示，不参与计数门槛，不影响退出码。" % cand,
+            "term_unregistered"))
+    return out
 
 
 def _finding_signature(f: Finding) -> tuple[str, str, str]:
@@ -1387,7 +1520,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
                       "HEADING_ECHO": 0, "HEADING_RELATION_CHANGED": 0,
                       "HEADING_SUBJECT_LOST": 0, "TERM_FIRST_IN_HEADING": 0}
-    term_allow = _term_allowlist(rules, cfg.root)
+    glossary = _glossary_for(rules, cfg.root)
+    allow_keys, allow_canon = _term_allowlist(rules, cfg.root, glossary)
+    seen_unregistered: set = set()
     for doc in docs:
         heads = _headings(doc.raw)
         for idx, head in enumerate(heads):
@@ -1414,20 +1549,6 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "标题不用冒号/破折号/括号解释/问号/句号：把解释移到正文"
                     "首句，标题只留名词短语；不改正文事实。",
                     "heading_malformed"))
-            first = _first_sentence_after(doc, head["end_line"]).lower()
-            for cand in _term_candidates(title):
-                key = cand.lower()
-                if key in term_allow or key in first:
-                    continue
-                heading_counts["TERM_FIRST_IN_HEADING"] += 1
-                instances["TERM_FIRST_IN_HEADING"].append(Finding(
-                    "TERM_FIRST_IN_HEADING", doc.file, line, _clip(title, 160),
-                    "标题里的「%s」第一次出现时，请在该节首句用一句话定义或"
-                    "点明它是什么（例：预注册是在收集数据前固定假设与分析"
-                    "计划的做法）；复述标题、垫话（如「相关工作里，」）与设问"
-                    "都不算定义。可在 term-allow.txt 登记白名单，只改措辞，"
-                    "不改事实。" % cand,
-                    "term_first_in_heading"))
             # v5：首句只是复述标题（复述/垫话/设问）——只判本节自己的正文。
             # 下一标题若是行内 \paragraph，它的首句可能和标题同在一行，
             # 仍算本节正文，不能用 stop_line 跳过。
@@ -1437,7 +1558,47 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 stop_line = heads[idx + 1]["line"]
             first_txt, first_pos = _first_sentence_span_after(
                 doc, head["end_line"], stop_line=stop_line)
-            if first_txt and _heading_echo(title, first_txt, rules, thresholds):
+            # ---- 批 90：TERM_FIRST_IN_HEADING 按 canonical 比对 ----
+            first_key = key_of(first_txt)
+            first_canon = {m.canonical for m in glossary.matches(first_txt)}
+            for cand in _term_candidates(title):
+                cand_key = key_of(cand)
+                canon = glossary.canonical_of(cand)
+                if cand_key in allow_keys:
+                    continue
+                if canon is not None and canon in allow_canon:
+                    continue
+                if canon is not None:
+                    if canon in first_canon:
+                        continue
+                elif cand_key and cand_key in first_key:
+                    continue
+                elif glossary:
+                    cand_canon = {m.canonical for m in glossary.matches(cand)}
+                    if cand_canon and cand_canon <= first_canon:
+                        continue
+                heading_counts["TERM_FIRST_IN_HEADING"] += 1
+                instances["TERM_FIRST_IN_HEADING"].append(Finding(
+                    "TERM_FIRST_IN_HEADING", doc.file, line, _clip(title, 160),
+                    "标题里的「%s」第一次出现时，请在该节首句用一句话定义或"
+                    "点明它是什么（例：预注册是在收集数据前固定假设与分析"
+                    "计划的做法）；复述标题、垫话（如「相关工作里，」）与设问"
+                    "都不算定义。可在 term-allow.txt 登记白名单，只改措辞，"
+                    "不改事实。" % cand,
+                    "term_first_in_heading"))
+            # ---- 批 90：TERM_UNREGISTERED（标题 / 首句；只提示）----
+            line_of_first = _line_of(doc, first_pos) if first_pos >= 0 else line
+            instances["TERM_UNREGISTERED"].extend(
+                _unregistered_findings(doc, line, title, glossary,
+                                       allow_keys, allow_canon,
+                                       seen_unregistered))
+            if first_txt:
+                instances["TERM_UNREGISTERED"].extend(
+                    _unregistered_findings(doc, line_of_first, first_txt,
+                                           glossary, allow_keys, allow_canon,
+                                           seen_unregistered))
+            if first_txt and _heading_echo(title, first_txt, rules, thresholds,
+                                           glossary):
                 heading_counts["HEADING_ECHO"] += 1
                 instances["HEADING_ECHO"].append(Finding(
                     "HEADING_ECHO", doc.file, _line_of(doc, first_pos),
@@ -1446,6 +1607,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "是在收集数据前固定假设与分析计划的做法）。复述标题、"
                     "垫话（「相关工作里，」）与设问都不算定义。",
                     "heading_echo"))
+
+    # ---- 批 90：TERM_VARIANT（同一 canonical 一篇多写法）----
+    variant_findings = _term_variant_findings(
+        docs, glossary, int(thresholds["term_variant_min_forms"]))
+    instances["TERM_VARIANT"].extend(variant_findings)
 
     # v5：改写前后标题比对（只在 style --diff 传入 --before 时运行）
     if before is not None:
@@ -1646,6 +1812,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "heading_relation_changed": heading_counts["HEADING_RELATION_CHANGED"],
         "heading_subject_lost": heading_counts["HEADING_SUBJECT_LOST"],
         "term_first_in_heading": heading_counts["TERM_FIRST_IN_HEADING"],
+        "term_variant": len(variant_findings),
+        "term_unregistered": len(instances["TERM_UNREGISTERED"]),
         "colloquial_triad": len(repeated_triads),
     }
 
@@ -1673,6 +1841,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         elif metric == "colloquial_triad":
             limit = int(thresholds["colloquial_triad_repeats"])
             hit = len(repeated_triads) >= limit
+            shown = limit
+        elif metric == "term_variant":
+            limit = int(thresholds["term_variant_min_forms"])
+            hit = bool(variant_findings)
             shown = limit
         elif metric in ("heading_too_long", "heading_malformed",
                         "term_first_in_heading", "heading_echo",
@@ -1724,7 +1896,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     findings: list[Finding] = []
     for code, items in instances.items():
         metric = next((m for m, c in CODE_OF.items() if c == code), "")
-        if metric not in fired_metrics:
+        # TERM_UNREGISTERED 只提示：不要求所属指标已触发。
+        if code != "TERM_UNREGISTERED" and metric not in fired_metrics:
             continue
         findings.extend(items[:cap])
     findings.sort(key=lambda f: (FINDING_ORDER.index(f.code)
@@ -1837,6 +2010,8 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("heading_relation_changed", "HEADING_RELATION_CHANGED", ">="),
         ("heading_subject_lost", "HEADING_SUBJECT_LOST", ">="),
         ("term_first_in_heading", "TERM_FIRST_IN_HEADING", ">="),
+        ("term_variant", "TERM_VARIANT", ">="),
+        ("term_unregistered", "TERM_UNREGISTERED", "提示"),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
@@ -1864,6 +2039,10 @@ def render_human(result: StyleResult, project: Path) -> str:
                 result.thresholds["heading_max_words_en"])
         elif key == "colloquial_triad":
             threshold = "repeat>=%d" % result.thresholds["colloquial_triad_repeats"]
+        elif key == "term_variant":
+            threshold = "forms>=%d" % result.thresholds["term_variant_min_forms"]
+        elif key == "term_unregistered":
+            threshold = "提示"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost"):
             threshold = ">=1"
@@ -1871,6 +2050,8 @@ def render_human(result: StyleResult, project: Path) -> str:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]
         status = "触发" if label in fired_codes else "ok"
+        if key == "term_unregistered" and m.get("term_unregistered"):
+            status = "提示"
         lines.append("%-23s  %-8s  %-7s  %s"
                      % (label, _fmt(value), threshold, status))
     lines.append("")

@@ -11,6 +11,10 @@
 # 再用户自维护的纯文本（一行一个词）；忽略空行与 # 注释，大小写不敏感。
 term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 
+# 项目术语表覆盖（相对项目根）；空/缺省时用仓内 factscribe/terms/glossary.tsv。
+# 词表列：canonical / aliases(en) / aliases(cn) / category（Tab 分隔）。
+# term_glossary = "glossary.tsv"
+
 # 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
 # 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）
 # 不承载对立关系，不进本表。英文按词边界，中文按结构匹配。
@@ -48,6 +52,11 @@ heading_max_chars_zh = 12
 heading_max_words_en = 8
 # 同构三点并列在相邻段落重复 >= N 次才报（不是按条数判）
 colloquial_triad_repeats = 2
+
+# ---- 批 90 术语层 ----
+# 同一 canonical 在同一篇里出现多少种不同表面形式才报 TERM_VARIANT
+# （大小写、全半角、连字符差异归一后不算不同形式）
+term_variant_min_forms = 2
 
 # ---- v5 新增（SPEC-V3.0 §15 改写后复检）----
 # 首句去掉停用词后，至少要引入这么多个标题里没有的实义词；

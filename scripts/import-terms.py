@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从 sia-harness 词册一次性导入术语表（可重跑，覆盖生成）。
+"""从 sia-harness 词册一次性导入工作区流程词表（可重跑，覆盖生成）。
 
 来源：``../sia-harness/nomenclator/terms/*.yaml``（相对本仓根）。
-输出：``factscribe/terms/glossary.tsv``（四列，Tab 分隔）。
+输出：``factscribe/terms/workspace.tsv``（四列，Tab 分隔）。
+
+本表是**工作区流程词**，只用于查词与同义归一，不参与 ``TERM_VARIANT``
+（流程词的别名是宽松近义，直接当同义词会误报）。论文术语走
+``scripts/import-glossary.py`` 生成的 ``paper.tsv``。
 
 只读取词册的 ``id`` / ``en`` / ``cn`` / ``aliases`` / ``category`` 字段；
 词册是简单键值 + 单行 flow 列表，这里用标准库解析，避免给运行时添依赖。
@@ -23,7 +27,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = REPO.parent / "sia-harness" / "nomenclator" / "terms"
-DEFAULT_OUT = REPO / "factscribe" / "terms" / "glossary.tsv"
+DEFAULT_OUT = REPO / "factscribe" / "terms" / "workspace.tsv"
 GENERATED_BY = "env PYTHONPATH=src python3 scripts/import-terms.py"
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -118,8 +122,9 @@ def render(rows, source: Path) -> str:
     forms = sum(1 + len(en) + len(cn)
                 for _canonical, en, cn, _cat in rows)
     lines = [
-        "# factscribe 术语表——由 scripts/import-terms.py 覆盖生成，请勿手改。",
+        "# factscribe 工作区流程词表——由 scripts/import-terms.py 覆盖生成，请勿手改。",
         "# 来源：%s/*.yaml" % _display_path(source),
+        "# 本表只用于查词，不参与 TERM_VARIANT（论文术语见 paper.tsv）。",
         "# 生成命令：%s" % GENERATED_BY,
         "# 规模：%d 个 canonical，%d 个表面形式" % (len(rows), forms),
         "canonical\taliases(en)\taliases(cn)\tcategory",

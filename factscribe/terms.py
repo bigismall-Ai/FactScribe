@@ -1,8 +1,17 @@
 # -*- coding: utf-8 -*-
 """术语归一化与同义词层（SPEC-TERMS）。
 
-一份词表（TSV：canonical / aliases(en) / aliases(cn) / category）＋两种
-归一化：
+词表分两层，运行时不读 ``sia-harness``：
+
+* ``terms/workspace.tsv``：从 nomenclator 导入的工作区流程词，**只用于查词
+  与同义归一，不参与 TERM_VARIANT**（流程词的别名是宽松近义，直接当同义
+  词会把 ``成本`` / ``预算`` 误报成同一概念的两种写法）；
+* ``terms/paper.tsv``：论文领域术语，由 ``scripts/import-glossary.py`` 从
+  ``paper-zh/GLOSSARY.md`` 生成；第五列 ``blocked(cn)`` 是备注里声明的
+  **禁用变体**。同名表面形式以 ``paper.tsv`` 为准。
+
+一份词表（TSV：canonical / aliases(en) / aliases(cn) / category /
+blocked(cn)）＋两种归一化：
 
 * 拉丁文：NFKC → 小写 → 去首尾空白；
 * 中文：不做分词，正文从左到右做**最长匹配**扫描。
@@ -11,9 +20,7 @@
 CJK 字符与单个空格。拉丁表面形式保留词边界（避免 ``id`` 命中 ``did``
 内部），中文表面形式不加词边界。
 
-本模块只服务 ``factscribe style``；纯标准库，不 import ``audit`` / ``protect``，
-也不在运行时依赖 ``sia-harness``（词表由 ``scripts/import-terms.py``
-一次性导入、本仓自持）。
+本模块只服务 ``factscribe style``；纯标准库，不 import ``audit`` / ``protect``。
 """
 from __future__ import annotations
 
@@ -22,7 +29,11 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_GLOSSARY_PATH = Path(__file__).resolve().parent / "terms" / "glossary.tsv"
+DEFAULT_TERMS_DIR = Path(__file__).resolve().parent / "terms"
+DEFAULT_WORKSPACE_PATH = DEFAULT_TERMS_DIR / "workspace.tsv"
+DEFAULT_PAPER_PATH = DEFAULT_TERMS_DIR / "paper.tsv"
+# 向后兼容：旧代码把默认词表当 glossary.tsv 读；现在默认是「论文＋流程」两层。
+DEFAULT_GLOSSARY_PATH = DEFAULT_WORKSPACE_PATH
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _SPACE_RE = re.compile(r"\s+")
@@ -80,6 +91,12 @@ class Term:
     canonical: str
     category: str
     forms: tuple
+    blocked: tuple = ()
+    source: str = "paper"       # "paper" / "workspace"
+
+    def is_blocked(self, form_key: str) -> bool:
+        """该匹配键是否属于本条的禁用变体。"""
+        return form_key in {key_of(x) for x in self.blocked if key_of(x)}
 
 
 @dataclass(frozen=True)
@@ -104,7 +121,10 @@ class _Form:
 
 
 class Glossary:
-    """词表与最长匹配扫描器。同一匹配键先到先得（导入脚本已挡冲突）。"""
+    """词表与最长匹配扫描器。同一匹配键先到先得（导入脚本已挡冲突）。
+
+    装载分层词表时把 ``paper`` 放在前面，因此同名表面形式以论文表为准。
+    """
 
     def __init__(self, terms):
         self.terms = tuple(terms)
@@ -133,6 +153,11 @@ class Glossary:
     @property
     def form_count(self) -> int:
         return len(self._form_map)
+
+    @property
+    def paper_terms(self) -> tuple:
+        """只参与 TERM_VARIANT 的论文术语（workspace 词只查词）。"""
+        return tuple(t for t in self.terms if t.source == "paper")
 
     def canonical_of(self, text: str) -> str | None:
         """整段文本恰好是某个表面形式时返回 canonical；否则 None。"""
@@ -236,8 +261,17 @@ class Glossary:
 # 装载
 # --------------------------------------------------------------------------
 
-def parse_glossary(text: str) -> Glossary:
-    """解析 TSV；空行与 # 注释忽略，列名行忽略。"""
+def _source_for_path(path: Path) -> str:
+    """按文件名判层：workspace.tsv → workspace；其余（含项目 glossary）→ paper。"""
+    return "workspace" if "workspace" in path.stem.lower() else "paper"
+
+
+def parse_glossary(text: str, source: str = "paper") -> Glossary:
+    """解析 TSV；空行与 # 注释忽略，列名行忽略。
+
+    第五列（可选）是 ``blocked(cn)``：禁用变体。它们**仍进匹配表**，这样
+    同义归一能把禁用写法视同正名；``TERM_VARIANT`` 再按禁用变体单独报。
+    """
     rows = []
     for raw in str(text).splitlines():
         line = raw.rstrip("\n")
@@ -250,17 +284,36 @@ def parse_glossary(text: str) -> Glossary:
         aliases_en = cols[1].split("|") if len(cols) > 1 else []
         aliases_cn = cols[2].split("|") if len(cols) > 2 else []
         category = cols[3].strip() if len(cols) > 3 else ""
+        blocked = cols[4].split("|") if len(cols) > 4 else []
+        blocked = [x.strip() for x in blocked if x.strip()]
         forms = [canonical]
         forms += [x.strip() for x in aliases_en if x.strip()]
         forms += [x.strip() for x in aliases_cn if x.strip()]
+        forms += [x for x in blocked if x not in forms]
         rows.append(Term(len(rows), canonical, category or "未分类",
-                         tuple(forms)))
+                         tuple(forms), tuple(blocked), source))
     return Glossary(rows)
 
 
+def _load_glossary_file(path: Path, source: str | None = None) -> Glossary:
+    return parse_glossary(path.read_text(encoding="utf-8"),
+                          source or _source_for_path(path))
+
+
 def load_glossary(path: str | Path | None = None) -> Glossary:
-    """读词表；未给路径时读仓内默认词表。文件缺失返回空词表。"""
-    target = Path(path) if path is not None else DEFAULT_GLOSSARY_PATH
-    if not target.is_file():
-        return Glossary(())
-    return parse_glossary(target.read_text(encoding="utf-8"))
+    """读词表。
+
+    * 给定路径：只读该文件（项目 ``glossary.tsv`` 视为论文术语表）；
+    * 未给路径：读仓内分层默认词表——``paper.tsv`` 在前、``workspace.tsv``
+      在后，同名表面形式以论文表为准；文件缺失时跳过该层。
+    """
+    if path is not None:
+        target = Path(path)
+        if not target.is_file():
+            return Glossary(())
+        return _load_glossary_file(target)
+    terms = []
+    for target in (DEFAULT_PAPER_PATH, DEFAULT_WORKSPACE_PATH):
+        if target.is_file():
+            terms.extend(_load_glossary_file(target).terms)
+    return Glossary(terms)

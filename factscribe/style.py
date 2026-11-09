@@ -44,8 +44,12 @@ STYLE_RULES_NAME = "style-rules.toml"
 DEFAULT_RULES: dict = {
     # 术语白名单：两层——项目内 GLOSSARY.md ＋ 用户自维护纯文本（一行一个词）
     "term_allow_files": ["GLOSSARY.md", "term-allow.txt"],
-    # 项目术语表覆盖（相对项目根）；空串＝用仓内 factscribe/terms/glossary.tsv
+    # 项目术语表覆盖（相对项目根）；空串＝用仓内分层词表
+    # （factscribe/terms/paper.tsv ＋ workspace.tsv）
     "term_glossary": "",
+    # TERM_UNREGISTERED 默认关闭；只由 `style --report-unregistered` 显式打开。
+    # 打开时只查标题，结果单独走 info 通道，不进 findings、不影响退出码。
+    "term_unregistered": False,
     "thresholds": {
         "connective_density": 8.0,
         # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
@@ -541,6 +545,7 @@ class StyleResult:
     summary: dict
     rules_path: str = ""
     stage_assessment: dict = field(default_factory=dict)
+    info: list = field(default_factory=list)
 
     @property
     def exit_code(self) -> int:
@@ -551,6 +556,7 @@ class StyleResult:
             "metrics": self.metrics,
             "thresholds": dict(self.thresholds),
             "findings": [f.as_dict() for f in self.findings],
+            "info": [f.as_dict() for f in self.info],
             "paragraphs": [p.as_dict() for p in self.paragraphs],
             "fired": self.fired,
             "summary": self.summary,
@@ -795,7 +801,11 @@ def _headings(tex: str) -> list[dict]:
 
 
 def _term_candidates(title: str) -> list[str]:
-    """从标题抽「术语样」词：中文 ≥4 字段；英文 ≥2 词短语。"""
+    """从标题抽「术语样」词：中文 ≥4 字段；英文 ≥2 词短语。
+
+    这是 ``TERM_FIRST_IN_HEADING`` 的候选面，沿用批 90 口径；
+    ``TERM_UNREGISTERED`` 用更严格的 ``_unregistered_candidates``。
+    """
     raw: list[str] = []
     for run in re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]{4,}", title):
         for seg in _TERM_SEP_RE.split(run):
@@ -823,8 +833,83 @@ def _term_candidates(title: str) -> list[str]:
     return out
 
 
+_CJK_RUN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
+_LATIN_PHRASE_RE = re.compile(
+    r"[A-Za-z][A-Za-z0-9'’\-]*(?:[ \t]+[A-Za-z][A-Za-z0-9'’\-]*)+")
+# 候选两端是虚词时不是术语，是句子碎片。
+_EDGE_FUNCTION_CHARS = set("的了和与在对是把被而或")
+# 候选内部夹着强虚词/句法助词时更像从句，不是术语（如「好让时间线留档」）。
+_INNER_CLAUSE_CHARS = set("让把被是的了而或且却")
+
+
+def _overlaps(start: int, stop: int, spans: list[tuple[int, int]]) -> bool:
+    return any(start < e and s < stop for s, e in spans)
+
+
+def _bounded(text: str, start: int, stop: int) -> bool:
+    """两侧必须是标点/空白/行首尾（不能紧贴字母或数字）。"""
+    before = text[start - 1] if start > 0 else ""
+    after = text[stop] if stop < len(text) else ""
+    return not before.isalnum() and not after.isalnum()
+
+
+def _unregistered_candidates(title: str, glossary: Glossary | None
+                             ) -> list[str]:
+    """TERM_UNREGISTERED 的候选：只从标题抽，形态收紧。
+
+    * 中文：CJK 2–7 字，两侧被标点/空白/标题边界隔开；不与任何更长命中重叠；
+    * 拉丁：≥2 个连续词（可含连字符），同样不与在册命中重叠；
+    * 以虚词（的/了/和/与/在/对/是/把/被/而/或）开头或结尾的候选不收；
+    * 候选内部夹着强句法助词（让/把/被/是/的/了/而/或/且/却）的不收。
+    """
+    spans = [(m.start, m.end) for m in glossary.matches(title)] if glossary else []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(cand: str) -> None:
+        cand = _norm_space(cand)
+        key = cand.lower()
+        if cand and key not in seen:
+            seen.add(key)
+            out.append(cand)
+
+    for m in _CJK_RUN_RE.finditer(title):
+        cand = m.group(0)
+        if not (2 <= len(cand) <= 7):
+            continue
+        if cand[0] in _EDGE_FUNCTION_CHARS or cand[-1] in _EDGE_FUNCTION_CHARS:
+            continue
+        if any(ch in _INNER_CLAUSE_CHARS for ch in cand):
+            continue
+        if not _bounded(title, m.start(), m.end()):
+            continue
+        if _overlaps(m.start(), m.end(), spans):
+            continue
+        add(cand)
+
+    for m in _LATIN_PHRASE_RE.finditer(title):
+        if not _bounded(title, m.start(), m.end()):
+            continue
+        run: list[str] = []
+        for word in m.group(0).split():
+            if word.lower() in _TERM_STOP:
+                if len(run) >= 2:
+                    add(" ".join(run))
+                run = []
+            else:
+                run.append(word)
+        if len(run) >= 2:
+            add(" ".join(run))
+        # 单字/被虚词切断的残片不报；Latin ≥2 词是硬条件。
+    return out
+
+
 def _glossary_for(rules: dict, project_root: Path) -> Glossary:
-    """解析顺序：rules.term_glossary → 项目根 glossary.tsv → 仓内默认词表。"""
+    """解析顺序：rules.term_glossary → 项目根 glossary.tsv → 仓内分层词表。
+
+    项目自带的 ``glossary.tsv`` 视为论文术语表（参与 TERM_VARIANT）；
+    仓内默认是 ``paper.tsv`` ＋ ``workspace.tsv`` 两层，同名以 paper 为准。
+    """
     configured = str(rules.get("term_glossary") or "").strip()
     if configured:
         path = Path(configured)
@@ -1239,7 +1324,15 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
 
 def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
                            min_forms: int) -> list[Finding]:
-    """同一 canonical 在一篇里出现 ≥ min_forms 种不同表面形式即报。"""
+    """只在 paper.tsv 的条目上判 TERM_VARIANT。
+
+    优先级：
+    1. 出现术语表声明的**禁用变体**即报（给出哪一行用了哪个变体、正名是什么）；
+    2. 否则同一 canonical 在一篇里出现 ≥ ``min_forms`` 种表面形式才报。
+
+    workspace.tsv 的流程词只用于查词，不参与本规则——它们的别名是宽松
+    近义（``成本`` 的别名含 ``预算``），直接当同义词会误报。
+    """
     findings: list[Finding] = []
     if not glossary or min_forms < 2:
         return findings
@@ -1247,10 +1340,16 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
         groups: dict = {}
 
         def add(match, line: int) -> None:
-            forms = groups.setdefault(match.canonical, {})
-            entry = forms.setdefault(match.form, {"lines": set(),
-                                                  "surface": match.surface})
+            if match.term.source != "paper":
+                return
+            group = groups.setdefault(match.canonical, {
+                "forms": {}, "blocked": {}})
+            entry = group["forms"].setdefault(
+                match.form, {"lines": set(), "surface": match.surface})
             entry["lines"].add(line)
+            if match.term.is_blocked(match.form):
+                bucket = group["blocked"].setdefault(match.surface, set())
+                bucket.add(line)
 
         for match in glossary.matches(doc.prose):
             add(match, _line_of(doc, match.start))
@@ -1258,10 +1357,32 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
             for match in glossary.matches(head["title"]):
                 add(match, head["line"])
         for canonical in sorted(groups):
-            forms = groups[canonical]
-            if len(forms) < min_forms:
+            group = groups[canonical]
+            blocked = group["blocked"]
+            if blocked:
+                pieces = []
+                lines: list[int] = []
+                for surface in sorted(blocked,
+                                      key=lambda s: (min(blocked[s]), s)):
+                    line_txt = "、".join(str(x) for x in sorted(blocked[surface]))
+                    pieces.append("「%s」（第%s行）" % (surface, line_txt))
+                    lines.extend(blocked[surface])
+                findings.append(Finding(
+                    "TERM_VARIANT", doc.file, min(lines),
+                    _clip("%s ← %s" % (canonical, "、".join(pieces)), 180),
+                    "术语表声明的禁用变体出现了：%s；正名是「%s」。"
+                    "只把这个写法改回正名，不改事实、数字与引用。"
+                    % ("、".join(pieces), canonical),
+                    "term_variant"))
                 continue
-            ordered = sorted(forms.values(),
+            forms = group["forms"]
+            # 只把中文表面形式计入「用词不一致」：英文列是同一术语的译法，
+            # 同一篇里出现 submit / hand in 不代表中文术语层不统一。
+            cjk_forms = [item for item in forms.values()
+                         if _CJK_RE.search(item["surface"])]
+            if len(cjk_forms) < min_forms:
+                continue
+            ordered = sorted(cjk_forms,
                              key=lambda item: (min(item["lines"]),
                                                item["surface"]))
             pieces = []
@@ -1276,7 +1397,7 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
                 _clip("%s：%s" % (canonical, "、".join(pieces)), 180),
                 "同一概念在一篇里用了 %d 种写法；统一用规范形「%s」，"
                 "其余写法改回它（只改措辞，不改事实）。"
-                % (len(forms), canonical),
+                % (len(cjk_forms), canonical),
                 "term_variant"))
     return findings
 
@@ -1284,11 +1405,11 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
 def _unregistered_findings(doc: "_Doc", line: int, text: str,
                            glossary: Glossary, allow_keys: set,
                            allow_canon: set, seen: set) -> list[Finding]:
-    """术语样候选归一化后不在册 → 只提示（不参与任何计数门槛）。"""
+    """标题里的术语样候选归一化后不在册 → 只提示（单独走 info 通道）。"""
     out: list[Finding] = []
     if not glossary or not text:
         return out
-    for cand in _term_candidates(text):
+    for cand in _unregistered_candidates(text, glossary):
         if glossary.canonical_of(cand) is not None:
             continue
         if glossary.covers(cand):
@@ -1303,9 +1424,9 @@ def _unregistered_findings(doc: "_Doc", line: int, text: str,
         seen.add(signature)
         out.append(Finding(
             "TERM_UNREGISTERED", doc.file, line, _clip(cand, 160),
-            "「%s」不在术语表内：建议登记到 glossary.tsv，或换用已登记"
-            "的规范形。本条只提示，不参与计数门槛，不影响退出码。" % cand,
-            "term_unregistered"))
+            "「%s」不在术语表内：建议登记到 paper.tsv，或换用已登记的"
+            "规范形。本条只提示，不进 findings 计数、不影响退出码。" % cand,
+            "term_unregistered", severity="info"))
     return out
 
 
@@ -1336,7 +1457,8 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
                        fired=fired, findings=new_findings,
                        paragraphs=after.paragraphs, instances=after.instances,
                        summary=summary, rules_path=after.rules_path,
-                       stage_assessment=after.stage_assessment)
+                       stage_assessment=after.stage_assessment,
+                       info=list(after.info))
 
 
 def _shape_bucket(n: int) -> int:
@@ -1415,7 +1537,8 @@ def assess_stage(triggers: int, cv: float, fired: list) -> dict:
 
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
-            before: tuple[Config, list[tuple[str, str]]] | None = None
+            before: tuple[Config, list[tuple[str, str]]] | None = None,
+            report_unregistered: bool = False
             ) -> StyleResult:
     thresholds = _thresholds(rules)
     limits = _limits(rules)
@@ -1586,16 +1709,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "都不算定义。可在 term-allow.txt 登记白名单，只改措辞，"
                     "不改事实。" % cand,
                     "term_first_in_heading"))
-            # ---- 批 90：TERM_UNREGISTERED（标题 / 首句；只提示）----
-            line_of_first = _line_of(doc, first_pos) if first_pos >= 0 else line
-            instances["TERM_UNREGISTERED"].extend(
-                _unregistered_findings(doc, line, title, glossary,
-                                       allow_keys, allow_canon,
-                                       seen_unregistered))
-            if first_txt:
+            # ---- 批 91：TERM_UNREGISTERED（默认关；打开时只查标题）----
+            if report_unregistered:
                 instances["TERM_UNREGISTERED"].extend(
-                    _unregistered_findings(doc, line_of_first, first_txt,
-                                           glossary, allow_keys, allow_canon,
+                    _unregistered_findings(doc, line, title, glossary,
+                                           allow_keys, allow_canon,
                                            seen_unregistered))
             if first_txt and _heading_echo(title, first_txt, rules, thresholds,
                                            glossary):
@@ -1895,14 +2013,18 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     fired_metrics = {f["metric"] for f in fired}
     findings: list[Finding] = []
     for code, items in instances.items():
+        # TERM_UNREGISTERED 单独走 info 通道，永不进 findings 计数。
+        if code == "TERM_UNREGISTERED":
+            continue
         metric = next((m for m, c in CODE_OF.items() if c == code), "")
-        # TERM_UNREGISTERED 只提示：不要求所属指标已触发。
-        if code != "TERM_UNREGISTERED" and metric not in fired_metrics:
+        if metric not in fired_metrics:
             continue
         findings.extend(items[:cap])
     findings.sort(key=lambda f: (FINDING_ORDER.index(f.code)
                                  if f.code in FINDING_ORDER else 99,
                                  f.file, f.line))
+    info = sorted(instances.get("TERM_UNREGISTERED", []),
+                  key=lambda f: (f.file, f.line, f.text))
 
     paragraphs = sorted(paragraph_infos.values(), key=lambda p: (p.file, p.line))
     stage = assess_stage(len(fired), raw_cv, fired)
@@ -1920,7 +2042,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     return StyleResult(metrics=metrics, thresholds=dict(thresholds), fired=fired,
                        findings=findings, paragraphs=paragraphs,
                        instances=instances, summary=summary,
-                       rules_path=rules_path, stage_assessment=stage)
+                       rules_path=rules_path, stage_assessment=stage,
+                       info=info)
 
 
 # --------------------------------------------------------------------------
@@ -2068,6 +2191,14 @@ def render_human(result: StyleResult, project: Path) -> str:
             lines.append(" %2d. %-22s %s:%d" % (idx, f.code, f.file, f.line))
             lines.append("     原文：" + _clip(f.text, 160))
             lines.append("     改法：" + f.suggestion)
+    info = getattr(result, "info", [])
+    if info:
+        lines.append("")
+        lines.append("[信息] %d 条未登记术语提示（不计数、不影响退出码）"
+                     % len(info))
+        for idx, f in enumerate(info, 1):
+            lines.append(" %2d. %-22s %s:%d  %s"
+                         % (idx, f.code, f.file, f.line, _clip(f.text, 80)))
     flagged = [p for p in result.paragraphs if p.flags]
     if flagged:
         lines.append("")

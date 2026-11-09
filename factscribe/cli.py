@@ -90,6 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--diff", default=None, metavar="BEFORE",
                     help="改写前目录：只报本次改写新增的违规，并启用标题"
                          "关系词/主语丢失比对（需该目录有 paperkit.toml）")
+    sp.add_argument("--report-unregistered", action="store_true",
+                    help="打开 TERM_UNREGISTERED 提示（默认关；只查标题，"
+                         "结果进 info 通道，不进 findings、不影响退出码）")
     sp = sub.add_parser(
         "protect", help="改写保护面比对：前后目录的 facts/数字/引用/公式/表格/交叉引用")
     sp.add_argument("--before", required=True, help="改写前目录")
@@ -224,7 +227,8 @@ def cmd_style(args) -> int:
         before_sections = load_sections(before_cfg)
         before = (before_cfg, before_sections)
     result = analyze(cfg, sections, rules, rules_path=rules_path,
-                     before=before)
+                     before=before,
+                     report_unregistered=bool(args.report_unregistered))
     if before is not None:
         baseline = analyze(before[0], before[1], rules, rules_path=rules_path)
         result = filter_new_findings(result, baseline)
@@ -245,6 +249,7 @@ def cmd_style(args) -> int:
                        metrics=result.metrics,
                        thresholds=dict(result.thresholds),
                        findings=[f.as_dict() for f in result.findings],
+                       info=[f.as_dict() for f in getattr(result, "info", [])],
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,

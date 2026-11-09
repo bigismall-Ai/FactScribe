@@ -25,9 +25,9 @@ sys.path.insert(0, str(ROOT))
 
 from factscribe.config import load_config, load_sections  # noqa: E402
 from factscribe.style import analyze, load_style_rules  # noqa: E402
-from factscribe.terms import (DEFAULT_GLOSSARY_PATH, key_of,  # noqa: E402
-                              load_glossary, normalize_surface,
-                              parse_glossary)
+from factscribe.terms import (DEFAULT_GLOSSARY_PATH, DEFAULT_PAPER_PATH,  # noqa: E402
+                              DEFAULT_WORKSPACE_PATH, key_of, load_glossary,
+                              normalize_surface, parse_glossary)
 
 PROJECT_TOML = """[project]
 title = "t"
@@ -67,11 +67,13 @@ def make_project(base: Path, sections: dict, glossary: str | None = GLOSSARY,
 
 def analyze_text(base: Path, body: str, glossary: str | None = GLOSSARY,
                  rules: str | None = None,
-                 extras: dict | None = None):
+                 extras: dict | None = None,
+                 report_unregistered: bool = False):
     root = make_project(base, {"01_main.tex": body}, glossary, rules, extras)
     cfg = load_config(root)
     loaded, path = load_style_rules(root)
-    return analyze(cfg, load_sections(cfg), loaded, rules_path=path)
+    return analyze(cfg, load_sections(cfg), loaded, rules_path=path,
+                   report_unregistered=report_unregistered)
 
 
 def codes(result) -> set:
@@ -146,6 +148,18 @@ class TestNormalization(unittest.TestCase):
         self.assertGreater(len(glossary), 100)
         self.assertGreaterEqual(glossary.form_count, len(glossary))
 
+    def test_default_layers_paper_and_workspace(self):
+        workspace = load_glossary(DEFAULT_WORKSPACE_PATH)
+        paper = load_glossary(DEFAULT_PAPER_PATH)
+        merged = load_glossary()
+        self.assertGreater(len(workspace), 100)
+        self.assertGreater(len(paper), 20)
+        self.assertEqual(merged.canonical_of("事前登记"), "预注册")
+        self.assertTrue(any(t.source == "paper" for t in merged.terms))
+        self.assertTrue(any(t.source == "workspace" for t in merged.terms))
+        self.assertEqual(
+            {t.source for t in merged.paper_terms}, {"paper"})
+
 
 # --------------------------------------------------------------------------
 # 2. TERM_VARIANT
@@ -209,7 +223,64 @@ class TestTermVariant(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------
-# 3. TERM_UNREGISTERED（只提示、不改退出码）
+# 2b. 分层词表：paper.tsv 禁用变体 / workspace.tsv 不参与 TERM_VARIANT
+# --------------------------------------------------------------------------
+
+PAPER_GLOSSARY = (
+    "canonical\taliases(en)\taliases(cn)\tcategory\tblocked(cn)\n"
+    "预注册\tpreregistration\t\t论文术语\t事前登记|预先登记\n"
+    "上下文编译\tcontext compilation\t\t论文术语\t上下文编排|上下文工程\n"
+)
+
+
+class TestPaperGlossaryLayers(unittest.TestCase):
+    def test_blocked_variant_still_normalizes_to_canonical(self):
+        glossary = parse_glossary(PAPER_GLOSSARY)
+        self.assertEqual(glossary.canonical_of("事前登记"), "预注册")
+        term = next(t for t in glossary.terms if t.canonical == "预注册")
+        self.assertTrue(term.is_blocked(key_of("事前登记")))
+        self.assertFalse(term.is_blocked(key_of("预注册")))
+
+    def test_forbidden_variant_reports_canonical_and_line(self):
+        body = ("\\section{预注册}\n\n"
+                "预注册要求在收集数据前固定假设。\n\n"
+                "事前登记让分析计划在见数据前冻结。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=PAPER_GLOSSARY)
+        hit = next(f for f in result.findings if f.code == "TERM_VARIANT")
+        self.assertIn("事前登记", hit.text)
+        self.assertIn("预注册", hit.text)
+        self.assertIn("第5行", hit.text)
+        self.assertIn("禁用变体", hit.suggestion)
+
+    def test_only_canonical_has_no_variant(self):
+        body = ("\\section{预注册}\n\n"
+                "预注册要求在收集数据前固定假设；分析计划在见数据前冻结。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=PAPER_GLOSSARY)
+        self.assertNotIn("TERM_VARIANT", codes(result))
+
+    def test_workspace_alias_is_not_a_variant(self):
+        body = ("\\section{成本}\n\n"
+                "成本按输出与输入分别记账，十六次运行的读数见附录。\n\n"
+                "预算在同一份账里也按输出与输入分开记录。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=None)
+        self.assertNotIn("TERM_VARIANT", codes(result))
+        self.assertEqual(result.metrics["term_variant"], 0)
+
+    def test_multiple_chinese_forms_still_reported(self):
+        body = ("\\section{预注册}\n\n"
+                "预注册要求在收集数据前固定假设。\n\n"
+                "预先登记让分析计划在见数据前冻结。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=PAPER_GLOSSARY)
+        hit = next(f for f in result.findings if f.code == "TERM_VARIANT")
+        self.assertIn("预先登记", hit.text)
+
+
+# --------------------------------------------------------------------------
+# 3. TERM_UNREGISTERED（默认关；打开后只查标题、只进 info 通道）
 # --------------------------------------------------------------------------
 
 UNREGISTERED = (
@@ -219,44 +290,82 @@ UNREGISTERED = (
 
 
 class TestTermUnregistered(unittest.TestCase):
-    def test_heading_hint_does_not_change_exit_code(self):
+    def test_default_is_off(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(Path(tmp), UNREGISTERED)
-        self.assertIn("TERM_UNREGISTERED", codes(result))
-        self.assertEqual(result.exit_code, 0)
+        self.assertNotIn("TERM_UNREGISTERED", codes(result))
+        self.assertEqual(result.metrics["term_unregistered"], 0)
+        self.assertEqual(result.info, [])
+
+    def test_heading_hint_only_with_report_flag_and_info_channel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            off = analyze_text(Path(tmp), UNREGISTERED)
+            on = analyze_text(Path(tmp), UNREGISTERED,
+                              report_unregistered=True)
+        self.assertEqual(on.info and [f.code for f in on.info],
+                         ["TERM_UNREGISTERED"])
+        self.assertNotIn("TERM_UNREGISTERED", codes(on))
+        self.assertEqual(on.summary["findings"], off.summary["findings"])
+        self.assertEqual(on.exit_code, off.exit_code)
+        self.assertEqual(on.exit_code, 0)
         self.assertNotIn("term_unregistered",
-                         {f["metric"] for f in result.fired})
-        self.assertEqual(result.summary["triggered"], 0)
-        hit = next(f for f in result.findings if f.code == "TERM_UNREGISTERED")
+                         {f["metric"] for f in on.fired})
+        hit = on.info[0]
         self.assertIn("只提示", hit.suggestion)
+        self.assertIn("量子纠缠网络", hit.text)
+
+    def test_report_flag_ignores_first_sentence(self):
+        body = ("\\section{测量}\n\n"
+                "我们报告量子纠缠网络的十六次远程读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        self.assertFalse(any("量子纠缠网络" in f.text for f in result.info))
+
+    def test_garbage_clause_candidate_not_reported(self):
+        body = ("\\section{好让时间线留档}\n\n"
+                "本节说明十六次运行的读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        self.assertEqual(result.info, [])
+
+    def test_term_like_heading_reported(self):
+        body = ("\\section{剂量反应曲线}\n\n"
+                "本节给出十六次运行的读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        self.assertTrue(any("剂量反应曲线" in f.text for f in result.info))
 
     def test_registered_heading_term_has_no_hint(self):
         body = ("\\section{预注册流程}\n\n"
                 "预注册流程固定假设，分析计划在见数据前冻结。\n")
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(Path(tmp), body)
-        hints = [f.text for f in result.findings
-                 if f.code == "TERM_UNREGISTERED"]
-        self.assertNotIn("预注册流程", hints)
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        self.assertNotIn("预注册流程", [f.text for f in result.info])
 
     def test_whitelist_suppresses_hint_after_normalization(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(
-                Path(tmp), UNREGISTERED,
+                Path(tmp), UNREGISTERED, report_unregistered=True,
                 extras={"term-allow.txt": "# user\n量子纠缠网络\n"})
-        hints = [f.text for f in result.findings
-                 if f.code == "TERM_UNREGISTERED"]
-        self.assertNotIn("量子纠缠网络", hints)
+        self.assertNotIn("量子纠缠网络", [f.text for f in result.info])
 
-    def test_first_sentence_hint(self):
-        body = ("\\section{测量}\n\n"
-                "我们报告量子纠缠网络的十六次远程读数与全部原始日志。\n")
+    def test_long_cjk_run_and_function_edges_not_reported(self):
+        body = ("\\section{超过七个字的超长术语候选}\n\n"
+                "\\section{的时间线}\n\n"
+                "两节都给出十六次运行的读数与全部原始日志。\n")
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(Path(tmp), body)
-        hints = [f.text for f in result.findings
-                 if f.code == "TERM_UNREGISTERED"]
-        self.assertTrue(any("量子纠缠网络" in x for x in hints))
-        self.assertEqual(result.exit_code, 0)
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        self.assertEqual(result.info, [])
+
+    def test_latin_single_word_not_reported_multi_word_reported(self):
+        body = ("\\section{Zeta}\n\n"
+                "\\section{dose response curve}\n\n"
+                "两节都给出十六次运行的读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, report_unregistered=True)
+        texts = [f.text for f in result.info]
+        self.assertNotIn("Zeta", texts)
+        self.assertIn("dose response curve", texts)
 
 
 # --------------------------------------------------------------------------
@@ -280,6 +389,21 @@ ECHO_SYNONYM_NEG = (
 
 
 class TestCanonicalHeadingRules(unittest.TestCase):
+    def test_heading_echo_with_paper_blocked_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), ECHO_SYNONYM,
+                                  glossary=PAPER_GLOSSARY)
+        self.assertIn("HEADING_ECHO", codes(result))
+        self.assertEqual(result.exit_code, 3)
+
+    def test_heading_echo_paper_variant_with_new_info_not_reported(self):
+        body = ("\\section{预注册}\n\n"
+                "事前登记要求分析计划在收集数据前冻结，"
+                "并记录十六次远程运行的读数。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=PAPER_GLOSSARY)
+        self.assertNotIn("HEADING_ECHO", codes(result))
+
     def test_heading_echo_still_caught_after_synonym(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(Path(tmp), ECHO_SYNONYM)
@@ -350,6 +474,63 @@ class TestImportScript(unittest.TestCase):
             parsed = parse_glossary(text)
             self.assertEqual(parsed.canonical_of("示例"), "样例")
             self.assertEqual(parsed.canonical_of("exemplar-alt"), "样例")
+
+
+# --------------------------------------------------------------------------
+# 6. import-glossary.py（论文术语表导入）
+# --------------------------------------------------------------------------
+
+GLOSSARY_MD = """\
+# 术语
+
+| 英文 | 中文 | 备注 |
+|---|---|---|
+| context compilation | 上下文编译 | 不写「上下文编排」「上下文工程」 |
+| invariant | 不变式 | 不写「不变量」 |
+| resolved | 判定修复 | 不用「解决」「修复成功」 |
+| pointer / object store | 指针／对象存储 | |
+"""
+
+
+class TestImportGlossaryScript(unittest.TestCase):
+    def test_import_paper_glossary_is_repeatable_and_parses_blocked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            src = tmp / "GLOSSARY.md"
+            src.write_text(GLOSSARY_MD, encoding="utf-8")
+            out = tmp / "paper.tsv"
+            cmd = [sys.executable,
+                   str(ROOT / "scripts" / "import-glossary.py"),
+                   "--source", str(src), "--out", str(out)]
+            first = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                   text=True)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            text = out.read_text(encoding="utf-8")
+            glossary = parse_glossary(text)
+            self.assertEqual(glossary.canonical_of("上下文编排"), "上下文编译")
+            self.assertEqual(glossary.canonical_of("不变量"), "不变式")
+            # 「不用「解决」」不是「不写」声明，不进口术语层。
+            self.assertIsNone(glossary.canonical_of("解决"))
+            # 并列概念拆成两条，避免同一 canonical 的假变体。
+            self.assertEqual(glossary.canonical_of("对象存储"), "对象存储")
+            self.assertIsNone(glossary.canonical_of("指针／对象存储"))
+            second = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                    text=True)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(out.read_text(encoding="utf-8"), text)
+
+    def test_missing_source_skips_with_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "paper.tsv"
+            cmd = [sys.executable,
+                   str(ROOT / "scripts" / "import-glossary.py"),
+                   "--source", str(Path(tmp) / "missing.md"),
+                   "--out", str(out)]
+            result = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+                                    text=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertIn("跳过", result.stdout)
+            self.assertFalse(out.exists())
 
 
 if __name__ == "__main__":

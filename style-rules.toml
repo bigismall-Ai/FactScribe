@@ -11,9 +11,15 @@
 # 再用户自维护的纯文本（一行一个词）；忽略空行与 # 注释，大小写不敏感。
 term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 
-# 项目术语表覆盖（相对项目根）；空/缺省时用仓内 factscribe/terms/glossary.tsv。
-# 词表列：canonical / aliases(en) / aliases(cn) / category（Tab 分隔）。
+# 项目术语表覆盖（相对项目根）；空/缺省时用仓内分层词表：
+#   terms/paper.tsv    论文领域术语（参与 TERM_VARIANT）
+#   terms/workspace.tsv 工作区流程词（只查词，不参与 TERM_VARIANT）
+# 词表列：canonical / aliases(en) / aliases(cn) / category / blocked(cn)（可选）。
 # term_glossary = "glossary.tsv"
+
+# TERM_UNREGISTERED 默认关闭；只由 `style --report-unregistered` 显式打开。
+# 打开时只查标题，结果单独走 info 通道：不进 findings 计数、不影响退出码。
+term_unregistered = false
 
 # 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
 # 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）
@@ -53,9 +59,10 @@ heading_max_words_en = 8
 # 同构三点并列在相邻段落重复 >= N 次才报（不是按条数判）
 colloquial_triad_repeats = 2
 
-# ---- 批 90 术语层 ----
+# ---- 批 90/91 术语层 ----
 # 同一 canonical 在同一篇里出现多少种不同表面形式才报 TERM_VARIANT
-# （大小写、全半角、连字符差异归一后不算不同形式）
+# （大小写、全半角、连字符差异归一后不算不同形式；只在 paper.tsv 的条目上判，
+#  声明的禁用变体出现即报，优先于本阈值）
 term_variant_min_forms = 2
 
 # ---- v5 新增（SPEC-V3.0 §15 改写后复检）----

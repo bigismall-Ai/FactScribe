@@ -130,6 +130,46 @@ class MarkdownMaskTest(unittest.TestCase):
         self.assertIn("——", scan.prose)
         self.assertEqual(scan.headings, [])
 
+    def test_list_lines_blanked_but_text_kept_in_list_view(self):
+        text = ("## 标题\n\n"
+                "- 第一项内容足够长\n"
+                "- 第二项内容足够长\n"
+                "\n"
+                "正文段落——在这里。\n")
+        scan = scan_markdown(text)
+        # 等长、换行不漂：行号仍可换算
+        self.assertEqual(len(scan.prose), len(text))
+        self.assertEqual(scan.prose.count("\n"), text.count("\n"))
+        # 列表行不参与句级统计
+        self.assertNotIn("第一项", scan.prose)
+        self.assertIn("正文段落", scan.prose)
+        # 列表视图里保留列表内容（供超长句规则单独判）
+        self.assertIn("第一项", scan.list_prose)
+        self.assertNotIn("正文段落", scan.list_prose)
+        self.assertEqual(len(scan.list_spans), 2)
+
+    def test_list_marker_styles_all_masked(self):
+        text = ("- 短横线项内容\n"
+                "* 星号项内容\n"
+                "+ 加号项内容\n"
+                "1. 数字项内容\n"
+                "10. 两位数项内容\n")
+        scan = scan_markdown(text)
+        for marker in ("短横线", "星号", "加号", "数字项", "两位数"):
+            self.assertNotIn(marker, scan.prose)
+
+    def test_nested_and_indented_continuation_masked(self):
+        text = ("- 第一项\n"
+                "  缩进续行\n"
+                "  - 嵌套项\n"
+                "续行也算列表\n"
+                "\n"
+                "正文段落。\n")
+        scan = scan_markdown(text)
+        for piece in ("第一项", "缩进续行", "嵌套项", "续行也算"):
+            self.assertNotIn(piece, scan.prose)
+        self.assertIn("正文段落", scan.prose)
+
     def test_format_of(self):
         self.assertEqual(format_of("a.md"), "markdown")
         self.assertEqual(format_of("a.MARKDOWN"), "markdown")
@@ -252,6 +292,79 @@ class MarkdownStyleCliTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             proc = run_cli(tmp, "style", "--doc", "nope.md")
             self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+
+
+class ListScopeTest(unittest.TestCase):
+    """批 94：列表不进句级统计；术语规则只在册词。"""
+
+    README_LIST = (
+        "## 黄牌规则\n\n"
+        "黄牌不阻断构建，但会让退出码变成 3。\n\n"
+        "- `UNBOUND_NUMBER`：回得到账但没绑定；\n"
+        "- `NO_MANIFEST` 与 `UNSIGNED_RESULT`：缺人签清单，或有未签产物；\n"
+        "- `VALUE_NOT_IN_SOURCE`：事实里的数字没在源文件里出现；\n"
+        "- `LEDGER_CONFLICT` 与 `DUPLICATE_VALUE`：账本自相矛盾，"
+        "或同值多 claim；\n"
+        "- `CITE_UNVERIFIED`：联网核验没成；\n"
+        "\n"
+        "文风黄牌共九条，分四类：破折号插入解释、标题过长或格式不对、"
+        "术语首现在标题、节奏与套话。\n")
+
+    def test_equal_length_list_has_no_rhythm_plateau(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), self.README_LIST)
+            self.assertNotIn("RHYTHM_PLATEAU", codes(payload))
+            self.assertEqual(payload["metrics"]["rhythm_plateau"], 0)
+
+    def test_long_sentence_inside_list_still_reported(self):
+        long_sentence = " ".join(["the model output value"] * 18)
+        text = ("## Overview\n\n"
+                "- " + long_sentence + ".\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), text)
+            self.assertIn("SENTENCE_LENGTH_EXTREME", codes(payload))
+            hit = next(f for f in payload["findings"]
+                       if f["code"] == "SENTENCE_LENGTH_EXTREME")
+            self.assertEqual(hit["line"], 3)
+
+    def test_line_numbers_accurate_after_list_mask(self):
+        text = ("## 标题\n\n"
+                "- 第一项内容足够长\n"
+                "- 第二项内容足够长\n"
+                "- 第三项内容足够长\n"
+                "\n"
+                "正文里有一个插入语破折号——像这样。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), text)
+            dashes = [f for f in payload["findings"]
+                      if f["code"] == "DASH_PARENTHETICAL"]
+            self.assertEqual([f["line"] for f in dashes], [7])
+
+    def test_dash_inside_list_not_reported(self):
+        text = ("## 标题\n\n"
+                "- 列表里的破折号——不该报\n"
+                "\n"
+                "正文没有破折号。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), text)
+            self.assertNotIn("DASH_PARENTHETICAL", codes(payload))
+
+    def test_unregistered_heading_term_not_reported(self):
+        text = "## 黄牌规则\n\n黄牌不阻断构建，但会让退出码变成 3。\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), text)
+            self.assertNotIn("TERM_FIRST_IN_HEADING", codes(payload))
+            self.assertEqual(payload["metrics"]["term_first_in_heading"], 0)
+
+    def test_registered_heading_term_still_reported(self):
+        text = ("## 预注册\n\n"
+                "我们报告十六次远程运行的读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            _, payload = style_doc(Path(tmp), text)
+            self.assertIn("TERM_FIRST_IN_HEADING", codes(payload))
+            hit = next(f for f in payload["findings"]
+                       if f["code"] == "TERM_FIRST_IN_HEADING")
+            self.assertEqual(hit["line"], 1)
 
 
 class TexPathRegressionTest(unittest.TestCase):

@@ -76,6 +76,18 @@ def analyze_text(base: Path, body: str, glossary: str | None = GLOSSARY,
                    report_unregistered=report_unregistered)
 
 
+def analyze_markdown(base: Path, body: str, glossary: str | None = None,
+                     extras: dict | None = None,
+                     report_unregistered: bool = False):
+    """Markdown 文档模式的直调口（等价 `style --doc`，不跑子进程）。"""
+    root = make_project(base, {}, glossary, None, extras)
+    cfg = load_config(root)
+    loaded, path = load_style_rules(root)
+    return analyze(cfg, [("README.md", body)], loaded, rules_path=path,
+                   report_unregistered=report_unregistered,
+                   formats={"README.md": "markdown"})
+
+
 def codes(result) -> set:
     return {f.code for f in result.findings}
 
@@ -440,6 +452,64 @@ class TestCanonicalHeadingRules(unittest.TestCase):
                 Path(tmp),
                 "\\section{预注册流程}\n\n我们报告十六次运行的读数。\n",
                 extras={"GLOSSARY.md": "# terms\n事前登记流程\n"})
+        self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
+
+
+# --------------------------------------------------------------------------
+# 4b. TERM_FIRST_IN_HEADING 作用域：只判在册术语（批 94）
+# --------------------------------------------------------------------------
+
+class TestTermFirstScope(unittest.TestCase):
+    """README 型标题不是学术术语：未在册不报，在册照报。"""
+
+    def test_unregistered_heading_not_reported(self):
+        body = ("## 黄牌规则\n\n"
+                "黄牌不阻断构建，但会让退出码变成 3。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_markdown(Path(tmp), body)
+        self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
+        self.assertEqual(result.metrics["term_first_in_heading"], 0)
+
+    def test_unregistered_heading_goes_to_unregistered_channel(self):
+        body = ("## 黄牌规则\n\n"
+                "黄牌不阻断构建，但会让退出码变成 3。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_markdown(Path(tmp), body,
+                                      report_unregistered=True)
+        self.assertIn("黄牌规则", [f.text for f in result.info])
+        self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
+
+    def test_registered_chinese_heading_still_reported(self):
+        body = ("## 预注册\n\n"
+                "我们报告十六次远程运行的读数与全部原始日志。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_markdown(Path(tmp), body)
+        hit = next(f for f in result.findings
+                   if f.code == "TERM_FIRST_IN_HEADING")
+        self.assertIn("预注册", hit.text)
+        self.assertEqual(hit.line, 1)
+
+    def test_registered_english_alias_still_reported(self):
+        body = ("## Preregistration\n\n"
+                "We report all sixteen remote runs and the original logs.\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_markdown(Path(tmp), body)
+        hit = next(f for f in result.findings
+                   if f.code == "TERM_FIRST_IN_HEADING")
+        self.assertIn("Preregistration", hit.text)
+
+    def test_registered_term_defined_in_first_sentence_not_reported(self):
+        body = ("## 预注册\n\n"
+                "预注册是在收集数据前固定假设与分析计划的做法。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_markdown(Path(tmp), body)
+        self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
+
+    def test_unregistered_latex_heading_not_reported(self):
+        body = ("\\section{稀疏检索增强}\n\n"
+                "我们描述流水线的实现细节，并给出足够的文字形成一句话。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body, glossary=None)
         self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
 
 

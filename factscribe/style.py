@@ -574,23 +574,27 @@ class _Doc:
     newlines: list
     raw: str = ""
     headings: list = field(default_factory=list)
+    list_prose: str = ""
+    list_spans: list = field(default_factory=list)
 
 
-def _source_view(text: str, fmt: str = "tex") -> tuple[str, list, str]:
-    """格式分派入口：返回 (prose, 标题清单, 活跃原文)。
+def _source_view(text: str, fmt: str = "tex"
+                 ) -> tuple[str, list, str, str, list]:
+    """格式分派入口：返回 (prose, 标题清单, 活跃原文, 列表视图, 列表区间)。
 
     ``tex`` 走既有 LaTeX 路径（行为逐字节不变）；``markdown`` 走 mdscan；
-    ``text`` 按纯文本处理（不遮罩、无标题）。
+    ``text`` 按纯文本处理（不遮罩、无标题、无列表视图）。
     """
     if fmt == "markdown":
         scan = mdscan.scan_markdown(text)
-        return scan.prose, scan.headings, text
+        return (scan.prose, scan.headings, text,
+                scan.list_prose, scan.list_spans)
     if fmt == "text":
         scan = mdscan.scan_plain(text)
-        return scan.prose, scan.headings, text
+        return scan.prose, scan.headings, text, "", []
     prose = prose_of(text)
     live, _defs = _live_text(text)   # 标题扫描走活跃正文（注释里的标题不算）
-    return prose, _headings(live), live
+    return prose, _headings(live), live, "", []
 
 
 def _line_of(doc: _Doc, pos: int) -> int:
@@ -921,6 +925,18 @@ def _unregistered_candidates(title: str, glossary: Glossary | None
             add(" ".join(run))
         # 单字/被虚词切断的残片不报；Latin ≥2 词是硬条件。
     return out
+
+
+def _paper_term_matches(text: str, glossary: Glossary | None) -> list:
+    """只保留论文词表（``paper.tsv`` / 项目 ``glossary.tsv``）的命中。
+
+    ``TERM_FIRST_IN_HEADING`` 只判在册术语：README 这类非学术标题里的
+    「黄牌规则」「已知缺口」不该被当成术语。未在册的词交给默认关闭的
+    ``TERM_UNREGISTERED``。
+    """
+    if not glossary:
+        return []
+    return [m for m in glossary.matches(text) if m.term.source == "paper"]
 
 
 def _glossary_for(rules: dict, project_root: Path) -> Glossary:
@@ -1580,14 +1596,14 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     docs: list[_Doc] = []
     for rel, text in sections:
         fmt = (formats or {}).get(rel, "tex")
-        prose, heads, raw = _source_view(text, fmt)
+        prose, heads, raw, list_prose, list_spans = _source_view(text, fmt)
         docs.append(_Doc(rel, prose,
                          [i for i, c in enumerate(prose) if c == "\n"],
-                         raw, heads))
+                         raw, heads, list_prose, list_spans))
     before_docs: list[_Doc] = []
     if before is not None:
         for rel, text in before[1]:
-            prose, heads, raw = _source_view(text, "tex")
+            prose, heads, raw, _lprose, _lspans = _source_view(text, "tex")
             before_docs.append(_Doc(rel, prose,
                                     [i for i, c in enumerate(prose) if c == "\n"],
                                     raw, heads))
@@ -1704,14 +1720,22 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             # ---- 批 90：TERM_FIRST_IN_HEADING 按 canonical 比对 ----
             first_key = key_of(first_txt)
             first_canon = {m.canonical for m in glossary.matches(first_txt)}
-            # Markdown 标题常是整句（README 尤其如此）。整句送进「按分隔字
-            # 粗切」的候选面会切出伪术语（如「标题用来测试标题长度规则」），
-            # 因此 doc 模式沿用 TERM_UNREGISTERED 的收紧抽取面：CJK 2–7 字、
-            # 虚词边界、拉丁 ≥2 词。LaTeX 路径不变。
+            # 批 94：只判在册术语（paper.tsv / 项目 glossary.tsv）。README
+            # 的「黄牌规则」「已知缺口」不是学术术语，不该按术语判；未在册
+            # 的词交给默认关闭的 TERM_UNREGISTERED。
+            # Markdown 标题常是整句，因此直接用标题里命中的在册表面形式作为
+            # 候选（整句粗切会切出伪术语，且 2–3 字术语会被漏掉）。
             if head.get("format") == "markdown":
-                candidates = _unregistered_candidates(title, glossary)
+                candidates = []
+                seen_canon: set = set()
+                for match in _paper_term_matches(title, glossary):
+                    if match.canonical in seen_canon:
+                        continue
+                    seen_canon.add(match.canonical)
+                    candidates.append(match.surface)
             else:
-                candidates = _term_candidates(title)
+                candidates = [cand for cand in _term_candidates(title)
+                              if _paper_term_matches(cand, glossary)]
             for cand in candidates:
                 cand_key = key_of(cand)
                 canon = glossary.canonical_of(cand)
@@ -1865,10 +1889,25 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     # ---- 7. 超长句（只报「又长又没有结构」的；长而有结构的句子不报） ----
     extreme_hits = 0
-    sentence_units = []
-    for doc, start, end, units in all_sentences:
-        sentence = _norm_space(doc.prose[start:end])
-        sentence_units.append((units, doc, start, sentence))
+    sentence_units = [(units, doc, start, _norm_space(doc.prose[start:end]))
+                      for doc, start, end, units in all_sentences]
+    # 列表行不进段落/节奏统计，但列表里真有超长句仍要报（批 94）：
+    # 列表视图按「行」切句——同一列表的两项不并成一句。
+    extreme_items = list(all_sentences)
+    for doc in docs:
+        for line_start, line_end in doc.list_spans:
+            line = doc.list_prose[line_start:line_end]
+            for s, e in sentence_spans(line):
+                piece = line[s:e]
+                if not piece.strip() or units_of(piece) < 2:
+                    continue
+                extreme_items.append(
+                    (doc, line_start + s, line_start + e, units_of(piece)))
+    for doc, start, end, units in extreme_items:
+        raw_sentence = doc.prose[start:end]
+        if not raw_sentence.strip():
+            raw_sentence = doc.list_prose[start:end]
+        sentence = _norm_space(raw_sentence)
         limit = (thresholds["sentence_length_extreme_zh"] if _cjk_heavy(sentence)
                  else thresholds["sentence_length_extreme_en"])
         if units > limit and not _has_structural_break(sentence):

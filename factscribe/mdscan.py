@@ -10,7 +10,11 @@
 * 围栏、表格行、front matter 被遮成空白行，段落天然被它们隔开。
 
 遮罩顺序：front matter → 围栏代码 → HTML 注释 → 行内代码 → 链接目标 →
-表格行。前一步遮掉的字符在下一步里已是空白，不会被二次解释。
+表格行 → 列表行。前一步遮掉的字符在下一步里已是空白，不会被二次解释。
+
+列表行（``- `` / ``* `` / ``+ `` / ``1. `` 及其缩进续行、惰性续行）整行遮罩：
+列表天然等长，不能拿句长节奏去判。列表内容另存一份 ``list_prose`` 视图，
+只给「超长句」这类真正逐句看的规则用（不参与段落/节奏统计）。
 """
 from __future__ import annotations
 
@@ -23,14 +27,18 @@ TEX_SUFFIXES = (".tex",)
 
 _FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*([^\n]*)$")
 _HEADING_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.*)$")
+# Markdown 列表项：行首 ≤3 空格 + 项目符号/数字序号 + 至少一个空白 + 内容。
+_LIST_ITEM_RE = re.compile(r"^[ \t]{0,3}([-*+]|\d{1,9}[.)])[ \t]+(?=\S)")
 
 
 @dataclass
 class ScanResult:
-    """一段源码的解析结果：遮罩后的正文 + 标题清单。"""
+    """一段源码的解析结果：遮罩后的正文 + 标题清单 + 列表视图。"""
 
     prose: str
     headings: list = field(default_factory=list)
+    list_prose: str = ""
+    list_spans: list = field(default_factory=list)
 
 
 def format_of(path) -> str:
@@ -215,6 +223,59 @@ def _mask_table_rows(chars: list) -> None:
             _blank(chars, start, end)
 
 
+def _indent_width(line: str) -> int:
+    return len(line) - len(line.lstrip(" \t"))
+
+
+def _list_spans(s: str) -> list[tuple[int, int]]:
+    """列表行区间：项目符号行 + 缩进续行 + 惰性续行（CommonMark 口径）。
+
+    列表在空行、标题行处结束；围栏、表格、front matter 在更早的遮罩里已
+    变成空白行，天然构成边界。返回的是**逐行**区间，行号可直接沿用。
+    """
+    spans: list[tuple[int, int]] = []
+    in_list = False
+    base_indent = 0
+    for start, end, line in _lines(s):
+        if _LIST_ITEM_RE.match(line):
+            spans.append((start, end))
+            in_list = True
+            base_indent = _indent_width(line)
+            continue
+        if not in_list:
+            continue
+        if not line.strip():
+            in_list = False
+            continue
+        if _HEADING_LINE_RE.match(line.lstrip(" \t")):
+            in_list = False
+            continue
+        # 缩进续行 / 嵌套块 / 无空行的惰性续行（CommonMark）都算列表内容；
+        # 列表只有在空行或标题行处结束，所以这里照遮。
+        spans.append((start, end))
+    return spans
+
+
+def _mask_lists(chars: list) -> tuple[str, list]:
+    """列表行整行遮罩；返回（只留列表内容的等长视图, 逐行区间）。
+
+    列表项天然等长，句长节奏与段末套话在列表上没有意义，因此列表行不进
+    ``prose``。``list_prose`` 保留列表内容（项目符号本身抹掉），供「超长句」
+    这类逐句规则单独判，行号与原文一致。
+    """
+    s = "".join(chars)
+    spans = _list_spans(s)
+    list_chars = ["\n" if ch == "\n" else " " for ch in s]
+    for start, end in spans:
+        marker = _LIST_ITEM_RE.match(s[start:end])
+        cut = start + (marker.end() if marker else 0)
+        for i in range(start, end):
+            if i >= cut:
+                list_chars[i] = s[i]
+        _blank(chars, start, end)
+    return "".join(list_chars), spans
+
+
 def _headings_of(chars: list) -> list[dict]:
     """从遮罩后的文本识别标题行；标题文字取遮罩后的原文（URL/代码已空白）。
 
@@ -254,8 +315,9 @@ def scan_markdown(text: str) -> ScanResult:
     _mask_inline_code(chars)
     _mask_link_targets(chars)
     _mask_table_rows(chars)
+    list_prose, list_spans = _mask_lists(chars)
     headings = _headings_of(chars)
-    return ScanResult("".join(chars), headings)
+    return ScanResult("".join(chars), headings, list_prose, list_spans)
 
 
 def scan_plain(text: str) -> ScanResult:

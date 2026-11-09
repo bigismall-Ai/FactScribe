@@ -231,17 +231,25 @@ TERM_ZH_POS = (
     "\\section{稀疏检索增强}\n"
     "我们描述流水线的实现细节，并给出足够的文字形成一句话。\n"
 )
+# 批 94 起 TERM_FIRST_IN_HEADING 只判在册术语；夹具术语由项目词表登记。
+TERM_GLOSSARY = (
+    "canonical\taliases(en)\taliases(cn)\tcategory\n"
+    "Retrieval Augmented\tretrieval augmented\t\t写作\n"
+    "稀疏检索增强\tsparse retrieval augmentation\t\t写作\n"
+)
 
 
 class TestTermFirstInHeading(unittest.TestCase):
     def test_positive_english_term(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TERM_POS)
+            result = analyze_text(tmp, TERM_POS,
+                                  extras={"glossary.tsv": TERM_GLOSSARY})
         self.assertIn("TERM_FIRST_IN_HEADING", codes(result))
 
     def test_negative_term_defined_in_first_sentence(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TERM_DEFINED)
+            result = analyze_text(tmp, TERM_DEFINED,
+                                  extras={"glossary.tsv": TERM_GLOSSARY})
         self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
 
     def test_whitelist_term_allow_file(self):
@@ -249,19 +257,22 @@ class TestTermFirstInHeading(unittest.TestCase):
             result = analyze_text(
                 tmp, TERM_POS,
                 'term_allow_files = ["term-allow.txt"]\n',
-                {"term-allow.txt": "# user maintained\n\n  retrieval augmented  \n"})
+                {"term-allow.txt": "# user maintained\n\n  retrieval augmented  \n",
+                 "glossary.tsv": TERM_GLOSSARY})
         self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
 
     def test_whitelist_glossary(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(
                 tmp, TERM_POS,
-                extras={"GLOSSARY.md": "# Terms\n\nRetrieval Augmented\n"})
+                extras={"GLOSSARY.md": "# Terms\n\nRetrieval Augmented\n",
+                        "glossary.tsv": TERM_GLOSSARY})
         self.assertNotIn("TERM_FIRST_IN_HEADING", codes(result))
 
     def test_chinese_term_positive(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TERM_ZH_POS)
+            result = analyze_text(tmp, TERM_ZH_POS,
+                                  extras={"glossary.tsv": TERM_GLOSSARY})
         self.assertIn("TERM_FIRST_IN_HEADING", codes(result))
 
 

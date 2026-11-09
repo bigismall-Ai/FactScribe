@@ -36,7 +36,8 @@ facts = "facts/*.toml"
 """
 
 
-def make_project(parent, body: str, rules: str | None = None) -> Path:
+def make_project(parent, body: str, rules: str | None = None,
+                 extras: dict | None = None) -> Path:
     root = Path(parent)
     (root / "sections").mkdir(parents=True, exist_ok=True)
     (root / "facts").mkdir(parents=True, exist_ok=True)
@@ -44,11 +45,14 @@ def make_project(parent, body: str, rules: str | None = None) -> Path:
     (root / "paperkit.toml").write_text(PROJECT_TOML, encoding="utf-8")
     if rules is not None:
         (root / "style-rules.toml").write_text(rules, encoding="utf-8")
+    for name, content in (extras or {}).items():
+        (root / name).write_text(content, encoding="utf-8")
     return root
 
 
-def analyze_text(parent, body: str, rules: str | None = None):
-    root = make_project(Path(parent) / "after", body, rules)
+def analyze_text(parent, body: str, rules: str | None = None,
+                 extras: dict | None = None):
+    root = make_project(Path(parent) / "after", body, rules, extras)
     cfg = load_config(root)
     loaded, path = load_style_rules(root)
     return analyze(cfg, load_sections(cfg), loaded, rules_path=path)
@@ -191,12 +195,18 @@ TERM_UNDEFINED = (
     "\\section{Retrieval Augmented}\n"
     "We describe the pipeline in this section with enough words to form a sentence.\n"
 )
+# 批 94 起 TERM_FIRST_IN_HEADING 只判在册术语；夹具术语由项目词表登记。
+TERM_GLOSSARY = (
+    "canonical\taliases(en)\taliases(cn)\tcategory\n"
+    "Retrieval Augmented\tretrieval augmented\t\t写作\n"
+)
 
 
 class TestTermFirstCopy(unittest.TestCase):
     def test_suggestion_forbids_three_pseudo_definitions(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TERM_UNDEFINED)
+            result = analyze_text(tmp, TERM_UNDEFINED,
+                                  extras={"glossary.tsv": TERM_GLOSSARY})
         hit = next(f for f in result.findings
                    if f.code == "TERM_FIRST_IN_HEADING")
         self.assertIn("复述标题", hit.suggestion)
@@ -206,7 +216,8 @@ class TestTermFirstCopy(unittest.TestCase):
 
     def test_suggestion_points_to_definition_example(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TERM_UNDEFINED)
+            result = analyze_text(tmp, TERM_UNDEFINED,
+                                  extras={"glossary.tsv": TERM_GLOSSARY})
         hit = next(f for f in result.findings
                    if f.code == "TERM_FIRST_IN_HEADING")
         self.assertIn("预注册", hit.suggestion)

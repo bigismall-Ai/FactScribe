@@ -8,8 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check
-from .config import (ConfigError, load_config, load_facts, load_sections)
+from .config import (Config, ConfigError, load_config, load_facts,
+                     load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .pdfgate import verify_pdf
@@ -83,7 +85,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true", help="（本命令默认只输出 JSON）")
     sp = sub.add_parser(
         "style", help="文风闸：只报公式化写作特征（黄牌 exit 3），不阻断、不改正文")
-    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("project", nargs="?", default=None,
+                    help="项目目录（默认当前目录；与 --doc 互斥）")
+    sp.add_argument("--doc", action="append", nargs="+", default=None,
+                    metavar="FILE",
+                    help="文档模式：直接扫文件，不需要 paperkit.toml；"
+                         "按扩展名判定格式（.md/.markdown = Markdown，"
+                         ".tex = LaTeX，其它 = 纯文本）。可重复，可一次多个")
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
     sp.add_argument("--prompt", action="store_true",
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
@@ -228,8 +236,63 @@ def cmd_build(args) -> int:
     return code
 
 
+def _cmd_style_doc(args, paths: list[str]) -> int:
+    """``style --doc``：文档模式，不读项目配置，按扩展名分派解析器。"""
+    if args.project is not None:
+        raise ConfigError("--doc 与项目目录不能同时给出：doc 模式不需要 "
+                          "paperkit.toml；项目模式请去掉 --doc")
+    if getattr(args, "diff", None):
+        raise ConfigError("--doc 不支持 --diff：改写前目录属于项目形态")
+    root = Path.cwd()
+    sections = []
+    formats = {}
+    for raw in paths:
+        path = Path(raw)
+        if not path.is_file():
+            raise ConfigError("--doc 指向的 %s 不存在" % raw)
+        sections.append((raw, path.read_text(encoding="utf-8")))
+        formats[raw] = mdscan.format_of(raw)
+    rules, rules_path = load_style_rules(root, args.rules)
+    cfg = Config(root=root)
+    result = analyze(cfg, sections, rules, rules_path=rules_path,
+                     report_unregistered=bool(args.report_unregistered),
+                     formats=formats)
+    code = result.exit_code
+
+    if args.prompt and not args.json:
+        print(build_prompt(result))
+        return code
+
+    human = render_human(result, root)
+    human += "\n文档模式：%d 个文件（%s）" % (
+        len(sections), "、".join(formats.get(p, "text") for p in paths))
+    payload = _payload("style", _severity_of(code), code,
+                       metrics=result.metrics,
+                       thresholds=dict(result.thresholds),
+                       findings=[f.as_dict() for f in result.findings],
+                       info=[f.as_dict() for f in getattr(result, "info", [])],
+                       paragraphs=[p.as_dict() for p in result.paragraphs],
+                       fired=result.fired,
+                       summary=result.summary,
+                       stage_assessment=dict(result.stage_assessment),
+                       disclaimer=DISCLAIMER,
+                       rules=rules_path,
+                       mode="doc",
+                       documents=[{"file": raw, "format": formats.get(raw, "text")}
+                                  for raw in paths])
+    if args.prompt:
+        payload["prompt"] = build_prompt(result)
+    payload["config"] = _config_block(cfg)
+    payload["config_warnings"] = list(cfg.warnings)
+    _emit(payload, human, args.json)
+    return code
+
+
 def cmd_style(args) -> int:
-    cfg = load_config(Path(args.project))
+    doc_paths = [p for group in (args.doc or []) for p in group]
+    if doc_paths:
+        return _cmd_style_doc(args, doc_paths)
+    cfg = load_config(Path(args.project or "."))
     sections = load_sections(cfg)
     rules, rules_path = load_style_rules(cfg.root, args.rules)
     before = None

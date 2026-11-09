@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import mdscan
 from .config import Config, ConfigError, load_toml
 from .constants import EXIT_OK, EXIT_YELLOW
 from .livetext import _live_text
@@ -572,6 +573,24 @@ class _Doc:
     prose: str
     newlines: list
     raw: str = ""
+    headings: list = field(default_factory=list)
+
+
+def _source_view(text: str, fmt: str = "tex") -> tuple[str, list, str]:
+    """格式分派入口：返回 (prose, 标题清单, 活跃原文)。
+
+    ``tex`` 走既有 LaTeX 路径（行为逐字节不变）；``markdown`` 走 mdscan；
+    ``text`` 按纯文本处理（不遮罩、无标题）。
+    """
+    if fmt == "markdown":
+        scan = mdscan.scan_markdown(text)
+        return scan.prose, scan.headings, text
+    if fmt == "text":
+        scan = mdscan.scan_plain(text)
+        return scan.prose, scan.headings, text
+    prose = prose_of(text)
+    live, _defs = _live_text(text)   # 标题扫描走活跃正文（注释里的标题不算）
+    return prose, _headings(live), live
 
 
 def _line_of(doc: _Doc, pos: int) -> int:
@@ -1279,13 +1298,13 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                               rules: dict) -> list[Finding]:
     """改写前后按文件、按标题出现顺序配对，报关系词变化与主语丢失。"""
     relation_words = _relation_words(rules)
-    before_by_file = {d.file: _headings(d.raw) for d in before_docs}
+    before_by_file = {d.file: d.headings for d in before_docs}
     findings: list[Finding] = []
     for doc in docs:
         old_heads = before_by_file.get(doc.file)
         if not old_heads:
             continue
-        new_heads = _headings(doc.raw)
+        new_heads = doc.headings
         for idx, (old, new) in enumerate(zip(old_heads, new_heads)):
             if old["cmd"] != new["cmd"]:
                 continue
@@ -1353,7 +1372,7 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
 
         for match in glossary.matches(doc.prose):
             add(match, _line_of(doc, match.start))
-        for head in _headings(doc.raw):
+        for head in doc.headings:
             for match in glossary.matches(head["title"]):
                 add(match, head["line"])
         for canonical in sorted(groups):
@@ -1538,7 +1557,8 @@ def assess_stage(triggers: int, cv: float, fired: list) -> dict:
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
             before: tuple[Config, list[tuple[str, str]]] | None = None,
-            report_unregistered: bool = False
+            report_unregistered: bool = False,
+            formats: dict[str, str] | None = None
             ) -> StyleResult:
     thresholds = _thresholds(rules)
     limits = _limits(rules)
@@ -1559,18 +1579,18 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     docs: list[_Doc] = []
     for rel, text in sections:
-        prose = prose_of(text)
-        live, _defs = _live_text(text)   # 标题扫描走活跃正文（注释里的标题不算）
+        fmt = (formats or {}).get(rel, "tex")
+        prose, heads, raw = _source_view(text, fmt)
         docs.append(_Doc(rel, prose,
-                         [i for i, c in enumerate(prose) if c == "\n"], live))
+                         [i for i, c in enumerate(prose) if c == "\n"],
+                         raw, heads))
     before_docs: list[_Doc] = []
     if before is not None:
         for rel, text in before[1]:
-            prose = prose_of(text)
-            live, _defs = _live_text(text)
+            prose, heads, raw = _source_view(text, "tex")
             before_docs.append(_Doc(rel, prose,
                                     [i for i, c in enumerate(prose) if c == "\n"],
-                                    live))
+                                    raw, heads))
 
     total_units = sum(units_of(d.prose) for d in docs)
     all_sentences = []          # [(doc, start, end, units)]
@@ -1647,7 +1667,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     allow_keys, allow_canon = _term_allowlist(rules, cfg.root, glossary)
     seen_unregistered: set = set()
     for doc in docs:
-        heads = _headings(doc.raw)
+        heads = doc.headings
         for idx, head in enumerate(heads):
             title, line = head["title"], head["line"]
             if _cjk_heavy(title):
@@ -1684,7 +1704,15 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             # ---- 批 90：TERM_FIRST_IN_HEADING 按 canonical 比对 ----
             first_key = key_of(first_txt)
             first_canon = {m.canonical for m in glossary.matches(first_txt)}
-            for cand in _term_candidates(title):
+            # Markdown 标题常是整句（README 尤其如此）。整句送进「按分隔字
+            # 粗切」的候选面会切出伪术语（如「标题用来测试标题长度规则」），
+            # 因此 doc 模式沿用 TERM_UNREGISTERED 的收紧抽取面：CJK 2–7 字、
+            # 虚词边界、拉丁 ≥2 词。LaTeX 路径不变。
+            if head.get("format") == "markdown":
+                candidates = _unregistered_candidates(title, glossary)
+            else:
+                candidates = _term_candidates(title)
+            for cand in candidates:
                 cand_key = key_of(cand)
                 canon = glossary.canonical_of(cand)
                 if cand_key in allow_keys:

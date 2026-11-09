@@ -103,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--after", required=True, help="改后目录")
     sp.add_argument("--out", default=None,
                     help="事件账本（默认 <after>/audit/tide-events.ndjson）")
+    sp.add_argument("--ignore", action="append", default=None, metavar="GLOB",
+                    help="追加忽略规则（可重复），在默认 LaTeX 构建产物表之上"
+                         "；fnmatch 对相对路径匹配")
+    sp.add_argument("--no-default-ignore", action="store_true",
+                    help="关掉默认忽略表（排查用）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
@@ -273,7 +278,9 @@ def cmd_protect(args) -> int:
 
 def cmd_tide(args) -> int:
     result = run_tide(Path(args.before), Path(args.after),
-                      Path(args.out) if args.out else None)
+                      Path(args.out) if args.out else None,
+                      ignore=args.ignore,
+                      default_ignore=not args.no_default_ignore)
     code = result.exit_code
     payload = _payload("tide", "ok" if code == EXIT_OK else "violation", code,
                        tx=result.tx,
@@ -286,6 +293,8 @@ def cmd_tide(args) -> int:
                        ledger=str(result.ledger_path),
                        view=(str(result.view_path)
                              if result.view_written else None),
+                       ignored=list(result.ignored),
+                       ignore=list(result.ignore),
                        events=len(result.rises) + len(result.falls) + 1)
     payload["status"] = result.status      # 事务状态：commit / rollback
     _emit(payload, render_tide(result), args.json)

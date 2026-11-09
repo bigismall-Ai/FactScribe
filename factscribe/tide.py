@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import difflib
+import fnmatch
 import hashlib
 import json
 import posixpath
@@ -32,6 +33,13 @@ _KINDS = (RISE, FALL, VERDICT)
 
 LEDGER_NAME = "tide-events.ndjson"
 VIEW_NAME = "tide-ledger.md"
+
+# 默认忽略表：LaTeX 编译中间产物（批 89b）。只按后缀忽略，源码/资料照常入账。
+DEFAULT_IGNORE = (
+    "*.aux", "*.log", "*.out", "*.blg", "*.bbl", "*.fls",
+    "*.fdb_latexmk", "*.synctex.gz", "*.toc", "*.lof", "*.lot",
+    "*.nav", "*.snm", "*.vrb",
+)
 
 
 # --------------------------------------------------------------------------
@@ -82,6 +90,8 @@ class TideResult:
     view_written: bool = False
     rows: list[dict] = field(default_factory=list)
     appends: int = 0
+    ignored: list[str] = field(default_factory=list)
+    ignore: tuple[str, ...] = ()
 
     @property
     def closed(self) -> bool:
@@ -121,9 +131,20 @@ def _text(root: Path, rel: str) -> str | None:
         return None
 
 
-def _inventory(root: Path, exclude: set[str]) -> dict[str, str]:
-    """普通文件相对路径 → 字节 sha256；跳过隐藏路径、顶层 audit/ 与产出本体。"""
-    out: dict[str, str] = {}
+def _ignored(rel: str, patterns: tuple[str, ...]) -> bool:
+    """相对路径是否命中忽略表（fnmatch；``*`` 跨目录，``*.aux`` 覆盖任意层级）。"""
+    return any(fnmatch.fnmatchcase(rel, pattern) for pattern in patterns)
+
+
+def _scan(root: Path, exclude: set[str], patterns: tuple[str, ...]
+          ) -> tuple[dict[str, str], dict[str, str]]:
+    """扫一棵树 → (入账文件, 被忽略文件)，两者都是 相对路径 → 字节 sha256。
+
+    跳过隐藏路径、顶层 audit/ 与产出本体；命中忽略表的文件不进入账面
+    （因此既不产生涨，也不进波及面），但哈希照记，便于报「忽略了几项」。
+    """
+    counted: dict[str, str] = {}
+    ignored: dict[str, str] = {}
     for p in sorted(root.rglob("*")):
         if not p.is_file():
             continue
@@ -135,8 +156,12 @@ def _inventory(root: Path, exclude: set[str]) -> dict[str, str]:
             continue
         if str(p.resolve()) in exclude:
             continue
-        out[rel] = _sha256_bytes(_read_bytes(p, rel))
-    return out
+        digest = _sha256_bytes(_read_bytes(p, rel))
+        if _ignored(rel, patterns):
+            ignored[rel] = digest
+        else:
+            counted[rel] = digest
+    return counted, ignored
 
 
 # --------------------------------------------------------------------------
@@ -477,10 +502,13 @@ def render_human(result: TideResult) -> str:
         "涨：%d   落：%d   波及面：%d   事件：%d" % (
             len(result.rises), len(result.falls), len(result.affect),
             len(result.rises) + len(result.falls) + 1),
+        "入账文件：%d   忽略：%d" % (len(result.rises), len(result.ignored)),
         "判定：paired %s   hash_ok %s   pass_all %s" % (
             _MARK[result.paired], _MARK[result.hash_ok],
             _MARK[result.pass_all]),
     ]
+    if result.ignored:
+        lines.append("忽略明细：%s" % "、".join(result.ignored))
     if result.reasons:
         lines.append("未闭合：")
         lines += ["- " + reason for reason in result.reasons]
@@ -499,19 +527,26 @@ def render_human(result: TideResult) -> str:
 # --------------------------------------------------------------------------
 
 def run_tide(before: Path | str, after: Path | str,
-             out: Path | str | None = None) -> TideResult:
+             out: Path | str | None = None, *,
+             ignore: list[str] | tuple[str, ...] | None = None,
+             default_ignore: bool = True) -> TideResult:
     before = Path(before)
     after = Path(after)
     for flag, path in (("--before", before), ("--after", after)):
         if not path.is_dir():
             raise ConfigError("%s 目录不存在或不是目录：%s" % (flag, path))
 
+    patterns = (tuple(DEFAULT_IGNORE) if default_ignore else ()) + \
+        tuple(ignore or ())
+
     ledger_path = Path(out) if out is not None else after / "audit" / LEDGER_NAME
     view_path = after / "audit" / VIEW_NAME
     exclude = {str(ledger_path.resolve()), str(view_path.resolve())}
 
-    bfiles = _inventory(before, exclude)
-    afiles = _inventory(after, exclude)
+    bfiles, bignored = _scan(before, exclude, patterns)
+    afiles, aignored = _scan(after, exclude, patterns)
+    ignored = sorted(rel for rel in set(bignored) | set(aignored)
+                     if bignored.get(rel) != aignored.get(rel))
     rises = _rises(before, after, bfiles, afiles)
     falls = _falls(after, rises)
     tx = _tx_id(rises, falls)
@@ -557,7 +592,7 @@ def run_tide(before: Path | str, after: Path | str,
                         rises=rises, falls=falls, affect=affect,
                         findings=hard, reasons=reasons,
                         ledger_path=ledger_path, view_path=view_path,
-                        rows=rows)
+                        rows=rows, ignored=ignored, ignore=patterns)
 
     if closed:
         events = _tx_events(tx, rises, falls, affect, status)

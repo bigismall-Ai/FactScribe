@@ -364,6 +364,97 @@ class TestAffect(Base):
 
 
 # --------------------------------------------------------------------------
+# 忽略规则：LaTeX 构建产物默认不入账
+# --------------------------------------------------------------------------
+
+LATEX_ARTIFACTS = ("main.aux", "main.log", "main.out", "main.blg", "main.bbl",
+                   "main.fls", "main.fdb_latexmk", "main.synctex.gz",
+                   "main.toc", "main.lof", "main.lot", "main.nav",
+                   "main.snm", "main.vrb")
+
+
+class TestIgnore(Base):
+    def test_default_ignores_added_artifacts(self):
+        for rel in LATEX_ARTIFACTS:
+            self.rewrite(rel, "junk\n")
+        data = self.commit()
+        self.assertEqual(data["rises"], [])
+        self.assertEqual(data["falls"], [])
+        self.assertEqual(len(data["ignored"]), len(LATEX_ARTIFACTS))
+
+    def test_default_ignores_modified_artifacts(self):
+        for rel in ("main.aux", "main.log", "main.out", "main.blg"):
+            (self.before / rel).write_text("old\n", encoding="utf-8")
+            (self.after / rel).write_text("new\n", encoding="utf-8")
+        data = self.commit()
+        self.assertEqual(data["rises"], [])
+
+    def test_default_ignores_deleted_artifacts(self):
+        # 缺陷复现：改前目录有构建产物、改后没有——旧行为判 rollback
+        for rel in ("main.aux", "main.blg", "main.out"):
+            (self.before / rel).write_text("junk\n", encoding="utf-8")
+        data = self.commit()
+        self.assertEqual(data["rises"], [])
+        self.assertEqual(data["reasons"], [])
+
+    def test_ignored_artifacts_are_listed(self):
+        (self.before / "main.aux").write_text("old\n", encoding="utf-8")
+        (self.after / "main.aux").write_text("new\n", encoding="utf-8")
+        data = self.commit()
+        self.assertEqual(data["ignored"], ["main.aux"])
+
+    def test_non_ignored_extensions_still_counted(self):
+        self.rewrite("refs.bib", "@book{x}\n")
+        self.rewrite("notes.md", "# n\n")
+        self.rewrite("paperkit.toml", "build = ''\n")
+        self.rewrite("figures/f.pdf", "%PDF-1.4\n")
+        self.rewrite("main.aux", "artifact\n")
+        data = self.commit()
+        self.assertEqual([r["path"] for r in data["rises"]],
+                         ["figures/f.pdf", "notes.md", "paperkit.toml",
+                          "refs.bib"])
+
+    def test_ignore_glob_appends_to_defaults(self):
+        (self.before / "chapters" / "a.tex.bak").write_text("x\n",
+                                                            encoding="utf-8")
+        (self.before / "notes.tmp").write_text("x\n", encoding="utf-8")
+        self.rewrite("main.aux", "artifact\n")
+        # 不传 --ignore：删除的 .bak/.tmp 是涨而无落 → rollback
+        self.rollback()
+        data = self.commit("--ignore", "*.bak", "--ignore", "*.tmp")
+        self.assertEqual(data["rises"], [])
+        self.assertIn("*.bak", data["ignore"])
+        self.assertIn("*.tmp", data["ignore"])
+
+    def test_no_default_ignore_restores_rollback(self):
+        (self.before / "main.aux").write_text("junk\n", encoding="utf-8")
+        data = self.rollback("--no-default-ignore")
+        self.assertFalse(data["criteria"]["hash_ok"])
+        self.assertTrue(any("main.aux" in r for r in data["reasons"]))
+        self.assertEqual(data["ignore"], [])
+
+    def test_no_default_ignore_keeps_explicit_globs(self):
+        (self.before / "main.aux").write_text("junk\n", encoding="utf-8")
+        data = self.commit("--no-default-ignore", "--ignore", "*.aux")
+        self.assertEqual(data["rises"], [])
+
+    def test_ignored_files_do_not_change_affect(self):
+        # 被 \input 的 .tex 变了 → 主文件仍在波及面；忽略项不进波及面
+        self.rewrite("chapters/a.tex", CHAPTER_PUNCT)
+        self.rewrite("main.aux", "artifact\n")
+        data = self.commit()
+        self.assertEqual(data["affect"], ["chapters/a.tex", "main.tex"])
+        self.assertNotIn("main.aux", data["affect"])
+
+    def test_ignored_file_not_reported_as_protect_finding(self):
+        self.rewrite("chapters/a.tex", CHAPTER_NUMBER)
+        (self.before / "main.aux").write_text("old\n", encoding="utf-8")
+        data = self.rollback()
+        self.assertEqual({f["code"] for f in data["findings"]},
+                         {"PROTECT_NUMBER_CHANGED"})
+
+
+# --------------------------------------------------------------------------
 # 确定性
 # --------------------------------------------------------------------------
 

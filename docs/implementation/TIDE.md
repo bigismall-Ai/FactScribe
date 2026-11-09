@@ -92,3 +92,56 @@ $ ./scripts/preflight-ci.sh
   这是设计意图（账与目录脱节必须暴露），不是误报。
 - 顶层 `audit/` 不入账（派生目录）；若项目把正文放 `audit/` 需改名。
 - 只抽 `\input`/`\include`；`\subfile`、`\import` 等不追（未在规范内）。
+
+## 8. 忽略规则（批 89b）
+
+**问题**：真实论文目录里 `main.aux` / `main.blg` / `main.out` 是 LaTeX 编译中间产物，
+改前有、改后没有（或反之）。旧口径把它们当普通文件入账，落的目标缺失 → `hash_ok=false`
+→ 永远是 `rollback`，真实改写闭不了合。
+
+**默认忽略表**（只按后缀，`fnmatch` 对相对路径匹配，`*` 可跨目录）：
+
+| 后缀 | 用途 |
+|---|---|
+| `.aux` `.log` `.out` `.blg` `.bbl` `.fls` `.fdb_latexmk` `.synctex.gz` | 编译/参考文献/同步中间产物 |
+| `.toc` `.lof` `.lot` `.nav` `.snm` `.vrb` | 目录/图表索引/beamer 中间产物 |
+
+- 只有这些后缀被忽略；`.tex` `.bib` `.md` `.toml` `.pdf` 等**照常入账**。
+- 忽略的文件**不产生涨、不产生落、不进波及面**，也不会出现在 `protect` 硬面发现里。
+- 忽略表在扫树（`_scan`）阶段生效，早于哈希比对——波及面的 `\input` 反查只看入账文件，
+  因此忽略项不会把主文件挤出波及面，也不会把无关文件拉进来。
+
+**开关**：
+
+| 开关 | 语义 |
+|---|---|
+| `--ignore <glob>` | 在默认表之上**追加**一条忽略规则；可重复写多条 |
+| `--no-default-ignore` | 关掉默认表（排查「是不是被忽略吃掉了」用）；此时 `--ignore` 仍生效 |
+
+**读数**：输出新增一行 `入账文件：N   忽略：M`（`--json` 里是 `rises` 长度与
+`ignored` 列表、生效规则在 `ignore`）。`ignored` 只列「两棵树之间真有差异」的被忽略文件，
+两棵树完全相同的产物不会占用这个数。
+
+**验收（`paperkit-dev/` 下跑）**：
+
+```text
+$ python3 -m factscribe tide --before ../paper --after /tmp/v4-regen/en
+事务：2ec2b0c4f7a35a71    状态：commit
+涨：9   落：9   波及面：10   事件：19
+入账文件：9   忽略：4
+判定：paired ✓   hash_ok ✓   pass_all ✓
+忽略明细：main.aux、main.blg、main.log、main.out
+EXIT=0
+
+$ python3 -m factscribe tide --before ../paper-zh --after /tmp/v4-regen/zh
+事务：560a62fe8614f236    状态：commit
+涨：11   落：11   波及面：12   事件：23
+入账文件：11   忽略：0
+判定：paired ✓   hash_ok ✓   pass_all ✓
+EXIT=0
+```
+
+批 89b 新增 `tests/test_tide.py::TestIgnore` **10 例**（默认表增/删/改、忽略明细、
+非忽略后缀仍入账、`--ignore` 追加、`--no-default-ignore` 回退到 rollback、
+`--no-default-ignore` 保留显式 glob、忽略项不改波及面、忽略项不进保护面发现），
+全套 40 例。

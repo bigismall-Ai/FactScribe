@@ -1777,10 +1777,10 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | 项 | 判据 |
 |---|---|
 | 输入 | 改写前/后的标题，按文件、按标题出现顺序配对；命令层级（`\section`/`\subsection`…）不同则不配对 |
-| 算法 | 从标题抽关系词集合（配置项 `heading_relation_words`，默认 `versus / vs / and / or / not / without / 对 / 与 / 及 / 不是`；英文按词边界，中文按子串）。旧集合非空且与新集合不相等 → 报。只新增关系词（旧集合为空）不报；标题文字完全未变则不判 |
+| 算法 | 从标题抽**对立关系词**集合（`heading_relation_words`，默认 `versus / vs / not / without / 对 / 而非 / 不是`；英文按词边界，中文按结构）。旧集合里有词在新集合中不存在（被删除或被替换）→ 报。只新增（旧集合为空）不报；标题文字完全未变则不判。同组同义关系词归一后比较（比较组 `versus/vs/对`、否定组 `not/不是`、排除组 `without/而非`）。 |
 | 阈值 | 出现即报（单点） |
-| 误报边界 | 只改措辞、保留原关系词不报；标题层级/数量变化时不强行配对 |
-| 漏报边界 | 用同义词替换关系词（如 `and`→`以及`）可能漏；启发式接受 |
+| 误报边界 | 只改措辞、保留原关系词不报；删除 `and / or / 与 / 及 / 、` 这类**并列连接**不报（它们不承载对立关系）；中文 `对` 只认「A 对 B」里的介词，`对照 / 针对 / 面对 / 对比 / 对于 / 相对 / 绝对` 等词内部不报；标题层级/数量变化时不强行配对 |
+| 漏报边界 | 同组同义关系词互换（比较组 `versus / vs / 对`；否定组 `not / 不是`；排除组 `without / 而非`）不报；跨组替换（如 `versus`→`not`）仍报；启发式接受 |
 | 对应码 | `HEADING_RELATION_CHANGED` |
 
 ### 15.4 `HEADING_SUBJECT_LOST`（黄，需 `--before`）
@@ -1788,10 +1788,11 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | 项 | 判据 |
 |---|---|
 | 输入 | 改写前/后的标题＋改后该节首句 |
-| 算法 | 抽旧标题的实义成分：中文按分隔字（`的/和/与/及/在/对/从/为/是`）切段，去停用字/短语与泛化词，保留 ≥2 字段；英文按词、去停用词/泛化词/关系词，做轻量复数归一。某成分在新标题与改后首句里**都不出现** → 报。标题文字完全未变则不判 |
-| 阈值 | 出现即报（单点；一个标题一条，列出全部丢失成分） |
-| 误报边界 | 成分在新标题保留、或在新首句里写回来，都不报；改写前目录缺失时不运行 |
+| 算法 | **只在旧标题本身是对比结构时启用**：英文 `X versus/vs Y`；中文 `X 对 Y`、`X 与 Y 对比/相比/比较`、`X 而非 Y`、`X 不是 Y`。抽对比双方的**对象实义成分**：中文按分隔字切段（去停用字/短语与泛化词，保留 ≥2 字段），英文按词（去停用词/泛化词/关系词，轻量复数归一，保留 ≥2 字符）。某对象在新标题与改后首句里**都不出现** → 报。序数词（`one/two/three/four`、`一二三四`）、单字词、对比结构之外的修饰语一律忽略。标题文字完全未变则不判 |
+| 阈值 | 出现即报（单点；一个标题一条，列出全部丢失对象） |
+| 误报边界 | 非对比标题（并列连接、普通名词短语）不报；对象在新标题保留、或在新首句里写回来，都不报；改写前目录缺失时不运行 |
 | 漏报边界 | 同义词替换（`机制`→`机理`）不报；启发式接受 |
+| 降级说明 | **不降为 `info`**：它与 §15.3 不完全重合——关系词可以保留而对象被换掉（如 `A versus B` → `A versus C`），此时只有本条能报 |
 | 对应码 | `HEADING_SUBJECT_LOST` |
 
 ### 15.5 `style --diff <before 目录>`
@@ -1814,7 +1815,7 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | TOML 键 | 类型 | 默认 | 服务规则 |
 |---|---|---|---|
 | `thresholds.heading_echo_min_new_terms` | 非负整数 | `1` | `HEADING_ECHO` |
-| `heading_relation_words` | 字符串数组 | `["versus","vs","and","or","not","without","对","与","及","不是"]` | `HEADING_RELATION_CHANGED` |
+| `heading_relation_words` | 字符串数组 | `["versus","vs","not","without","对","而非","不是"]` | `HEADING_RELATION_CHANGED` |
 | `heading_echo.generic_terms_en` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
 | `heading_echo.generic_terms_zh` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
 | `heading_echo.meta_openers_en` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
@@ -1828,8 +1829,12 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 - 真正的定义式首句（中英各一）不被 `HEADING_ECHO` 报；
 - `--diff`：改前改后都不违规 → 不报；改前有、改后更多 → 只报新增；CLI 退出码 0/3；
 - 阈值可配：`heading_echo_min_new_terms`、`heading_relation_words` 改文件即改判定；
-- 对 `/tmp/v4-regen/en` 与 `/tmp/v4-regen/zh` 跑 `--diff` 能抓到上述 6 例，
-  且 `paper/`、`paper-zh/` 原文新增违规 ≤10 条（批 87 实测 0 条）；
+- 对 `/tmp/v4-regen/en` 与 `/tmp/v4-regen/zh` 跑 `--diff` 能抓到上述 6 例；
+  v5b 收紧后，两条复检规则的新增告警从 EN 8 / ZH 15 降到 EN 2 / ZH 5
+  （EN ≤4、ZH ≤6）；`paper/`、`paper-zh/`、`paper-b/`、`paper-b-zh/` 原文
+  三条新码全 0；
+- 「排除并列连接删除 / 非对比标题不判对象丢失」的负例锁：`Debug log`、
+  `Invariants`、`Attribution`、`容量假设` 等实例不再报；
 - `python3 -m unittest discover -s tests` 与 `./scripts/preflight-ci.sh` 全绿。
 
 ---

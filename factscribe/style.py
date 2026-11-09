@@ -110,9 +110,10 @@ DEFAULT_RULES: dict = {
                       "从", "当", "为了", "通过", "由", "被", "把", "让",
                       "使", "一个", "一种", "本文", "本节", "每一", "每"],
     },
-    # v5：标题关系词。改写前后标题的这组词发生替换或删除即报黄。
-    "heading_relation_words": ["versus", "vs", "and", "or", "not", "without",
-                               "对", "与", "及", "不是"],
+    # v5：标题关系词。只收承载「对立/否定」的关系词；并列连接
+    # （and / or / 与 / 及 / 、）不进本表——删掉它们不改变论证方向。
+    "heading_relation_words": ["versus", "vs", "not", "without",
+                               "对", "而非", "不是"],
     # v5：HEADING_ECHO 的可配词表（泛化词不算「新实义」；垫话开头视为复述式）
     "heading_echo": {
         "generic_terms_en": ["limitation", "problem", "issue", "result",
@@ -889,6 +890,22 @@ _ECHO_STOP_ZH_CHARS = set(
 
 _ECHO_PUNCT_RE = re.compile(r"[\s。．.!！?？:：;；,，、\"'“”‘’()（）\[\]【】]+")
 
+# 对比结构识别（§15.4）。「对」只认「A 对 B」里的介词，排除
+# 对照 / 针对 / 面对 / 对比 / 对于 / 相对 / 绝对 等词内部的对。
+_DUI_RE = re.compile(
+    r"(?<![针面绝反相应核比一])对(?=\s*[A-Za-z0-9\u4e00-\u9fff])"
+    r"(?![照于比此方应称象着])")
+_YU_COMPARE_RE = re.compile(r"(.+?)与(.+?)(?:对比|相比|比较)")
+_ORDINAL_EN = {"one", "two", "three", "four", "first", "second", "third",
+               "fourth"}
+_ORDINAL_ZH = set("一二三四")
+# 同义关系词分组：组内互换不报，跨组替换报（§15.3）。
+_RELATION_GROUPS = {
+    "versus": "comparison", "vs": "comparison", "对": "comparison",
+    "not": "negation", "不是": "negation",
+    "without": "exclusion", "而非": "exclusion",
+}
+
 # 这些垫话单独出现在句首就是元话语，不需要先复述标题；
 # 「里/中/方面/来说/而言」只在标题后紧跟时才算（见 _heading_echo）。
 _DIRECT_META_ZH = ("本节讨论", "本节讲", "这里讨论", "这一节讨论", "我们讨论",
@@ -1002,15 +1019,58 @@ def _relation_hits(title: str, words: list[str]) -> list[str]:
     low = title.lower()
     for word in words:
         if _CJK_RE.search(word):
-            if word in title:
+            if word == "对":
+                # 只认「A 对 B」里的介词：排除 对照 / 针对 / 面对 / 对比 /
+                # 对于 / 相对 / 绝对 这类词内部的「对」。
+                if _DUI_RE.search(title) or _YU_COMPARE_RE.search(title):
+                    hits.append(word)
+            elif word in title:
                 hits.append(word)
         elif re.search(r"(?<![A-Za-z])%s(?![A-Za-z])" % re.escape(word.lower()), low):
             hits.append(word.lower())
     return sorted(set(hits))
 
 
+def _canon_relation(word: str) -> str:
+    """关系词同义归一：同义关系词互换不算「对立关系被删」。
+
+    比较：versus / vs / 对（含「与…对比」）；否定：not / 不是；
+    排除：without / 而非。跨组替换仍算关系变化。
+    """
+    low = word.lower()
+    return _RELATION_GROUPS.get(low, low)
+
+
+def _contrast_sides(title: str) -> list[str]:
+    """旧标题若是对比结构，返回对比双方（各取实义成分）；否则返回 []。
+
+    只认 §15.4 列出的结构：英文 ``X versus/vs Y``；中文 ``X 对 Y``、
+    ``X 与 Y 对比/相比/比较``、``X 而非 Y``、``X 不是 Y``。
+    「并列连接」（and / 与 / 及 / 、）与普通修饰语不激活本规则。
+    """
+    if _cjk_heavy(title):
+        m = _DUI_RE.search(title)
+        if m:
+            return [title[:m.start()], title[m.end():]]
+        m = _YU_COMPARE_RE.search(title)
+        if m:
+            return [m.group(1), m.group(2)]
+        for marker in ("而非", "不是"):
+            if marker in title:
+                left, right = title.split(marker, 1)
+                return [left, right]
+        return []
+    m = re.search(r"(?<![A-Za-z])(?:versus|vs)(?![A-Za-z])", title, re.I)
+    if not m:
+        return []
+    return [title[:m.start()], title[m.end():]]
+
+
 def _heading_subjects(title: str, rules: dict) -> list[str]:
-    """旧标题里的实义成分（中文按分隔字切段、英文按词），用于判「主语丢失」。"""
+    """旧标题里的实义成分（中文按分隔字切段、英文按词），用于判「主语丢失」。
+
+    序数词与单字词不承载对比对象，直接忽略。
+    """
     generic_en, generic_zh = _echo_generic(rules)
     if _cjk_heavy(title):
         out = []
@@ -1019,34 +1079,53 @@ def _heading_subjects(title: str, rules: dict) -> list[str]:
                          "", seg)
             for phrase in _ECHO_STOP_ZH_PHRASES:
                 seg = seg.replace(phrase, "")
-            seg = "".join(ch for ch in seg if ch not in _ECHO_STOP_ZH_CHARS)
+            seg = "".join(ch for ch in seg if ch not in _ECHO_STOP_ZH_CHARS
+                          and ch not in _ORDINAL_ZH)
             for term in generic_zh:
                 seg = seg.replace(term, "")
             if len(seg) >= 2 and seg not in out:
                 out.append(seg)
         return out
     out = []
-    relation = {w.lower() for w in _relation_words(rules)}
+    relation = {_canon_relation(w) for w in _relation_words(rules)}
     for word in _en_terms(title):
-        if word in generic_en or word in relation or word in out:
+        if (len(word) < 2 or word in generic_en or word in _ORDINAL_EN
+                or _canon_relation(word) in relation or word in out):
             continue
         out.append(word)
     return out
 
 
+def _contrast_objects(title: str, rules: dict) -> list[str]:
+    """对比结构里的「对象名词」；标题不是对比结构时返回 []。"""
+    sides = _contrast_sides(title)
+    if not sides:
+        return []
+    objects: list[str] = []
+    for side in sides:
+        for term in _heading_subjects(side, rules):
+            if term not in objects:
+                objects.append(term)
+    return objects
+
+
 def _lost_subjects(old_title: str, new_title: str, new_first: str,
                    rules: dict) -> list[str]:
+    """只在旧标题是对比结构时，报「对比对象在新标题与新首句里都消失」。"""
+    objects = _contrast_objects(old_title, rules)
+    if not objects:
+        return []
     lost = []
     if _cjk_heavy(old_title):
         probe = (new_title + " " + new_first)
-        for seg in _heading_subjects(old_title, rules):
-            if seg not in probe:
-                lost.append(seg)
+        for obj in objects:
+            if obj not in probe:
+                lost.append(obj)
     else:
         probe = set(_en_terms(new_title + " " + new_first))
-        for word in _heading_subjects(old_title, rules):
-            if word not in probe:
-                lost.append(word)
+        for obj in objects:
+            if _stem_en(obj) not in probe and obj not in probe:
+                lost.append(obj)
     return lost
 
 
@@ -1069,12 +1148,15 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                 continue
             old_rel = _relation_hits(old_title, relation_words)
             new_rel = _relation_hits(new_title, relation_words)
-            if old_rel and old_rel != new_rel:
+            old_set = {_canon_relation(w) for w in old_rel}
+            new_set = {_canon_relation(w) for w in new_rel}
+            if old_set and (old_set - new_set):
                 findings.append(Finding(
                     "HEADING_RELATION_CHANGED", doc.file, new["line"],
                     _clip(new_title, 160),
-                    "标题里的关系词变了（旧：%s；新：%s）。关系词承载论证方向，"
-                    "替换或删除前先确认结论没变；要改就连正文一起改。"
+                    "标题里的对立关系词被删除或替换了（旧：%s；新：%s）。"
+                    "关系词承载论证方向，替换或删除前先确认结论没变；"
+                    "要改就连正文一起改。"
                     % ("、".join(old_rel), "、".join(new_rel) or "无"),
                     "heading_relation_changed"))
             stop_line = None

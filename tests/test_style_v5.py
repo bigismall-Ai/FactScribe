@@ -309,6 +309,16 @@ LOST_EN_AFTER = (
     "\\section{Debug log}\n"
     "The log records every arm and every run.\n"
 )
+LOST_EN_CONTRAST_BEFORE = (
+    "\\section{Mechanisms}\n\n"
+    "\\paragraph{Prompt versus mechanism.} We first wrote the required process "
+    "as six constraints.\n"
+)
+LOST_EN_CONTRAST_AFTER = (
+    "\\section{Mechanisms}\n\n"
+    "\\paragraph{Prompt.} We first wrote the required process "
+    "as six constraints.\n"
+)
 LOST_SUBJECT_BACK_IN_SENTENCE = (
     "\\section{机制}\n\n"
     "\\paragraph{提示词} 机制决定了这一回合何时收口。\n"
@@ -323,9 +333,12 @@ class TestHeadingSubjectLost(unittest.TestCase):
         self.assertIn("HEADING_SUBJECT_LOST", codes(new))
 
     def test_positive_english_subject_lost(self):
+        # v5b：只有对比结构才判「对象丢失」。并列标题
+        # ``Debug log: run order and per-arm cost`` → ``Debug log``
+        # 现在归入负例（见 TestTightenedPrecision）。
         with tempfile.TemporaryDirectory() as tmp:
-            new, _after, _before = analyze_pair(tmp, LOST_EN_BEFORE,
-                                                LOST_EN_AFTER)
+            new, _after, _before = analyze_pair(
+                tmp, LOST_EN_CONTRAST_BEFORE, LOST_EN_CONTRAST_AFTER)
         self.assertIn("HEADING_SUBJECT_LOST", codes(new))
 
     def test_negative_subject_kept_in_heading(self):
@@ -499,6 +512,179 @@ class TestBatch84Regressions(unittest.TestCase):
                 tmp, SAMPLE_ZH_04_BEFORE, SAMPLE_ZH_04_AFTER)
         self.assertIn("HEADING_RELATION_CHANGED", codes(new))
         self.assertIn("HEADING_SUBJECT_LOST", codes(new))
+
+
+# --------------------------------------------------------------------------
+# 7. v5b：收紧精度（只降噪，不丢召回）
+# --------------------------------------------------------------------------
+
+# 4 个良性实例（批 88 任务表）＋ 2 个同族实例，必须不再报。
+NOISE_EN_DEBUG_BEFORE = (
+    "\\section{Debug log: run order and per-arm cost}\n\n"
+    "The log records every arm and every run.\n"
+)
+NOISE_EN_DEBUG_AFTER = (
+    "\\section{Debug log}\n\n"
+    "The log records every arm and every run.\n"
+)
+NOISE_EN_INVARIANTS_BEFORE = (
+    "\\subsection{Invariants, and what they stop}\n\n"
+    "The register names twenty-one invariants over the assembly.\n"
+)
+NOISE_EN_INVARIANTS_AFTER = (
+    "\\subsection{Invariants}\n\n"
+    "The register names twenty-one invariants over the assembly.\n"
+)
+NOISE_EN_ATTRIBUTION_BEFORE = (
+    "\\section{Cost}\n\n"
+    "\\paragraph{What the attribution shows.} The difference is in output, "
+    "not input.\n"
+)
+NOISE_EN_ATTRIBUTION_AFTER = (
+    "\\section{Cost}\n\n"
+    "\\paragraph{Attribution.} The difference is in output, not input.\n"
+)
+NOISE_ZH_CAPACITY_BEFORE = (
+    "\\section{消融}\n\n"
+    "\\paragraph{假设一：容量。} 如果回合失败是因为空间不够，"
+    "那么撤掉压力就该让它跑完。\n"
+)
+NOISE_ZH_CAPACITY_AFTER = (
+    "\\section{消融}\n\n"
+    "\\paragraph{容量假设} 如果回合失败是因为空间不够，"
+    "那么撤掉压力就该让它跑完。\n"
+)
+NOISE_ZH_DEBUG_BEFORE = (
+    "\\section{调试日志：运行顺序与每臂成本}\n\n"
+    "本附录记录各臂实际运行的顺序。\n"
+)
+NOISE_ZH_DEBUG_AFTER = (
+    "\\section{调试日志}\n\n"
+    "本附录记录各臂实际运行的顺序。\n"
+)
+NOISE_ZH_INVARIANTS_BEFORE = (
+    "\\subsection{不变式，以及它们拦住了什么}\n\n"
+    "登记册列出了二十一条针对装配的不变式。\n"
+)
+NOISE_ZH_INVARIANTS_AFTER = (
+    "\\subsection{不变式}\n\n"
+    "登记册列出了二十一条针对装配的不变式。\n"
+)
+NOISE_ZH_CLI_BEFORE = (
+    "\\subsection{对照一个成熟的 CLI}\n\n"
+    "表在同样六题上比较两套脚手架。\n"
+)
+NOISE_ZH_CLI_AFTER = (
+    "\\subsection{与成熟 CLI 对比}\n\n"
+    "表在同样六题上比较两套脚手架。\n"
+)
+
+# 论文里未改动的正常标题（从 paper/、paper-zh/ 的 sections 实取）。
+UNCHANGED_TITLES = [
+    ("\\section{Related work}\n\nLong-horizon software benchmarks moved "
+     "evaluation from function-level synthesis to repository-level repair.\n"),
+    ("\\section{Cost accounting}\n\nThe ledger records the supplier usage "
+     "fields verbatim.\n"),
+    ("\\section{Across domains}\n\nTable reports a tool-and-policy benchmark "
+     "from the tau-bench family.\n"),
+    ("\\section{Mechanical gates}\n\nThe gates answer a different question "
+     "from context: not what the model knows, but when the episode ends.\n"),
+    ("\\section{相关工作}\n\n长程软件基准把评测从函数级合成推进到仓库级修复。\n"),
+    ("\\section{成本记账}\n\n账本过去每次调用只记一个数：总 token。\n"),
+    ("\\section{机械闸门}\n\n闸门回答的是与上下文不同的问题："
+     "不是模型知道什么，而是这一回合何时结束。\n"),
+    ("\\section{跨领域}\n\n表报告一个工具与策略基准，"
+     "成功既取决于正确调用工具，也取决于遵守成文策略。\n"),
+]
+
+BOUNDARY_RELATION_TITLE = (
+    "\\section{Mechanisms}\n\n"
+    "\\paragraph{Prompt versus mechanism.} We first wrote the required process "
+    "as six constraints.\n"
+)
+
+
+class TestTightenedPrecision(unittest.TestCase):
+    """批 88：两条复检规则收紧后的正/负例锁。"""
+
+    TARGET = {"HEADING_RELATION_CHANGED", "HEADING_SUBJECT_LOST"}
+
+    def _new_codes(self, before: str, after: str) -> set:
+        with tempfile.TemporaryDirectory() as tmp:
+            new, _after, _before = analyze_pair(tmp, before, after)
+        return codes(new)
+
+    def assert_no_noise(self, before: str, after: str):
+        fired = self._new_codes(before, after)
+        self.assertFalse(fired & self.TARGET,
+                         "unexpected heading noise: %s" % (fired & self.TARGET))
+
+    # -- 4 个良性实例 ------------------------------------------------------
+    def test_benign_debug_log_does_not_report(self):
+        self.assert_no_noise(NOISE_EN_DEBUG_BEFORE, NOISE_EN_DEBUG_AFTER)
+
+    def test_benign_invariants_and_does_not_report(self):
+        self.assert_no_noise(NOISE_EN_INVARIANTS_BEFORE,
+                             NOISE_EN_INVARIANTS_AFTER)
+
+    def test_benign_attribution_subject_does_not_report(self):
+        self.assert_no_noise(NOISE_EN_ATTRIBUTION_BEFORE,
+                             NOISE_EN_ATTRIBUTION_AFTER)
+
+    def test_benign_capacity_ordinal_does_not_report(self):
+        self.assert_no_noise(NOISE_ZH_CAPACITY_BEFORE, NOISE_ZH_CAPACITY_AFTER)
+
+    # -- 同族的并列/序数/介词噪声 -----------------------------------------
+    def test_benign_chinese_debug_yu_does_not_report(self):
+        self.assert_no_noise(NOISE_ZH_DEBUG_BEFORE, NOISE_ZH_DEBUG_AFTER)
+
+    def test_benign_chinese_invariants_and_does_not_report(self):
+        self.assert_no_noise(NOISE_ZH_INVARIANTS_BEFORE,
+                             NOISE_ZH_INVARIANTS_AFTER)
+
+    def test_benign_duizhao_to_yu_compare_does_not_report(self):
+        self.assert_no_noise(NOISE_ZH_CLI_BEFORE, NOISE_ZH_CLI_AFTER)
+
+    def test_benign_english_and_deletion_does_not_report(self):
+        self.assert_no_noise(
+            "\\section{A and B}\n\nWe describe both parts in detail.\n",
+            "\\section{A B}\n\nWe describe both parts in detail.\n")
+
+    def test_benign_chinese_yu_deletion_does_not_report(self):
+        self.assert_no_noise(
+            "\\section{甲与乙}\n\n我们分别描述两边的做法与代价。\n",
+            "\\section{甲乙}\n\n我们分别描述两边的做法与代价。\n")
+
+    # -- 论文里未改动的正常标题 -------------------------------------------
+    def test_untouched_paper_titles_do_not_report(self):
+        for body in UNCHANGED_TITLES:
+            with self.subTest(title=body.splitlines()[0]):
+                self.assert_no_noise(body, body)
+
+    # -- 边界：EN-06 的新标题必报，原标题不报 -----------------------------
+    def test_boundary_prompt_or_mechanism_reports(self):
+        fired = self._new_codes(
+            BOUNDARY_RELATION_TITLE,
+            BOUNDARY_RELATION_TITLE.replace("versus", "or"))
+        self.assertIn("HEADING_RELATION_CHANGED", fired)
+
+    def test_boundary_prompt_versus_mechanism_itself_does_not_report(self):
+        self.assert_no_noise(BOUNDARY_RELATION_TITLE, BOUNDARY_RELATION_TITLE)
+
+    def test_contrast_replaced_by_coordination_still_reports(self):
+        fired = self._new_codes(
+            BOUNDARY_RELATION_TITLE,
+            BOUNDARY_RELATION_TITLE.replace("versus", "and"))
+        self.assertIn("HEADING_RELATION_CHANGED", fired)
+
+    def test_subject_lost_while_relation_word_kept(self):
+        # 关系词保留、对比对象被换掉：只有 HEADING_SUBJECT_LOST 能报，
+        # 说明两条规则不完全重合，不能降为 info。
+        fired = self._new_codes(
+            BOUNDARY_RELATION_TITLE,
+            BOUNDARY_RELATION_TITLE.replace("mechanism", "trigger"))
+        self.assertIn("HEADING_SUBJECT_LOST", fired)
+        self.assertNotIn("HEADING_RELATION_CHANGED", fired)
 
 
 if __name__ == "__main__":

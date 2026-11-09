@@ -11,10 +11,11 @@
 # 再用户自维护的纯文本（一行一个词）；忽略空行与 # 注释，大小写不敏感。
 term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 
-# 标题关系词：改写前后标题里的这组词发生替换或删除即报
-# HEADING_RELATION_CHANGED。英文按词边界，中文按子串。
-heading_relation_words = ["versus", "vs", "and", "or", "not", "without",
-                          "对", "与", "及", "不是"]
+# 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
+# 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）
+# 不承载对立关系，不进本表。英文按词边界，中文按结构匹配。
+heading_relation_words = ["versus", "vs", "not", "without",
+                          "对", "而非", "不是"]
 
 [thresholds]
 # 每千词（中文按字）套话连接词数；> 触发

@@ -102,3 +102,60 @@ exit 5
   `test_build_empty_without_tex_is_config_error`（空 build + 无 `main.tex`
   → exit 2，不再静默跳过）。
 - 全量：`Ran 858 tests ... OK`（0 失败）。
+
+## 5. 闸门 `--build` 实测（批 122）
+
+规范：`docs/design/SPEC-BUILD.md` §7。`audit` / `verify-pdf` 的 `--build`
+复用本文件 §1–§5 的编译实现，不另写第二套。
+
+### 5.1 三条验收读数
+
+```
+$ python3 -m factscribe audit ../paper-b --build
+...
+结论：0 红 / 0 黄 → 绿（退出码 0）
+build  : 已编译（79370 字节）
+
+$ python3 -m factscribe audit ../paper-b-zh --build
+...
+结论：0 红 / 0 黄 → 绿（退出码 0）
+build  : 已编译（264522 字节）
+
+$ python3 -m factscribe audit ../paper-zh --build
+...
+[黄] 1 处（未核验/未绑定/未签名——不判死，但不许当绿）
+[红] 0 处 —— 数字与引用全部有账、有据
+结论：0 红 / 1 黄 → 黄（未核验，不判死）（退出码 3）
+build  : 已编译（306031 字节）
+```
+
+| 项目 | 配置形态 | build 路径 | audit 退出码 |
+|---|---|---|---|
+| `paper-b` | V3（`build` 不读） | 自动路径，1 次过 | 0（与不传 `--build` 一致） |
+| `paper-b-zh` | V3（`build` 不读） | 自动路径，字体兜底第 2 次过 | 0（与不传 `--build` 一致） |
+| `paper-zh` | V1，`project.build = "tectonic main.tex"` | shell 路败在 fandol 缺失 → 闸门临时副本字体兜底重试成功 | 3（既有黄，未变红） |
+
+`paper-zh` 的 shell 输出是 `CTeX fontset 'fandol' could not be found`
+（本机无网络，tectonic bundle 拉不到 fandol）。闸门按 §7 的字体兜底扩展
+改用 `fontset=none` + `STHEITI.ttf` 的临时副本重编；项目里的 `main.tex`
+逐字节未改。
+
+### 5.2 测试
+
+新增 `tests/test_audit_build.py`：12 例，全离线（假 `tectonic` 脚本 +
+`FAKE_LOG` 调用日志），覆盖：
+
+- `audit --build` 成功：先编（日志非空、`main.pdf` 落盘）后审，exit 0，
+  `--json` 的 `build = {ran: true, ok: true, pdf_bytes > 0}`；
+- 编译失败（shell 路 1 / 自动路 4）、引擎缺失（8）：中止且退出码沿用，
+  人读输出含「审计中止」、不含审计结论；
+- 不传 `--build`：假引擎一次都不调用，`build = {ran: false, ok: true,
+  pdf_bytes: 0}`；
+- `project.build` 非空：shell 先跑、不碰 tectonic；shell 败在字体特征时
+  闸门走临时副本兜底且项目 `.tex` 逐字节不变；
+- `verify-pdf --build`：用真实 benign 夹具 PDF 走完整「先编（真实 PDF
+  覆盖旧件）→ 回检 → exit 0」；失败 / 缺引擎 / 不传开关同语义；
+- `--json` 的 `build` 字段固定三键。
+
+全量：`Ran 891 tests ... OK`（0 失败）；`./scripts/preflight-ci.sh` 全绿
+（3.10 / 3.11 / 3.12 及干净克隆）。

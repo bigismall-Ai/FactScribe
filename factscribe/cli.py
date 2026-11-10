@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check
-from .buildpdf import auto_build
+from .buildpdf import _is_font_error, auto_build
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
@@ -54,6 +54,43 @@ def run_build(cfg: Config) -> tuple[int, str]:
         return EXIT_RED, "$ %s\n%s\n构建失败：退出码 %d" % (cfg.build, out.rstrip(), proc.returncode)
     return EXIT_OK, "$ %s\n%s\n构建成功：退出码 0" % (cfg.build, out.rstrip())
 
+
+def run_build_step(cfg: Config, engine: str = "tectonic",
+                   cjk_font: str | None = None,
+                   keep_temp: bool = False,
+                   font_fallback: bool = False) -> tuple[int, str, dict]:
+    """批 122：build 子命令与 audit/verify-pdf --build 共用同一条编译路。
+
+    ``font_fallback`` 只在闸门（audit/verify-pdf --build）打开：``project.build``
+    非空时仍按原样跑 shell，但若它败在字体上（批 120 §3.2 的特征），就复用
+    自动路径的临时副本 CJK 兜底重试——项目里的 ``.tex`` 仍不改。
+    """
+    if cfg.build.strip():
+        code, out = run_build(cfg)
+        if code != EXIT_OK and font_fallback and _is_font_error(out):
+            return auto_build(cfg.root, output=cfg.output, engine=engine,
+                              cjk_font=cjk_font, keep_temp=keep_temp,
+                              root_tex=cfg.root_tex or "main.tex")
+        return code, out, {}
+    return auto_build(cfg.root, output=cfg.output, engine=engine,
+                      cjk_font=cjk_font, keep_temp=keep_temp,
+                      root_tex=cfg.root_tex or "main.tex")
+
+
+def _build_block(cfg: Config, code: int, info: dict,
+                 ran: bool = True) -> dict:
+    """--json 的 build 字段：ran/ok/pdf_bytes（pdf_bytes 只在成功时非零）。"""
+    ok = code == EXIT_OK
+    size = 0
+    if ok:
+        size = int(info.get("pdf_bytes") or 0)
+        if size == 0:
+            pdf = cfg.root / cfg.output
+            if pdf.is_file():
+                size = pdf.stat().st_size
+    return {"ran": ran, "ok": ok, "pdf_bytes": size}
+
+
 def _exit_code(red: int, yellow: int, strict: bool = False) -> int:
     if red:
         return EXIT_RED
@@ -84,6 +121,8 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "audit":
             sp.add_argument("--resolve", action="store_true",
                             help="联网核验 arXiv/DOI（超时 5 秒；失败标 unverified 黄）")
+            sp.add_argument("--build", action="store_true",
+                            help="审计前先编 PDF（project.build 非空跑它；空则用 tectonic 自动编）")
         if name == "matrix":
             sp.add_argument("--out", default=None, help="默认 audit/matrix.md")
         if name == "preamble":
@@ -100,6 +139,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--report", required=True, help="audit/report.json（被签的那一份）")
     sp.add_argument("--stamp", default=None, help="audit/stamp.json（有则必须先验信任链）")
     sp.add_argument("--keys", default=None, help="项目外公钥登记 approver_keys.json")
+    sp.add_argument("--project", default=None,
+                    help="--build 用的项目目录（默认取 PDF 所在目录）")
+    sp.add_argument("--build", action="store_true",
+                    help="回检前先编 PDF（项目目录默认取 PDF 上一级）")
     sp.add_argument("--json", action="store_true", help="（本命令默认只输出 JSON）")
     sp = sub.add_parser(
         "style", help="文风闸：只报公式化写作特征（黄牌 exit 3），不阻断、不改正文")
@@ -240,6 +283,18 @@ def cmd_check(args) -> int:
 
 def cmd_audit(args) -> int:
     cfg = load_config(Path(args.project))
+    build = {"ran": False, "ok": True, "pdf_bytes": 0}
+    if getattr(args, "build", False):
+        bcode, bout, binfo = run_build_step(cfg, font_fallback=True)
+        build = _build_block(cfg, bcode, binfo)
+        if bcode != EXIT_OK:
+            payload = _payload("audit", _severity_of(bcode), bcode,
+                               build=build, build_output=bout)
+            payload["config"] = _config_block(cfg)
+            payload["config_warnings"] = list(cfg.warnings)
+            _emit(payload, "== paperkit audit ==\n编译失败，审计中止（退出码 %d）\n%s"
+                  % (bcode, bout), args.json)
+            return bcode
     facts = load_facts(cfg)
     sections = load_sections(cfg)
     red, yellow, hints, summary, unresolved = run_audit(
@@ -247,6 +302,8 @@ def cmd_audit(args) -> int:
     code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
                            integrity_first=cfg.is_v3)
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    if build["ran"]:
+        text += "\nbuild  : 已编译（%d 字节）" % build["pdf_bytes"]
     if cfg.warnings:
         text += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
     findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
@@ -257,7 +314,8 @@ def cmd_audit(args) -> int:
                        warnings=[i.as_dict() for i in yellow],
                        hints=[h.as_dict() for h in hints],
                        coverage=summary.get("coverage", {}),
-                       resolved=unresolved)
+                       resolved=unresolved,
+                       build=build)
     payload["config"] = _config_block(cfg)
     payload["config_warnings"] = list(cfg.warnings)
     _emit(payload, text, args.json)
@@ -265,6 +323,17 @@ def cmd_audit(args) -> int:
 
 
 def cmd_verify_pdf(args) -> int:
+    build = {"ran": False, "ok": True, "pdf_bytes": 0}
+    if getattr(args, "build", False):
+        project = Path(args.project) if args.project else Path(args.pdf).parent
+        cfg = load_config(project)
+        bcode, bout, binfo = run_build_step(cfg, font_fallback=True)
+        build = _build_block(cfg, bcode, binfo)
+        if bcode != EXIT_OK:
+            payload = _payload("verify-pdf", _severity_of(bcode), bcode,
+                               build=build, build_output=bout)
+            _emit(payload, "", True)
+            return bcode
     stats: dict = {}
     issues, warnings, code = verify_pdf(
         Path(args.pdf), Path(args.report),
@@ -282,7 +351,8 @@ def cmd_verify_pdf(args) -> int:
                        issues=[i.as_dict() for i in issues],
                        warnings=[w.as_dict() for w in warnings],
                        structural_masked=masked,
-                       structural_masked_by=by_cat)
+                       structural_masked_by=by_cat,
+                       build=build)
     _emit(payload, human, True)
     return code
 
@@ -320,14 +390,9 @@ def cmd_preamble(args) -> int:
 
 def cmd_build(args) -> int:
     cfg = load_config(Path(args.project))
-    if cfg.build.strip():
-        code, out = run_build(cfg)
-        info = {}
-    else:
-        code, out, info = auto_build(
-            cfg.root, output=cfg.output, engine=args.engine,
-            cjk_font=args.cjk_font, keep_temp=args.keep_temp,
-            root_tex=cfg.root_tex or "main.tex")
+    code, out, info = run_build_step(
+        cfg, engine=args.engine, cjk_font=args.cjk_font,
+        keep_temp=args.keep_temp)
     payload = _payload("build", "ok" if code == EXIT_OK else "violation", code,
                        build=cfg.build, output=out)
     payload.update(info)

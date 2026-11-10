@@ -112,3 +112,39 @@ tectonic -X compile main.tex        # cwd = <temp>/project
 - 不读 `audit/`、不判报告新鲜度——`build` 仍是排版预览，发布路径另论。
 - 同一项目并发跑 `build` 不在本规范承诺内（临时目录各自独立，回写最后者胜）。
 - 项目内符号链接在副本里按链接复制（`copytree(symlinks=True)`），不改指向。
+
+## 7. 闸门命令的 `--build`（批 122）
+
+`audit` 与 `verify-pdf` 增加开关 `--build`，把「编 PDF」与「回检」合成一步，
+避免审的是旧 PDF。编译逻辑不另写一套，直接走 §1–§5 的同一入口。
+
+```
+python3 -m factscribe audit <项目> --build [--json]
+python3 -m factscribe verify-pdf <pdf> --report <report> [--build]
+                                     [--project <项目>] [--json]
+```
+
+| 情况 | 行为 |
+|---|---|
+| 传 `--build` | 先按 §1 判定：`project.build` 非空按 shell 跑；为空走 §2–§5 自动路径。编译成功后才继续审计/回检 |
+| 编译失败 | 立即中止，不再输出审计结论；退出码沿用 build 的（shell 路 1，自动路 2/8/4） |
+| 不传 `--build` | 行为完全不变：不探测、不调用引擎，CI 上没有 TeX 也不受影响 |
+
+两点补充：
+
+1. **字体兜底延伸到 shell 路**：`project.build` 非空但败在 §3.2 的字体特征
+   上时，闸门会复用自动路径的临时副本兜底重试（只改副本，项目里的 `.tex`
+   不动）。这是 `audit`/`verify-pdf --build` 专有的宽容；`build` 子命令的
+   shell 路仍保持批 120 的原行为。
+2. **`verify-pdf` 的项目目录**：默认取 PDF 的上一级目录；PDF 不在项目根时
+   用 `--project <项目>` 指定。
+
+`--json` 增补字段（两个命令同形）：
+
+```json
+"build": {"ran": true, "ok": true, "pdf_bytes": 79370}
+```
+
+- 未传 `--build`：`{"ran": false, "ok": true, "pdf_bytes": 0}`；
+- 编译失败：`ran=true`、`ok=false`、`pdf_bytes=0`，并另给 `build_output`
+  人读原始输出。

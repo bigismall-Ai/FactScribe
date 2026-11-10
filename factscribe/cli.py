@@ -23,6 +23,8 @@ from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
 from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
                     load_style_rules, render_human)
+from .term_suggest import (add_from_tsv, json_payload, render_tsv,
+                           suggest)
 from .tide import render_human as render_tide
 from .tide import run_tide
 
@@ -132,6 +134,31 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--for", dest="for_code", default=None, metavar="CODE",
                     help="按错误码查处方（例：HEADING_ECHO）")
     sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "terms", help="术语候选抽取与人工入表（零 LLM：suggest / add）")
+    tsp = sp.add_subparsers(dest="terms_action", required=True)
+    ss = tsp.add_parser("suggest", help="从论文语料抽术语候选（TSV）")
+    ss.add_argument("root", help="论文目录")
+    ss.add_argument("--min-count", type=int, default=3, metavar="N",
+                    help="最少出现次数（默认 3）")
+    ss.add_argument("--min-sections", type=int, default=2, metavar="N",
+                    help="最少跨小节数（默认 2）")
+    ss.add_argument("--out", default=None, metavar="FILE",
+                    help="候选 TSV 落盘路径（默认只出 stdout）")
+    ss.add_argument("--glossary", default=None, metavar="TSV",
+                    help="既有词表（默认仓内 paper.tsv ＋ workspace.tsv）")
+    ss.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sa = tsp.add_parser("add", help="只把人工 --pick 点名的形式写进 paper.tsv")
+    sa.add_argument("--from", dest="from_path", required=True, metavar="FILE",
+                    help="terms suggest 产出的候选 TSV")
+    sa.add_argument("--pick", action="append", required=True,
+                    metavar="SURFACE",
+                    help="人工指定的表面形式；逗号分隔，可重复")
+    sa.add_argument("--glossary", default=None, metavar="TSV",
+                    help="目标词表（默认 factscribe/terms/paper.tsv）")
+    sa.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
 
@@ -457,13 +484,59 @@ def cmd_prescribe(args) -> int:
     return EXIT_OK
 
 
+def cmd_terms(args) -> int:
+    """术语候选抽取 / 人工入表。零 LLM；不自动写词表。"""
+    if args.terms_action == "suggest":
+        rows = suggest(args.root, min_count=args.min_count,
+                       min_sections=args.min_sections,
+                       glossary_path=args.glossary)
+        text = render_tsv(rows)
+        out = Path(args.out) if args.out else None
+        if out is not None:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text, encoding="utf-8")
+        if args.json:
+            print(json.dumps(
+                json_payload(rows, args.root, args.min_count,
+                             args.min_sections),
+                ensure_ascii=False, indent=2))
+            return EXIT_OK
+        lines = ["== factscribe terms suggest ==",
+                 "根：%s" % args.root,
+                 "候选：%d 条（min-count=%d，min-sections=%d）"
+                 % (len(rows), args.min_count, args.min_sections)]
+        if out is not None:
+            lines.append("写盘：%s" % out)
+        print("\n".join(lines))
+        print(text, end="")
+        return EXIT_OK
+
+    info = add_from_tsv(args.from_path, args.pick,
+                        glossary_path=args.glossary)
+    if args.json:
+        payload = _payload("terms", "ok", EXIT_OK, **info)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return EXIT_OK
+    lines = ["== factscribe terms add ==",
+             "词表：%s" % info["glossary"],
+             "来源：%s" % info["source"],
+             "新增：%d 条%s" % (len(info["added"]),
+                              ("（%s）" % "、".join(info["added"]))
+                              if info["added"] else ""),
+             "跳过：%d 条" % len(info["skipped"])]
+    for item in info["skipped"]:
+        lines.append("  - %s：%s" % (item["surface"], item["reason"]))
+    print("\n".join(lines))
+    return EXIT_OK
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
-                "prescribe": cmd_prescribe}
+                "prescribe": cmd_prescribe, "terms": cmd_terms}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

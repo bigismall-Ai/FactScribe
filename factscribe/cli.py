@@ -23,6 +23,9 @@ from .protect import compare as compare_protect
 from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
                      _human_check, _payload, _severity_of, render_matrix)
+from .review import payload as review_payload
+from .review import render_human as render_review
+from .review import run_review
 from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
                     load_style_rules, render_human)
 from .term_suggest import (add_from_tsv, json_payload, render_tsv,
@@ -138,6 +141,21 @@ def build_parser() -> argparse.ArgumentParser:
                          "；fnmatch 对相对路径匹配")
     sp.add_argument("--no-default-ignore", action="store_true",
                     help="关掉默认忽略表（排查用）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "review",
+        help="改写验收一条命令：protect + style --diff + tide 的组合，不新增判据",
+        description="改写验收一条命令：protect + style --diff + tide 的组合，"
+                    "不新增判据。保护面有红或 tide 不闭合即拒绝（exit 1）；"
+                    "新增违规超过 --allow-new 即需复核（exit 3）；三项全过才"
+                    "通过（exit 0）。--snapshot 只在通过时存快照。")
+    sp.add_argument("--before", required=True, help="改写前目录")
+    sp.add_argument("--after", required=True, help="改写后目录")
+    sp.add_argument("--snapshot", default=None, metavar="STORE",
+                    help="判定为「通过」时保存快照的库根（其余判定不存）")
+    sp.add_argument("--allow-new", dest="allow_new", type=int, default=0,
+                    metavar="N", help="允许的新增 style 违规条数（默认 0）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
@@ -551,6 +569,18 @@ def _tide_restore(args) -> int:
     return code
 
 
+def cmd_review(args) -> int:
+    """改写验收：一次跑保护面、复检、闭合三项，合成一个 final verdict。"""
+    result = run_review(
+        Path(args.before), Path(args.after),
+        allow_new=args.allow_new,
+        snapshot=Path(args.snapshot) if args.snapshot else None)
+    code = result.exit_code
+    data = _payload("review", _severity_of(code), code, **review_payload(result))
+    _emit(data, render_review(result), args.json)
+    return code
+
+
 def _write_stdout(text: str) -> int:
     """写 stdout；下游提前关闭（如 ``| head``）时安静退出，不报内部错误。"""
     try:
@@ -700,6 +730,7 @@ def main(argv=None) -> int:
                 "build": cmd_build, "preamble": cmd_preamble,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
+                "review": cmd_review,
                 "polish": cmd_polish,
                 "prescribe": cmd_prescribe, "terms": cmd_terms}
     try:

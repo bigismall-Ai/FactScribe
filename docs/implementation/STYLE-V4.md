@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `DASH_PARENTHETICAL` | `——`/`—` 用作插入解释，**逐处报** | `thresholds.dash_budget = 0` | 数值范围、文献页码、数学环境排除；ASCII `--` 不匹配 |
 | `HEADING_TOO_LONG` | 中文标题 >12 字、英文 >8 词 | `heading_max_chars_zh = 12`、`heading_max_words_en = 8` | `\title{}` 豁免 |
-| `HEADING_MALFORMED` | 标题含冒号/破折号/括号解释/问号/句号 | 出现即报 | 论文主标题 `\title{}` 除外；连字符不算破折号 |
+| `HEADING_MALFORMED` | 标题含冒号/破折号/括号解释/问号/句号（含英文句点，常见缩写豁免） | 出现即报 | 论文主标题 `\title{}` 除外；连字符不算破折号；批 112 起 `.` 同判，`heading_period_exempt` 放行缩写 |
 | `TERM_FIRST_IN_HEADING` | 标题出现术语样词（中文 ≥4 字段、英文 ≥2 词短语），该节首句未出现 | 出现即报；白名单命中不报 | 启发式，只黄 |
 | `RHYTHM_PLATEAU` | 同段连续 ≥3 句落在同一 10 词区间 | `rhythm_plateau_run = 3`、`rhythm_plateau_window = 10` | 保留 |
 | `COLLOQUIAL_TRIAD` | **模板式**三点并列（`首先/其次/最后` 等）在**相邻段落**重复 ≥2 次 | `colloquial_triad_repeats = 2` | 替代旧 `TRIAD_DENSITY`；批 110 起顿号/逗号列举不算，不按条数判 |

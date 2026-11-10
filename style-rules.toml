@@ -37,6 +37,11 @@ abbrev_first_use = false
 heading_relation_words = ["versus", "vs", "not", "without",
                           "对", "而非", "不是"]
 
+# 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾的
+# 标题不算「带句号」——句点是缩写的一部分，不是句子终止符。大小写不敏感。
+heading_period_exempt = ["al.", "e.g.", "i.e.", "vs.", "etc.", "Fig.",
+                         "Eq.", "No.", "cf.", "Dr.", "et al."]
+
 [thresholds]
 # 每千词（中文按字）套话连接词数；> 触发
 connective_density = 8.0

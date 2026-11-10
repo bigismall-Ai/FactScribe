@@ -176,6 +176,11 @@ DEFAULT_RULES: dict = {
     # （and / or / 与 / 及 / 、）不进本表——删掉它们不改变论证方向。
     "heading_relation_words": ["versus", "vs", "not", "without",
                                "对", "而非", "不是"],
+    # 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾
+    # 的标题不算「带句号」——句点是缩写的一部分，不是句子终止符。
+    # 大小写不敏感；表可在项目根 style-rules.toml 覆盖。
+    "heading_period_exempt": ["al.", "e.g.", "i.e.", "vs.", "etc.", "Fig.",
+                              "Eq.", "No.", "cf.", "Dr.", "et al."],
     # v5：HEADING_ECHO 的可配词表（泛化词不算「新实义」；垫话开头视为复述式）
     "heading_echo": {
         "generic_terms_en": ["limitation", "problem", "issue", "result",
@@ -1079,6 +1084,24 @@ def _is_range_dash(prose: str, start: int, end: int) -> bool:
         if re.search(r"第\s*\d+\s*$", left) and re.match(r"\s*\d+\s*页", right):
             return True
     return False
+
+
+def _period_exempt_words(rules: dict) -> list[str]:
+    """标题句点豁免表（缩写）。缺省时用内置默认值；大小写不敏感。"""
+    raw = rules.get("heading_period_exempt")
+    if raw is None:
+        raw = DEFAULT_RULES["heading_period_exempt"]
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]
+    return [str(x).strip().lower() for x in raw if str(x).strip()]
+
+
+def _heading_period_bad(title: str, exempt: list[str]) -> bool:
+    """标题以英文句点结尾且不是常见缩写 → True。"""
+    if not title.endswith("."):
+        return False
+    low = title.lower()
+    return not any(low.endswith(word) for word in exempt)
 
 
 def _heading_title(tex: str, brace: int) -> tuple[str, int]:
@@ -2605,6 +2628,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
                       "HEADING_ECHO": 0, "HEADING_RELATION_CHANGED": 0,
                       "HEADING_SUBJECT_LOST": 0, "TERM_FIRST_IN_HEADING": 0}
+    period_exempt = _period_exempt_words(rules)
     glossary = _glossary_for(rules, cfg.root)
     allow_keys, allow_canon = _term_allowlist(rules, cfg.root, glossary)
     seen_unregistered: set = set()
@@ -2627,7 +2651,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "标题压到 %s 以内：把副标题或解释移到正文首句，标题只留"
                     "名词短语；不改正文事实。" % limit_txt,
                     "heading_too_long"))
-            if _HEADING_MALFORMED_RE.search(title):
+            if (_HEADING_MALFORMED_RE.search(title)
+                    or _heading_period_bad(title, period_exempt)):
                 heading_counts["HEADING_MALFORMED"] += 1
                 instances["HEADING_MALFORMED"].append(Finding(
                     "HEADING_MALFORMED", doc.file, line, _clip(title, 160),

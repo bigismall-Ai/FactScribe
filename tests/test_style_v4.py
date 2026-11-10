@@ -191,6 +191,24 @@ TITLE_COLON = (
     "\\section{Results}\n"
     "We describe the pipeline in this section with enough words to form a sentence.\n"
 )
+# 批 112：英文标题末尾句点。最小复现（批 84 规则本意是「标题不带句号」
+# 但旧正则只认中文句号「。」，英文句点整条漏报）。
+HEAD_PERIOD_SECTION = (
+    "\\section{Results.}\n"
+    "We describe the pipeline in this section with enough words to form a sentence.\n"
+)
+HEAD_PERIOD_PARAGRAPH = (
+    "\\paragraph{Generation systems.} 正文一句。\n"
+    "\\section{Results.} 正文。\n"
+)
+HEAD_PERIOD_ABBREV = (
+    "\\section{Results for et al.}\n"
+    "We describe the pipeline in this section with enough words to form a sentence.\n"
+)
+HEAD_CLEAN_SHORT = (
+    "\\paragraph{Related work}\n"
+    "We describe the pipeline in this section with enough words to form a sentence.\n"
+)
 
 
 class TestHeadingMalformed(unittest.TestCase):
@@ -213,6 +231,54 @@ class TestHeadingMalformed(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, TITLE_COLON)
         self.assertNotIn("HEADING_MALFORMED", codes(result))
+
+    # ---- 批 112：英文句点与缩写豁免 ----
+    def test_positive_english_period_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_PERIOD_SECTION)
+        self.assertIn("HEADING_MALFORMED", codes(result))
+
+    def test_positive_english_period_paragraph(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_PERIOD_PARAGRAPH)
+        self.assertIn("HEADING_MALFORMED", codes(result))
+        self.assertGreaterEqual(result.metrics["heading_malformed"], 1)
+
+    def test_negative_clean_heading_without_period(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_CLEAN_SHORT)
+        self.assertNotIn("HEADING_MALFORMED", codes(result))
+
+    def test_negative_abbreviation_period_is_exempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_PERIOD_ABBREV)
+        self.assertNotIn("HEADING_MALFORMED", codes(result))
+
+    def test_markdown_heading_period(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "doc.md"
+            path.write_text("## Results.\n\nBody sentence.\n", encoding="utf-8")
+            env = dict(os.environ, PYTHONPATH=str(ROOT))
+            proc = subprocess.run(
+                [sys.executable, "-m", "factscribe", "style", "--doc",
+                 "doc.md", "--json"],
+                cwd=tmp, env=env, capture_output=True, text=True)
+        payload = json.loads(proc.stdout)
+        self.assertIn("HEADING_MALFORMED",
+                      {f["code"] for f in payload["findings"]})
+
+    def test_markdown_heading_without_period(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "doc.md"
+            path.write_text("## Results\n\nBody sentence.\n", encoding="utf-8")
+            env = dict(os.environ, PYTHONPATH=str(ROOT))
+            proc = subprocess.run(
+                [sys.executable, "-m", "factscribe", "style", "--doc",
+                 "doc.md", "--json"],
+                cwd=tmp, env=env, capture_output=True, text=True)
+        payload = json.loads(proc.stdout)
+        self.assertNotIn("HEADING_MALFORMED",
+                         {f["code"] for f in payload["findings"]})
 
 
 # --------------------------------------------------------------------------

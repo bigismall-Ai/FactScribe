@@ -10,6 +10,8 @@ Standard library only. No model SDK. Python ≥ 3.10.
 
 Green means three things hold: the ledger has evidence, the evidence is unchanged, and the prose is bound to it. It does not mean the paper is true, nor that a reviewer should accept its conclusions. See `docs/design/SPEC-V1.md` §2.3.
 
+What a reading does and does not support is spelled out in [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md).
+
 ## Install and run
 
 ```bash
@@ -18,9 +20,9 @@ python3 -m factscribe audit <project>          # core check
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Ten commands
+## Eleven commands
 
-`factscribe` ships ten subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
+`factscribe` ships eleven subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
 
 | Command | What it does |
 |---|---|
@@ -34,6 +36,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `protect` | Rewrite protection: compares six classes of content that must not change |
 | `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing |
 | `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
+| `terms` | Term candidates for human pick, then `add`; no automatic merge |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 
@@ -86,7 +89,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 563 tests, fully offline
+python3 -m unittest discover -s tests     # 597 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

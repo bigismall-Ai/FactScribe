@@ -5,7 +5,7 @@
   1. 文风与标题规则一律调用 `python3 -m factscribe style --doc README.md README.en.md`，
      本脚本不再重复实现第二套判据；
   2. 命令名必须真实存在（对照 `factscribe --help`）；
-  3. 十个命令必须都写进两份 README；
+  3. 子命令清单从 `factscribe --help` 现取，两份 README 必须一条不落；
   4. 相对链接的目标文件必须存在；
   5. README 里写的测试数必须等于实际跑出来的数。
 
@@ -19,8 +19,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = ["README.md", "README.en.md"]
-COMMANDS = ["check", "audit", "matrix", "build", "preamble",
-            "verify-pdf", "style", "protect", "tide", "prescribe"]
 ok = True
 
 
@@ -50,8 +48,12 @@ def main():
         print(styled.stderr)
 
     help_txt = run(["-m", "factscribe", "--help"]).stdout
-    for cmd in COMMANDS:
-        (good if cmd in help_txt else bad)(f"命令 {cmd}")
+    m = re.search(r"\{([a-z0-9,\-]+)\}", help_txt)
+    COMMANDS = m.group(1).split(",") if m else []
+    if not COMMANDS:
+        bad("无法从 --help 解析子命令列表")
+    else:
+        good(f"--help 里有 {len(COMMANDS)} 个子命令")
 
     for name in FILES:
         path = ROOT / name
@@ -64,7 +66,7 @@ def main():
         if missing:
             bad(f"命令未写入：{', '.join(missing)}")
         else:
-            good(f"十个命令已写齐（{len(COMMANDS)} 条）")
+            good(f"命令已写齐（{len(COMMANDS)} 条）")
         for link in re.findall(r"\]\(([^)]+)\)", text):
             if link.startswith("http"):
                 continue

@@ -10,6 +10,8 @@ FactScribe 是一道机械闸门，专门拦 AI 写论文时最危险的两类�
 
 绿只说明三件事：账有据、据未改、文有绑。它不说明论文为真，也不替审稿人判断结论是否成立。完整边界见 `docs/design/SPEC-V1.md` §2.3。
 
+一条读数能支撑什么说法、不能支撑什么说法，见 [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md)。
+
 ## 装与跑
 
 ```bash
@@ -18,9 +20,9 @@ python3 -m factscribe audit <项目>             # 核心校验
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-## 十个命令
+## 十一个命令
 
-`factscribe` 一共十个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
+`factscribe` 一共十一个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
 
 | 命令 | 干什么 |
 |---|---|
@@ -34,6 +36,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `protect` | 改写保护面：比对改写前后六类不许变的内容 |
 | `tide` | 潮汐式改动账：涨、落、波及面、闭合，全成或全退 |
 | `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
+| `terms` | 术语候选抽取与人工入表：suggest 提候选，add 只写你勾的 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 
@@ -84,7 +87,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 563 例，全离线
+python3 -m unittest discover -s tests     # 597 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

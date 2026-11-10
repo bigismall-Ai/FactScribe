@@ -10,7 +10,10 @@
 * 围栏、表格行、front matter 被遮成空白行，段落天然被它们隔开。
 
 遮罩顺序：front matter → 围栏代码 → HTML 注释 → 行内代码 → 链接目标 →
-表格行 → 列表行。前一步遮掉的字符在下一步里已是空白，不会被二次解释。
+表格行 → 引文行 → 列表行。前一步遮掉的字符在下一步里已是空白，不会被二次解释。
+
+引文行（``>`` 开头）整行遮罩：引用别人的话不是作者正文，句级规则
+（含解释性套语）不判。
 
 列表行（``- `` / ``* `` / ``+ `` / ``1. `` 及其缩进续行、惰性续行）整行遮罩：
 列表天然等长，不能拿句长节奏去判。列表内容另存一份 ``list_prose`` 视图，
@@ -223,6 +226,18 @@ def _mask_table_rows(chars: list) -> None:
             _blank(chars, start, end)
 
 
+def _mask_blockquotes(chars: list) -> None:
+    """引文行（``>`` 开头，允许最多 3 个空格缩进）整行遮罩。
+
+    引用别人的话不是作者正文；句级规则（套话、解释性套语、节奏）都不应
+    把引文算进作者的口径。与列表行同构：整行抹成空白，保留换行。
+    """
+    s = "".join(chars)
+    for start, end, line in _lines(s):
+        if re.match(r"^[ \t]{0,3}>", line):
+            _blank(chars, start, end)
+
+
 def _indent_width(line: str) -> int:
     return len(line) - len(line.lstrip(" \t"))
 
@@ -315,6 +330,7 @@ def scan_markdown(text: str) -> ScanResult:
     _mask_inline_code(chars)
     _mask_link_targets(chars)
     _mask_table_rows(chars)
+    _mask_blockquotes(chars)
     list_prose, list_spans = _mask_lists(chars)
     headings = _headings_of(chars)
     return ScanResult("".join(chars), headings, list_prose, list_spans)

@@ -52,7 +52,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ```
 
-第三道是文风与术语。文风闸只报可机械判定的公式化写法，共 18 条判据，其中 4 条是改写复检：`HEADING_ECHO` 查首句是否复述标题，`HEADING_RELATION_CHANGED` 查标题里的对立关系是否被换掉，`HEADING_SUBJECT_LOST` 查旧标题的主语是否丢失，`TERM_VARIANT` 查同一个术语是否在一篇里换着写法。术语层分两册：论文术语 33 条来自 `paper-zh/GLOSSARY.md`，工作区流程词 153 条来自词册。
+第三道是文风与术语。文风闸只报可机械判定的公式化写法，共 20 条判据，其中 4 条是改写复检：`HEADING_ECHO` 查首句是否复述标题，`HEADING_RELATION_CHANGED` 查标题里的对立关系是否被换掉，`HEADING_SUBJECT_LOST` 查旧标题的主语是否丢失，`TERM_VARIANT` 查同一个术语是否在一篇里换着写法。术语层分两册：论文术语 33 条来自 `paper-zh/GLOSSARY.md`，工作区流程词 153 条来自词册。
 
 ## 改动账
 
@@ -87,7 +87,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 597 例，全离线
+python3 -m unittest discover -s tests     # 618 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

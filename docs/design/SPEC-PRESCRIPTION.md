@@ -205,7 +205,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 }
 ```
 
-## 5. 六条处方
+## 5. 七条处方
 
 | # | 名称 | 治的判据（错误码） | 优先序 | 一句话 |
 |---|---|---|---|---|
@@ -215,6 +215,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 | 4 | `heading-malformed` | `HEADING_MALFORMED`、`HEADING_RELATION_CHANGED` | 3 标题指向内容 | 去冒号/问号/句号，但不许替换关系词 |
 | 5 | `heading-subject-keep` | `HEADING_SUBJECT_LOST`、`HEADING_RELATION_CHANGED` | 2 结构完整 | 对比结构改写后，第二个对象必须还在 |
 | 6 | `section-completeness` | `SECTION_INCOMPLETE` | 2 结构完整 | 每节首段交代「本节做什么、结论是什么」 |
+| 7 | `drop-the-proof` | `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN` | 5 文句风格 | 删掉反射式解释，让断言自己站住 |
 
 ### 5.1 `heading-shorten`
 
@@ -265,6 +266,26 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 `SECTION_INCOMPLETE` 是处方层自有的检查码：`style` 不产生它，处方层也不反过来
 给 `style` 增加判据。它只用于把「本节缺结论」与「首句复述标题」区分开。
 
+### 5.7 `drop-the-proof`
+
+治「每句都跟一个证明」的答辩腔（`EXPLAINER_DENSITY`、`JUSTIFY_CHAIN`，
+判据见 `SPEC-EXPLAINER.md`）。必做三件：让一半断言独立成立；把证据挪到
+真正需要它的地方；一段最多解释一次。禁做是**把解释句改成同义的另一句
+解释**——那只是换词，反射还在。
+
+反例（旧 → 新）：
+
+```
+旧  数字全对，结论照样可能是错的。这是最常见的一种误会。
+新  数字全对，结论照样可能是错的。
+```
+
+验收命令：
+
+```bash
+env PYTHONPATH=src python3 -m factscribe prescribe drop-the-proof --json
+```
+
 ## 6. 边界与非目标
 
 - 不判断「改得好不好」，不打分、不排名、不给通过率；
@@ -275,8 +296,9 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 
 ## 7. 验收
 
-- `tests/test_prescription.py` ≥ 10 例，覆盖：清单与六段完整性、按五个既有
-  错误码可查、处方文字不进 `style` findings、`style` 不导入处方模块、
+- `tests/test_prescription.py` ≥ 10 例，覆盖：清单与六段完整性、按既有
+  错误码可查（含批 99 新增的 `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN`）、
+  处方文字不进 `style` findings、`style` 不导入处方模块、
   冲突优先序与「让位」、验收命令可执行、反例与旧→新示例存在。
 - 门禁：
 

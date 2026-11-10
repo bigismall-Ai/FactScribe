@@ -74,6 +74,10 @@ DEFAULT_RULES: dict = {
         "heading_echo_min_new_terms": 1,
         # 术语层：同一 canonical 在一篇里出现多少种不同表面形式才报 TERM_VARIANT
         "term_variant_min_forms": 2,
+        # 批 99：解释性套语密度（每千词/字，> 触发）与反射式解释链
+        "explainer_density": 6.0,
+        "justify_chain_min_sentences": 2,
+        "justify_chain_min_paragraphs": 2,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -84,6 +88,18 @@ DEFAULT_RULES: dict = {
         "english": ["Moreover", "Furthermore", "Additionally", "In addition",
                     "Overall", "In conclusion"],
         "chinese": ["首先", "其次", "此外", "综上所述", "总而言之"],
+    },
+    # 批 99：句首解释性套语（EXPLAINER_DENSITY / JUSTIFY_CHAIN）。
+    # 只收「替上一句补解释/补举证」的固定说法；普通因果连词（因为/由于）
+    # 属正常论证，不进本表。
+    "explainers": {
+        "english": ["This means", "That is", "In other words",
+                    "This is because", "The reason is", "Which is why",
+                    "This shows that", "It follows that"],
+        "chinese": ["这说明", "这意味着", "也就是说", "换句话说", "换言之",
+                    "说白了", "简单说", "原因在于", "这是因为", "之所以",
+                    "由此可见", "正因如此", "这就是为什么", "这正是",
+                    "它证明", "它不证明", "可见"],
     },
     "empty_adjectives": {
         "english": ["crucial", "robust", "comprehensive", "significant",
@@ -150,6 +166,8 @@ DIRECTIONS = {
     "sentence_uniformity": "below",
     "empty_adjective": "above",
     "paragraph_template": "above",
+    "explainer_density": "above",
+    "justify_chain": "at_least",
     "hedge_stack": "at_least",
     "repeated_opener": "at_least",
     "sentence_length_extreme": "at_least",
@@ -173,6 +191,8 @@ CODE_OF = {
     "sentence_uniformity": "SENTENCE_UNIFORMITY",
     "empty_adjective": "EMPTY_ADJECTIVE",
     "paragraph_template": "PARAGRAPH_TEMPLATE",
+    "explainer_density": "EXPLAINER_DENSITY",
+    "justify_chain": "JUSTIFY_CHAIN",
     "hedge_stack": "HEDGE_STACK",
     "repeated_opener": "REPEATED_OPENER",
     "sentence_length_extreme": "SENTENCE_LENGTH_EXTREME",
@@ -198,7 +218,8 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_SUBJECT_LOST", "TERM_FIRST_IN_HEADING",
                  "TERM_VARIANT", "TERM_UNREGISTERED",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
-                 "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "REPEATED_OPENER",
+                 "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
+                 "JUSTIFY_CHAIN", "REPEATED_OPENER",
                  "RHYTHM_PLATEAU", "SENTENCE_UNIFORMITY"]
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -293,6 +314,7 @@ def _phrase_regex(phrases: list[str]) -> re.Pattern | None:
 
 _SKIP_ENV_RE = re.compile(
     r"\\begin\s*\{(verbatim\*?|Verbatim|lstlisting|minted|comment\*?|pkignore"
+    r"|quote|quotation|verse"
     r"|equation\*?|align\*?|gather\*?|multline\*?|eqnarray\*?|displaymath|math"
     r"|figure\*?|table\*?|tabular\*?|tabularx|thebibliography"
     r"|algorithm\*?|algorithmic|tikzpicture)\}.*?\\end\s*\{\1\}",
@@ -659,6 +681,40 @@ def _strip_connective(sentence: str, token: str) -> str:
     tail = sentence[end:]
     tail = re.sub(r"^[\s,，、;；:：]+", "", tail)
     return tail
+
+
+# 句首允许出现的前置符号（引号、括号、Markdown 强调符）。
+_LEAD_STRIP = " \t\r\n\"'“”‘’`«»「」『』()[]{}【】（）《》>#*_"
+
+
+def _explainer_opener(sentence: str, eng_re, cn_words) -> str:
+    """句首解释性套语；没有则返回空串。
+
+    中文按前缀匹配，英文按词边界匹配，两者取最长命中。只判句首——
+    句中的「这意味着」是正常行文，不算反射式解释。
+    """
+    head = sentence.lstrip(_LEAD_STRIP)
+    if not head:
+        return ""
+    best = ""
+    for word in cn_words:
+        if head.startswith(word) and len(word) > len(best):
+            best = word
+    if eng_re is not None:
+        m = eng_re.match(head)
+        if m and len(m.group(0)) > len(best):
+            best = m.group(0)
+    return best
+
+
+def _strip_opener(sentence: str, token: str) -> str:
+    """给出「删掉句首套语」后的替换示例。"""
+    head = sentence.lstrip(_LEAD_STRIP)
+    if not head.lower().startswith(token.lower()):
+        return sentence
+    tail = head[len(token):]
+    tail = re.sub(r"^[\s,，、;；:：。.!?！？—–-]+", "", tail)
+    return tail or sentence
 
 
 def _extreme_split(sentence: str) -> str:
@@ -1591,6 +1647,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     closer_cn = _cn_words(rules, "paragraph_closers")
     hedge_re = _phrase_regex(_words(rules, "hedge_stacks"))
     hedge_cn = _cn_words(rules, "hedge_stacks")
+    explainer_re = _phrase_regex(_words(rules, "explainers"))
+    explainer_cn = _cn_words(rules, "explainers")
+    chain_min_sentences = int(thresholds["justify_chain_min_sentences"])
+    chain_min_paragraphs = int(thresholds["justify_chain_min_paragraphs"])
     triad_re = _english_triad_re()
 
     docs: list[_Doc] = []
@@ -1640,6 +1700,74 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "CONNECTIVE_DENSITY", doc.file, _line_of(doc, start), _clip(sentence, 180),
                 "删去「%s」，直接陈述：%s" % (token, _clip(replacement, 120)),
                 "connective_density"))
+
+    # ---- 1b. 解释性套语：密度 + 反射式解释链（批 99）----
+    explainer_hits = 0
+    for doc, start, end, _w in all_sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        token = _explainer_opener(sentence, explainer_re, explainer_cn)
+        if not token:
+            continue
+        explainer_hits += 1
+        replacement = _strip_opener(sentence, token)
+        instances["EXPLAINER_DENSITY"].append(Finding(
+            "EXPLAINER_DENSITY", doc.file, _line_of(doc, start),
+            _clip(sentence, 180),
+            "句首「%s」是解释性套语：先删掉它，让断言自己站住（例：'%s'）；"
+            "证据只在真正需要它的那一处出现一次。" % (token, _clip(replacement, 120)),
+            "explainer_density"))
+
+    chain_findings: list[Finding] = []
+    for doc in docs:
+        closing = []        # [(line, 原句, 是否解释句)]
+        for pstart, pend in _paragraphs(doc, 1):
+            sents = []
+            for s, e in _sentences(doc.prose[pstart:pend], pstart):
+                text = _norm_space(doc.prose[s:e])
+                token = _explainer_opener(text, explainer_re, explainer_cn)
+                sents.append((s, text, token))
+            if not sents:
+                continue
+            hits = [x for x in sents if x[2]]
+            if len(hits) >= chain_min_sentences:
+                second = hits[1]
+                chain_findings.append(Finding(
+                    "JUSTIFY_CHAIN", doc.file, _line_of(doc, second[0]),
+                    _clip(second[1], 180),
+                    "同一段有 %d 句以解释套语开头：留一句解释就够，其余删掉；"
+                    "让断言自己站住，不要每句都补一个理由。" % len(hits),
+                    "justify_chain"))
+            last_start, last_text, last_token = sents[-1]
+            closing.append((_line_of(doc, last_start), last_text,
+                            bool(last_token)))
+        # 连续段落都以解释句收尾：一段连续的解释收尾只报一处。
+        i = 0
+        while i < len(closing):
+            if not closing[i][2]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < len(closing) and closing[j + 1][2]:
+                j += 1
+            run = j - i + 1
+            if run >= chain_min_paragraphs:
+                line, text, _flag = closing[j]
+                chain_findings.append(Finding(
+                    "JUSTIFY_CHAIN", doc.file, line, _clip(text, 180),
+                    "连续 %d 段都用解释句收尾：删掉最后一段的解释句，让段落停在"
+                    "事实或结论上；解释只在读者会误解的地方出现一次。" % run,
+                    "justify_chain"))
+            i = j + 1
+
+    seen_chain: set = set()
+    unique_chain: list[Finding] = []
+    for finding in chain_findings:
+        key = (finding.file, finding.line)
+        if key in seen_chain:
+            continue
+        seen_chain.add(key)
+        unique_chain.append(finding)
+    instances["JUSTIFY_CHAIN"].extend(unique_chain)
 
     # ---- 2. 空泛形容词 ----
     adjective_hits = 0
@@ -1986,6 +2114,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "sentence_uniformity": round(uniformity, 3),
         "empty_adjective": density(adjective_hits),
         "paragraph_template": template_ratio,
+        "explainer_density": density(explainer_hits),
+        "justify_chain": len(unique_chain),
         "hedge_stack": hedge_hits,
         "repeated_opener": repeated,
         "sentence_length_extreme": extreme_hits,
@@ -2030,6 +2160,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         elif metric == "term_variant":
             limit = int(thresholds["term_variant_min_forms"])
             hit = bool(variant_findings)
+            shown = limit
+        elif metric == "justify_chain":
+            limit = 1
+            hit = bool(unique_chain)
             shown = limit
         elif metric in ("heading_too_long", "heading_malformed",
                         "term_first_in_heading", "heading_echo",
@@ -2208,6 +2342,8 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("empty_adjective", "EMPTY_ADJECTIVE", ">"),
         ("sentence_uniformity", "SENTENCE_UNIFORMITY", "<"),
         ("paragraph_template", "PARAGRAPH_TEMPLATE", ">"),
+        ("explainer_density", "EXPLAINER_DENSITY", ">"),
+        ("justify_chain", "JUSTIFY_CHAIN", ">="),
         ("hedge_stack", "HEDGE_STACK", ">="),
         ("repeated_opener", "REPEATED_OPENER", ">="),
     ]
@@ -2231,6 +2367,10 @@ def render_human(result: StyleResult, project: Path) -> str:
             threshold = "repeat>=%d" % result.thresholds["colloquial_triad_repeats"]
         elif key == "term_variant":
             threshold = "forms>=%d" % result.thresholds["term_variant_min_forms"]
+        elif key == "justify_chain":
+            threshold = "chain>=%d/%d" % (
+                result.thresholds["justify_chain_min_sentences"],
+                result.thresholds["justify_chain_min_paragraphs"])
         elif key == "term_unregistered":
             threshold = "提示"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",

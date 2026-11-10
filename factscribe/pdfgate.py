@@ -275,6 +275,33 @@ def pdf_key_counts(pdf: Path) -> Counter:
     return counts
 
 
+_STRUCTURAL_KEY_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def structural_key_categories(report: dict, total_pages: int) -> dict[str, str]:
+    """源层结构性白名单 → {key: category}（页码按 PDF 实际页数补 1..P）。
+
+    只收 `sections` / `floats` / `years` 三类源侧声明；页码永远由实际 PDF
+    页数决定，不采信报告里的数字。同 key 属多类时按固定优先级归一类。
+    """
+    spec = report.get("structural_whitelist") or {}
+    if not isinstance(spec, dict):
+        spec = {}
+    categories: dict[str, str] = {}
+
+    def _add(category: str, values) -> None:
+        for value in values or []:
+            key = str(value).strip()
+            if _STRUCTURAL_KEY_RE.fullmatch(key):
+                categories.setdefault(key, category)
+
+    _add("sections", spec.get("sections"))
+    _add("floats", spec.get("floats"))
+    _add("years", spec.get("years"))
+    _add("pages", [str(i) for i in range(1, max(total_pages, 0) + 1)])
+    return categories
+
+
 def _whitelist(report: dict, issues: list[Issue]) -> Counter:
     counts: Counter = Counter()
     for item in report.get("pdf_whitelist") or []:
@@ -442,8 +469,14 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
 # 页面与数字（P-02..P-05）：audit 与 verify-pdf 共用
 # --------------------------------------------------------------------------
 
-def verify_document(pdf: Path, report: dict) -> tuple[list[Issue], list[Issue]]:
-    """P-02/P-03/P-04/P-05：只判磁盘上的 PDF 字节与报告里的账/白名单。"""
+def verify_document(pdf: Path, report: dict,
+                    stats: dict | None = None) -> tuple[list[Issue], list[Issue]]:
+    """P-02/P-03/P-04/P-05：只判磁盘上的 PDF 字节与报告里的账/白名单。
+
+    `report.structural_whitelist` 是源层推导的章节号/浮动体编号/bib 年份；
+    页码由本函数按实际页数补 1..P。命中这些形态的**盈余 token** 不判红，
+    而是计数进 `stats["structural_masked"]`（供报告显式披露，不静默吞掉）。
+    """
     issues: list[Issue] = []
     warnings: list[Issue] = []
 
@@ -501,6 +534,8 @@ def verify_document(pdf: Path, report: dict) -> tuple[list[Issue], list[Issue]]:
     want = ledger_counts(report)
     whitelist = _whitelist(report, issues)
     allowed = want + whitelist
+    structural = structural_key_categories(report, total_pages)
+    masked: Counter = Counter()
 
     for key, expected in sorted(want.items()):
         actual = pdf_counts.get(key, 0)
@@ -510,17 +545,33 @@ def verify_document(pdf: Path, report: dict) -> tuple[list[Issue], list[Issue]]:
                 "账上数字 key=%s 出现 %d 次，PDF 只有 %d 次——ledger ⊆ PDF 不成立（P-04）"
                 % (key, expected, actual), token=key, exit_code=5))
     for key, actual in sorted(pdf_counts.items()):
-        if actual > allowed.get(key, 0):
-            issues.append(Issue(
-                "PDF_UNACCOUNTED_NUMBER",
-                "PDF 里数字 key=%s 出现 %d 次，允许集只有 %d 次——账外数字（P-05）"
-                % (key, actual, allowed.get(key, 0)), token=key, exit_code=5))
+        surplus = actual - allowed.get(key, 0)
+        if surplus <= 0:
+            continue
+        if key in structural:
+            masked[key] += surplus
+            continue
+        issues.append(Issue(
+            "PDF_UNACCOUNTED_NUMBER",
+            "PDF 里数字 key=%s 出现 %d 次，允许集只有 %d 次——账外数字（P-05）"
+            % (key, actual, allowed.get(key, 0)), token=key, exit_code=5))
     for key, count in sorted(whitelist.items()):
         if pdf_counts.get(key, 0) == 0:
             warnings.append(Issue(
                 "PDF_WHITELIST_UNUSED",
                 "白名单声明了 key=%s（%d 次）但 PDF 里没出现" % (key, count),
                 token=key, severity=SEV_YELLOW))
+
+    if stats is not None:
+        by_category: Counter = Counter()
+        for key, count in masked.items():
+            by_category[structural.get(key, "other")] += count
+        stats.clear()
+        stats.update({
+            "structural_masked": sum(masked.values()),
+            "structural_masked_by": dict(sorted(by_category.items())),
+            "structural_masked_keys": dict(sorted(masked.items())),
+        })
 
     return issues, warnings
 
@@ -530,7 +581,8 @@ def verify_document(pdf: Path, report: dict) -> tuple[list[Issue], list[Issue]]:
 # --------------------------------------------------------------------------
 
 def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
-               keys_path: Path | None) -> tuple[list[Issue], list[Issue], int]:
+               keys_path: Path | None,
+               stats: dict | None = None) -> tuple[list[Issue], list[Issue], int]:
     issues: list[Issue] = []
     warnings: list[Issue] = []
 
@@ -559,7 +611,7 @@ def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
         if stamp_red:
             return stamp_red, warnings, _exit_of(stamp_red)
 
-    issues, warnings = verify_document(pdf, report)
+    issues, warnings = verify_document(pdf, report, stats=stats)
     return issues, warnings, _exit_of(issues)
 
 

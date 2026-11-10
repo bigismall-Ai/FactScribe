@@ -265,15 +265,25 @@ def cmd_audit(args) -> int:
 
 
 def cmd_verify_pdf(args) -> int:
+    stats: dict = {}
     issues, warnings, code = verify_pdf(
         Path(args.pdf), Path(args.report),
         Path(args.stamp) if args.stamp else None,
-        Path(args.keys) if args.keys else None)
-    human = "== factscribe verify-pdf ==\n%s\n红：%d   黄：%d   退出码：%d" % (
-        args.pdf, len(issues), len(warnings), code)
-    _emit(_payload("verify-pdf", _severity_of(code), code,
-                   issues=[i.as_dict() for i in issues],
-                   warnings=[w.as_dict() for w in warnings]), human, True)
+        Path(args.keys) if args.keys else None,
+        stats=stats)
+    masked = int(stats.get("structural_masked", 0))
+    by_cat = stats.get("structural_masked_by", {})
+    human = ("== factscribe verify-pdf ==\n%s\n结构性 token 掩掉 %d 个（%s）\n"
+             "红：%d   黄：%d   退出码：%d" % (
+                 args.pdf, masked,
+                 "、".join("%s %d" % (k, v) for k, v in by_cat.items()) or "无",
+                 len(issues), len(warnings), code))
+    payload = _payload("verify-pdf", _severity_of(code), code,
+                       issues=[i.as_dict() for i in issues],
+                       warnings=[w.as_dict() for w in warnings],
+                       structural_masked=masked,
+                       structural_masked_by=by_cat)
+    _emit(payload, human, True)
     return code
 
 

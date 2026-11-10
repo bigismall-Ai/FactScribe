@@ -2,10 +2,12 @@
 """TeX 遮罩、scan_tex 与数字抽取。"""
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass, field
 
 from .facts import THIN, _NUM_RE, canon_text, number_key
+from .texrules import strip_comments_and_verbatim
 
 # --------------------------------------------------------------------------
 # LaTeX 扫描：注释、命令名、结构参数、\fact{} 绑定
@@ -417,6 +419,143 @@ def scan_tex(tex: str) -> ScanResult:
                       bib_files=bib_files, figures=figures,
                       annotations=annotations, annotation_args=annotation_args,
                       marker_groups=marker_groups, adjacency=adjacency_text)
+
+
+# --------------------------------------------------------------------------
+# 结构性 token 白名单（PDF 回检用；全部在源文件解析阶段推导）
+#
+# PDF 里的章节号、浮动体编号、页码、参考文献年份不是正文定量断言，却会被
+# P-05 的多重集判成「账外数字」。这里从源文件算出它们的**允许形态**：
+#   - 章节号：\section/\subsection/\subsubsection 的实际层级与顺序；
+#   - 浮动体：figure/table/公式环境的计数，产出 1..N；
+#   - 年份：refs.bib 的 year 字段；
+#   - 页码：由 PDF 实际页数在 pdfgate 侧补 1..P。
+# 只进 PDF 比对的白名单，不进 number_ledger，也不影响 check。
+# --------------------------------------------------------------------------
+
+_INPUT_REF_RE = re.compile(r"\\(?:input|include|subfile)\s*\{([^{}]*)\}")
+_FLOAT_COUNT_RE = re.compile(
+    r"\\begin\{(figure\*?|table\*?|equation|align|eqnarray|gather|multline)\}")
+_YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+
+
+def _document_texts(sections: list[tuple[str, str]],
+                    root_tex: str | None = None):
+    """按 `\\input/\\include` 编译顺序产出清理后的文本块（含父文件上下文）。
+
+    `Config.load_sections` 返回的列表按文件名排序，不是编译顺序；章节号
+    必须按后者算。父文件在 `\\input` 前后的内容要分别落在子文件两侧——
+    `\\appendix` 的位置因此才不会被搬到开头。根文件不可得时退回文件名顺序。
+    """
+    by_rel = {rel: text for rel, text in sections}
+
+    def _resolve(ref: str, base_rel: str) -> str | None:
+        ref = ref.strip()
+        if not ref or "\\" in ref or "#" in ref:
+            return None
+        base = posixpath.dirname(base_rel)
+        for cand in (posixpath.normpath(posixpath.join(base, ref)),
+                     posixpath.normpath(ref)):
+            for name in (cand, cand + ".tex"):
+                if name in by_rel:
+                    return name
+        return None
+
+    seen: set[str] = set()
+
+    def _walk(rel: str):
+        if rel in seen or rel not in by_rel:
+            return
+        seen.add(rel)
+        clean = strip_comments_and_verbatim(by_rel[rel])
+        pos = 0
+        for m in _INPUT_REF_RE.finditer(clean):
+            yield clean[pos:m.start()]
+            target = _resolve(m.group(1), rel)
+            if target is not None:
+                yield from _walk(target)
+            pos = m.end()
+        yield clean[pos:]
+
+    if root_tex and root_tex in by_rel:
+        yield from _walk(root_tex)
+    for rel in sorted(by_rel):
+        if rel not in seen:
+            yield from _walk(rel)
+
+
+def section_number_tokens(sections: list[tuple[str, str]],
+                          root_tex: str | None = None) -> list[str]:
+    """按 LaTeX 规则算出会被排版出来的章节号（不含星号节与附录字母）。"""
+    counters = [0, 0, 0]
+    appendix = False
+    tokens: list[str] = []
+    for clean in _document_texts(sections, root_tex):
+        events = re.finditer(
+            r"\\appendix\b|\\(section|subsection|subsubsection)(\*?)"
+            r"\s*(?:\[[^\]]*\])?\s*\{", clean)
+        for m in events:
+            if m.group(0).startswith("\\appendix"):
+                appendix = True
+                continue
+            level_name, starred = m.group(1), m.group(2)
+            if starred:
+                continue          # \section* 不编号，也不推进计数器
+            if appendix:
+                continue          # \appendix 之后是 A/B，不是数字 token
+            if level_name == "section":
+                counters[0] += 1
+                counters[1] = counters[2] = 0
+                tokens.append(str(counters[0]))
+            elif level_name == "subsection":
+                counters[1] += 1
+                counters[2] = 0
+                tokens.append("%d.%d" % (counters[0], counters[1]))
+            else:
+                counters[2] += 1
+                tokens.append("%d.%d.%d" % tuple(counters))
+    return tokens
+
+
+def float_number_tokens(sections: list[tuple[str, str]],
+                        root_tex: str | None = None) -> list[str]:
+    """figure/table/公式环境的编号：按最大计数器产出 1..N。
+
+    同名计数器在 LaTeX 里各自递增；PDF 只剩裸数字，故取各类计数的最大值
+    做上界（1..N 覆盖所有可能的编号）。`equation*`/`align*` 不编号，不计数。
+    """
+    counts = {"figure": 0, "table": 0, "math": 0}
+    for clean in _document_texts(sections, root_tex):
+        for m in _FLOAT_COUNT_RE.finditer(clean):
+            env = m.group(1)
+            if env.startswith("figure"):
+                counts["figure"] += 1
+            elif env.startswith("table"):
+                counts["table"] += 1
+            else:
+                counts["math"] += 1
+    return [str(i) for i in range(1, max(counts.values()) + 1)]
+
+
+def bib_year_tokens(bib_entries) -> list[str]:
+    """refs.bib 里所有 4 位年份（只认 year 字段）。"""
+    years: set[str] = set()
+    for entry in bib_entries or []:
+        fields = getattr(entry, "fields", None) or {}
+        for m in _YEAR_RE.finditer(str(fields.get("year") or "")):
+            years.add(m.group(0))
+    return sorted(years)
+
+
+def structural_whitelist(sections: list[tuple[str, str]],
+                         bib_entries=(), root_tex: str | None = None) -> dict:
+    """PDF 回检的结构性白名单（页码由 pdfgate 按实际页数补齐）。"""
+    return {
+        "sections": section_number_tokens(sections, root_tex),
+        "floats": float_number_tokens(sections, root_tex),
+        "years": bib_year_tokens(bib_entries),
+    }
+
 
 def _extract_numbers(masked: str, original: str) -> list[dict]:
     orig_lines = original.split("\n")

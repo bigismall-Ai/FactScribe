@@ -23,7 +23,7 @@ from .texrules import (adjacency_hits, arith_hits, display_hits,
                        tabular_regions)
 from .texscan import (_balanced, _blank, _extract_numbers,
                       _merge_number_units, scan_tex, sentence_index,
-                      sentence_spans)
+                      sentence_spans, structural_whitelist)
 
 # --------------------------------------------------------------------------
 # 问题单
@@ -1357,14 +1357,33 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                                   "count": min(item["count"], present),
                                   "source": item["source"],
                                   "category": "W2-bib"})
+            # 结构性白名单来自源文件（章节号/浮动体/bib 年份），页码由
+            # pdfgate 按实际页数补。它只影响 PDF 比对，不进 ledger/check。
+            struct_sections = sections
+            struct_root = cfg.root_tex
+            if not struct_root and (cfg.root / "main.tex").is_file():
+                struct_root = "main.tex"
+                shell = (cfg.root / "main.tex").read_text(encoding="utf-8")
+                if all(rel != "main.tex" for rel, _text in sections):
+                    struct_sections = list(sections) + [("main.tex", shell)]
+            structural = structural_whitelist(
+                struct_sections, bib_entries, struct_root)
+            pdf_stats: dict = {}
             pdf_red, pdf_yellow = verify_document(
-                pdf_path, {"number_ledger": ledger, "pdf_whitelist": whitelist})
+                pdf_path, {"number_ledger": ledger,
+                           "pdf_whitelist": whitelist,
+                           "structural_whitelist": structural},
+                stats=pdf_stats)
             red += pdf_red
             yellow += pdf_yellow
             pdf_summary = {"checked": True, "file": cfg.output,
                            "ledger": len(ledger),
                            "whitelist": len(whitelist),
-                           "red": len(pdf_red), "yellow": len(pdf_yellow)}
+                           "red": len(pdf_red), "yellow": len(pdf_yellow),
+                           "structural_masked": pdf_stats.get(
+                               "structural_masked", 0),
+                           "structural_masked_by": pdf_stats.get(
+                               "structural_masked_by", {})}
 
     summary = {
         "facts": len(facts),

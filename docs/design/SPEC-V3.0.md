@@ -288,6 +288,22 @@ C13 输出 token：{raw, key(s), span, file/page, line, col}。
 
 > **为什么是相等而不是包含**：只做 `ledger ⊆ PDF` 会让「已授权数字被无限重复、搬到任意语境」放行；只做 `PDF ⊆ ledger` 会让空文本层平凡通过。相等把两边都钉住。代价是白名单必须精确，这是有意的：白名单是**人签的声明**，不是自动放行。
 
+### P-05S 结构性 token 白名单（源层推导）
+
+真实论文的 PDF 里，章节号、图表编号、参考文献年份与页码是排版器生成的**结构量**，不在 `number_ledger` 上。若按 P-05 一律判「账外数字」，判据对任何真实论文都会红，等于不可用。P-05S 在数字比对前从**源文件**推导四类结构性 token，只放行这些形态：
+
+| 类别 | 来源（源层，不从 PDF 反推） | 形态 |
+|---|---|---|
+| 章节号 | `main.tex` 经 `\input/\include` 展开后的编译序；`\section/\subsection/\subsubsection` 的层级与顺序 | `1`、`1.1`、`1.1.1`、`2`…（`\section*` 不编号；`\appendix` 之后是字母，不产数字） |
+| 浮动体编号 | 统计 `figure`/`figure*`/`table`/`table*` 与 `equation`/`align` 等编号公式环境 | `1..N`（N 取各类计数最大值；`equation*`/`align*` 不编号，不计数） |
+| 年份 | `refs.bib` 每个 entry 的 `year` 字段 | 4 位年份（`2018`、`2024`…） |
+| 页码 | PDF **实际页数** `pdfinfo Pages` | `1..P` |
+
+- **实现位置**：`texscan.structural_whitelist()` 在源解析阶段产出 `{sections, floats, years}`，`audit` 随 `report.structural_whitelist` 交给 `pdfgate.verify_document()`；页码由 `pdfgate` 按实际页数补 `1..P`。
+- **判定**：`pdf_counts[k]` 超过 `ledger_counts[k] + pdf_whitelist[k]` 的**盈余**，若 `k` 属上述四类则**不判红**，计入 `structural_masked`（按类别分账）；不属于则照旧报 `PDF_UNACCOUNTED_NUMBER`。
+- **边界**：这是 token 形态白名单，不是语义豁免。正文数据数字只有与结构量同形时才会被同时掩掉；账上已有的正文明细不受影响。白名单**不进** `number_ledger`、**不影响** `check`，也不替代人签 `pdf_whitelist`。
+- **读数（批 121）**：`paper-b` 的 `PDF_UNACCOUNTED_NUMBER` 41 → 0（掩 56 个 token：章节 35 / 年份 17 / 页码 4）；`paper-b-zh` 45 → 0（掩 83 个：章节 55 / 年份 17 / 页码 11）。`paper` 与 `paper-zh` 回归仍 0 红。
+
 ### P-06 源头禁止「用图片承载定量」
 
 | 项 | 内容 |

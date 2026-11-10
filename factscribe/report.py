@@ -142,6 +142,12 @@ def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
         "coverage: %s" % ("、".join(cov.get("files_scanned", [])) or "（无）"),
         "",
     ]
+    pdf = summary.get("pdf") or {}
+    if pdf.get("checked"):
+        by_cat = pdf.get("structural_masked_by") or {}
+        detail = "、".join("%s %d" % (k, v) for k, v in by_cat.items()) or "无"
+        lines.insert(6, "pdf     : %s；结构性 token 掩掉 %d 个（%s）" % (
+            pdf.get("file", ""), pdf.get("structural_masked", 0), detail))
     if yellow:
         lines.append("[黄] %d 处（未核验/未绑定/未签名——不判死，但不许当绿）" % len(yellow))
         lines += [_print_issue(i, n) for n, i in enumerate(yellow, 1)]

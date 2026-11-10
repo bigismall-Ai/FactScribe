@@ -326,8 +326,10 @@ class TestMetrics(unittest.TestCase):
 
     def test_colloquial_triad_positive(self):
         body = (
-            "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-            "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+            "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+            "其次，我们把每一轮的原始日志完整留档。最后，我们把对照结果写进共享账本。\n\n"
+            "首先，我们固定数据切分与随机种子，再重跑一遍基线。"
+            "其次，我们保存每一轮的原始输出与堆栈。最后，我们把两臂的差值记进同一本账。\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, body)
@@ -442,8 +444,10 @@ class TestThresholdsAndLang(unittest.TestCase):
 
     def test_threshold_override_disables_colloquial_triad(self):
         body = (
-            "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-            "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+            "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+            "其次，我们把每一轮的原始日志完整留档。最后，我们把对照结果写进共享账本。\n\n"
+            "首先，我们固定数据切分与随机种子，再重跑一遍基线。"
+            "其次，我们保存每一轮的原始输出与堆栈。最后，我们把两臂的差值记进同一本账。\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
             base = analyze_text(tmp, body)
@@ -561,7 +565,11 @@ class TestStageAssessment(unittest.TestCase):
             "Furthermore, we measure width, height, and depth for each sample.\n\n"
             "Additionally, the results are crucial and comprehensive.\n\n"
             "In conclusion, the method is essential and significant.\n\n"
-            "Overall, we log input, output, and cache counts for every call.\n"
+            "Overall, we log input, output, and cache counts for every call.\n\n"
+            "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+            "其次，我们把每一轮的原始日志完整留档。最后，我们把对照结果写进共享账本。\n\n"
+            "首先，我们固定数据切分与随机种子，再重跑一遍基线。"
+            "其次，我们保存每一轮的原始输出与堆栈。最后，我们把两臂的差值记进同一本账。\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, body)

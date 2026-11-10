@@ -324,47 +324,88 @@ class TestRhythmPlateau(unittest.TestCase):
 # 6. COLLOQUIAL_TRIAD
 # --------------------------------------------------------------------------
 
+# 批 110：只认模板式标记（首先/其次/最后、第一/第二/第三、一是/二是/三是、
+# 其一/其二/其三）。顿号、逗号列举是正文内容（实验条件、约束清单），不算模板。
 TRIAD_POS = (
-    "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-    "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+    "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+    "其次，我们把每一轮的原始日志完整留档。"
+    "最后，我们把对照结果写进共享账本，供读者复算。\n\n"
+    "首先，我们固定数据切分与随机种子，再重跑一遍基线。"
+    "其次，我们保存每一轮的原始输出与堆栈。"
+    "最后，我们把两臂的差值记进同一本账。\n"
 )
 TRIAD_SINGLE = (
-    "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-    "The run finished on time and the logs stayed complete for every request in the batch.\n"
+    "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+    "其次，我们把每一轮的原始日志完整留档。"
+    "最后，我们把对照结果写进共享账本，供读者复算。\n\n"
+    "这次运行按时结束，日志对批次里的每个请求都保持完整。\n"
 )
 TRIAD_NONADJACENT = (
-    "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-    "The run finished on time and the logs stayed complete for every request in the batch.\n\n"
-    "With the same inputs and the same machine, we compare red, green, and blue across both buckets.\n"
+    "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+    "其次，我们把每一轮的原始日志完整留档。"
+    "最后，我们把对照结果写进共享账本，供读者复算。\n\n"
+    "这次运行按时结束，日志对批次里的每个请求都保持完整。\n\n"
+    "首先，我们固定数据切分与随机种子，再重跑一遍基线。"
+    "其次，我们保存每一轮的原始输出与堆栈。"
+    "最后，我们把两臂的差值记进同一本账。\n"
 )
-TRIAD_DIFFERENT_SHAPE = (
-    "Under the same load and the same budget, we test alpha, beta, and gamma on every bucket.\n\n"
-    "With the same inputs and the same machine, we compare the first model, the second model, "
-    "and the third model across both buckets.\n"
+TRIAD_DIFFERENT_SERIES = (
+    "首先，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+    "其次，我们把每一轮的原始日志完整留档。"
+    "最后，我们把对照结果写进共享账本，供读者复算。\n\n"
+    "第一，我们固定任务集与预算，再记录每臂的耗时与失败数。"
+    "第二，我们把每一轮的原始日志完整留档。"
+    "第三，我们把对照结果写进共享账本，供读者复算。\n"
+)
+# 顿号列举：真实实验条件，不是同构排比模板。
+TRIAD_CAPACITY = (
+    "我们依次做了三次容量干预：逐出重复读、调大文件读取可用的份额、抬高会话 token 上限。\n\n"
+    "我们又做了三次读取实验：去掉重复读、放大读取份额、抬高上限，逐一观察回合是否收口。\n"
+)
+# 六条约束被截成三条才误判：列表项要数全。
+TRIAD_SIX_ITEMS = (
+    "我们依次做了三次容量干预：逐出重复读、调大文件读取可用的份额、抬高会话 token 上限。\n\n"
+    "我们把要求的流程写成六条约束（尽早交补丁、不要重读同一段、动手前先记结论、不越界、"
+    "交卷而不是反复测试、输出保持简短），并把它们作为常驻的项目规则小节装配进去。\n"
 )
 
 
 class TestColloquialTriad(unittest.TestCase):
-    def test_positive_adjacent_same_shape(self):
+    def test_positive_adjacent_template_paragraphs(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, TRIAD_POS)
         self.assertIn("COLLOQUIAL_TRIAD", codes(result))
         self.assertGreaterEqual(result.metrics["colloquial_triad"], 2)
 
-    def test_negative_single_triad(self):
+    def test_negative_single_template_triad(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, TRIAD_SINGLE)
         self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertEqual(result.metrics["colloquial_triad"], 0)
 
     def test_negative_non_adjacent(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, TRIAD_NONADJACENT)
         self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertEqual(result.metrics["colloquial_triad"], 0)
 
-    def test_negative_different_shape(self):
+    def test_negative_different_series(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TRIAD_DIFFERENT_SHAPE)
+            result = analyze_text(tmp, TRIAD_DIFFERENT_SERIES)
         self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertEqual(result.metrics["colloquial_triad"], 0)
+
+    def test_negative_dunhao_enumeration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, TRIAD_CAPACITY)
+        self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertEqual(result.metrics["colloquial_triad"], 0)
+
+    def test_negative_six_items_counted_in_full(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, TRIAD_SIX_ITEMS)
+        self.assertNotIn("COLLOQUIAL_TRIAD", codes(result))
+        self.assertEqual(result.metrics["colloquial_triad"], 0)
 
 
 # --------------------------------------------------------------------------

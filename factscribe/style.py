@@ -1024,33 +1024,17 @@ def _is_stopword(first: str, stops: set) -> bool:
     return first in stops
 
 
-def _english_triad_re() -> re.Pattern:
-    item = r"[A-Za-z0-9][A-Za-z0-9'’\-]*(?:\s+[A-Za-z0-9][A-Za-z0-9'’\-]*){0,3}"
-    return re.compile(r"\b(%s)\s*,\s*(%s)\s*,\s*(?:and|or)\s+(%s)\b" % (item, item, item),
-                      re.IGNORECASE)
-
-
-_CN_TRIAD_RE = re.compile(r"[^，。；：、\s][^，。；：、]{0,20}、[^，。；：、]{0,20}、[^，。；：、]{0,20}")
-
-# 三元组里的每一项应是名词短语，而不是从句。第三项以这些词开头，
-# 说明匹配到的是「A, B, and because ...」这种句子结构，不是并列清单。
-_TRIAD_BAD_START = {
-    "because", "which", "while", "when", "where", "whereas", "so", "but",
-    "although", "though", "since", "if", "then", "that", "thereby", "who",
-    "whom", "whose", "what", "how", "why", "yet", "nor",
-}
-
-
-def _valid_triad(groups: tuple[str, ...]) -> bool:
-    for group in groups:
-        words = re.findall(r"[A-Za-z][A-Za-z'’\-]*", group)
-        if not words:
-            return False
-        if words[0].lower() in _TRIAD_BAD_START:
-            return False
-        if any(w.lower() in ("and", "or") for w in words):
-            return False
-    return True
+# 批 110：同构排比只认模板式标记。顿号、逗号列举是正文内容（真实实验
+# 条件、约束清单），不是模板；三项并列本身不报，只有同一模板在相邻段落
+# 重复才算。列表项必须整体计数，不能截成三项。
+_TRIAD_TEMPLATE_SERIES = (
+    ("cn_first", ("首先", "其次", "再次", "最后"), 3),
+    ("cn_di", ("第一", "第二", "第三"), 3),
+    ("cn_yishi", ("一是", "二是", "三是"), 3),
+    ("cn_qiyi", ("其一", "其二", "其三"), 3),
+)
+# 序数词后面必须跟分隔符，避免把「第一台机器」这类记数当成模板。
+_TRIAD_ORDINAL_SEP = r"\s*[，,、：:]"
 
 
 # --------------------------------------------------------------------------
@@ -1801,29 +1785,36 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
                        metric_details=dict(after.metric_details))
 
 
-def _shape_bucket(n: int) -> int:
-    return 1 if n <= 2 else (2 if n <= 4 else 3)
+def _paragraph_triads(text: str, base: int) -> list[tuple]:
+    """返回段内模板式三点并列的 (绝对起点, 绝对终点, 原文, 模板指纹)。
 
-
-def _paragraph_triads(text: str, triad_re: re.Pattern, base: int) -> list[tuple]:
-    """返回段内三点并列的 (绝对起点, 绝对终点, 原文, 结构指纹)。"""
+    只认模板标记；顿号/逗号列举不算。同一段内标记必须按序出现。
+    """
     hits = []
-    for m in triad_re.finditer(text):
-        if not _valid_triad(m.groups()):
+    for name, markers, need in _TRIAD_TEMPLATE_SERIES:
+        found = []
+        for index, marker in enumerate(markers):
+            pattern = re.escape(marker)
+            if name == "cn_di":
+                pattern += _TRIAD_ORDINAL_SEP
+            m = re.search(pattern, text)
+            if m is not None:
+                found.append((m.start(), m.end(), index))
+        if len(found) < need:
             continue
-        items = [_norm_space(g) for g in m.groups()]
-        shape = tuple(_shape_bucket(len(re.findall(r"[A-Za-z][A-Za-z0-9'’\-]*", it)))
-                      for it in items)
-        hits.append((base + m.start(), base + m.end(),
-                     _norm_space(m.group(0)), ("en", shape)))
-    for m in _CN_TRIAD_RE.finditer(text):
-        raw = m.group(0)
-        items = [x.strip() for x in raw.split("、")]
-        if len(items) != 3 or any(not x for x in items):
+        found.sort()
+        indexes = [index for _start, _end, index in found]
+        # 必须以首项起头，其余按模板顺序递增；「再次」可省。
+        if found[0][2] != 0 or indexes != sorted(set(indexes)):
             continue
-        shape = tuple(_shape_bucket(len(x)) for x in items)
-        hits.append((base + m.start(), base + m.end(),
-                     _norm_space(raw), ("cn", shape)))
+        start = found[0][0]
+        end = found[-1][1]
+        # 摘录延伸到第三项所在句的句末，避免只截到标记本身。
+        tail = re.search(r"[。！？!?]", text[end:])
+        if tail:
+            end += tail.end()
+        hits.append((base + start, base + end,
+                     _norm_space(text[start:end]), name))
     return sorted(hits)
 
 
@@ -2418,7 +2409,6 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     explainer_cn = _cn_words(rules, "explainers")
     chain_min_sentences = int(thresholds["justify_chain_min_sentences"])
     chain_min_paragraphs = int(thresholds["justify_chain_min_paragraphs"])
-    triad_re = _english_triad_re()
 
     docs: list[_Doc] = []
     for rel, text in sections:
@@ -2728,7 +2718,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     # ---- 3c. 同构三点并列：相邻段落重复才算 ----
     para_triads = []
     for doc, start, end, _units in all_paragraphs:
-        hits = _paragraph_triads(doc.prose[start:end], triad_re, start)
+        hits = _paragraph_triads(doc.prose[start:end], start)
         para_triads.append((doc, hits))
     repeated_triads = []
     seen_triad = set()

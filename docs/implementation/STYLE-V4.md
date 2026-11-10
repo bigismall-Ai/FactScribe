@@ -13,7 +13,7 @@
 | `HEADING_MALFORMED` | 标题含冒号/破折号/括号解释/问号/句号 | 出现即报 | 论文主标题 `\title{}` 除外；连字符不算破折号 |
 | `TERM_FIRST_IN_HEADING` | 标题出现术语样词（中文 ≥4 字段、英文 ≥2 词短语），该节首句未出现 | 出现即报；白名单命中不报 | 启发式，只黄 |
 | `RHYTHM_PLATEAU` | 同段连续 ≥3 句落在同一 10 词区间 | `rhythm_plateau_run = 3`、`rhythm_plateau_window = 10` | 保留 |
-| `COLLOQUIAL_TRIAD` | **同构**三点并列在**相邻段落**重复 ≥2 次 | `colloquial_triad_repeats = 2` | 替代旧 `TRIAD_DENSITY`；不按条数判 |
+| `COLLOQUIAL_TRIAD` | **模板式**三点并列（`首先/其次/最后` 等）在**相邻段落**重复 ≥2 次 | `colloquial_triad_repeats = 2` | 替代旧 `TRIAD_DENSITY`；批 110 起顿号/逗号列举不算，不按条数判 |
 | `CONNECTIVE_DENSITY` | 套话连接词密度 | `connective_density = 8.0`（每千词/字） | 保留；句中定语用法不算 |
 | `EMPTY_ADJECTIVE` | 空泛形容词密度 | `empty_adjective = 6.0`（每千词/字） | 保留；`exempt_phrases` 排除术语搭配 |
 | `SENTENCE_LENGTH_EXTREME` | 英文 >60 词/中文 >110 字且句内无断点 | `sentence_length_extreme_en = 60`、`_zh = 110` | 保留窄版；长而有结构不报 |

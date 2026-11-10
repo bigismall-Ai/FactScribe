@@ -20,9 +20,9 @@ python3 -m factscribe audit <project>          # core check
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Eleven commands
+## Thirteen commands
 
-`factscribe` ships eleven subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
+`factscribe` ships thirteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
 
 | Command | What it does |
 |---|---|
@@ -37,6 +37,8 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing |
 | `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
 | `terms` | Term candidates for human pick, then `add`; no automatic merge |
+| `review` | Rewrite acceptance: protection, re-check, closure in one verdict |
+| `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 
@@ -89,7 +91,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 771 tests, fully offline
+python3 -m unittest discover -s tests     # 816 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

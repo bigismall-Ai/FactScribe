@@ -20,9 +20,9 @@ python3 -m factscribe audit <项目>             # 核心校验
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-## 十一个命令
+## 十三个命令
 
-`factscribe` 一共十一个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
+`factscribe` 一共十三个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
 
 | 命令 | 干什么 |
 |---|---|
@@ -37,6 +37,8 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `tide` | 潮汐式改动账：涨、落、波及面、闭合，全成或全退 |
 | `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
 | `terms` | 术语候选抽取与人工入表：suggest 提候选，add 只写你勾的 |
+| `review` | 改写验收：保护面 + 复检 + 闭合一次判完，给通过、需复核或拒绝 |
+| `polish` | 给 LLM 的润色入口：`--print` 出操作手册，`--plan` 出工作单 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 
@@ -87,7 +89,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 771 例，全离线
+python3 -m unittest discover -s tests     # 816 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

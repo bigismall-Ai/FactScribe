@@ -9,8 +9,8 @@
   `strip_top` 可配、中文语料反向锁；
 * `ZH_ASPECT_ZHE`：动词＋着、词尾「有着」、词内用法排除、每千汉字单位、
   英文反向锁；
-* `ZH_DANG_WHEN`：三种尾巴、词内「当成/当天/当然」排除、「什么时候」
-  排除、paper-b-zh 反向锁；
+* `ZH_DANG_WHEN`：同段 ≥2 处才报、单句单次不报、跨段不累计、三种尾巴、
+  词内「当成/当天/当然」排除、「什么时候」排除、paper-b-zh 反向锁；
 * `ZH_COLLOCATION_REDUNDANCY`：十条词表逐一触发、每条给删法、跨句不报、
   单一半词不报；
 * `ABBREV_FIRST_USE`：默认关、`--report-abbrev` 打开、同句/前一句展开、
@@ -94,11 +94,16 @@ ZHE_LEXICAL = (
 ZHE_PLAIN = "他把书读完了，我们没有意见。"
 ZHE_ENGLISH = "The gate stays quiet under load and reports no findings."
 
-DANG_DE = "当数据缺失的时候，流程会停下。"
-DANG_AFTER = "当数据加载之后，流程才开始。"
-DANG_SHI = "当两套约定不一致时，两套都印出来。"
-DANG_WHEN = "当它什么时候跑，没人知道。"
-DANG_LEXICAL = "他把规格当成文档来攻。当天下午我们复跑了实验。当然，这条也要改。"
+DANG_DE = "当数据缺失的时候，流程会停下。当字段缺失的时候，流程也会停下。"
+DANG_AFTER = "当数据加载之后，流程才开始。当索引重建之后，流程才继续。"
+DANG_SHI = "当两套约定不一致时，两套都印出来。当两套命名冲突时，两套都报出来。"
+# 单次出现是正常中文（批 107 主语者裁定），不是欧化病灶。
+DANG_SINGLE = "当两套约定不一致时，两套都印在这条主张旁边。"
+DANG_CROSS = ("当数据缺失的时候，流程会停下。\n\n"
+              "当数据加载之后，流程才开始。")
+DANG_WHEN = "当它什么时候跑，没人知道。当它什么时候停，也没人知道。"
+DANG_LEXICAL = ("他把规格当成文档来攻。他又把需求当成结论。"
+                "当天下午我们复跑了实验。当然，这条也要改。")
 DANG_CORPUS = ("外部席位没有实现者的心智模型，它把规格当文档来攻：定义可以有"
                "两种读法，保证提到了某项检查却没说它什么时候跑。")
 
@@ -236,17 +241,32 @@ class TestZhDangWhen(unittest.TestCase):
     def test_de_shihou(self):
         result = analyze_text(DANG_DE)
         found = findings(result, "ZH_DANG_WHEN")
-        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found), 2)
         self.assertIn("让条件自己站住", found[0].suggestion)  # 给删法，不只报数
+        # 报的时候列出本段全部命中位置。
+        self.assertIn("本段共 2 处", found[0].suggestion)
+        self.assertIn("当字段缺失的时候", found[0].suggestion)
 
     def test_zhihou(self):
         result = analyze_text(DANG_AFTER)
-        self.assertEqual(result.metrics["zh_dang_when"], 1)
+        self.assertEqual(result.metrics["zh_dang_when"], 2)
         self.assertIn("删「当」", findings(result, "ZH_DANG_WHEN")[0].suggestion)
 
     def test_dang_shi(self):
         result = analyze_text(DANG_SHI)
-        self.assertEqual(result.metrics["zh_dang_when"], 1)
+        self.assertEqual(result.metrics["zh_dang_when"], 2)
+
+    def test_single_occurrence_is_normal_chinese(self):
+        # 主语者裁定：单次「当…时」是正常中文；只有同段成串才是欧化病灶。
+        result = analyze_text(DANG_SINGLE)
+        self.assertNotIn("ZH_DANG_WHEN", codes(result))
+        self.assertEqual(result.metrics["zh_dang_when"], 0)
+
+    def test_cross_paragraph_occurrences_do_not_add_up(self):
+        # 每段各一处，跨段不累计。
+        result = analyze_text(DANG_CROSS)
+        self.assertNotIn("ZH_DANG_WHEN", codes(result))
+        self.assertEqual(result.metrics["zh_dang_when"], 0)
 
     def test_when_question_negative(self):
         result = analyze_text(DANG_WHEN)
@@ -263,12 +283,16 @@ class TestZhDangWhen(unittest.TestCase):
 
     def test_runtime_noun_not_a_condition(self):
         # 「运行时」是名词（runtime），不是「当…时」；尾巴后面跟「把」，
-        # 不是停顿或主句标记。
-        result = analyze_text("只有当运行时把决定权拿走，任务才被解决。")
+        # 不是停顿或主句标记。写两处，确认不是靠同段闸挡住的。
+        result = analyze_text(
+            "只有当运行时把决定权拿走，任务才被解决。"
+            "只有当运行时把控制权交回，任务才收尾。")
         self.assertNotIn("ZH_DANG_WHEN", codes(result))
 
     def test_colon_does_not_bridge(self):
-        result = analyze_text("他把它当文档：检查什么时候跑，没人知道。")
+        result = analyze_text(
+            "他把它当文档：检查什么时候跑，没人知道。"
+            "他又把它当文档：检查什么时候停，也没人知道。")
         self.assertNotIn("ZH_DANG_WHEN", codes(result))
 
 

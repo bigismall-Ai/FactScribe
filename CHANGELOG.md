@@ -14,6 +14,9 @@ and will not change without a major version bump.
 - `style`: `ZH_LIGHT_VERB_NOUN` reports Chinese light-verb + noun constructions (`进行了分析` → `分析了`) with the action verb spelled out; item-counted, no density gate.
 - `style`: five B-tier syntax rules (batch 105). `NOMINALIZATION_RATE` counts English nominalization per 100 words after stripping the document's five most frequent types (reported in `metric_details.nominalization_stripped`). `ZH_ASPECT_ZHE` counts verb + 着 per 1000 Chinese characters, excluding lexicalised forms. `ZH_DANG_WHEN` reports `当……的时候/之后/时`. `ZH_COLLOCATION_REDUNDANCY` reports ten redundant collocations with a deletion fix. `ABBREV_FIRST_USE` reports an abbreviation whose first use has no expansion; it is **off by default** and only runs under `style --report-abbrev` because all four corpora exceed the 2-per-10,000-word false-positive budget.
 
+### Changed
+- `style`: `ZH_DANG_WHEN` now reports only when one paragraph contains at least two `当……的时候/之后/时` occurrences (batch 107). A single occurrence is normal Chinese, and counts do not accumulate across paragraphs. When it fires, every hit in that paragraph is listed with its position.
+
 ## [1.3.0] - 2026-11-10
 
 ### Added

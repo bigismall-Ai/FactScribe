@@ -2232,14 +2232,15 @@ def _zh_aspect_zhe_findings(sentences, rules: dict
     return out, hits
 
 
-def _zh_dang_when_findings(sentences, rules: dict) -> list[Finding]:
-    """B3：当……的时候 / 当……之后 / 当……时（按条报）。"""
+def _zh_dang_when_findings(paragraph_sentences, rules: dict) -> list[Finding]:
+    """B3：当……的时候 / 当……之后 / 当……时（同段成串才报）。"""
     group = rules.get("zh_dang_when") or {}
     tails = [str(x) for x in group.get("tails") or []
              if str(x).strip()]
     forbid = {str(x) for x in group.get("forbid_heads") or []}
     if not tails:
         return []
+    min_hits = max(1, int(group.get("min_per_paragraph", 2) or 2))
     alts = []
     for tail in sorted(tails, key=len, reverse=True):
         piece = re.escape(tail)
@@ -2252,12 +2253,24 @@ def _zh_dang_when_findings(sentences, rules: dict) -> list[Finding]:
                      r"(?=[，,、：:；;。！？!?]|$|才|就|则|便|方)"
                      % "|".join(alts))
     out: list[Finding] = []
-    for doc, start, end, _units in sentences:
-        sentence = _norm_space(doc.prose[start:end])
-        for m in pat.finditer(sentence):
+    # 段内累计：单次出现是正常中文，同一段至少 min_hits 处才报；
+    # 跨段不累计。
+    for seq in paragraph_sentences:
+        hits = []
+        for doc, start, end, _units in seq:
+            sentence = _norm_space(doc.prose[start:end])
+            for m in pat.finditer(sentence):
+                if m.group("body")[:1] in forbid:
+                    continue
+                hits.append((doc, start, sentence, m))
+        if len(hits) < min_hits:
+            continue
+        positions = "；".join(
+            "%s:%d「%s」" % (doc.file, _line_of(doc, start), m.group(0))
+            for doc, start, _sentence, m in hits)
+        note = "本段共 %d 处：%s" % (len(hits), positions)
+        for doc, start, sentence, m in hits:
             body = m.group("body")
-            if body[:1] in forbid:
-                continue
             tail = m.group("tail")
             if tail == "之后":
                 fix = "删「当」，写「%s之后」，时间关系自己站住" % body
@@ -2267,8 +2280,8 @@ def _zh_dang_when_findings(sentences, rules: dict) -> list[Finding]:
             out.append(Finding(
                 "ZH_DANG_WHEN", doc.file, _line_of(doc, start),
                 _clip(sentence, 180),
-                "「%s」是翻译腔的「当…%s」结构（英文 when 语序）。%s。"
-                % (m.group(0), tail, fix),
+                "「%s」是翻译腔的「当…%s」结构（英文 when 语序）。%s。%s。"
+                % (m.group(0), tail, fix, note),
                 "zh_dang_when"))
     return out
 
@@ -2413,15 +2426,18 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     all_sentences = []          # [(doc, start, end, units)]
     all_paragraphs = []         # [(doc, start, end, units)]
     paragraph_sentences = []    # 每段的句子序列（节奏平台按段判，不跨段）
+    # 含短段的全量分段：B3 只按「同段」计数，不因段短而漏计。
+    dang_paragraphs = []
     for doc in docs:
-        for start, end in _paragraphs(doc, min_units):
-            all_paragraphs.append((doc, start, end, units_of(doc.prose[start:end])))
-            seq = []
-            for s, e in _sentences(doc.prose[start:end], start):
-                item = (doc, s, e, units_of(doc.prose[s:e]))
-                all_sentences.append(item)
-                seq.append(item)
-            paragraph_sentences.append(seq)
+        for start, end in _paragraphs(doc, 0):
+            unit_count = units_of(doc.prose[start:end])
+            seq = [(doc, s, e, units_of(doc.prose[s:e]))
+                   for s, e in _sentences(doc.prose[start:end], start)]
+            dang_paragraphs.append(seq)
+            if unit_count >= min_units:
+                all_paragraphs.append((doc, start, end, unit_count))
+                all_sentences.extend(seq)
+                paragraph_sentences.append(seq)
 
     instances: dict[str, list[Finding]] = {code: [] for code in CODE_OF.values()}
     paragraph_infos: dict[tuple[str, int], ParagraphInfo] = {}
@@ -2447,7 +2463,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     zhe_findings, zhe_hits = _zh_aspect_zhe_findings(all_sentences, rules)
     instances["ZH_ASPECT_ZHE"].extend(zhe_findings)
     instances["ZH_DANG_WHEN"].extend(
-        _zh_dang_when_findings(all_sentences, rules))
+        _zh_dang_when_findings(dang_paragraphs, rules))
     instances["ZH_COLLOCATION_REDUNDANCY"].extend(
         _zh_collocation_findings(all_sentences, rules))
     abbrev_enabled = bool(report_abbrev

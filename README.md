@@ -16,7 +16,7 @@ FactScribe 是一道机械闸门，专门拦 AI 写论文时最危险的两类�
 
 ```bash
 python3 -m pip install -e .                    # 可选；不装也能用 PYTHONPATH 跑
-python3 -m factscribe audit <项目>             # 核心校验
+python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
@@ -89,7 +89,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 879 例，全离线
+python3 -m unittest discover -s tests     # 891 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

@@ -16,7 +16,7 @@ What a reading does and does not support is spelled out in [`docs/WHAT-IT-PROVES
 
 ```bash
 python3 -m pip install -e .                    # optional; PYTHONPATH works too
-python3 -m factscribe audit <project>          # core check
+python3 -m factscribe audit <project> --build  # build the PDF, then audit
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
@@ -91,7 +91,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 879 tests, fully offline
+python3 -m unittest discover -s tests     # 891 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

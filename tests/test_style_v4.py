@@ -197,9 +197,16 @@ HEAD_PERIOD_SECTION = (
     "\\section{Results.}\n"
     "We describe the pipeline in this section with enough words to form a sentence.\n"
 )
+# 批 113：行内标题（run-in heading）是 LaTeX 惯例——标题与正文同段，句点
+# 作分隔符，因此 \paragraph / \subparagraph 末尾句点不判；其它标题照判。
 HEAD_PERIOD_PARAGRAPH = (
-    "\\paragraph{Generation systems.} 正文一句。\n"
-    "\\section{Results.} 正文。\n"
+    "\\paragraph{Motivation.} 正文一句。\n"
+)
+HEAD_PERIOD_SUBPARAGRAPH = (
+    "\\subparagraph{Motivation.} 正文一句。\n"
+)
+HEAD_PARAGRAPH_COLON = (
+    "\\paragraph{Results: A Gate} 正文一句。\n"
 )
 HEAD_PERIOD_ABBREV = (
     "\\section{Results for et al.}\n"
@@ -238,9 +245,20 @@ class TestHeadingMalformed(unittest.TestCase):
             result = analyze_text(tmp, HEAD_PERIOD_SECTION)
         self.assertIn("HEADING_MALFORMED", codes(result))
 
-    def test_positive_english_period_paragraph(self):
+    def test_negative_runin_paragraph_period(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, HEAD_PERIOD_PARAGRAPH)
+        self.assertNotIn("HEADING_MALFORMED", codes(result))
+        self.assertEqual(result.metrics["heading_malformed"], 0)
+
+    def test_negative_runin_subparagraph_period(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_PERIOD_SUBPARAGRAPH)
+        self.assertNotIn("HEADING_MALFORMED", codes(result))
+
+    def test_positive_runin_paragraph_colon(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(tmp, HEAD_PARAGRAPH_COLON)
         self.assertIn("HEADING_MALFORMED", codes(result))
         self.assertGreaterEqual(result.metrics["heading_malformed"], 1)
 

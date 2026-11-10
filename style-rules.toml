@@ -39,6 +39,8 @@ heading_relation_words = ["versus", "vs", "not", "without",
 
 # 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾的
 # 标题不算「带句号」——句点是缩写的一部分，不是句子终止符。大小写不敏感。
+# 批 113：\paragraph / \subparagraph 是行内标题（run-in heading），末尾句点
+# 属 LaTeX 惯例，代码层直接放行，不查本表；本表只对其它标题生效。
 heading_period_exempt = ["al.", "e.g.", "i.e.", "vs.", "etc.", "Fig.",
                          "Eq.", "No.", "cf.", "Dr.", "et al."]
 

@@ -41,6 +41,10 @@
 正是因为本缺口把它们全部漏掉。修复后按新判据报 17 条，属规则本意的正确
 读数，不是回归。`paper-zh` 仍为 0。
 
+> 批 113 更正：上表 `../paper` 的 17 条全为 `\paragraph{...}` 行内标题，
+> 属 LaTeX 合法写法，已按「假阳性超半」回退；见 §6。批 112 的句点判据只对
+> 非行内标题生效。
+
 ## 4. 清理与保护面（只在 /tmp 副本）
 
 `/tmp/pb/en/sections/02_related.tex` 的 5 个标题只删末尾句点、不改词：
@@ -73,3 +77,33 @@ python3 -m factscribe tide --before ../paper-b --after /tmp/pb/en --snapshot /tm
 - `\section{Results.}` / `\paragraph{Generation systems.}` → 报；
 - `\paragraph{Related work}`、`\paragraph{et al.}`、`\section{Results}` → 不报；
 - Markdown `## Results.` → 报；`## Results` → 不报。
+
+## 6. 批 113 回退：行内标题豁免末尾句点
+
+批 112 把 `\paragraph`/`\subparagraph` 末尾句点一并判红，在自认为干净
+的英文稿 `../paper` 上新增 17 条 `HEADING_MALFORMED`，全部是
+`\paragraph{Motivation.}`、`\paragraph{Failure modes.}` 这类**行内标题**
+（run-in heading）。这是 LaTeX 的合法惯例：标题与正文同段，句点作分隔符。
+按准入单「假阳性超半」回退。
+
+改法：
+
+- `\paragraph` 与 `\subparagraph` 的末尾 `.` 不再报；
+- 行内标题的冒号、问号、括号解释照旧报；
+- `\section`/`\subsection`/`\subsubsection` 与 Markdown `#` 末尾句点照旧报；
+- 缩写豁免表 `heading_period_exempt` 保留，用于非行内标题；
+- 中英两版标题是否统一（中文 `\paragraph{动机}` 无句点、英文带句点）由
+  作者决定，工具不强制。
+
+读数（回退后）：
+
+| 语料 | findings 合计 | 说明 |
+|---|---|---|
+| `../paper` | 0 | 17 条行内标题句点全部放行 |
+| `../paper-zh` | 0 | 不变 |
+| `../paper-b` | 6 | 1 `HEADING_TOO_LONG`＋5 冒号类（`Design:` 等），句点类已放行 |
+| `/tmp/pb/en` | 0 | 不变 |
+
+测试（`TestHeadingMalformed`）：`\paragraph{Motivation.}` 与
+`\subparagraph{Motivation.}` 不报；`\paragraph{Results: A Gate}` 报；
+`\section{Results.}` 与 Markdown `## Results.` 照旧报。

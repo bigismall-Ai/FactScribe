@@ -1549,7 +1549,7 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 | 输入 | 源文件的章节标题（`\title{}` 豁免） |
 | 算法 | 标题含中文/英文冒号 `：:`、破折号 `——`/`—`、括号解释 `（…）`/`(…)`、问号 `？?`、句号 `。`/英文句点 `.`、叹号 `！!` 即报。标题末尾的英文句点与中文句号同判；LaTeX 的 `\section`/`\subsection`/`\subsubsection`/`\paragraph`/`\subparagraph` 与 Markdown `#` 标题同一口径 |
 | 阈值 | 出现即报（单点） |
-| 误报边界 | 论文主标题 `\title{}` 除外；连字符 `-`（如 `End-to-End`）不算破折号；标题以常见缩写结尾时不判句点（批量 112）：`al.`、`e.g.`、`i.e.`、`vs.`、`etc.`、`Fig.`、`Eq.`、`No.`、`cf.`、`Dr.`、`et al.`，大小写不敏感，表在 `style-rules.toml` 的 `heading_period_exempt` 可覆盖 |
+| 误报边界 | 论文主标题 `\title{}` 除外；连字符 `-`（如 `End-to-End`）不算破折号；标题以常见缩写结尾时不判句点（批量 112）：`al.`、`e.g.`、`i.e.`、`vs.`、`etc.`、`Fig.`、`Eq.`、`No.`、`cf.`、`Dr.`、`et al.`，大小写不敏感，表在 `style-rules.toml` 的 `heading_period_exempt` 可覆盖；**行内标题（run-in heading）豁免末尾句点**（批量 113）：LaTeX 惯例把 `\paragraph`/`\subparagraph` 的标题与正文排在同一段、以英文句点分隔，故 `\paragraph{Motivation.}` 合法不报；该豁免只放行末尾 `.`，冒号/问号/括号解释照旧报，`\section` 等非行内标题与 Markdown `#` 末尾句点照旧报。中英两版标题是否统一（中文 `\paragraph{动机}` 不带句点、英文带句点）由作者决定，工具不强制 |
 | 漏报边界 | 无标点但语义是问句的标题不报；属启发式接受 |
 | 对应码 | `HEADING_MALFORMED` |
 

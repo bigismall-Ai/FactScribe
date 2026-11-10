@@ -2651,8 +2651,13 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "标题压到 %s 以内：把副标题或解释移到正文首句，标题只留"
                     "名词短语；不改正文事实。" % limit_txt,
                     "heading_too_long"))
-            if (_HEADING_MALFORMED_RE.search(title)
-                    or _heading_period_bad(title, period_exempt)):
+            # 批 113：LaTeX 行内标题（run-in heading，\paragraph/\subparagraph）
+            # 惯例是标题与正文同段、以句点分隔，末尾英文句点不算缺陷；
+            # 冒号/问号/括号解释等其它问题照旧报。Markdown 标题的 cmd 是
+            # h1/h2/...，不在此列，末尾句点继续报。
+            period_bad = (head.get("cmd") not in ("paragraph", "subparagraph")
+                          and _heading_period_bad(title, period_exempt))
+            if (_HEADING_MALFORMED_RE.search(title) or period_bad):
                 heading_counts["HEADING_MALFORMED"] += 1
                 instances["HEADING_MALFORMED"].append(Finding(
                     "HEADING_MALFORMED", doc.file, line, _clip(title, 160),

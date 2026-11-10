@@ -143,6 +143,46 @@ class TestPlaybook(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.text)
 
+    def test_every_counterexample_wrong_form_is_present(self):
+        """每个反例的「错误写法」都要在手册里可核对（不靠模型猜）。"""
+        bad_forms = [
+            "摘要。",                              # 复述标题
+            "`提示词`",                            # 删对比对象
+            "Prompt or mechanism",                # 替换关系词
+            "相关工作里，预注册很重要。",            # 垫话
+            "什么是预注册？",                       # 设问开头
+            "最后一臂的，是五次运行的任务的。",      # 为过规则改僵
+            "结论、一项草稿阶段的干预",              # 换标点过关
+            "一项草稿阶段`",                        # 只删词留残句
+        ]
+        for bad in bad_forms:
+            with self.subTest(bad=bad):
+                self.assertIn(bad, self.text)
+
+    def test_forbids_passing_by_swapping_punctuation(self):
+        """被判定违规的标点不许换成另一种标点蒙混过关（批 116 反规避）。"""
+        self.assertIn("禁止换标点过关", self.text)
+        # 反例：冒号换顿号，标题结构没变。
+        self.assertIn(
+            "`结论：一项草稿阶段的干预` → `结论、一项草稿阶段的干预`",
+            self.text)
+        # 正例：冒号标题改写成名词短语。
+        self.assertIn(
+            "`结论：一项草稿阶段的干预` → `草稿阶段的干预`",
+            self.text)
+        self.assertIn("顿号", self.text)
+
+    def test_forbids_deleting_words_without_rewrite(self):
+        """压长度不许只删词留残句（批 116 反规避）。"""
+        self.assertIn("禁止只删词不重写", self.text)
+        self.assertIn("残句", self.text)
+        # 反例：删掉中心词，只剩定语。
+        self.assertIn(
+            "`结论：一项草稿阶段的干预` → `一项草稿阶段`", self.text)
+        # 正例：删掉类别词，剩下的仍是完整名词短语。
+        self.assertIn(
+            "`结论：一项草稿阶段的干预` → `一项草稿阶段的干预`", self.text)
+
     def test_every_code_in_playbook_exists_in_style_registry(self):
         # 全集 = style 注册表 ∪ 处方绑定的码；手册不许出现这两个来源之外的码。
         universe = set(CODE_OF.values())

@@ -20,16 +20,16 @@ python3 -m factscribe audit <project> --build  # build the PDF, then audit
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Thirteen commands
+## Fourteen commands
 
-`factscribe` ships thirteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
+`factscribe` ships fourteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
 
 | Command | What it does |
 |---|---|
 | `check` | Validates the fact ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
 | `audit` | Core check: inline binding, number-to-ledger, citation stability, coverage report |
 | `matrix` | Writes the traceability matrix to `audit/matrix.md` |
-| `build` | Runs `project.build` from `factscribe.toml` |
+| `build` | Runs `project.build` from `factscribe.toml`; Chinese builds auto-use Fandol |
 | `preamble` | Generates the `\fact` and `\pkignore` macros in `audit/preamble.tex` |
 | `verify-pdf` | PDF check: text layer, raster pages, bidirectional multiset, stamp signature |
 | `style` | Prose gate: reports formulaic writing only, yellow, never blocking |
@@ -37,6 +37,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing |
 | `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
 | `terms` | Term candidates for human pick, then `add`; no automatic merge |
+| `fonts` | On-demand Fandol font download and local cache: `--status` / `--fetch` |
 | `review` | Rewrite acceptance: protection, re-check, closure in one verdict |
 | `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
 
@@ -91,7 +92,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 891 tests, fully offline
+python3 -m unittest discover -s tests     # 908 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

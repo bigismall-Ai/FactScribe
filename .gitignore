@@ -14,6 +14,12 @@ audit/
 *.bbl
 *.blg
 
+# 字体与字体包不入库（批 123：Fandol 走 ~/.cache 按需下载）
+*.otf
+*.ttf
+*.ttc
+*.zip
+
 # 例外：红队夹具的原始产物是测试输入，必须入库（否则干净克隆跑不出同一读数）
 !tests/fixtures/**/results/*.log
 

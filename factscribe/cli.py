@@ -16,6 +16,9 @@ from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
+from .fonts import FontCacheError, fetch as fetch_fandol, font_status
+from .fonts import render_fetch as render_fonts_fetch
+from .fonts import render_status as render_fonts_status
 from .pdfgate import verify_pdf
 from .polish import (build_plan, plan_payload, playbook_text, render_plan)
 from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
@@ -235,6 +238,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
+        "fonts", help="Fandol 中文字体缓存：--status 看状态，--fetch 按需下载")
+    fgroup = sp.add_mutually_exclusive_group(required=True)
+    fgroup.add_argument("--status", action="store_true",
+                        help="查看缓存目录与四个必需 OTF 是否齐")
+    fgroup.add_argument("--fetch", action="store_true",
+                        help="下载 Fandol 包并解压到缓存（已完整则跳过）")
+    sp.add_argument("--url", default=None, metavar="URL",
+                    help="字体包地址或本地路径（默认 CTAN fandol.zip）")
+    sp.add_argument("--force", action="store_true",
+                    help="缓存已完整也重下")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
         "terms", help="术语候选抽取与人工入表（零 LLM：suggest / add）")
     tsp = sp.add_subparsers(dest="terms_action", required=True)
     ss = tsp.add_parser("suggest", help="从论文语料抽术语候选（TSV）")
@@ -388,11 +404,29 @@ def cmd_preamble(args) -> int:
     return EXIT_OK
 
 
+def cmd_fonts(args) -> int:
+    if args.status:
+        info = font_status()
+        payload = _payload("fonts", "ok", EXIT_OK, action="status", **info)
+        _emit(payload, render_fonts_status(info), args.json)
+        return EXIT_OK
+    try:
+        info = fetch_fandol(url=args.url, force=args.force)
+    except FontCacheError as exc:
+        payload = _payload("fonts", "error", EXIT_INTERNAL,
+                           action="fetch", message=str(exc))
+        _emit(payload, "== factscribe fonts ==\n%s" % exc, args.json)
+        return EXIT_INTERNAL
+    payload = _payload("fonts", "ok", EXIT_OK, action="fetch", **info)
+    _emit(payload, render_fonts_fetch(info), args.json)
+    return EXIT_OK
+
+
 def cmd_build(args) -> int:
     cfg = load_config(Path(args.project))
     code, out, info = run_build_step(
         cfg, engine=args.engine, cjk_font=args.cjk_font,
-        keep_temp=args.keep_temp)
+        keep_temp=args.keep_temp, font_fallback=True)
     payload = _payload("build", "ok" if code == EXIT_OK else "violation", code,
                        build=cfg.build, output=out)
     payload.update(info)
@@ -823,7 +857,8 @@ def main(argv=None) -> int:
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,
                 "polish": cmd_polish,
-                "prescribe": cmd_prescribe, "terms": cmd_terms}
+                "prescribe": cmd_prescribe, "terms": cmd_terms,
+                "fonts": cmd_fonts}
     try:
         return handlers[args.command](args)
     except ConfigError as exc:

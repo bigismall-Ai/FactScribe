@@ -67,11 +67,14 @@ tectonic -X compile main.tex        # cwd = <temp>/project
 
 | 顺序 | 来源 |
 |---|---|
-| 1 | `--cjk-font <路径>`（必须是已存在的文件） |
+| 0 | `--cjk-font <路径>`（必须是已存在的文件；用户点名优先） |
+| 1 | 本地 Fandol 缓存（四个 OTF 齐时，见 `SPEC-FONTS.md` §3） |
 | 2 | `fc-match -f "%{file}" STHeiti` |
 | 3 | `fc-match -f "%{file}" "Heiti SC"` |
 
-三条都拿不到 → **exit 4**，输出里带「CJK 字体未找到」与上一次编译的末 20 行。
+四条都拿不到 → **exit 4**，输出里带「CJK 字体未找到」与上一次编译的末 20 行。
+缓存完整时注入 Fandol 四条（宋/黑/仿/楷），缓存缺失才退回系统字体并在输出里
+明写「用了系统字体，未用 Fandol」。
 
 ### 3.3 重试次数
 
@@ -134,8 +137,8 @@ python3 -m factscribe verify-pdf <pdf> --report <report> [--build]
 
 1. **字体兜底延伸到 shell 路**：`project.build` 非空但败在 §3.2 的字体特征
    上时，闸门会复用自动路径的临时副本兜底重试（只改副本，项目里的 `.tex`
-   不动）。这是 `audit`/`verify-pdf --build` 专有的宽容；`build` 子命令的
-   shell 路仍保持批 120 的原行为。
+   不动）。批 123 起 `build` 子命令的 shell 路也享受同一兜底，否则
+   `paper-zh` 这类 V1 项目永远编不出 Fandol PDF。
 2. **`verify-pdf` 的项目目录**：默认取 PDF 的上一级目录；PDF 不在项目根时
    用 `--project <项目>` 指定。
 

@@ -20,16 +20,16 @@ python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-## 十三个命令
+## 十四个命令
 
-`factscribe` 一共十三个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
+`factscribe` 一共十四个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
 
 | 命令 | 干什么 |
 |---|---|
 | `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
 | `audit` | 核心校验：内联绑定、数字回账、引用落稳定标识、覆盖报告 |
 | `matrix` | 生成追溯矩阵 `audit/matrix.md` |
-| `build` | 执行 `factscribe.toml` 里的 `project.build` |
+| `build` | 执行 `factscribe.toml` 里的 `project.build`；中文缺字体时自动改用 Fandol |
 | `preamble` | 生成 `audit/preamble.tex` 里的 `\fact` 与 `\pkignore` 宏 |
 | `verify-pdf` | PDF 回检：文本层、栅格页、双向多重集、stamp 验签 |
 | `style` | 文风闸：只报公式化写作特征，黄牌，不阻断 |
@@ -37,6 +37,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `tide` | 潮汐式改动账：涨、落、波及面、闭合，全成或全退 |
 | `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
 | `terms` | 术语候选抽取与人工入表：suggest 提候选，add 只写你勾的 |
+| `fonts` | Fandol 中文字体按需下载与本地缓存：`--status` 看状态，`--fetch` 下载 |
 | `review` | 改写验收：保护面 + 复检 + 闭合一次判完，给通过、需复核或拒绝 |
 | `polish` | 给 LLM 的润色入口：`--print` 出操作手册，`--plan` 出工作单 |
 
@@ -89,7 +90,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 891 例，全离线
+python3 -m unittest discover -s tests     # 908 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

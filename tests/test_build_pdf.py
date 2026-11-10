@@ -6,6 +6,7 @@
 """
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -95,8 +96,14 @@ def sha(path: Path) -> str:
 
 
 def run(args):
+    # 本文件的用例都针对「系统字体兜底」：把 Fandol 缓存指到空目录，
+    # 免得开发机上的真实缓存改变字体来源（批 123）。
+    env = dict(os.environ)
+    env["FACTSCRIBE_FONT_CACHE"] = str(
+        Path(tempfile.gettempdir()) / "factscribe-test-empty-fandol")
     return subprocess.run([sys.executable, "-m", "factscribe"] + args,
-                          capture_output=True, text=True, cwd=str(ROOT))
+                          capture_output=True, text=True, cwd=str(ROOT),
+                          env=env)
 
 
 def run_json(args):

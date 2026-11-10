@@ -10,6 +10,17 @@
 * TSV 列名与 JSON 结构；
 * ``terms add`` 只写人工 pick、留日期/来源注释、幂等、词表仍可解析；
 * 双跑逐字节一致与排序确定性。
+
+批 98b 追加（精度）：
+
+* 中英文泛词表命中即丢，但泛词嵌在更长候选里（``system prompt`` /
+  ``系统提示``）不受影响；
+* LaTeX 命令参数（``\\ref{}`` / ``\\cite{}`` / ``\\label{}`` / ``\\fact{}``
+  / ``\\input{}``）与模型名（``Flash`` / ``Pro`` / ``MiniMax-M3.1-Flash``）
+  不进候选；
+* 排序加分：标题 +3、定义句式 +2、中文专业后缀 +2、英文连字符/首字母
+  大写 +1；加分只改排序、不改入选；
+* 默认阈值改为 ``--min-count 4 --min-sections 3``。
 """
 from __future__ import annotations
 
@@ -112,7 +123,8 @@ class CorpusCase(unittest.TestCase):
 
 class TestChineseCandidates(CorpusCase):
     def test_three_planted_terms_found(self):
-        rows = by_surface(self.rows(ZH_CORPUS))
+        rows = by_surface(self.rows(ZH_CORPUS, min_count=3,
+                                    min_sections=2))
         for term in ("剂量反应曲线", "变异系数", "预注册"):
             self.assertIn(term, rows, "漏掉中文术语：%s" % term)
             self.assertEqual(rows[term].lang, "zh")
@@ -123,7 +135,9 @@ class TestChineseCandidates(CorpusCase):
         glossary = self.root / "glossary-registered.tsv"
         glossary.write_text(EMPTY_GLOSSARY + "预注册\tpreregistration\t\t论文术语\t\n",
                             encoding="utf-8")
-        rows = by_surface(self.rows(ZH_CORPUS, glossary_path=glossary))
+        rows = by_surface(self.rows(ZH_CORPUS, min_count=3,
+                                    min_sections=2,
+                                    glossary_path=glossary))
         self.assertNotIn("预注册", rows)
         self.assertIn("剂量反应曲线", rows)
 
@@ -135,8 +149,9 @@ class TestChineseCandidates(CorpusCase):
         self.assertEqual(rows["局部词"].count, 2)
 
     def test_min_sections_filters_local_candidate(self):
-        files = {"one.md": "# 甲\n\n局部术语，出现一次。\n局部术语，出现两次。\n局部术语，出现三次。\n"}
+        files = {"one.md": "# 甲\n\n局部术语，出现一次。\n局部术语，出现两次。\n局部术语，出现三次。\n局部术语，出现四次。\n"}
         write_files(self.root, files)
+        # 默认 min-count=4 能过，但只在一个小节里，min-sections=3 卡掉。
         default = by_surface(suggest(self.root, glossary_path=self.glossary))
         relaxed = by_surface(suggest(self.root, glossary_path=self.glossary,
                                      min_sections=1))
@@ -156,7 +171,8 @@ class TestChineseCandidates(CorpusCase):
 
 class TestEnglishCandidates(CorpusCase):
     def test_multiword_terms_found(self):
-        rows = by_surface(self.rows(EN_CORPUS))
+        rows = by_surface(self.rows(EN_CORPUS, min_count=3,
+                                    min_sections=2))
         for term in ("system prompt", "token budget"):
             self.assertIn(term, rows, "漏掉英文短语：%s" % term)
             self.assertEqual(rows[term].lang, "en")
@@ -173,7 +189,7 @@ class TestEnglishCandidates(CorpusCase):
             "b.md": "# B\n\nsystem prompt, two.\n",
             "c.md": "# C\n\nsystem prompt, three.\n",
         }
-        rows = by_surface(self.rows(files))
+        rows = by_surface(self.rows(files, min_count=3, min_sections=2))
         self.assertIn("system prompt", rows)
         self.assertEqual(rows["system prompt"].count, 3)
 
@@ -182,7 +198,7 @@ class TestEnglishCandidates(CorpusCase):
             "a.md": "# A\n\nfail-closed, one.\nfail-closed, two.\n",
             "b.md": "# B\n\nfail-closed, three.\n",
         }
-        rows = by_surface(self.rows(files))
+        rows = by_surface(self.rows(files, min_count=3, min_sections=2))
         self.assertIn("fail-closed", rows)
 
 
@@ -228,10 +244,10 @@ system prompt
             "a.md": "# 甲\n\n弱候选，出现。\n弱候选，再现。\n",
             "b.md": "# 乙\n\n弱候选，最后一次。\n",
         }
-        self.assertIn("弱候选", by_surface(self.rows(files)))
-        # 三处出现 -> 默认 min-count=3 收；抬到 4 后消失。
-        self.assertNotIn("弱候选", by_surface(self.rows(
-            files, min_count=4)))
+        # 三处出现、两小节：显式 min-count=3,min-sections=2 收；默认 4/3 卡掉。
+        self.assertIn("弱候选", by_surface(self.rows(
+            files, min_count=3, min_sections=2)))
+        self.assertNotIn("弱候选", by_surface(self.rows(files)))
 
     def test_tsv_header_and_columns(self):
         text = render_tsv(suggest(self.root, glossary_path=self.glossary))
@@ -239,15 +255,18 @@ system prompt
                          "surface\tlang\tcount\tsections\tfirst_location\tscore")
 
     def test_json_shape_via_cli(self):
-        write_files(self.root, ZH_CORPUS)
+        write_files(self.root, {"a.md": (
+            "# 甲\n\n剂量反应曲线。\n剂量反应曲线。\n"
+            "\n## 乙\n\n剂量反应曲线。\n"
+            "\n## 丙\n\n剂量反应曲线。\n")})
         proc = run_cli(self.root, "terms", "suggest", ".", "--json",
                        "--glossary", str(self.glossary))
         self.assertEqual(proc.returncode, 0, proc.stderr)
         payload = json.loads(proc.stdout)
         self.assertEqual(payload["tool"], "terms")
         self.assertEqual(payload["action"], "suggest")
-        self.assertEqual(payload["min_count"], 3)
-        self.assertEqual(payload["min_sections"], 2)
+        self.assertEqual(payload["min_count"], 4)
+        self.assertEqual(payload["min_sections"], 3)
         self.assertEqual(payload["count"], len(payload["candidates"]))
         row = payload["candidates"][0]
         self.assertEqual(set(row), {"surface", "lang", "count", "sections",
@@ -260,6 +279,7 @@ system prompt
         for out in (first, second):
             proc = run_cli(self.root, "terms", "suggest", ".",
                            "--glossary", str(self.glossary),
+                           "--min-count", "3", "--min-sections", "2",
                            "--out", str(out))
             self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(first.read_bytes(), second.read_bytes())
@@ -362,6 +382,162 @@ class TestLatexProject(CorpusCase):
         self.assertEqual(rows["剂量反应曲线"].count, 2)  # verbatim 里两处不计
         self.assertTrue(rows["剂量反应曲线"].first_location.startswith(
             "sections/01.tex:"))
+
+
+# --------------------------------------------------------------------------
+# 6. 精度：泛词、遮罩与加分（批 98b）
+# --------------------------------------------------------------------------
+
+class TestGenericStoplist(CorpusCase):
+    def test_chinese_generic_words_filtered(self):
+        files = {
+            "a.md": "# 第一节\n\n模型。\n任务。\n剂量反应曲线。\n变异系数。\n"
+                    "\n## 甲小节\n\n模型。\n任务。\n剂量反应曲线。\n变异系数。\n",
+            "b.md": "# 第二节\n\n模型。\n任务。\n剂量反应曲线。\n变异系数。\n",
+        }
+        rows = by_surface(self.rows(files, min_count=3, min_sections=3))
+        self.assertNotIn("模型", rows)
+        self.assertNotIn("任务", rows)
+        self.assertIn("剂量反应曲线", rows)
+        self.assertIn("变异系数", rows)
+
+    def test_english_generic_words_filtered(self):
+        files = {
+            "a.md": "# First\n\nSystem prompt.\nTable.\nFlash.\n"
+                    "MiniMax-M3.1-Flash.\n"
+                    "\n## Sub\n\nSystem prompt.\nTable.\nFlash.\n"
+                    "MiniMax-M3.1-Flash.\n",
+            "b.md": "# Second\n\nSystem prompt.\nTable.\nFlash.\n"
+                    "MiniMax-M3.1-Flash.\n",
+        }
+        rows = by_surface(self.rows(files, min_count=3, min_sections=3))
+        self.assertNotIn("table", rows)
+        for surface in rows:
+            self.assertNotIn("flash", surface)
+            self.assertNotIn("minimax", surface)
+        self.assertIn("system prompt", rows)
+
+    def test_generic_inside_longer_term_survives(self):
+        files = {
+            "a.md": "# 甲\n\n系统提示。\nmodel compression.\n"
+                    "\n## 乙\n\n系统提示。\nmodel compression.\n"
+                    "\n## 丙\n\n系统提示。\nmodel compression.\n",
+        }
+        rows = by_surface(self.rows(files, min_count=3, min_sections=3))
+        # 系统 / model 是泛词，但嵌在更长候选里不受影响。
+        self.assertIn("系统提示", rows)
+        self.assertIn("model compression", rows)
+
+
+class TestNoiseMasking(CorpusCase):
+    def test_latex_command_arguments_masked(self):
+        files = {"a.tex": (
+            "\\section{甲}\n"
+            "See \\ref{tab:x} and \\ref{tab:x}.\n"
+            "\\label{sec:y} \\cite{smith2020}.\n"
+            "\\fact{D1} \\input{foo/bar}.\n")}
+        rows = by_surface(self.rows(files, min_count=1, min_sections=1))
+        for surface in ("tab", "x", "sec", "y", "smith2020", "d1",
+                        "foo", "bar"):
+            self.assertNotIn(surface, rows, "LaTeX 参数漏进候选：%s" % surface)
+
+    def test_latex_snippets_in_markdown_masked(self):
+        files = {"a.md": (
+            "# A\n\n"
+            "See \\ref{tab:x} and \\ref{tab:x}.\n"
+            "\\label{sec:y} \\cite{smith2020}.\n"
+            "\\fact{D1} \\input{foo/bar}.\n")}
+        rows = by_surface(self.rows(files, min_count=1, min_sections=1))
+        for surface in ("tab", "x", "sec", "y", "smith2020", "d1",
+                        "foo", "bar"):
+            self.assertNotIn(surface, rows)
+
+    def test_model_names_masked(self):
+        files = {"a.md": (
+            "# A\n\n"
+            "DeepSeek V4.1 Flash is used.\n"
+            "MiniMax-M3.1-Flash is used.\n"
+            "Flash is used.\nPro is used.\n"
+            "MiniMax is used.\n")}
+        rows = by_surface(self.rows(files, min_count=1, min_sections=1))
+        for surface in rows:
+            lowered = surface.lower()
+            for marker in ("flash", "minimax", "deepseek", "v4.1"):
+                self.assertNotIn(marker, lowered,
+                                 "模型名漏进候选：%s" % surface)
+
+
+class TestScoringBonuses(CorpusCase):
+    def test_heading_term_ranks_higher(self):
+        files = {
+            "a.md": "# 预注册\n\n预注册。\n随机化。\n"
+                    "\n## 甲\n\n预注册。\n随机化。\n",
+            "b.md": "# 乙\n\n预注册。\n随机化。\n",
+        }
+        rows = self.rows(files, min_count=3, min_sections=3)
+        surfaces = [row.surface for row in rows]
+        self.assertIn("预注册", surfaces)
+        self.assertIn("随机化", surfaces)
+        self.assertLess(surfaces.index("预注册"), surfaces.index("随机化"))
+
+    def test_definition_adjacent_term_ranks_higher(self):
+        files = {
+            "a.md": "# 甲\n\n灰盒测试是指标。\n白盒测试，指标。\n"
+                    "\n## 乙\n\n灰盒测试是指标。\n白盒测试，指标。\n"
+                    "\n## 丙\n\n灰盒测试是指标。\n白盒测试，指标。\n",
+        }
+        rows = self.rows(files, min_count=3, min_sections=3)
+        surfaces = [row.surface for row in rows]
+        self.assertIn("灰盒测试", surfaces)
+        self.assertIn("白盒测试", surfaces)
+        self.assertLess(surfaces.index("灰盒测试"), surfaces.index("白盒测试"))
+
+    def test_chinese_professional_suffix_ranks_higher(self):
+        files = {
+            "a.md": "# 甲\n\n变异系数。\n预注册。\n"
+                    "\n## 乙\n\n变异系数。\n预注册。\n"
+                    "\n## 丙\n\n变异系数。\n预注册。\n",
+        }
+        rows = self.rows(files, min_count=3, min_sections=3)
+        surfaces = [row.surface for row in rows]
+        self.assertLess(surfaces.index("变异系数"), surfaces.index("预注册"))
+
+    def test_english_hyphen_ranks_higher(self):
+        files = {
+            "a.md": "# A\n\nfail-closed.\nclosed loop.\n"
+                    "\n## B\n\nfail-closed.\nclosed loop.\n"
+                    "\n## C\n\nfail-closed.\nclosed loop.\n",
+        }
+        rows = self.rows(files, min_count=3, min_sections=3)
+        surfaces = [row.surface for row in rows]
+        self.assertIn("fail-closed", surfaces)
+        self.assertIn("closed loop", surfaces)
+        self.assertLess(surfaces.index("fail-closed"),
+                        surfaces.index("closed loop"))
+
+    def test_bonus_does_not_change_inclusion(self):
+        # 同一份语料里，有加分与无加分的候选都过阈值，只是排序不同。
+        files = {
+            "a.md": "# A\n\nfail-closed.\nclosed loop.\n"
+                    "\n## B\n\nfail-closed.\nclosed loop.\n"
+                    "\n## C\n\nfail-closed.\nclosed loop.\n",
+        }
+        rows = self.rows(files, min_count=3, min_sections=3)
+        self.assertEqual(len(rows), 2)
+
+
+class TestDefaultThresholds(CorpusCase):
+    def test_default_is_4_3(self):
+        files = {
+            "a.md": "# 甲\n\n弱候选。\n"
+                    "\n## 乙\n\n弱候选。\n"
+                    "\n## 丙\n\n弱候选。\n",
+        }
+        # 3 次出现、3 个小节：默认 4/3 卡 count；显式 3/3 才收。
+        self.assertNotIn("弱候选",
+                         by_surface(self.rows(files)))
+        self.assertIn("弱候选", by_surface(self.rows(
+            files, min_count=3, min_sections=3)))
 
 
 def run_cli(cwd, *args, stdin=None):

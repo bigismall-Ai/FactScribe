@@ -140,10 +140,10 @@ def build_parser() -> argparse.ArgumentParser:
     tsp = sp.add_subparsers(dest="terms_action", required=True)
     ss = tsp.add_parser("suggest", help="从论文语料抽术语候选（TSV）")
     ss.add_argument("root", help="论文目录")
-    ss.add_argument("--min-count", type=int, default=3, metavar="N",
-                    help="最少出现次数（默认 3）")
-    ss.add_argument("--min-sections", type=int, default=2, metavar="N",
-                    help="最少跨小节数（默认 2）")
+    ss.add_argument("--min-count", type=int, default=4, metavar="N",
+                    help="最少出现次数（默认 4）")
+    ss.add_argument("--min-sections", type=int, default=3, metavar="N",
+                    help="最少跨小节数（默认 3）")
     ss.add_argument("--out", default=None, metavar="FILE",
                     help="候选 TSV 落盘路径（默认只出 stdout）")
     ss.add_argument("--glossary", default=None, metavar="TSV",

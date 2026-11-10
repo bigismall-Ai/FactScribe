@@ -84,10 +84,10 @@ DEFAULT_RULES: dict = {
         "zh_postposed_condition": 1,
         "zh_due_to_make": 1,
         "zh_de_stack": 1,
-        # 单句式「的」堆叠的两个判据参数：一句内 >= min_de 个「的」，
-        # 且该句汉字 <= max_chars（超出长度是正常复句，不报）。
-        "zh_de_stack_min_de": 4,
-        "zh_de_stack_max_chars": 30,
+        # 批 103：单句式「的」堆叠改为「短修饰链」判据——同一句内至少
+        # 两对相邻「的」的间隔不超过 zh_de_stack_max_gap 个汉字才算成链。
+        # 不看「的」总数或整句长度（正常复句里定语再长也不报）。
+        "zh_de_stack_max_gap": 6,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -1837,24 +1837,43 @@ def _light_verb_findings(sentences, rules: dict) -> list[Finding]:
     return out
 
 
+# 「的」链内的谓词/连接断点：出现这些字说明不是连续定语修饰，而是
+# 「是…的」结构或小句（如「难度档用的是…」「那些臂是更小的…」）。
+_DE_CHAIN_BREAKS = set(
+    "是用有在把被而并或和与及也就都还又不没无未为对从向给让使得会能可要"
+    "这那其之于以所等着了过"
+)
+
+
 def _zh_de_stack_findings(sentences, thresholds: dict) -> list[Finding]:
-    min_de = int(thresholds["zh_de_stack_min_de"])
-    max_chars = int(thresholds["zh_de_stack_max_chars"])
+    max_gap = int(thresholds["zh_de_stack_max_gap"])
     out: list[Finding] = []
     for doc, start, end, _units in sentences:
         sentence = _norm_space(doc.prose[start:end])
         if not _cjk_heavy(sentence):
             continue
-        cjk = len(_CJK_RE.findall(sentence))
-        de = sentence.count("的")
-        if de < min_de or cjk > max_chars:
+        positions = [i for i, ch in enumerate(sentence) if ch == "的"]
+        links: list = []          # 每对相邻「的」：合格＝(间隔, 字数)，否则 None
+        for left, right in zip(positions, positions[1:]):
+            gap = re.sub(r"\s+", "", sentence[left + 1:right])
+            ok = (bool(gap)
+                  and all(_CJK_RE.fullmatch(ch) for ch in gap)
+                  and not any(ch in _DE_CHAIN_BREAKS for ch in gap)
+                  and len(gap) <= max_gap)
+            links.append((gap, len(gap)) if ok else None)
+        chain = next(((links[i], links[i + 1])
+                      for i in range(len(links) - 1)
+                      if links[i] and links[i + 1]), None)
+        if chain is None:
             continue
+        (gap_a, len_a), (gap_b, len_b) = chain
         out.append(Finding(
             "ZH_DE_STACK", doc.file, _line_of(doc, start),
             _clip(sentence, 180),
-            "一句里连用 %d 个「的」（%d 个汉字）：「的」链把定语叠成楼梯。"
-            "拆成两句，或把定语改成动词句（例：'A 的 B 的 C' → "
-            "'C 由 B 做，B 属于 A'）；事实与数字不动。" % (de, cjk),
+            "短修饰链：连续两层定语的间隔只有 %d / %d 字（「%s」「%s」）。"
+            "把其中一层改成动词句，或拆成两句（例：'A 的 B 的 C' → "
+            "'C 由 B 做，B 属于 A'）；事实与数字不动。"
+            % (len_a, len_b, gap_a, gap_b),
             "zh_de_stack"))
     return out
 
@@ -2717,9 +2736,8 @@ def render_human(result: StyleResult, project: Path) -> str:
         elif key == "term_unregistered":
             threshold = "提示"
         elif key == "zh_de_stack":
-            threshold = "de>=%d/<=%d字" % (
-                result.thresholds["zh_de_stack_min_de"],
-                result.thresholds["zh_de_stack_max_chars"])
+            threshold = "gap<=%d字" % (
+                result.thresholds["zh_de_stack_max_gap"],)
         elif key in ("light_verb_nominalization", "wordiness_bloat",
                      "zh_postposed_condition", "zh_due_to_make"):
             threshold = ">=1"

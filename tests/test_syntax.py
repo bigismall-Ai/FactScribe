@@ -7,7 +7,8 @@
 
 * `LIGHT_VERB_NOMINALIZATION`：甲/乙两组正例、名词后缀、白名单、
   乙组精度边界（宾语补足语 / 短语动词 / 状态名词）、动作动词提示；
-* `ZH_DE_STACK`：正例、3 个「的」负例、超长负例、阈值可配、边界；
+* `ZH_DE_STACK`：短修饰链正例、正常定语负例、长定语负例、间隔 6/7 边界、
+  阈值可配、引文与列表遮罩；
 * `ZH_POSTPOSED_CONDITION`：后置正例、前置负例、「若干」豁免、多标记；
 * `ZH_DUE_TO_MAKE`：两种原因标记、负例、跨句不报、理由含「缺主」；
 * `WORDINESS_BLOAT`：五条短语各一例、直接替代、B 级不报、大小写；
@@ -78,10 +79,18 @@ LIGHT_EXEMPT = (
     "These measurements provide a basis for the comparison."
 )
 
-DE_STACK = "这是他的老师的学生的作业的答案。"           # 4 个「的」，16 字
-DE_THREE = "这是他的老师的学生的作业。"                  # 3 个「的」
-DE_LONG = ("这是一个关于他的老师的学生的作业的答案的非常详细而且完整的"
-           "补充说明。")                                  # 5 个「的」，33 字
+DE_CHAIN = "弯弯的杨柳的稀疏的倩影。"                    # 余光中原例：连续短修饰
+DE_STACK = "这是他的老师的学生的作业的答案。"            # 4 个「的」，每段修饰 2 字
+DE_SHORT_CHAIN = "他的老师的学生的作业。"                # 3 个「的」也报（不再要求 ≥4）
+# 正常定语：不是连续短修饰。第一句「难度档用的是…」是「是…的」结构，
+# 第二句夹着「是一个任务的」与「那些臂是更小的」两个谓词断点。
+DE_NORMAL_TABLE = "表 的难度档用的是数据集自带的标签，不是我们另贴的。"
+DE_NORMAL_ARM = (
+    "最后一臂的 5/5 是一个任务的五次运行，而不成功的那些臂是更小的集合。")
+DE_LONG_ATTR = "一个关于模型在长程任务中失败原因的分析。"  # 只有 1 个「的」
+DE_GAP_6 = "红红的杨柳花草树木的叶子的颜色。"           # 链内间隔恰好 6 字
+DE_GAP_7 = "红红的杨柳花草树木林的叶子的颜色。"         # 链内间隔 7 字，不报
+DE_SINGLE_GAP = "他收到的载荷的哈希。"                  # 只有一个短间隔：相对从句，不成链
 
 POST_COND = "这个矩阵是幂等的，如果它的秩等于阶数。"
 PRE_COND = "如果矩阵的秩等于阶数，它就是幂等的。"
@@ -117,7 +126,7 @@ SIGNIFICANT_TERM = "这个差异是统计显著的。我们重复了三次实验
 SIGNIFICANT_PHRASE = "两组之间存在显著差异。我们重复了三次实验。"
 EMPTY_STILL = "这个方案至关重要。我们重复了三次实验。"
 
-DE_MIN_5 = "[thresholds]\nzh_de_stack_min_de = 5\n"
+DE_GAP_CONFIG = "[thresholds]\nzh_de_stack_max_gap = 7\n"
 
 
 # --------------------------------------------------------------------------
@@ -172,29 +181,49 @@ class TestLightVerbNominalization(unittest.TestCase):
 # --------------------------------------------------------------------------
 
 class TestZhDeStack(unittest.TestCase):
-    def test_four_de_in_short_sentence_reports(self):
-        result = analyze_text(DE_STACK)
+    def test_short_modifier_chain_reports(self):
+        result = analyze_text(DE_CHAIN)
         found = findings(result, "ZH_DE_STACK")
         self.assertEqual(len(found), 1)
         self.assertEqual(result.metrics["zh_de_stack"], 1)
 
-    def test_three_de_negative(self):
-        result = analyze_text(DE_THREE)
-        self.assertNotIn("ZH_DE_STACK", codes(result))
-
-    def test_long_sentence_negative(self):
-        result = analyze_text(DE_LONG)
-        self.assertNotIn("ZH_DE_STACK", codes(result))
-
-    def test_threshold_configurable(self):
-        result = analyze_text(DE_STACK, DE_MIN_5)
-        self.assertNotIn("ZH_DE_STACK", codes(result))
-
-    def test_length_boundary_is_documented(self):
-        # 正好 4 个「的」、不超过 30 字 → 报；这条锁死「单句式」口径。
+    def test_four_de_chain_reports(self):
         result = analyze_text(DE_STACK)
         self.assertEqual(result.metrics["zh_de_stack"], 1)
-        self.assertLessEqual(len(DE_STACK), 30)
+
+    def test_three_de_short_chain_reports(self):
+        # 不再要求总数 ≥4：三个「的」连成短链就报。
+        result = analyze_text(DE_SHORT_CHAIN)
+        self.assertIn("ZH_DE_STACK", codes(result))
+
+    def test_normal_attributive_sentences_negative(self):
+        # 「是…的」/ 谓词断点不是连续短修饰。
+        for text in (DE_NORMAL_TABLE, DE_NORMAL_ARM):
+            with self.subTest(text=text):
+                self.assertNotIn("ZH_DE_STACK", codes(analyze_text(text)))
+
+    def test_long_attributive_negative(self):
+        # 「的」少但修饰长（长定语），不是「的的不休」。
+        result = analyze_text(DE_LONG_ATTR)
+        self.assertNotIn("ZH_DE_STACK", codes(result))
+
+    def test_gap_boundary_six_reports_seven_not(self):
+        self.assertIn("ZH_DE_STACK", codes(analyze_text(DE_GAP_6)))
+        self.assertNotIn("ZH_DE_STACK", codes(analyze_text(DE_GAP_7)))
+
+    def test_single_short_gap_is_not_a_chain(self):
+        # 「收到的载荷的哈希」只有一个短间隔，是相对从句而非连续短修饰。
+        result = analyze_text(DE_SINGLE_GAP)
+        self.assertNotIn("ZH_DE_STACK", codes(result))
+
+    def test_gap_threshold_configurable(self):
+        result = analyze_text(DE_GAP_7, DE_GAP_CONFIG)
+        self.assertIn("ZH_DE_STACK", codes(result))
+
+    def test_masked_blockquote_and_list_negative(self):
+        for text in ("> " + DE_CHAIN + "\n", "- " + DE_CHAIN + "\n"):
+            with self.subTest(text=text):
+                self.assertNotIn("ZH_DE_STACK", codes(analyze_text(text)))
 
 
 # --------------------------------------------------------------------------
@@ -330,9 +359,8 @@ class TestRegistrationAndPrescriptions(unittest.TestCase):
     def test_metrics_and_thresholds_registered(self):
         loaded, _path = load_style_rules(ROOT)
         for key in ("light_verb_nominalization", "wordiness_bloat",
-                    "zh_de_stack", "zh_de_stack_min_de",
-                    "zh_de_stack_max_chars", "zh_postposed_condition",
-                    "zh_due_to_make"):
+                    "zh_de_stack", "zh_de_stack_max_gap",
+                    "zh_postposed_condition", "zh_due_to_make"):
             with self.subTest(key=key):
                 self.assertIn(key, loaded["thresholds"])
 

@@ -78,6 +78,16 @@ DEFAULT_RULES: dict = {
         "explainer_density": 6.0,
         "justify_chain_min_sentences": 2,
         "justify_chain_min_paragraphs": 2,
+        # 批 102：句法级判据。数字型指标按条计，>= 1 触发，无密度闸。
+        "light_verb_nominalization": 1,
+        "wordiness_bloat": 1,
+        "zh_postposed_condition": 1,
+        "zh_due_to_make": 1,
+        "zh_de_stack": 1,
+        # 单句式「的」堆叠的两个判据参数：一句内 >= min_de 个「的」，
+        # 且该句汉字 <= max_chars（超出长度是正常复句，不报）。
+        "zh_de_stack_min_de": 4,
+        "zh_de_stack_max_chars": 30,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -104,11 +114,15 @@ DEFAULT_RULES: dict = {
     "empty_adjectives": {
         "english": ["crucial", "robust", "comprehensive", "significant",
                     "essential", "vital"],
-        "chinese": ["至关重要", "显著", "全面", "深入"],
+        # 批 102 A6：移除「显著」——统计写作里它是术语，不是空泛标签。
+        "chinese": ["至关重要", "全面", "深入"],
         "exempt_phrases": ["statistically significant",
                            "robust standard error", "robust to",
                            "more robust", "less robust",
-                           "significant at the"],
+                           "significant at the",
+                           # 批 102：中文统计短语豁免（防词表回填后误伤）
+                           "统计显著", "显著差异", "显著性", "显著水平",
+                           "显著优于", "显著低于", "显著提高", "不显著"],
     },
     "paragraph_closers": {
         "english": ["Therefore", "Overall", "Thus", "In conclusion"],
@@ -158,6 +172,86 @@ DEFAULT_RULES: dict = {
                             "这里讨论", "这一节讨论", "我们讨论", "本文讨论",
                             "讨论的是", "讲的是", "谈的是"],
     },
+    # 批 102：英文轻动词＋名义化（LIGHT_VERB_NOMINALIZATION）。
+    # 甲组（english）可直接跟名义化名词；乙组（article_verbs）只认
+    # 「a/an＋名词」或复数名词，排除 "make the X legible" 这类宾语补足语
+    # 与 "take the decision away" 这类短语动词。
+    "light_verbs": {
+        "english": ["perform", "performs", "performed", "performing",
+                    "conduct", "conducts", "conducted", "conducting",
+                    "carry out", "carries out", "carried out", "carrying out",
+                    "undertake", "undertakes", "undertook", "undertaking",
+                    "provide", "provides", "provided", "providing",
+                    "offer", "offers", "offered", "offering"],
+        "article_verbs": ["make", "makes", "made", "making",
+                          "give", "gives", "gave", "giving",
+                          "take", "takes", "took", "taking",
+                          "have", "has", "had", "having",
+                          "do", "does", "did", "doing",
+                          "reach", "reaches", "reached", "reaching",
+                          "achieve", "achieves", "achieved", "achieving",
+                          "establish", "establishes", "established",
+                          "establishing"],
+        # 不含裸 -al：several / partial / beneficial 会大面积误命中。
+        "suffixes": ["tion", "sion", "ment", "ance", "ence", "ity",
+                     "ness", "sis"],
+        "exempt_phrases": ["have a chance", "provide a basis",
+                           "have a role", "take a look", "give a view",
+                           "make a difference"],
+        # 「动作其实是什么」：查表优先，查不到给通用提示（不瞎猜变形）。
+        "actions": {
+            "distinction": "distinguish", "analysis": "analyze",
+            "decision": "decide", "explanation": "explain",
+            "evaluation": "evaluate", "assessment": "assess",
+            "implementation": "implement", "measurement": "measure",
+            "observation": "observe", "description": "describe",
+            "discussion": "discuss", "conclusion": "conclude",
+            "assumption": "assume", "comparison": "compare",
+            "definition": "define", "application": "apply",
+            "performance": "perform", "improvement": "improve",
+            "requirement": "require", "statement": "state",
+            "treatment": "treat", "judgment": "judge",
+            "agreement": "agree", "consideration": "consider",
+            "investigation": "investigate", "identification": "identify",
+            "verification": "verify", "validation": "validate",
+            "demonstration": "demonstrate", "estimation": "estimate",
+            "reduction": "reduce", "production": "produce",
+            "introduction": "introduce", "contribution": "contribute",
+            "classification": "classify", "specification": "specify",
+            "justification": "justify", "motivation": "motivate",
+            "transformation": "transform", "configuration": "configure",
+            "optimization": "optimize", "selection": "select",
+            "detection": "detect", "collection": "collect",
+            "inspection": "inspect", "protection": "protect",
+            "construction": "construct", "adoption": "adopt",
+            "addition": "add", "allocation": "allocate",
+            "reliance": "rely", "appearance": "appear",
+            "existence": "exist", "occurrence": "occur",
+            "preference": "prefer", "resistance": "resist",
+        },
+    },
+    # 批 102：英文膨胀短语（WORDINESS_BLOAT）。只收「删掉/替换后不丢信息」
+    # 的固定说法；in order to / in terms of 这类属正常学术行文，不进表。
+    "wordiness": {
+        "replacements": {
+            "due to the fact that": "because",
+            "at this point in time": "now",
+            "in spite of the fact that": "although",
+            "in the event that": "if",
+            "on account of the fact that": "because",
+        },
+    },
+    # 批 102：后置条件从句（ZH_POSTPOSED_CONDITION）。中文条件前置；
+    # 「……，如果 B。」是英文语序。只锁条件标记，不锁「因为」（后置追补正常）。
+    "zh_postposed_condition": {
+        "chinese": ["如果", "假如", "倘若", "一旦", "要是", "若"],
+    },
+    # 批 102：由于/因为 X，使得/致使/导致 Y（ZH_DUE_TO_MAKE）。
+    # 介词短语不能作主语，全句缺主，是语法错。
+    "zh_due_to_make": {
+        "chinese": ["由于", "因为"],
+        "effects": ["使得", "致使", "导致"],
+    },
 }
 
 # 指标方向：True = 超过阈值触发；False = 低于阈值触发；单点指标用下限。
@@ -184,6 +278,12 @@ DIRECTIONS = {
     "heading_subject_lost": "at_least",
     # 批 90 术语层（TERM_UNREGISTERED 只提示，不进本表）
     "term_variant": "at_least",
+    # 批 102 句法级判据（按条件计数，>= 1 触发）
+    "light_verb_nominalization": "at_least",
+    "wordiness_bloat": "at_least",
+    "zh_de_stack": "at_least",
+    "zh_postposed_condition": "at_least",
+    "zh_due_to_make": "at_least",
 }
 
 CODE_OF = {
@@ -210,6 +310,12 @@ CODE_OF = {
     # 批 90 术语层
     "term_variant": "TERM_VARIANT",
     "term_unregistered": "TERM_UNREGISTERED",
+    # 批 102 句法级判据
+    "light_verb_nominalization": "LIGHT_VERB_NOMINALIZATION",
+    "wordiness_bloat": "WORDINESS_BLOAT",
+    "zh_de_stack": "ZH_DE_STACK",
+    "zh_postposed_condition": "ZH_POSTPOSED_CONDITION",
+    "zh_due_to_make": "ZH_DUE_TO_MAKE",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
@@ -217,6 +323,8 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_ECHO", "HEADING_RELATION_CHANGED",
                  "HEADING_SUBJECT_LOST", "TERM_FIRST_IN_HEADING",
                  "TERM_VARIANT", "TERM_UNREGISTERED",
+                 "LIGHT_VERB_NOMINALIZATION", "WORDINESS_BLOAT",
+                 "ZH_DE_STACK", "ZH_POSTPOSED_CONDITION", "ZH_DUE_TO_MAKE",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
                  "JUSTIFY_CHAIN", "REPEATED_OPENER",
@@ -1626,6 +1734,211 @@ def assess_stage(triggers: int, cv: float, fired: list) -> dict:
             "reason": reason, "triggers": triggers, "cv": cv_shown}
 
 
+# --------------------------------------------------------------------------
+# 批 102：句法级判据（轻动词名义化 / 的-堆叠 / 语序 / 语法错 / 冗词）
+# --------------------------------------------------------------------------
+
+def _light_verb_patterns(rules: dict) -> tuple[re.Pattern | None,
+                                               re.Pattern | None]:
+    """返回 (甲组模式, 乙组模式)。甲组可直接跟名义化名词；乙组只认
+    「a/an＋名词」或复数名词。"""
+    group = rules.get("light_verbs") or {}
+    suffixes = [str(x) for x in group.get("suffixes") or [] if str(x).strip()]
+    if not suffixes:
+        return None, None
+    noun = r"\w+(?:%s)s?\b" % "|".join(re.escape(s) for s in suffixes)
+    plural = r"\w+(?:%s)s\b" % "|".join(re.escape(s) for s in suffixes)
+
+    def alts(key: str) -> str:
+        items = sorted({str(x) for x in group.get(key) or [] if str(x).strip()},
+                       key=len, reverse=True)
+        return "|".join(re.escape(x).replace(r"\ ", r"\s+") for x in items)
+
+    direct = alts("english")
+    article = alts("article_verbs")
+    pat_direct = pat_article = None
+    if direct:
+        pat_direct = re.compile(
+            r"\b(?:%s)\s+(?:(?:a|an|the)\s+)?(?:\w+ly\s+)?(?P<noun>%s)"
+            % (direct, noun), re.IGNORECASE)
+    if article:
+        pat_article = re.compile(
+            r"\b(?:%s)\s+(?:(?:a|an)\s+(?:\w+ly\s+)?(?P<noun>%s)"
+            r"|(?P<plural>%s))" % (article, noun, plural), re.IGNORECASE)
+    return pat_direct, pat_article
+
+
+def _span_intersects(regex: re.Pattern | None, text: str,
+                     start: int, end: int) -> bool:
+    if regex is None:
+        return False
+    for m in regex.finditer(text):
+        if m.start() < end and start < m.end():
+            return True
+    return False
+
+
+def _exempt_phrase_regex(phrases: list[str]) -> re.Pattern | None:
+    """白名单短语的匹配式：动词按常见屈折展开（have/has/had）。"""
+    forms = {
+        "have": ["have", "has", "had", "having"],
+        "provide": ["provide", "provides", "provided", "providing"],
+        "take": ["take", "takes", "took", "taking"],
+        "give": ["give", "gives", "gave", "giving"],
+        "make": ["make", "makes", "made", "making"],
+    }
+    variants: list[str] = []
+    for phrase in phrases:
+        phrase = str(phrase).strip()
+        if not phrase:
+            continue
+        variants.append(phrase)
+        first, _, rest = phrase.partition(" ")
+        for form in forms.get(first.lower(), []):
+            if rest:
+                variants.append("%s %s" % (form, rest))
+    return _phrase_regex(variants)
+
+
+def _light_verb_findings(sentences, rules: dict) -> list[Finding]:
+    pat_direct, pat_article = _light_verb_patterns(rules)
+    group = rules.get("light_verbs") or {}
+    actions = {str(k).lower(): str(v)
+               for k, v in (group.get("actions") or {}).items()}
+    exempt_re = _exempt_phrase_regex(
+        [str(x) for x in group.get("exempt_phrases") or []])
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        seen: set = set()
+        for regex in (pat_direct, pat_article):
+            if regex is None:
+                continue
+            for m in regex.finditer(sentence):
+                groups = m.groupdict()
+                noun = (groups.get("noun") or groups.get("plural") or "").strip()
+                if not noun or m.span() in seen:
+                    continue
+                if _span_intersects(exempt_re, sentence, m.start(), m.end()):
+                    continue
+                seen.add(m.span())
+                action = actions.get(noun.lower())
+                if action:
+                    hint = "把动作写成动词：「%s」→ %s" % (noun, action)
+                else:
+                    hint = ("把动作写成动词：把「%s」还原成对应的动词"
+                            % noun)
+                out.append(Finding(
+                    "LIGHT_VERB_NOMINALIZATION", doc.file, _line_of(doc, start),
+                    _clip(sentence, 180),
+                    "「%s」是轻动词＋名义化：动词是空的，动作藏在名词里。%s"
+                    % (_norm_space(m.group(0)), hint),
+                    "light_verb_nominalization"))
+    return out
+
+
+def _zh_de_stack_findings(sentences, thresholds: dict) -> list[Finding]:
+    min_de = int(thresholds["zh_de_stack_min_de"])
+    max_chars = int(thresholds["zh_de_stack_max_chars"])
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        if not _cjk_heavy(sentence):
+            continue
+        cjk = len(_CJK_RE.findall(sentence))
+        de = sentence.count("的")
+        if de < min_de or cjk > max_chars:
+            continue
+        out.append(Finding(
+            "ZH_DE_STACK", doc.file, _line_of(doc, start),
+            _clip(sentence, 180),
+            "一句里连用 %d 个「的」（%d 个汉字）：「的」链把定语叠成楼梯。"
+            "拆成两句，或把定语改成动词句（例：'A 的 B 的 C' → "
+            "'C 由 B 做，B 属于 A'）；事实与数字不动。" % (de, cjk),
+            "zh_de_stack"))
+    return out
+
+
+def _zh_postposed_condition_findings(sentences, rules: dict
+                                     ) -> list[Finding]:
+    markers = [str(x) for x in
+               (rules.get("zh_postposed_condition") or {}).get("chinese") or []
+               if str(x).strip()]
+    if not markers:
+        return []
+    alt = "|".join(re.escape(m) for m in
+                   sorted(markers, key=len, reverse=True))
+    pat = re.compile(r"[^。！？\n]{4,}[，,]\s*(?P<marker>%s)(?P<cond>[^。！？\n]{2,})"
+                     r"[。！？]" % alt)
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        m = pat.search(sentence)
+        if not m or m.group("cond").startswith("干"):   # 「若干」不是条件
+            continue
+        cond = m.group("marker") + m.group("cond")
+        main = sentence[:m.start("marker")].rstrip(" ，,；;")
+        out.append(Finding(
+            "ZH_POSTPOSED_CONDITION", doc.file, _line_of(doc, start),
+            _clip(sentence, 180),
+            "条件从句后置（英文语序）：中文条件在前。把「%s」移到逗号前 → "
+            "「%s，%s」" % (cond.rstrip("。！？"),
+                            cond.rstrip("。！？"), main),
+            "zh_postposed_condition"))
+    return out
+
+
+def _zh_due_to_make_findings(sentences, rules: dict) -> list[Finding]:
+    group = rules.get("zh_due_to_make") or {}
+    causes = [str(x) for x in group.get("chinese") or [] if str(x).strip()]
+    effects = [str(x) for x in group.get("effects") or [] if str(x).strip()]
+    if not causes or not effects:
+        return []
+    pat = re.compile(r"(?P<prep>%s)[^。；]{1,40}(?:%s)"
+                     % ("|".join(map(re.escape, causes)),
+                        "|".join(map(re.escape, effects))))
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        m = pat.search(sentence)
+        if not m:
+            continue
+        out.append(Finding(
+            "ZH_DUE_TO_MAKE", doc.file, _line_of(doc, start),
+            _clip(sentence, 180),
+            "「%s…」是介词短语，不能作主语，全句缺主。删掉「%s」，让原因"
+            "自己当主语，后半句直接给结果（例：「由于数据缺失，使得结果"
+            "不可靠」→「数据缺失，结果不可靠」）；这是语法错，不只是文风。"
+            % (m.group("prep"), m.group("prep")),
+            "zh_due_to_make"))
+    return out
+
+
+def _wordiness_bloat_findings(sentences, rules: dict) -> list[Finding]:
+    replacements = {str(k): str(v) for k, v in
+                    ((rules.get("wordiness") or {}).get("replacements") or {}).items()}
+    pat = _phrase_regex(list(replacements))
+    if pat is None:
+        return []
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        for m in pat.finditer(sentence):
+            phrase = _norm_space(m.group(0))
+            repl = replacements.get(phrase.lower()) or replacements.get(phrase)
+            if not repl:
+                # 索引按原表键（大小写不敏感匹配）
+                repl = next((v for k, v in replacements.items()
+                             if k.lower() == phrase.lower()), "")
+            out.append(Finding(
+                "WORDINESS_BLOAT", doc.file, _line_of(doc, start),
+                _clip(sentence, 180),
+                "「%s」是膨胀短语：直接写「%s」，信息不减"
+                % (phrase, repl or "更短的写法"),
+                "wordiness_bloat"))
+    return out
+
+
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
             before: tuple[Config, list[tuple[str, str]]] | None = None,
@@ -1684,6 +1997,18 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     instances: dict[str, list[Finding]] = {code: [] for code in CODE_OF.values()}
     paragraph_infos: dict[tuple[str, int], ParagraphInfo] = {}
+
+    # ---- 批 102：句法级判据（各按条计，无密度闸）----
+    instances["LIGHT_VERB_NOMINALIZATION"].extend(
+        _light_verb_findings(all_sentences, rules))
+    instances["WORDINESS_BLOAT"].extend(
+        _wordiness_bloat_findings(all_sentences, rules))
+    instances["ZH_DE_STACK"].extend(
+        _zh_de_stack_findings(all_sentences, thresholds))
+    instances["ZH_POSTPOSED_CONDITION"].extend(
+        _zh_postposed_condition_findings(all_sentences, rules))
+    instances["ZH_DUE_TO_MAKE"].extend(
+        _zh_due_to_make_findings(all_sentences, rules))
 
     # ---- 1. 套话连接词 ----
     connective_hits = 0
@@ -2130,6 +2455,13 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "term_variant": len(variant_findings),
         "term_unregistered": len(instances["TERM_UNREGISTERED"]),
         "colloquial_triad": len(repeated_triads),
+        # 批 102
+        "light_verb_nominalization":
+            len(instances["LIGHT_VERB_NOMINALIZATION"]),
+        "wordiness_bloat": len(instances["WORDINESS_BLOAT"]),
+        "zh_de_stack": len(instances["ZH_DE_STACK"]),
+        "zh_postposed_condition": len(instances["ZH_POSTPOSED_CONDITION"]),
+        "zh_due_to_make": len(instances["ZH_DUE_TO_MAKE"]),
     }
 
     fired = []
@@ -2164,6 +2496,12 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         elif metric == "justify_chain":
             limit = 1
             hit = bool(unique_chain)
+            shown = limit
+        elif metric in ("light_verb_nominalization", "wordiness_bloat",
+                        "zh_de_stack", "zh_postposed_condition",
+                        "zh_due_to_make"):
+            limit = 1
+            hit = value >= limit
             shown = limit
         elif metric in ("heading_too_long", "heading_malformed",
                         "term_first_in_heading", "heading_echo",
@@ -2336,6 +2674,11 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("term_first_in_heading", "TERM_FIRST_IN_HEADING", ">="),
         ("term_variant", "TERM_VARIANT", ">="),
         ("term_unregistered", "TERM_UNREGISTERED", "提示"),
+        ("light_verb_nominalization", "LIGHT_VERB_NOMINALIZATION", ">="),
+        ("wordiness_bloat", "WORDINESS_BLOAT", ">="),
+        ("zh_de_stack", "ZH_DE_STACK", ">="),
+        ("zh_postposed_condition", "ZH_POSTPOSED_CONDITION", ">="),
+        ("zh_due_to_make", "ZH_DUE_TO_MAKE", ">="),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
@@ -2373,6 +2716,13 @@ def render_human(result: StyleResult, project: Path) -> str:
                 result.thresholds["justify_chain_min_paragraphs"])
         elif key == "term_unregistered":
             threshold = "提示"
+        elif key == "zh_de_stack":
+            threshold = "de>=%d/<=%d字" % (
+                result.thresholds["zh_de_stack_min_de"],
+                result.thresholds["zh_de_stack_max_chars"])
+        elif key in ("light_verb_nominalization", "wordiness_bloat",
+                     "zh_postposed_condition", "zh_due_to_make"):
+            threshold = ">=1"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost"):
             threshold = ">=1"

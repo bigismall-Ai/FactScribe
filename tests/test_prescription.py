@@ -38,11 +38,13 @@ from factscribe.style import CODE_OF  # noqa: E402
 # 既有判据码：每条都必须能被 `--for` 查到。
 FIVE_CODES = ["HEADING_ECHO", "HEADING_MALFORMED", "TERM_FIRST_IN_HEADING",
               "DASH_PARENTHETICAL", "HEADING_SUBJECT_LOST",
-              "EXPLAINER_DENSITY", "JUSTIFY_CHAIN"]
+              "EXPLAINER_DENSITY", "JUSTIFY_CHAIN",
+              "LIGHT_VERB_NOMINALIZATION", "ZH_DE_STACK"]
 
 ALL_NAMES = ["heading-shorten", "term-first-sentence", "dash-rewrite",
              "heading-malformed", "heading-subject-keep",
-             "section-completeness", "drop-the-proof"]
+             "section-completeness", "drop-the-proof",
+             "unbury-the-verb", "cut-the-de"]
 
 PROJECT_TOML = """[project]
 title = "处方层隔离测试"
@@ -116,7 +118,7 @@ class TestListAndShape(unittest.TestCase):
 
     def test_every_prescription_has_all_six_sections(self):
         prescriptions = load_prescriptions()
-        self.assertEqual(len(prescriptions), 7)
+        self.assertEqual(len(prescriptions), 9)
         for name, p in prescriptions.items():
             with self.subTest(name=name):
                 self.assertEqual(set(p.fields), set(SECTION_KEYS))

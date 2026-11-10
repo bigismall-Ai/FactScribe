@@ -56,6 +56,22 @@ sentence_length_extreme_zh = 110
 rhythm_plateau_run = 3
 rhythm_plateau_window = 10
 
+# ---- 批 102 句法级判据（全部按条计，>= 1 触发；无密度闸）----
+# 英文轻动词＋名义化：make a distinction / perform an analysis。
+# 单位＝条，不做每千词密度（低频高信）。
+light_verb_nominalization = 1
+# 英文膨胀短语：due to the fact that 等固定说法，逐处给直接替代。
+wordiness_bloat = 1
+# 中文后置条件从句：……，如果/若 B。（语序级，出现即异常）。
+zh_postposed_condition = 1
+# 中文「由于/因为 X，使得 Y」：介词短语作主语，全句缺主（语法错）。
+zh_due_to_make = 1
+# 中文单句式「的」堆叠：一句内 >= 4 个「的」且汉字 <= 30 才报。
+# 上界挡掉正常学术复句；不做全文密度（四份语料差 4 倍，不可移植）。
+zh_de_stack = 1
+zh_de_stack_min_de = 4
+zh_de_stack_max_chars = 30
+
 # ---- v4 新增（SPEC-V3.0 §13）----
 # 插入语破折号（—— / —）预算：出现数 > 预算才报；按处报，默认 0
 dash_budget = 0
@@ -112,11 +128,16 @@ chinese = ["首先", "其次", "此外", "综上所述", "总而言之"]
 # 空泛形容词：不承载可核验信息
 english = ["crucial", "robust", "comprehensive", "significant",
            "essential", "vital"]
-chinese = ["至关重要", "显著", "全面", "深入"]
-# 这些搭配里形容词是术语的一部分，不算空泛（避免误伤）
+# 批 102 A6：移除「显著」——统计写作里「显著」是术语，不是空泛标签；
+# 只数「的」「大小」这类无法核验的形容词。原先收在表里是 bug。
+chinese = ["至关重要", "全面", "深入"]
+# 这些搭配里形容词是术语的一部分，不算空泛（避免误伤）。
+# 批 102：补中文统计短语；即使将来词表重新收入「显著」，这些搭配也豁免。
 exempt_phrases = ["statistically significant", "robust standard error",
                   "robust to", "more robust", "less robust",
-                  "significant at the"]
+                  "significant at the",
+                  "统计显著", "显著差异", "显著性", "显著水平",
+                  "显著优于", "显著低于", "显著提高", "不显著"]
 
 [paragraph_closers]
 # 段末套话收尾词（看最后一句的句首）
@@ -157,3 +178,109 @@ stopwords = ["the", "a", "an", "this", "that", "these", "those",
              "而且", "这", "那", "我们", "它", "其", "在", "对",
              "从", "当", "为了", "通过", "由", "被", "把", "让",
              "使", "一个", "一种", "本文", "本节", "每一", "每"]
+
+# ---- 批 102 句法级判据词表 ----
+
+[light_verbs]
+# LIGHT_VERB_NOMINALIZATION 甲组：高精度，可直接跟名义化名词（可无冠词）。
+# 这些动词出现在名义化名词前时，动作几乎总在名词里。
+english = ["perform", "performs", "performed", "performing",
+           "conduct", "conducts", "conducted", "conducting",
+           "carry out", "carries out", "carried out", "carrying out",
+           "undertake", "undertakes", "undertook", "undertaking",
+           "provide", "provides", "provided", "providing",
+           "offer", "offers", "offered", "offering"]
+# 乙组：低精度，只认「a/an＋名词」或复数名词。
+# 排除 "make the section more uniform"（宾语补足语）与
+# "take the decision away"（短语动词）这类非名义化用法。
+article_verbs = ["make", "makes", "made", "making",
+                 "give", "gives", "gave", "giving",
+                 "take", "takes", "took", "taking",
+                 "have", "has", "had", "having",
+                 "do", "does", "did", "doing",
+                 "reach", "reaches", "reached", "reaching",
+                 "achieve", "achieves", "achieved", "achieving",
+                 "establish", "establishes", "established", "establishing"]
+# 名义化后缀；不含裸 -al（several / partial / beneficial 会误命中）。
+suffixes = ["tion", "sion", "ment", "ance", "ence", "ity", "ness", "sis"]
+# 正常搭配，不报。
+exempt_phrases = ["have a chance", "provide a basis", "have a role",
+                  "take a look", "give a view", "make a difference"]
+# 「动作其实是什么」：常见名义化 → 动词（查表优先；查不到给通用提示）。
+[light_verbs.actions]
+distinction = "distinguish"
+analysis = "analyze"
+decision = "decide"
+explanation = "explain"
+evaluation = "evaluate"
+assessment = "assess"
+implementation = "implement"
+measurement = "measure"
+observation = "observe"
+description = "describe"
+discussion = "discuss"
+conclusion = "conclude"
+assumption = "assume"
+comparison = "compare"
+definition = "define"
+application = "apply"
+performance = "perform"
+improvement = "improve"
+requirement = "require"
+statement = "state"
+treatment = "treat"
+judgment = "judge"
+agreement = "agree"
+consideration = "consider"
+investigation = "investigate"
+identification = "identify"
+verification = "verify"
+validation = "validate"
+demonstration = "demonstrate"
+estimation = "estimate"
+reduction = "reduce"
+production = "produce"
+introduction = "introduce"
+contribution = "contribute"
+classification = "classify"
+specification = "specify"
+justification = "justify"
+motivation = "motivate"
+transformation = "transform"
+configuration = "configure"
+optimization = "optimize"
+selection = "select"
+detection = "detect"
+collection = "collect"
+inspection = "inspect"
+protection = "protect"
+construction = "construct"
+adoption = "adopt"
+addition = "add"
+allocation = "allocate"
+reliance = "rely"
+appearance = "appear"
+existence = "exist"
+occurrence = "occur"
+preference = "prefer"
+resistance = "resist"
+
+[wordiness]
+# WORDINESS_BLOAT：固定膨胀短语 → 直接替代。只收「删掉/替换不丢信息」
+# 的说法；in order to / in terms of / a number of 属正常学术行文，不进表。
+[wordiness.replacements]
+"due to the fact that" = "because"
+"at this point in time" = "now"
+"in spite of the fact that" = "although"
+"in the event that" = "if"
+"on account of the fact that" = "because"
+
+[zh_postposed_condition]
+# ZH_POSTPOSED_CONDITION：条件标记出现在逗号之后即报。
+# 只锁条件，不锁「因为」——后置追补属正常中文。
+chinese = ["如果", "假如", "倘若", "一旦", "要是", "若"]
+
+[zh_due_to_make]
+# ZH_DUE_TO_MAKE：由于/因为 X，使得/致使/导致 Y。
+chinese = ["由于", "因为"]
+effects = ["使得", "致使", "导致"]

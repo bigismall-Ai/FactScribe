@@ -383,6 +383,7 @@ class TexPathRegressionTest(unittest.TestCase):
         "heading_too_long": 0,
         "hedge_stack": 0,
         "justify_chain": 0,
+        "light_verb_nominalization": 0,
         "paragraph_template": 0.0,
         "repeated_opener": 0,
         "rhythm_plateau": 1,
@@ -391,6 +392,10 @@ class TexPathRegressionTest(unittest.TestCase):
         "term_first_in_heading": 0,
         "term_unregistered": 0,
         "term_variant": 0,
+        "wordiness_bloat": 0,
+        "zh_de_stack": 0,
+        "zh_due_to_make": 0,
+        "zh_postposed_condition": 0,
     }
 
     def test_examples_minimal_unchanged(self):

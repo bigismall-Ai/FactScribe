@@ -205,7 +205,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 }
 ```
 
-## 5. 七条处方
+## 5. 九条处方
 
 | # | 名称 | 治的判据（错误码） | 优先序 | 一句话 |
 |---|---|---|---|---|
@@ -216,6 +216,8 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 | 5 | `heading-subject-keep` | `HEADING_SUBJECT_LOST`、`HEADING_RELATION_CHANGED` | 2 结构完整 | 对比结构改写后，第二个对象必须还在 |
 | 6 | `section-completeness` | `SECTION_INCOMPLETE` | 2 结构完整 | 每节首段交代「本节做什么、结论是什么」 |
 | 7 | `drop-the-proof` | `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN` | 5 文句风格 | 删掉反射式解释，让断言自己站住 |
+| 8 | `unbury-the-verb` | `LIGHT_VERB_NOMINALIZATION` | 5 文句风格 | 把埋进名词的动作挖回动词 |
+| 9 | `cut-the-de` | `ZH_DE_STACK` | 5 文句风格 | 拆掉单句里的「的」链 |
 
 ### 5.1 `heading-shorten`
 
@@ -286,6 +288,47 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 env PYTHONPATH=src python3 -m factscribe prescribe drop-the-proof --json
 ```
 
+### 5.8 `unbury-the-verb`
+
+治「轻动词＋名义化」（`make a distinction`、`perform an analysis`，
+判据见 `SPEC-SYNTAX.md` §1）。必做是先把名词背后的动作找出来
+（distinction → distinguish），再把动作写成动词、把施动者放回主语。
+禁做是**换一个轻动词**（`make a decision` → `take a decision`，动作仍在
+名词里），或者为了去名词删掉宾语与限定。
+
+反例（旧 → 新）：
+
+```
+旧  We make a distinction between the two runtime paths.
+新  We distinguish the two runtime paths.
+```
+
+验收命令：
+
+```bash
+env PYTHONPATH=src python3 -m factscribe prescribe unbury-the-verb --json
+```
+
+### 5.9 `cut-the-de`
+
+治单句「的」链（一句内 ≥4 个「的」且汉字 ≤30，判据见 `SPEC-SYNTAX.md`
+§2）。必做是先找中心词，再把定语改写成动词句或短句：
+`A 的 B 的 C` → `C 由 B 做，B 属于 A`。禁做是**把「的」换成另一个虚词**
+（「之」）硬撑，或者为了少一个「的」删掉定语里的读数与限定。
+
+反例（旧 → 新）：
+
+```
+旧  最后一臂的 5/5 是一个任务的五次运行，而不成功的那些臂是更小的集合。
+新  最后一臂在 5/5 上通过；那是一个任务的五次运行。不成功的臂则是更小的集合。
+```
+
+验收命令：
+
+```bash
+env PYTHONPATH=src python3 -m factscribe prescribe cut-the-de --json
+```
+
 ## 6. 边界与非目标
 
 - 不判断「改得好不好」，不打分、不排名、不给通过率；
@@ -297,7 +340,8 @@ env PYTHONPATH=src python3 -m factscribe prescribe drop-the-proof --json
 ## 7. 验收
 
 - `tests/test_prescription.py` ≥ 10 例，覆盖：清单与六段完整性、按既有
-  错误码可查（含批 99 新增的 `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN`）、
+  错误码可查（含批 99 的 `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN` 与批 102
+  的 `LIGHT_VERB_NOMINALIZATION`、`ZH_DE_STACK`）、
   处方文字不进 `style` findings、`style` 不导入处方模块、
   冲突优先序与「让位」、验收命令可执行、反例与旧→新示例存在。
 - 门禁：

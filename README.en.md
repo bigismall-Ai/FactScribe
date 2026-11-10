@@ -52,7 +52,7 @@ The second gate is the protection surface, meaning the six classes of content th
 python3 -m factscribe protect --before old/ --after new/
 ```
 
-The third gate is the prose gate. It reports only mechanically checkable formulaic writing, across 20 rules. Four of them are rewrite rechecks: `HEADING_ECHO` catches a first sentence that restates its heading, `HEADING_RELATION_CHANGED` catches a swapped contrast word, `HEADING_SUBJECT_LOST` catches a dropped subject from an old heading, and `TERM_VARIANT` catches one term written several ways. The term layer has two lists: 33 paper terms from `paper-zh/GLOSSARY.md`, and 153 workspace process terms from the term registry.
+The third gate is the prose gate. It reports only mechanically checkable formulaic writing, across 25 rules. Four of them are rewrite rechecks: `HEADING_ECHO` catches a first sentence that restates its heading, `HEADING_RELATION_CHANGED` catches a swapped contrast word, `HEADING_SUBJECT_LOST` catches a dropped subject from an old heading, and `TERM_VARIANT` catches one term written several ways. The term layer has two lists: 33 paper terms from `paper-zh/GLOSSARY.md`, and 153 workspace process terms from the term registry.
 
 ## Change record
 
@@ -64,7 +64,7 @@ There is no self-reported change list here. A person can read the result but can
 
 ## Prescription layer
 
-`prescribe` answers a different question: once a rule fires, how should the text actually change? It carries 6 prescriptions. Each one gives a verified fix and records known bad fixes as forbidden moves with counterexamples. When two prescriptions conflict, a fixed priority order decides, and the losing one says so.
+`prescribe` answers a different question: once a rule fires, how should the text actually change? It carries 9 prescriptions. Each one gives a verified fix and records known bad fixes as forbidden moves with counterexamples. When two prescriptions conflict, a fixed priority order decides, and the losing one says so.
 
 This layer adds no criteria and produces no score. It leaves every decision and exit code in `audit`, `style`, and `protect` untouched.
 
@@ -89,7 +89,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 618 tests, fully offline
+python3 -m unittest discover -s tests     # 656 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

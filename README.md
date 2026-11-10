@@ -52,7 +52,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ```
 
-第三道是文风与术语。文风闸只报可机械判定的公式化写法，共 20 条判据，其中 4 条是改写复检：`HEADING_ECHO` 查首句是否复述标题，`HEADING_RELATION_CHANGED` 查标题里的对立关系是否被换掉，`HEADING_SUBJECT_LOST` 查旧标题的主语是否丢失，`TERM_VARIANT` 查同一个术语是否在一篇里换着写法。术语层分两册：论文术语 33 条来自 `paper-zh/GLOSSARY.md`，工作区流程词 153 条来自词册。
+第三道是文风与术语。文风闸只报可机械判定的公式化写法，共 25 条判据，其中 4 条是改写复检：`HEADING_ECHO` 查首句是否复述标题，`HEADING_RELATION_CHANGED` 查标题里的对立关系是否被换掉，`HEADING_SUBJECT_LOST` 查旧标题的主语是否丢失，`TERM_VARIANT` 查同一个术语是否在一篇里换着写法。术语层分两册：论文术语 33 条来自 `paper-zh/GLOSSARY.md`，工作区流程词 153 条来自词册。
 
 ## 改动账
 
@@ -62,7 +62,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 
 ## 处方层
 
-`prescribe` 回答的是另一件事：某条判据被触发后，下一步到底怎么改。先看处方。它带 6 条处方，只给已经验证过的改法，并把已知坏改法写成禁做与反例。处方之间冲突时按固定优先序裁决，被压制的处方会明写让位。
+`prescribe` 回答的是另一件事：某条判据被触发后，下一步到底怎么改。先看处方。它带 9 条处方，只给已经验证过的改法，并把已知坏改法写成禁做与反例。处方之间冲突时按固定优先序裁决，被压制的处方会明写让位。
 
 这一层不进判据，也不产生分数。它不改 `audit`、`style`、`protect` 的任何判定与退出码。
 
@@ -87,7 +87,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 618 例，全离线
+python3 -m unittest discover -s tests     # 656 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

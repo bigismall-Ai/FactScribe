@@ -40,6 +40,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `fonts` | On-demand Fandol font download and local cache: `--status` / `--fetch` |
 | `review` | Rewrite acceptance: protection, re-check, closure in one verdict |
 | `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
+| `fonts` | CJK fonts: `--fetch` caches Fandol locally, `--status` checks completeness |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 

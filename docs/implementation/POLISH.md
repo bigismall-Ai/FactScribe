@@ -203,7 +203,13 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
    3  sections/02_related.tex:7      RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
    4  sections/02_related.tex:11     RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
    5  sections/02_related.tex:16     RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
-   …（其余 7 条同为 `RHYTHM_PLATEAU`）
+   6  sections/02_related.tex:20     RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+   7  sections/04_mechanisms.tex:55  RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+   8  sections/05_eval.tex:16        RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+   9  sections/05_eval.tex:22        RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+  10  sections/05_eval.tex:35        RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+  11  sections/05_eval.tex:39        RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
+  12  sections/07_threats.tex:14     RHYTHM_PLATEAU  无处方：只提示，不许为它改句子  只作参考读数或整篇聚合，不是逐句改法；不许为它改句子。
 ```
 
 `style` 对 `paper-zh` 的 `findings` 是 0（阶段判定已是 `polished`），
@@ -221,8 +227,65 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
 | 工作单 CLI | 9 | 每条 finding 有条目、顺序符合优先序、处方名可在 `prescribe --list` 查到、JSON 键集合稳定、两跑逐字节一致、空单、默认当前目录、缺模式退 2、`--print/--plan` 互斥退 2 |
 
 全量：`env PYTHONPATH=src python3 -m unittest discover -s tests`
-→ **Ran 816 tests ... OK**（基线 791 ＋ 本批 25）。
+→ 干净克隆（只含本批提交）**Ran 796 tests ... OK**（基线 771 ＋ 本批 25）。
+工作区 `--fast` 读数 816，多出的 20 例是批 114 当时未提交的 `test_review.py`，
+不属于本批。
 
 ## 8. 门禁输出
 
-（见下方实测记录。）
+### 8.1 工作区测试（`env PYTHONPATH=src python3 -m unittest discover -s tests`）
+
+```text
+Ran 816 tests in 96.634s
+
+OK
+```
+
+（816 ＝ 基线 771 ＋ 本批 25 ＋ 批 114 工作区里未提交的 review 测试 20。）
+
+### 8.2 `./scripts/preflight-ci.sh`（干净克隆，HEAD 992089e，只含已提交文件）
+
+```text
+== 步骤 1/4：外部依赖（CI 装了 poppler；本机没有则 PDF 测试会红）
+   ✓ pdftotext：/opt/homebrew/bin/pdftotext
+   ✓ pdfinfo：/opt/homebrew/bin/pdfinfo
+   ✓ PDF 工具齐备
+
+== 步骤 2/4：干净克隆（只含已提交文件——夹具缺源文件这里就会暴露）
+   ✓ 克隆到 .../factscribe-ci.IpTLvf/repo（HEAD 992089e）
+
+== 步骤 3/4：测试矩阵（CI 是 3.10 / 3.11 / 3.12）
+   ✓ Python 3.10：Ran 796 tests
+   ✓ Python 3.11：Ran 796 tests
+   ✓ Python 3.12：Ran 796 tests
+
+== 步骤 4/4：验收样例必须 exit 1（workflow 的硬断言）
+   ✓ examples/minimal audit exit=1（红，符合预期）
+
+== 结论
+   本地等价 CI 全绿——可以推。
+```
+
+### 8.3 `./scripts/preflight-ci.sh --fast`（工作区）
+
+```text
+== 步骤 3/4：测试矩阵（CI 是 3.10 / 3.11 / 3.12）
+   ✓ Python 3.10：Ran 816 tests
+   ✓ Python 3.11：Ran 816 tests
+   ✓ Python 3.12：Ran 816 tests
+
+== 步骤 4/4：验收样例必须 exit 1（workflow 的硬断言）
+   ✓ examples/minimal audit exit=1（红，符合预期）
+
+== 结论
+   本地等价 CI 全绿——可以推。
+```
+
+错误码与非处方清单全部机器现算；干净克隆三个 Python 版本读数一致（796），
+验收样例仍按预期 `exit 1`。
+
+## 9. 提交
+
+| 提交 | 内容 |
+|---|---|
+| `992089e` | 本批：`factscribe/polish.py`、`patterns/PLAYBOOK.md`、`cli.py`（只加 polish 注册）、`tests/test_polish.py`、本件 |

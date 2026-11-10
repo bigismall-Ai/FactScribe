@@ -16,6 +16,8 @@ and will not change without a major version bump.
 
 ### Changed
 - `style`: `ZH_DANG_WHEN` now reports only when one paragraph contains at least two `当……的时候/之后/时` occurrences (batch 107). A single occurrence is normal Chinese, and counts do not accumulate across paragraphs. When it fires, every hit in that paragraph is listed with its position.
+- `style`: `RHYTHM_PLATEAU` is informational by default (batch 109). Its reading stays in `metrics.rhythm_plateau` and is listed under `advisories`, but it does not enter `findings`, does not affect the exit code, and does not count as a yellow card; set `rhythm_plateau_level = "yellow"` to restore the old behaviour. `SENTENCE_UNIFORMITY` is the formal rhythm criterion.
+- `tide`: when `--before`, `--after`, and `--snapshot` are all given, closure is judged first and the snapshot is saved only if it closes (batch 109). If it does not close, the command exits 1 and writes neither a snapshot nor a ledger entry. A pure `--snapshot` run now says explicitly that no closure check was performed.
 
 ## [1.3.0] - 2026-11-10
 

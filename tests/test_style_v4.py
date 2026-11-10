@@ -303,8 +303,10 @@ PLATEAU_EXEMPT = (
 
 class TestRhythmPlateau(unittest.TestCase):
     def test_positive(self):
+        # 批 109：默认 info；要黄牌需把 rhythm_plateau_level 设为 yellow。
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, PLATEAU_POS)
+            result = analyze_text(tmp, PLATEAU_POS,
+                                  'rhythm_plateau_level = "yellow"\n')
         self.assertIn("RHYTHM_PLATEAU", codes(result))
 
     def test_negative_length_break(self):

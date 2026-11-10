@@ -312,6 +312,8 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
                        thresholds=dict(result.thresholds),
                        findings=[f.as_dict() for f in result.findings],
                        info=[f.as_dict() for f in getattr(result, "info", [])],
+                       advisories=[f.as_dict()
+                                   for f in getattr(result, "advisories", [])],
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
@@ -368,6 +370,8 @@ def cmd_style(args) -> int:
                        thresholds=dict(result.thresholds),
                        findings=[f.as_dict() for f in result.findings],
                        info=[f.as_dict() for f in getattr(result, "info", [])],
+                       advisories=[f.as_dict()
+                                   for f in getattr(result, "advisories", [])],
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
@@ -401,26 +405,23 @@ def cmd_protect(args) -> int:
 
 
 def cmd_tide(args) -> int:
-    """三种模式：比对（默认）/ 快照保存（--snapshot）/ 快照恢复（--restore）。"""
+    """四种模式：比对 / 纯存快照 / 先判闭合再存快照 / 快照恢复。"""
     if args.restore:
         return _tide_restore(args)
     if args.into:
         raise ConfigError("--into 只能与 --restore 一起使用")
+    # 批 109：--before/--after/--snapshot 三者同给＝先判闭合，闭合才存快照。
+    if args.before and args.after and args.snapshot:
+        return _tide_compare_and_snapshot(args)
     if args.snapshot or (args.after and not args.before):
         return _tide_snapshot(args)
     return _tide_compare(args)
 
 
-def _tide_compare(args) -> int:
-    if not args.before or not args.after:
-        raise ConfigError("比对模式需要 --before 与 --after")
-    result = run_tide(Path(args.before), Path(args.after),
-                      Path(args.out) if args.out else None,
-                      ignore=args.ignore,
-                      default_ignore=not args.no_default_ignore)
-    code = result.exit_code
-    payload = _payload("tide", "ok" if code == EXIT_OK else "violation", code,
-                       mode="compare", tx=result.tx,
+def _tide_payload(result, mode: str = "compare") -> dict:
+    payload = _payload("tide", "ok" if result.exit_code == EXIT_OK
+                       else "violation", result.exit_code,
+                       mode=mode, tx=result.tx,
                        criteria=result.criteria(),
                        reasons=list(result.reasons),
                        rises=[r.as_dict() for r in result.rises],
@@ -434,8 +435,57 @@ def _tide_compare(args) -> int:
                        ignore=list(result.ignore),
                        events=len(result.rises) + len(result.falls) + 1)
     payload["status"] = result.status      # 事务状态：commit / rollback
-    _emit(payload, render_tide(result), args.json)
+    return payload
+
+
+def _tide_compare(args) -> int:
+    if not args.before or not args.after:
+        raise ConfigError("比对模式需要 --before 与 --after")
+    result = run_tide(Path(args.before), Path(args.after),
+                      Path(args.out) if args.out else None,
+                      ignore=args.ignore,
+                      default_ignore=not args.no_default_ignore)
+    code = result.exit_code
+    _emit(_tide_payload(result), render_tide(result), args.json)
     return code
+
+
+def _tide_compare_and_snapshot(args) -> int:
+    """批 109：先判闭合，闭合才存快照；不闭合整次失败，不落快照。"""
+    if not args.before or not args.after:
+        raise ConfigError("闭合＋快照模式需要 --before 与 --after")
+    result = run_tide(Path(args.before), Path(args.after),
+                      Path(args.out) if args.out else None,
+                      ignore=args.ignore,
+                      default_ignore=not args.no_default_ignore)
+    if not result.closed:
+        payload = _tide_payload(result, mode="compare-snapshot")
+        payload["snapshot_saved"] = False
+        payload["snapshot"] = None
+        human = (render_tide(result)
+                 + "\n未保存快照：闭合判定未通过（不落快照、不落账）。")
+        _emit(payload, human, args.json)
+        return EXIT_RED
+
+    snap = save_snapshot(Path(args.after),
+                         Path(args.snapshot) if args.snapshot else None,
+                         ignore=args.ignore,
+                         default_ignore=not args.no_default_ignore)
+    payload = _tide_payload(result, mode="compare-snapshot")
+    payload.update({
+        "snapshot_saved": True,
+        "snapshot_id": snap.snapshot_id,
+        "snapshot": snap.short,
+        "files": snap.files,
+        "bytes": snap.bytes,
+        "blobs_new": snap.blobs_new,
+        "blobs_shared": snap.blobs_shared,
+        "store": str(snap.store),
+        "manifest": str(snap.manifest_path),
+    })
+    human = render_tide(result) + "\n" + render_tide_snapshot(snap)
+    _emit(payload, human, args.json)
+    return EXIT_OK
 
 
 def _tide_snapshot(args) -> int:
@@ -454,8 +504,13 @@ def _tide_snapshot(args) -> int:
                        store=str(result.store),
                        manifest=str(result.manifest_path),
                        ignored=list(result.ignored),
-                       ignore=list(result.ignore))
-    _emit(payload, render_tide_snapshot(result), args.json)
+                       ignore=list(result.ignore),
+                       closure_checked=False,
+                       notice="未做闭合判定（未给 --before；纯存快照）")
+    human = render_tide_snapshot(result)
+    if not args.before:
+        human += "\n说明：未给 --before，本趟是纯存快照，未做闭合判定。"
+    _emit(payload, human, args.json)
     return EXIT_OK
 
 

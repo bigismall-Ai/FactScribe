@@ -52,6 +52,11 @@ DEFAULT_RULES: dict = {
     # TERM_UNREGISTERED 默认关闭；只由 `style --report-unregistered` 显式打开。
     # 打开时只查标题，结果单独走 info 通道，不进 findings、不影响退出码。
     "term_unregistered": False,
+    # 批 109：RHYTHM_PLATEAU 默认只作参考读数（info）。10 词分桶会把「长度
+    # 接近」误当成「节奏平台」，且它与 SENTENCE_UNIFORMITY（句长 CV）测的是
+    # 同一件事。节奏的正式判据是 SENTENCE_UNIFORMITY；把本项设为 "yellow"
+    # 可恢复旧的黄牌行为。
+    "rhythm_plateau_level": "info",
     # 批 105（B5）：ABBREV_FIRST_USE 默认关闭。四份语料里专名与通用缩写
     # 混在一起，判「该不该展开」仍需人看；只由 `--report-abbrev` 打开。
     "abbrev_first_use": False,
@@ -807,6 +812,7 @@ class StyleResult:
     rules_path: str = ""
     stage_assessment: dict = field(default_factory=dict)
     info: list = field(default_factory=list)
+    advisories: list = field(default_factory=list)
     metric_details: dict = field(default_factory=dict)
 
     @property
@@ -819,6 +825,7 @@ class StyleResult:
             "thresholds": dict(self.thresholds),
             "findings": [f.as_dict() for f in self.findings],
             "info": [f.as_dict() for f in self.info],
+            "advisories": [f.as_dict() for f in self.advisories],
             "paragraphs": [p.as_dict() for p in self.paragraphs],
             "fired": self.fired,
             "summary": self.summary,
@@ -1790,6 +1797,7 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
                        summary=summary, rules_path=after.rules_path,
                        stage_assessment=after.stage_assessment,
                        info=list(after.info),
+                       advisories=list(after.advisories),
                        metric_details=dict(after.metric_details))
 
 
@@ -2390,6 +2398,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     limits = _limits(rules)
     min_units = limits["min_paragraph_units"]
     cap = limits["max_findings_per_metric"]
+    rhythm_level = str(rules.get("rhythm_plateau_level", "info")).strip().lower()
+    if rhythm_level not in ("info", "yellow"):
+        raise ConfigError("rhythm_plateau_level 只能是 \"info\" 或 \"yellow\"：%r"
+                          % rules.get("rhythm_plateau_level"))
+    rhythm_yellow = rhythm_level == "yellow"
 
     connective_re = _phrase_regex(_words(rules, "connectives"))
     connective_cn = _cn_words(rules, "connectives")
@@ -2477,6 +2490,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "nominalization_stripped": nom_stripped,
         "abbrev_first_use_enabled": abbrev_enabled,
         "zh_aspect_zhe_raw_hits": zhe_hits,
+        "rhythm_plateau_level": rhythm_level,
     }
 
     # ---- 1. 套话连接词 ----
@@ -2952,7 +2966,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric == "rhythm_plateau":
             limit = int(thresholds["rhythm_plateau_run"])
-            hit = plateau_hits >= 1
+            hit = rhythm_yellow and plateau_hits >= 1
             shown = limit
         elif metric in ("hedge_stack", "repeated_opener"):
             limit = thresholds[metric]
@@ -3043,6 +3057,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                                  f.file, f.line))
     info = sorted(instances.get("TERM_UNREGISTERED", []),
                   key=lambda f: (f.file, f.line, f.text))
+    # 批 109：RHYTHM_PLATEAU 在 info 档只做参考读数，不进 findings。
+    advisories = []
+    if not rhythm_yellow:
+        advisories = sorted(instances.get("RHYTHM_PLATEAU", []),
+                            key=lambda f: (f.file, f.line, f.text))
 
     paragraphs = sorted(paragraph_infos.values(), key=lambda p: (p.file, p.line))
     stage = assess_stage(len(fired), raw_cv, fired)
@@ -3061,7 +3080,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                        findings=findings, paragraphs=paragraphs,
                        instances=instances, summary=summary,
                        rules_path=rules_path, stage_assessment=stage,
-                       info=info, metric_details=metric_details)
+                       info=info, advisories=advisories,
+                       metric_details=metric_details)
 
 
 # --------------------------------------------------------------------------
@@ -3083,7 +3103,8 @@ def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
 
     head = ("下列均为黄牌提示，只改措辞，不改事实、数字、引用；"
             "不得删数字、不得删引用、不得整段删除。优先保留原有结构与修辞，"
-            "禁止整段拆短；只在 RHYTHM_PLATEAU 处调节奏。逐条处理后重新提交。")
+            "禁止整段拆短；节奏只在 SENTENCE_UNIFORMITY 命中处调整"
+            "（RHYTHM_PLATEAU 仅作参考）。逐条处理后重新提交。")
     items = []
     # 先每个指标取一条，保证覆盖面，再补其余
     seen = set()
@@ -3224,6 +3245,9 @@ def render_human(result: StyleResult, project: Path) -> str:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]
         status = "触发" if label in fired_codes else "ok"
+        if key == "rhythm_plateau" and not result.metric_details.get(
+                "rhythm_plateau_level") == "yellow":
+            status = "参考"
         if (key == "abbrev_first_use"
                 and not result.metric_details.get("abbrev_first_use_enabled")):
             status = "关"
@@ -3256,6 +3280,14 @@ def render_human(result: StyleResult, project: Path) -> str:
         lines.append("[信息] %d 条未登记术语提示（不计数、不影响退出码）"
                      % len(info))
         for idx, f in enumerate(info, 1):
+            lines.append(" %2d. %-22s %s:%d  %s"
+                         % (idx, f.code, f.file, f.line, _clip(f.text, 80)))
+    advisories = getattr(result, "advisories", [])
+    if advisories:
+        lines.append("")
+        lines.append("[参考] %d 条节奏平台读数（info：不计数、不影响退出码；"
+                     "节奏的正式判据是 SENTENCE_UNIFORMITY）" % len(advisories))
+        for idx, f in enumerate(advisories, 1):
             lines.append(" %2d. %-22s %s:%d  %s"
                          % (idx, f.code, f.file, f.line, _clip(f.text, 80)))
     flagged = [p for p in result.paragraphs if p.flags]

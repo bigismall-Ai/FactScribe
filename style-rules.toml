@@ -21,6 +21,11 @@ term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 # 打开时只查标题，结果单独走 info 通道：不进 findings 计数、不影响退出码。
 term_unregistered = false
 
+# 批 109：RHYTHM_PLATEAU 默认降级为参考读数（info）——10 词分桶会把「长度
+# 接近」误判成「节奏平台」，且它与 SENTENCE_UNIFORMITY（句长 CV）测的是同一
+# 件事。节奏的正式判据是 SENTENCE_UNIFORMITY。设 "yellow" 恢复旧黄牌行为。
+rhythm_plateau_level = "info"
+
 # ABBREV_FIRST_USE 默认关闭（批 105 B5）：四份语料里专名与通用缩写混在
 # 一起，「该不该展开」仍需人判断。只由 `style --report-abbrev` 打开；
 # 打开后进 findings。改 true 即常开（不建议，见 docs/implementation/SYNTAX-B.md）。

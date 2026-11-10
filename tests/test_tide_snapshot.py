@@ -385,6 +385,82 @@ class TestRestoreMode(SnapshotCase):
         self.assertEqual(proc.returncode, 2, proc.stdout)
 
 
+class TestCombinedClosureSnapshot(unittest.TestCase):
+    """批 109：--before/--after/--snapshot 同给＝先判闭合，闭合才存快照。"""
+
+    MAIN = ("\\documentclass{article}\n"
+            "\\begin{document}\n"
+            "The run uses 53 tokens.\n"
+            "\\end{document}\n")
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp(prefix="tide-combined-"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.before = make_tree(self.tmp / "before",
+                                {"main.tex": self.MAIN})
+        self.after = make_tree(self.tmp / "after",
+                               {"main.tex": self.MAIN})
+        self.store = self.tmp / "store"
+        self.ledger = self.after / "audit" / "tide-events.ndjson"
+
+    def combined(self, *extra: str):
+        return run(["tide", "--before", str(self.before),
+                    "--after", str(self.after),
+                    "--snapshot", str(self.store), *extra])
+
+    def write_after(self, text: str) -> None:
+        (self.after / "main.tex").write_text(text, encoding="utf-8")
+
+    def snapshots(self) -> list[Path]:
+        snapdir = self.store / "snapshots"
+        return sorted(snapdir.iterdir()) if snapdir.is_dir() else []
+
+    def test_closed_change_commits_and_saves_snapshot(self):
+        self.write_after(self.MAIN.replace("tokens.", "tokens!"))
+        proc = self.combined("--json")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["mode"], "compare-snapshot")
+        self.assertEqual(payload["status"], "commit")
+        self.assertTrue(payload["snapshot_saved"])
+        self.assertEqual(len(self.snapshots()), 1)
+        self.assertEqual(self.snapshots()[0].name, payload["snapshot_id"])
+        self.assertTrue(self.ledger.is_file())
+
+    def test_no_change_still_commits_and_saves_snapshot(self):
+        proc = self.combined("--json")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "commit")
+        self.assertTrue(payload["snapshot_saved"])
+        self.assertEqual(len(self.snapshots()), 1)
+
+    def test_unclosed_does_not_save_snapshot_or_ledger(self):
+        self.write_after(self.MAIN.replace("53", "54"))
+        proc = self.combined("--json")
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "rollback")
+        self.assertFalse(payload["snapshot_saved"])
+        self.assertIsNone(payload["snapshot"])
+        self.assertEqual(self.snapshots(), [])
+        self.assertFalse(self.ledger.exists())
+
+    def test_pure_snapshot_says_no_closure_check(self):
+        proc = run(["tide", "--after", str(self.after),
+                    "--snapshot", str(self.store), "--json"])
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["mode"], "snapshot")
+        self.assertFalse(payload["closure_checked"])
+        self.assertIn("未做闭合判定", payload["notice"])
+        human = run(["tide", "--after", str(self.after),
+                     "--snapshot", str(self.store)])
+        self.assertEqual(human.returncode, 0, human.stdout + human.stderr)
+        self.assertIn("未做闭合判定", human.stdout)
+        self.assertEqual(len(self.snapshots()), 1)
+
+
 class TestUsage(SnapshotCase):
     def test_usage_errors(self) -> None:
         make_tree(self.src, {"a.txt": "aaa"})

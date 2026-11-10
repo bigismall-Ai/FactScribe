@@ -229,18 +229,21 @@ python3 -m factscribe tide --before <旧> --after <新> --snapshot <库目录>
 python3 -m factscribe tide --restore <快照ID> --into <目录> --snapshot <库目录>
 ```
 
-| 参数 | 保存 | 恢复 | 语义 |
-|---|---|---|---|
-| `--snapshot` | 选 | 选 | 库根；缺省 `./.tide` |
-| `--after` | 必 | 禁 | 要快照的目录（改后状态，必须存在且是目录） |
-| `--before` | 可 | 禁 | 只为与比对形共用命令行，**不参与快照**（快照只描述改后目录） |
-| `--restore` | 禁 | 必 | 快照ID（全宽 64 位，或它的任意长度前缀；前缀必须唯一命中） |
-| `--into` | 禁 | 必 | 还原目标目录（不存在则创建） |
-| `--ignore` / `--no-default-ignore` | 选 | 禁 | 与比对同一套忽略表，作用在保存侧 |
-| `--json` | 选 | 选 | stdout 只出 JSON |
+| 参数 | 保存 | 闭合＋保存 | 恢复 | 语义 |
+|---|---|---|---|---|
+| `--snapshot` | 选 | 必 | 选 | 库根；缺省 `./.tide` |
+| `--after` | 必 | 必 | 禁 | 要快照的目录（改后状态，必须存在且是目录） |
+| `--before` | 禁 | 必 | 禁 | 闭合模式的改前目录；**给定时先判闭合，闭合才存快照** |
+| `--restore` | 禁 | 禁 | 必 | 快照ID（全宽 64 位，或它的任意长度前缀；前缀必须唯一命中） |
+| `--into` | 禁 | 禁 | 必 | 还原目标目录（不存在则创建） |
+| `--ignore` / `--no-default-ignore` | 选 | 选 | 禁 | 与比对同一套忽略表，作用在保存侧 |
+| `--json` | 选 | 选 | 选 | stdout 只出 JSON |
 
-模式判定：给了 `--restore` 即恢复模式；否则给了 `--snapshot`（或只给 `--after`
-没给 `--before`）即保存模式，库根缺省 `./.tide`；`--before` 与 `--after` 都给则是
+模式判定（批 109 修订）：给了 `--restore` 即恢复模式；否则 `--before`、
+`--after`、`--snapshot` **三者同给**＝闭合＋保存模式——先按 §7 判闭合，闭合才
+保存快照；不闭合则整次失败（退出码 1），不落快照、不落账。只给 `--snapshot`
+（或只给 `--after` 没给 `--before`）＝纯存快照模式，库根缺省 `./.tide`，输出
+明确写「未做闭合判定」。`--before` 与 `--after` 都给且没有 `--snapshot` 则是
 原有的比对模式。恢复模式里再给 `--before` / `--after` 即 `CONFIG_INVALID`。
 
 ### 12.2 存储布局（确定性）
@@ -268,7 +271,10 @@ python3 -m factscribe tide --restore <快照ID> --into <目录> --snapshot <库�
 3. 按路径排序拼出 `manifest.tsv` 字节 → 取其 sha256 作为快照ID；
 4. 写 `<库根>/snapshots/<快照ID>/manifest.tsv`。
 
-保存不读 `--before`，也不产生任何「改了什么」的判断——快照是纯内容副本。
+纯存快照模式不读 `--before`，也不产生任何「改了什么」的判断——快照是纯内容副本。
+**批 109 起**：`--before`、`--after`、`--snapshot` 三者同给时，先按 §7 判闭合；
+闭合才执行上述保存步骤，不闭合则整次失败（退出码 1），库目录不新增任何文件。
+快照本身仍只描述 `--after` 目录实况。
 
 ### 12.4 恢复（失败关闭）
 
@@ -292,7 +298,13 @@ ID 前缀歧义、清单格式坏）＝ `CONFIG_INVALID`，退出码 2。
 
 保存人读输出含快照ID（16 位）、文件数、字节数、新增/复用 blob 数；`--json` 含
 `mode="snapshot"`、`snapshot_id`（全宽）、`snapshot`（前 16 位）、`files`（文件数）、
-`bytes`、`blobs_new`、`blobs_shared`、`store`、`manifest`。
+`bytes`、`blobs_new`、`blobs_shared`、`store`、`manifest`；纯存快照另给
+`closure_checked=false` 与 `notice`（明说未做闭合判定）。
+
+闭合＋保存模式（批 109）：`mode="compare-snapshot"`，同时含比对面（`status`、
+`criteria`、`rises`、`falls`、`affect`、`reasons`、`ledger` 等）与快照面；
+闭合成功时 `snapshot_saved=true` 并带 `snapshot_id` 等字段，不闭合时
+`snapshot_saved=false`、`snapshot=null`，退出码 1，库目录不新增。
 
 恢复 `--json` 含 `mode="restore"`、`snapshot_id`、`snapshot`、`files`、`bytes`、
 `verified`、`ok`、`reasons`、`into`、`store`。

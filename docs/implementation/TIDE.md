@@ -271,3 +271,38 @@ $ ./scripts/preflight-ci.sh --fast
 
 > 读数说明：708 是当次全套例数（本批 26 例 + 并行批新增），随仓内其它批变动而变；
 > 本批自己的准数是 `test_tide_snapshot.py` 的 26 例。
+
+## 10. 闭合与快照的关系（批 109）
+
+**问题**：`tide --before <旧> --after <新> --snapshot <库>` 落到保存模式后
+`--before` 被静默忽略：只存了快照，没有做闭合判定，也没有任何提示。
+
+**新语义**（SPEC-TIDE §12.1 / §12.3 / §12.5）：
+
+| 参数组合 | 行为 |
+|---|---|
+| `--before` ＋ `--after` ＋ `--snapshot` | 先按 §7 判闭合；闭合才存快照，不闭合整次失败（exit 1），不落快照、不落账 |
+| 只给 `--snapshot`（或只有 `--after`） | 纯存快照，输出明说「未做闭合判定」；`--json` 带 `closure_checked=false` 与 `notice` |
+| `--before` ＋ `--after`（无 `--snapshot`） | 原比对模式不变 |
+
+闭合成功时 `--json` 的 `mode="compare-snapshot"`，同时给比对面与快照面
+（`snapshot_saved=true`、`snapshot_id` 等）；不闭合时 `snapshot_saved=false`、
+`snapshot=null`，库目录不新增。
+
+**验收（`paperkit-dev/` 下跑）**：
+
+```text
+$ cp -R ../paper-b /tmp/tidesnap2
+$ python3 -m factscribe tide --before ../paper-b --after /tmp/tidesnap2 --snapshot /tmp/tidelib2
+事务：66fc7a53a6171739    状态：commit
+涨：0   落：0   波及面：0   事件：1
+判定：paired ✓   hash_ok ✓   pass_all ✓
+== factscribe tide 快照 ==
+快照ID：92aef8d6383ce5de（全宽 92aef8…9a70e2）
+文件：26   字节：167022
+EXIT=0
+```
+
+测试：`tests/test_tide_snapshot.py` 新增 4 例——闭合＋改动（commit 且出快照）、
+无改动（仍 commit 且出快照）、不闭合（exit 1，库目录零新增、账本不落）、
+纯存快照（明说未做闭合判定）。

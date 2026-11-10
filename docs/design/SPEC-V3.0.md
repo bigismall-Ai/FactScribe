@@ -1501,8 +1501,9 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 ## 13. 文风规则 v4（批 82 增补）
 
 > 本节只约束 `factscribe style` 子命令。**不改 `audit` 的判据与退出码**：文风闸
-> 始终只出黄牌（exit 3），永不返回 1。阈值与词表全部来自 `style-rules.toml`，
-> 改文件即改判定；本节与仓根 `style-rules.toml` 同表。
+> 正式判据只出黄牌（exit 3），永不返回 1；参考读数（如默认档的
+> `RHYTHM_PLATEAU`）单独列出，不计数、不影响退出码。阈值、档位与词表全部来自
+> `style-rules.toml`，改文件即改判定；本节与仓根 `style-rules.toml` 同表。
 
 ### 13.0 共同输入与输出
 
@@ -1564,14 +1565,28 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 | 漏报边界 | 标题术语与首句用同义词替换时不报；属启发式接受 |
 | 对应码 | `TERM_FIRST_IN_HEADING` |
 
-### 13.5 `RHYTHM_PLATEAU`（黄，保留）
+### 13.5 `RHYTHM_PLATEAU`（默认 info，参考读数）
+
+> 批 109 起默认降为 **informational**。理由有两条，均来自批 108 端到端试跑的实测：
+>
+> 1. **分桶伪影**：旧判据把句子长度按 10 词（字）分桶，连续 3 句落在同一桶就算
+>    「平台」。中英两节基线共 4 条命中，3 条是这种「长度接近」造成的量化假象；
+>    四份语料剩余命中也几乎全是它（英文 17/17、中文 12/14）。
+> 2. **与正式判据重复**：它与 `SENTENCE_UNIFORMITY`（句长 CV）测的是同一件事，
+>    而后者有明确健康区间 `[0.45, 0.80]`，能区分「太平」与「散」。
+>
+> **节奏的正式判据是 `SENTENCE_UNIFORMITY`**。`RHYTHM_PLATEAU` 保留为参考读数：
+> 读数仍在 `metrics.rhythm_plateau`，条目进 `advisories`（人读输出的 `[参考]`
+> 区），**不进 findings、不影响退出码、不占黄牌数**。把配置项
+> `rhythm_plateau_level` 设为 `"yellow"` 可恢复旧黄牌行为。
 
 | 项 | 判据 |
 |---|---|
 | 输入 | 段内句子长度序列 |
 | 算法 | 同一段连续 ≥N 句长度落在同一 `rhythm_plateau_window` 词区间 |
+| 档位 | `rhythm_plateau_level`：`"info"`（默认，参考读数）／`"yellow"`（旧行为，进 findings） |
 | 阈值 | `thresholds.rhythm_plateau_run` 默认 `3`；`rhythm_plateau_window` 默认 `10` |
-| 误报边界 | 不跨段；短句/长句交界自然打断平台 |
+| 误报边界 | 不跨段；短句/长句交界自然打断平台；**分桶伪影与 CV 重复是本条默认降级的直接原因** |
 | 对应码 | `RHYTHM_PLATEAU` |
 
 ### 13.6 `COLLOQUIAL_TRIAD`（黄，替代旧 `TRIAD_DENSITY`）
@@ -1629,6 +1644,7 @@ run_id 不符、`facts[]` 不含本 fact、反向指针悬空）才统一报 `EV
 | `thresholds.empty_adjective` | 非负数 | `6.0` | `EMPTY_ADJECTIVE` |
 | `thresholds.sentence_length_extreme_en` | 非负数字 | `60` | `SENTENCE_LENGTH_EXTREME` |
 | `thresholds.sentence_length_extreme_zh` | 非负数字 | `110` | `SENTENCE_LENGTH_EXTREME` |
+| `rhythm_plateau_level` | 字符串 | `"info"` | `RHYTHM_PLATEAU`（`"yellow"` 恢复黄牌） |
 | `term_allow_files` | 字符串数组 | `["GLOSSARY.md", "term-allow.txt"]` | `TERM_FIRST_IN_HEADING` |
 
 `thresholds` 里出现未知键不报错（向前兼容）；已知键必须是数字且非负，否则

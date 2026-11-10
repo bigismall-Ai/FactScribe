@@ -412,8 +412,10 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(result.metrics["sentence_length_extreme"], 0)
 
     def test_rhythm_plateau_positive(self):
+        # 批 109：默认 info 只作参考；旧黄牌行为由配置恢复。
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, PLATEAU_POS)
+            result = analyze_text(tmp, PLATEAU_POS,
+                                  'rhythm_plateau_level = "yellow"\n')
         self.assertIn("RHYTHM_PLATEAU", codes(result))
         self.assertEqual(result.metrics["rhythm_plateau"], 1)
         hit = next(f for f in result.findings if f.code == "RHYTHM_PLATEAU")

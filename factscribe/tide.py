@@ -16,8 +16,10 @@ import difflib
 import fnmatch
 import hashlib
 import json
+import os
 import posixpath
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -605,3 +607,309 @@ def run_tide(before: Path | str, after: Path | str,
             view_path.write_text(render_ledger(result), encoding="utf-8")
             result.view_written = True
     return result
+
+
+# --------------------------------------------------------------------------
+# 快照与回滚（批 106，SPEC-TIDE §12）
+# --------------------------------------------------------------------------
+# 快照是纯内容副本：blobs/ 按内容寻址，snapshots/<ID>/manifest.tsv 是唯一清单，
+# 快照ID＝清单字节的 sha256。恢复先全校验再动笔；任何一处不符即零写入。
+
+SNAPSHOTS_DIR = "snapshots"
+BLOBS_DIR = "blobs"
+MANIFEST_NAME = "manifest.tsv"
+DEFAULT_SNAPSHOT_ROOT = ".tide"
+
+_ID_RE = re.compile(r"^[0-9a-f]{4,64}$")
+_SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+@dataclass
+class SnapshotEntry:
+    path: str
+    sha256: str
+    size: int
+
+
+@dataclass
+class SnapshotResult:
+    store: Path
+    source: Path
+    snapshot_id: str
+    files: int
+    bytes: int
+    blobs_new: int
+    blobs_shared: int
+    ignored: list[str]
+    manifest_path: Path
+    ignore: tuple[str, ...] = ()
+
+    @property
+    def short(self) -> str:
+        return self.snapshot_id[:16]
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_OK
+
+
+@dataclass
+class RestoreResult:
+    store: Path
+    into: Path
+    snapshot_id: str
+    files: int
+    bytes: int
+    verified: int = 0
+    written: int = 0
+    reasons: list[str] = field(default_factory=list)
+
+    @property
+    def short(self) -> str:
+        return self.snapshot_id[:16]
+
+    @property
+    def ok(self) -> bool:
+        return not self.reasons
+
+    @property
+    def exit_code(self) -> int:
+        return EXIT_OK if self.ok else EXIT_RED
+
+
+def _check_rel(rel: str, where: str = "路径") -> None:
+    """清单路径必须安全：相对、无 `..`/空段/制表符/换行（清单是裸 TSV）。"""
+    if not rel:
+        raise ConfigError("%s为空" % where)
+    if rel.startswith("/") or "\\" in rel:
+        raise ConfigError("%s不是相对 POSIX 路径：%s" % (where, rel))
+    if any(ch in rel for ch in "\t\r\n"):
+        raise ConfigError("%s含制表符/换行，清单无法表示：%r" % (where, rel))
+    if any(part in ("", ".", "..") for part in rel.split("/")):
+        raise ConfigError("%s含空段或 `..`，拒绝写入库外：%s" % (where, rel))
+
+
+def _render_manifest(entries: list[SnapshotEntry]) -> bytes:
+    return "".join("%s\t%s\t%d\n" % (e.path, e.sha256, e.size)
+                   for e in entries).encode("utf-8")
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """临时文件 + 原子替换：要么旧内容，要么完整新内容，不留半个文件。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tide-part-")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _skip_roots(source: Path, store: Path) -> list[Path]:
+    """库根落在被快照目录内时，整个库跳过（快照不许自吞自己）。"""
+    resolved = store.resolve()
+    try:
+        resolved.relative_to(source.resolve())
+    except ValueError:
+        return []
+    return [resolved]
+
+
+def _snapshot_entries(source: Path, patterns: tuple[str, ...],
+                      store: Path) -> tuple[list[SnapshotEntry], list[str]]:
+    entries: list[SnapshotEntry] = []
+    ignored: list[str] = []
+    skip = _skip_roots(source, store)
+    for p in sorted(source.rglob("*")):
+        if not p.is_file() or p.is_symlink():
+            continue
+        rel = p.relative_to(source).as_posix()
+        if any(part.startswith(".") for part in rel.split("/")):
+            continue
+        resolved = p.resolve()
+        if any(resolved == root or root in resolved.parents for root in skip):
+            continue
+        if _ignored(rel, patterns):
+            ignored.append(rel)
+            continue
+        _check_rel(rel, "源文件相对路径")
+        data = _read_bytes(p, rel)
+        entries.append(SnapshotEntry(rel, _sha256_bytes(data), len(data)))
+    entries.sort(key=lambda e: e.path)
+    return entries, sorted(ignored)
+
+
+def save_snapshot(after: Path | str, store: Path | str | None = None, *,
+                  ignore: list[str] | tuple[str, ...] | None = None,
+                  default_ignore: bool = True) -> SnapshotResult:
+    """为 `after` 目录建快照；返回快照ID（清单字节的 sha256）。"""
+    source = Path(after)
+    if not source.is_dir():
+        raise ConfigError("--after 目录不存在或不是目录：%s" % source)
+    root = Path(store) if store is not None else Path(DEFAULT_SNAPSHOT_ROOT)
+    patterns = (tuple(DEFAULT_IGNORE) if default_ignore else ()) + \
+        tuple(ignore or ())
+
+    entries, ignored = _snapshot_entries(source, patterns, root)
+    manifest = _render_manifest(entries)
+    snapshot_id = _sha256_bytes(manifest)
+
+    blobs_dir = root / BLOBS_DIR
+    new = shared = 0
+    for entry in entries:
+        data = _read_bytes(source / entry.path, entry.path)
+        if _sha256_bytes(data) != entry.sha256:
+            raise ConfigError("快照过程中源文件发生变化：%s" % entry.path)
+        blob = blobs_dir / entry.sha256
+        if blob.is_file() and blob.stat().st_size == entry.size:
+            shared += 1
+            continue
+        _write_atomic(blob, data)
+        new += 1
+
+    manifest_path = root / SNAPSHOTS_DIR / snapshot_id / MANIFEST_NAME
+    _write_atomic(manifest_path, manifest)
+    return SnapshotResult(store=root, source=source, snapshot_id=snapshot_id,
+                          files=len(entries),
+                          bytes=sum(e.size for e in entries),
+                          blobs_new=new, blobs_shared=shared,
+                          ignored=ignored, manifest_path=manifest_path,
+                          ignore=patterns)
+
+
+def _resolve_snapshot(store: Path, snapshot_id: str) -> Path:
+    sid = (snapshot_id or "").strip().lower()
+    if not _ID_RE.match(sid):
+        raise ConfigError("快照ID 不合法（需 4–64 位十六进制）：%r" % snapshot_id)
+    snaps = store / SNAPSHOTS_DIR
+    if not snaps.is_dir():
+        raise ConfigError("快照库不存在：%s" % snaps)
+    hits = sorted(p.name for p in snaps.iterdir()
+                  if p.is_dir() and p.name.startswith(sid))
+    if not hits:
+        raise ConfigError("快照不存在：%s" % snapshot_id)
+    if len(hits) > 1:
+        raise ConfigError("快照ID 前缀不唯一（命中 %d 个）：%s"
+                          % (len(hits), snapshot_id))
+    return snaps / hits[0]
+
+
+def parse_manifest(raw: bytes) -> list[SnapshotEntry]:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError("清单不是 UTF-8：%s" % exc) from exc
+    entries: list[SnapshotEntry] = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        where = "清单第 %d 行" % lineno
+        if not line:
+            raise ConfigError("%s为空行" % where)
+        parts = line.split("\t")
+        if len(parts) != 3:
+            raise ConfigError("%s不是「路径\\t哈希\\t字节数」" % where)
+        rel, digest, size_text = parts
+        _check_rel(rel, where + "路径")
+        if not _SHA_RE.match(digest):
+            raise ConfigError("%s哈希不是 64 位十六进制" % where)
+        if not size_text.isdigit():
+            raise ConfigError("%s字节数不是非负整数" % where)
+        entries.append(SnapshotEntry(rel, digest, int(size_text)))
+    paths = [e.path for e in entries]
+    if paths != sorted(paths):
+        raise ConfigError("清单未按路径升序")
+    if len(set(paths)) != len(paths):
+        raise ConfigError("清单有重复路径")
+    return entries
+
+
+def restore_snapshot(store: Path | str, snapshot_id: str,
+                     into: Path | str) -> RestoreResult:
+    """把快照还原到 `into`：先全校验，任何一处不符即零写入（失败关闭）。"""
+    root = Path(store) if store is not None else Path(DEFAULT_SNAPSHOT_ROOT)
+    target = Path(into)
+    snap = _resolve_snapshot(root, snapshot_id)
+    manifest_path = snap / MANIFEST_NAME
+    if not manifest_path.is_file():
+        raise ConfigError("快照缺清单：%s" % manifest_path)
+
+    raw = manifest_path.read_bytes()
+    result = RestoreResult(store=root, into=target, snapshot_id=snap.name,
+                           files=0, bytes=0)
+
+    # 先验清单完整性：清单字节的 sha256 必须等于目录名（清单被改过即失败，
+    # 不再尝试解释这份清单）。
+    if _sha256_bytes(raw) != snap.name:
+        result.reasons.append("清单哈希与快照ID不符（清单被改过）")
+        return result
+
+    entries = parse_manifest(raw)
+    result.files = len(entries)
+    result.bytes = sum(e.size for e in entries)
+
+    blobs = root / BLOBS_DIR
+    for entry in entries:
+        blob = blobs / entry.sha256
+        if not blob.is_file():
+            result.reasons.append("缺 blob：%s（%s）"
+                                  % (entry.sha256[:16], entry.path))
+            continue
+        data = blob.read_bytes()
+        if len(data) != entry.size:
+            result.reasons.append("长度不符：%s（清单 %d，实际 %d）"
+                                  % (entry.path, entry.size, len(data)))
+            continue
+        if _sha256_bytes(data) != entry.sha256:
+            result.reasons.append("哈希不符：%s（blob 被改过）" % entry.path)
+            continue
+        result.verified += 1
+
+    if result.reasons:
+        return result
+
+    target.mkdir(parents=True, exist_ok=True)
+    for entry in entries:
+        data = (blobs / entry.sha256).read_bytes()
+        path = target.joinpath(*entry.path.split("/"))
+        _write_atomic(path, data)
+        back = path.read_bytes()
+        if len(back) != entry.size or _sha256_bytes(back) != entry.sha256:
+            result.reasons.append("写后复算不符：%s" % entry.path)
+            continue
+        result.written += 1
+    return result
+
+
+def render_snapshot(result: SnapshotResult) -> str:
+    lines = [
+        "== factscribe tide 快照 ==",
+        "快照ID：%s（全宽 %s）" % (result.short, result.snapshot_id),
+        "文件：%d   字节：%d" % (result.files, result.bytes),
+        "blob：新增 %d   复用 %d" % (result.blobs_new, result.blobs_shared),
+        "清单：%s/%s/%s" % (SNAPSHOTS_DIR, result.snapshot_id, MANIFEST_NAME),
+    ]
+    if result.ignored:
+        lines.append("忽略：%d 项（%s）"
+                     % (len(result.ignored), "、".join(result.ignored)))
+    return "\n".join(lines)
+
+
+def render_restore(result: RestoreResult) -> str:
+    lines = [
+        "== factscribe tide 快照还原 ==",
+        "快照ID：%s（全宽 %s）" % (result.short, result.snapshot_id),
+        "文件：%d   字节：%d" % (result.files, result.bytes),
+        "校验：%d/%d 通过" % (result.verified, result.files),
+    ]
+    if result.ok:
+        lines.append("结果：已还原 %d 个文件（写后逐字节复算通过）"
+                     % result.written)
+    else:
+        lines.append("结果：失败关闭，未写任何文件")
+        lines.append("原因：")
+        lines += ["- " + reason for reason in result.reasons]
+    return "\n".join(lines)

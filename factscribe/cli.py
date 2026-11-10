@@ -25,8 +25,11 @@ from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
                     load_style_rules, render_human)
 from .term_suggest import (add_from_tsv, json_payload, render_tsv,
                            suggest)
+from .tide import DEFAULT_SNAPSHOT_ROOT
 from .tide import render_human as render_tide
-from .tide import run_tide
+from .tide import render_restore as render_tide_restore
+from .tide import render_snapshot as render_tide_snapshot
+from .tide import restore_snapshot, run_tide, save_snapshot
 
 # --------------------------------------------------------------------------
 # build
@@ -114,10 +117,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="章节标题变化降为信息（不让它拉黄）")
     sp = sub.add_parser(
         "tide", help="潮汐式改动账：涨/落/波及面/闭合三条件，全成或全退")
-    sp.add_argument("--before", required=True, help="改前目录")
-    sp.add_argument("--after", required=True, help="改后目录")
+    sp.add_argument("--before", default=None, help="改前目录（比对模式必填）")
+    sp.add_argument("--after", default=None,
+                    help="改后目录（比对模式必填；快照模式为要快照的目录）")
     sp.add_argument("--out", default=None,
                     help="事件账本（默认 <after>/audit/tide-events.ndjson）")
+    sp.add_argument("--snapshot", default=None, metavar="STORE",
+                    help="快照库根（默认 ./.tide）；给了即保存模式")
+    sp.add_argument("--restore", default=None, metavar="SNAPSHOT_ID",
+                    help="按快照ID（全宽或任意唯一前缀）恢复，需配 --into")
+    sp.add_argument("--into", default=None, metavar="DIR",
+                    help="恢复目标目录（与 --restore 一起用）")
     sp.add_argument("--ignore", action="append", default=None, metavar="GLOB",
                     help="追加忽略规则（可重复），在默认 LaTeX 构建产物表之上"
                          "；fnmatch 对相对路径匹配")
@@ -384,13 +394,26 @@ def cmd_protect(args) -> int:
 
 
 def cmd_tide(args) -> int:
+    """三种模式：比对（默认）/ 快照保存（--snapshot）/ 快照恢复（--restore）。"""
+    if args.restore:
+        return _tide_restore(args)
+    if args.into:
+        raise ConfigError("--into 只能与 --restore 一起使用")
+    if args.snapshot or (args.after and not args.before):
+        return _tide_snapshot(args)
+    return _tide_compare(args)
+
+
+def _tide_compare(args) -> int:
+    if not args.before or not args.after:
+        raise ConfigError("比对模式需要 --before 与 --after")
     result = run_tide(Path(args.before), Path(args.after),
                       Path(args.out) if args.out else None,
                       ignore=args.ignore,
                       default_ignore=not args.no_default_ignore)
     code = result.exit_code
     payload = _payload("tide", "ok" if code == EXIT_OK else "violation", code,
-                       tx=result.tx,
+                       mode="compare", tx=result.tx,
                        criteria=result.criteria(),
                        reasons=list(result.reasons),
                        rises=[r.as_dict() for r in result.rises],
@@ -405,6 +428,47 @@ def cmd_tide(args) -> int:
                        events=len(result.rises) + len(result.falls) + 1)
     payload["status"] = result.status      # 事务状态：commit / rollback
     _emit(payload, render_tide(result), args.json)
+    return code
+
+
+def _tide_snapshot(args) -> int:
+    if not args.after:
+        raise ConfigError("快照保存需要 --after（要快照的目录）")
+    result = save_snapshot(Path(args.after),
+                           Path(args.snapshot) if args.snapshot else None,
+                           ignore=args.ignore,
+                           default_ignore=not args.no_default_ignore)
+    payload = _payload("tide", "ok", EXIT_OK, mode="snapshot",
+                       snapshot_id=result.snapshot_id,
+                       snapshot=result.short, ok=True,
+                       files=result.files, bytes=result.bytes,
+                       blobs_new=result.blobs_new,
+                       blobs_shared=result.blobs_shared,
+                       store=str(result.store),
+                       manifest=str(result.manifest_path),
+                       ignored=list(result.ignored),
+                       ignore=list(result.ignore))
+    _emit(payload, render_tide_snapshot(result), args.json)
+    return EXIT_OK
+
+
+def _tide_restore(args) -> int:
+    if args.before or args.after:
+        raise ConfigError("--restore 不能与 --before/--after 同时使用")
+    if not args.into:
+        raise ConfigError("快照恢复需要 --into（还原到哪个目录）")
+    result = restore_snapshot(
+        Path(args.snapshot) if args.snapshot else Path(DEFAULT_SNAPSHOT_ROOT),
+        args.restore, Path(args.into))
+    code = result.exit_code
+    payload = _payload("tide", "ok" if code == EXIT_OK else "violation", code,
+                       mode="restore", snapshot_id=result.snapshot_id,
+                       snapshot=result.short, ok=result.ok,
+                       files=result.files, bytes=result.bytes,
+                       verified=result.verified, written=result.written,
+                       reasons=list(result.reasons),
+                       into=str(result.into), store=str(result.store))
+    _emit(payload, render_tide_restore(result), args.json)
     return code
 
 

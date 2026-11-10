@@ -145,3 +145,129 @@ EXIT=0
 非忽略后缀仍入账、`--ignore` 追加、`--no-default-ignore` 回退到 rollback、
 `--no-default-ignore` 保留显式 glob、忽略项不改波及面、忽略项不进保护面发现），
 全套 40 例。
+
+---
+
+## 9. 快照与回滚（批 106）
+
+> 规范：`docs/design/SPEC-TIDE.md` §12。
+> 一句话：**改完存一份快照；回滚＝先全校验再把快照逐字节写回，任何一处不符就一个字节也不写。**
+
+### 9.1 为什么
+
+比对模式只回答「改了什么」，不回答「改坏了怎么退」。原来退回去靠人手备份目录——
+备份是否完整、是否同一版本、混进没混进构建产物，全靠人记。快照把这件事变成
+内容寻址的机械事实：清单＋blob，ID 是清单字节的哈希，恢复前逐条复算。
+
+### 9.2 布局
+
+```text
+<库根>/snapshots/<快照ID>/manifest.tsv   # 相对路径 \t sha256 \t 字节数，按路径升序
+<库根>/blobs/<sha256>                    # 内容寻址，同内容只存一份
+```
+
+- 快照ID＝`manifest.tsv` **字节**的 sha256（64 位全宽）；对外显示前 16 位。
+- 恢复接受全宽或任意唯一前缀（4–64 位十六进制）；前缀命中多个快照即配置错。
+- 清单无时间戳、无绝对路径、无随机数；行尾 `\n`，UTF-8。
+- blob 与清单都走「临时文件 + 原子替换」，不会留下半个文件。
+
+### 9.3 保存
+
+1. 扫 `--after` 目录（普通文件；跳过隐藏路径与符号链接；复用比对侧忽略表）；
+2. 每文件算 sha256 与字节数，拼出按路径升序的清单；
+3. 逐个写 `blobs/<sha256>`：已存在且长度相同即复用（**去重**），否则写；
+4. 清单字节取 sha256 → 快照ID → 写 `snapshots/<ID>/manifest.tsv`。
+
+先写 blob 后写清单：清单存在即代表整份快照可还原；中途失败只会留下无主 blob，
+不会被任何快照引用。库根若落在被快照目录内，扫树时整库跳过（快照不自吞）。
+`--before` 在保存模式下不参与——快照是纯内容副本，不判断「改了什么」。
+
+### 9.4 恢复（失败关闭）
+
+顺序写死，前四步全部通过之前**不创建目标目录、不写任何文件**：
+
+1. 解析快照ID（前缀唯一命中），清单必须存在；
+2. `sha256(清单字节)` 必须等于快照目录名（**清单被改过即失败**）；
+3. 清单逐行校验：三字段、安全相对路径（无开头 `/`、无 `..`、无空段）、
+   64 位小写十六进制哈希、非负整数长度、路径升序且不重复；
+4. 逐条验 blob：存在、长度等于清单、`sha256(blob)` 等于清单；
+5. 全过后才建目录逐文件写（原子替换），写完回读复算 sha256 与长度。
+
+校验失败＝**整份不落**，退出码 1，`--json` 给 `ok=false` 与逐条 `reasons`；
+结构性错误（快照不存在、前缀歧义、清单格式坏）＝`CONFIG_INVALID`，退出码 2。
+`--into` 里不在清单中的文件不动，清单中的文件被覆盖。
+
+### 9.5 读数（真实语料 `../paper`，库根落临时目录）
+
+```text
+$ python3 -m factscribe tide --after ../paper --snapshot /tmp/tide-store
+== factscribe tide 快照 ==
+快照ID：281996f4be561df7（全宽 281996f4…cc9f4a）
+文件：50   字节：328448
+blob：新增 50   复用 0
+清单：snapshots/281996f4…cc9f4a/manifest.tsv
+忽略：5 项（main.aux、main.bbl、main.blg、main.log、main.out）
+EXIT=0
+
+$ python3 -m factscribe tide --restore 281996f4be561df7 --into /tmp/tide-restored --snapshot /tmp/tide-store
+== factscribe tide 快照还原 ==
+快照ID：281996f4be561df7（全宽 281996f4…cc9f4a）
+文件：50   字节：328448
+校验：50/50 通过
+结果：已还原 50 个文件（写后逐字节复算通过）
+EXIT=0
+```
+
+还原后对两棵树做逐文件字节比对（同一忽略表）：50 个文件的键集合与每个文件的字节
+**全部一致**。
+
+改掉其中一个 blob 的字节后再恢复：
+
+```text
+$ python3 -m factscribe tide --restore 281996f4be561df7 --into /tmp/tide-tampered --snapshot /tmp/tide-store
+校验：49/50 通过
+结果：失败关闭，未写任何文件
+原因：
+- 哈希不符：appendix/c_debuglog.tex（blob 被改过）
+EXIT=1
+```
+
+目标目录根本没有被创建——失败关闭不是「删掉写坏的」，而是「验不过就不动笔」。
+
+`--json` 里保存侧有 `mode="snapshot"`、`snapshot_id`（全宽）、`snapshot`（前 16 位）、
+`files`、`bytes`、`blobs_new`、`blobs_shared`；恢复侧有 `mode="restore"`、
+`files`、`verified`、`written`、`ok`、`reasons`。
+
+### 9.6 测试数
+
+`tests/test_tide_snapshot.py`：**26 例**（全离线，走真实 CLI）：
+
+| 组 | 例数 | 要点 |
+|---|---|---|
+| 保存 | 3 | 清单按路径升序且逐条哈希/长度正确；人读输出含 16 位 ID 与文件数；blob 名＝内容哈希 |
+| 往返 | 3 | 文本＋嵌套＋空文件＋二进制一次全比；空文件 sha256＝`e3b0c442…`、长度 0；大二进制逐字节 |
+| 去重 | 2 | 两个相同文件共用一个 blob；第二趟保存 `blobs_new=0` |
+| 确定性 | 2 | 连存两次 ID 与清单字节不变；ID＝清单字节重算的 sha256 |
+| 忽略 | 4 | `.aux/.log/.synctex.gz` 不进清单也不进 blob 库；`--ignore` 追加；库根在源目录内不自吞；缺省库根 `./.tide` 可存可恢复 |
+| JSON | 2 | 保存侧 ID/文件数/字节数；恢复侧 `ok/verified/files` |
+| 失败关闭 | 4 | blob 内容被改、blob 缺失、清单被改（哈希不符）、清单长度被改（ID 同步换名）→ 均退出码 1、目标目录零写入 |
+| 恢复 | 5 | 16 位前缀恢复；不动无关文件；人读读数；未知 ID → 2；前缀歧义 → 2 |
+| 用法 | 1 | 保存缺 `--after`、恢复缺 `--into`、恢复带 `--after`、比对缺 `--after` 均 → 2 |
+
+### 9.7 门禁输出
+
+```text
+$ env PYTHONPATH=src python3 -m unittest discover -s tests
+Ran 708 tests in 38.9s
+OK
+
+$ ./scripts/preflight-ci.sh --fast
+步骤 1/4：外部依赖 ......... ✓ pdftotext / pdfinfo 齐备
+步骤 2/4：干净克隆（--fast：跳过，直接用工作区）
+步骤 3/4：测试矩阵 ......... ✓ 3.10 / 3.11 / 3.12 各 Ran 708 tests
+步骤 4/4：验收样例 ......... ✓ examples/minimal audit exit=1
+本地等价 CI 全绿。
+```
+
+> 读数说明：708 是当次全套例数（本批 26 例 + 并行批新增），随仓内其它批变动而变；
+> 本批自己的准数是 `test_tide_snapshot.py` 的 26 例。

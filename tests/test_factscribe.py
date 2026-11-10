@@ -472,12 +472,12 @@ class TestBuild(unittest.TestCase):
             self.assertEqual(p.returncode, 1)
             self.assertIn("构建失败", p.stdout)
 
-    def test_build_empty_skips(self):
+    def test_build_empty_without_tex_is_config_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(tmp, build="")
             code, data = run_json(["build", str(root), "--json"])
-            self.assertEqual(code, 0)
-            self.assertIn("跳过编译", data["output"])
+            self.assertEqual(code, 2)
+            self.assertIn("main.tex", data["output"])
 
 
 class TestExampleAcceptance(unittest.TestCase):

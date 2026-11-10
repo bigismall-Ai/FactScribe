@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check
+from .buildpdf import auto_build
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
@@ -71,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
         ("audit", "核心：内联绑定 + 数字回账 + 引用落稳定标识 + 覆盖报告"),
         ("matrix", "生成 audit/matrix.md 追溯矩阵"),
-        ("build", "执行 project.build（v1 仍按 shell 字符串执行，见 SPEC-V1 B5）"),
+        ("build", "执行 project.build；为空时用 tectonic 自动编译 main.tex"),
         ("preamble", "生成 audit/preamble.tex（\\fact / \\pkignore 宏定义）"),
     ):
         sp = sub.add_parser(name, help=help_text)
@@ -87,6 +88,13 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--out", default=None, help="默认 audit/matrix.md")
         if name == "preamble":
             sp.add_argument("--out", default=None, help="默认 audit/preamble.tex")
+        if name == "build":
+            sp.add_argument("--engine", default="tectonic",
+                            help="自动编译用的引擎（默认 tectonic；可给绝对路径）")
+            sp.add_argument("--cjk-font", default=None, metavar="PATH",
+                            help="中文字体文件（缺省用 fc-match 找 STHeiti）")
+            sp.add_argument("--keep-temp", action="store_true",
+                            help="保留临时副本并打印路径（默认清理）")
     sp = sub.add_parser("verify-pdf", help="PDF 回检：文本层/栅格/双向多重集/stamp（V3.0）")
     sp.add_argument("pdf", help="最终 PDF 路径")
     sp.add_argument("--report", required=True, help="audit/report.json（被签的那一份）")
@@ -302,9 +310,17 @@ def cmd_preamble(args) -> int:
 
 def cmd_build(args) -> int:
     cfg = load_config(Path(args.project))
-    code, out = run_build(cfg)
+    if cfg.build.strip():
+        code, out = run_build(cfg)
+        info = {}
+    else:
+        code, out, info = auto_build(
+            cfg.root, output=cfg.output, engine=args.engine,
+            cjk_font=args.cjk_font, keep_temp=args.keep_temp,
+            root_tex=cfg.root_tex or "main.tex")
     payload = _payload("build", "ok" if code == EXIT_OK else "violation", code,
                        build=cfg.build, output=out)
+    payload.update(info)
     payload["config"] = _config_block(cfg)
     payload["config_warnings"] = list(cfg.warnings)
     _emit(payload, "== paperkit build ==\n" + out, args.json)

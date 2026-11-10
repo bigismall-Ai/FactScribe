@@ -172,6 +172,40 @@ class TestPlaybook(unittest.TestCase):
             self.text)
         self.assertIn("顿号", self.text)
 
+    def test_forbids_passing_by_swapping_prepositions(self):
+        """冒号标题不许用 as/with/for/of 介词顶替（批 118 英文实测）。"""
+        self.assertIn("禁止换标点过关", self.text)
+        self.assertIn("禁止换介词过关", self.text)
+        for prep in ("`as`", "`with`", "`for`", "`of`"):
+            with self.subTest(prep=prep):
+                self.assertIn(prep, self.text)
+        # 反例：三条英文介词顶替。
+        bad_forms = [
+            "`Design: A Contract Before a Judge` → "
+            "`Design as a Contract Before a Judge`",
+            "`Method: Indicators, Bidirectional Rules, and Stage` → "
+            "`Method with Indicators, Bidirectional Rules, and Stage`",
+            "`Experiment: Three Comparisons and a Blind Protocol` → "
+            "`Experiment with Three Comparisons and a Blind Protocol`",
+        ]
+        for bad in bad_forms:
+            with self.subTest(bad=bad):
+                self.assertIn(bad, self.text)
+
+    def test_has_english_noun_phrase_positive_examples(self):
+        """英文正解至少两条：删类别词，重写成名词短语（批 118）。"""
+        positives = [
+            "`Results: The Gate Wins on Drafts and Loses on Polished Text` → "
+            "`Gate Wins on Drafts, Loses on Polished Text`",
+            "`Conclusion: A Draft-Stage Intervention` → "
+            "`A Draft-Stage Intervention`",
+            "`Design: A Contract Before a Judge` → `Contract-first design`",
+        ]
+        for good in positives:
+            with self.subTest(good=good):
+                self.assertIn(good, self.text)
+        self.assertGreaterEqual(len(positives), 2)
+
     def test_forbids_deleting_words_without_rewrite(self):
         """压长度不许只删词留残句（批 116 反规避）。"""
         self.assertIn("禁止只删词不重写", self.text)

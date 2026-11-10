@@ -90,9 +90,17 @@ python3 -m factscribe review --before 原稿 --after 改后
    反例：`也就是说` → `换句话说`。
 7. **换一个破折号当替身**：插入语破折号还在。
    反例：`结果——即 53 个样本——显著` → `结果 – 即 53 个样本 – 显著`。
-8. **禁止换标点过关**：被判定违规的标点（冒号、破折号、句号、括号）不许换成另一种标点蒙混过关。冒号标题必须改写成名词短语。
-   反例：`结论：一项草稿阶段的干预` → `结论、一项草稿阶段的干预`（错：顿号还是把标题劈成两截，结构没改）。
-   正例：`结论：一项草稿阶段的干预` → `草稿阶段的干预`。
+8. **禁止换标点过关、也禁止换介词过关**：被判定违规的标点（冒号、破折号、句号、括号）不许换成另一种标点蒙混过关——顿号、逗号、括号都不行；冒号标题也不许用 `as` / `with` / `for` / `of` 等介词把两截接起来。正解只有一个：删掉类别词，重写成能独立指路的**名词短语**。
+   反例（中文·换标点）：`结论：一项草稿阶段的干预` → `结论、一项草稿阶段的干预`（错：顿号还是把标题劈成两截，结构没改）。
+   反例（英文·换介词 `as`）：`Design: A Contract Before a Judge` → `Design as a Contract Before a Judge`（错：介词顶替冒号，两截结构没变）。
+   反例（英文·换介词 `with`）：`Method: Indicators, Bidirectional Rules, and Stage` → `Method with Indicators, Bidirectional Rules, and Stage`（错：同上）。
+   反例（英文·换介词 `with`）：`Experiment: Three Comparisons and a Blind Protocol` → `Experiment with Three Comparisons and a Blind Protocol`（错：同上）。
+   反例（英文·换介词 `as`）：`Conclusion: A Draft-Stage Intervention` → `Conclusion as a Draft-Stage Intervention`（错：同上）。
+   正例（中文）：`结论：一项草稿阶段的干预` → `草稿阶段的干预`。
+   正例（中文）：`结论：一项草稿阶段的干预` → `一项草稿阶段的干预`（删类别词「结论」，其余照留）。
+   正例（英文）：`Results: The Gate Wins on Drafts and Loses on Polished Text` → `Gate Wins on Drafts, Loses on Polished Text`（删类别词，改名词短语）。
+   正例（英文）：`Conclusion: A Draft-Stage Intervention` → `A Draft-Stage Intervention`。
+   正例（英文）：`Design: A Contract Before a Judge` → `Contract-first design`。
 9. **禁止只删词不重写**：标题压长度时，删掉类别词后必须仍然是一个能独立指路的短语，不许留下残句。
    反例：`结论：一项草稿阶段的干预` → `一项草稿阶段`（删掉中心词「干预」，只剩定语，不成短语）。
    正例：`结论：一项草稿阶段的干预` → `一项草稿阶段的干预`（删掉类别词「结论」，剩下的仍是完整名词短语）。

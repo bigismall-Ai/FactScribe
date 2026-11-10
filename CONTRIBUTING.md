@@ -26,7 +26,25 @@ the tests and packaged via `packages = ["factscribe"]` (see `pyproject.toml`).
 
 ---
 
-## 2. Set up and run
+## 2. 新判据准入单
+
+新增或修改任何一条判据，提交前必须填完这张单。少一项就算没过。
+
+| # | 项 | 做法 |
+|---|---|---|
+| 1 | **触发量** | 在至少四份真实语料上跑，报「每万字触发数」。超过 2/万字即调阈值或降级。 |
+| 2 | **逐条判真假** | 把触发的句子逐条抄出来，标真阳性 / 假阳性，**不许只报总数**。 |
+| 3 | **假阳性超半即回退** | 单条规则的假阳性超过一半，删掉重做，不许靠调阈值硬救。 |
+| 4 | **正反例各三** | 测试里至少三条该触发的真实句子、三条不该触发的真实句子。 |
+| 5 | **反向锁** | 写明这条规则在哪份语料上**应当 0 触发**，并把它写成测试。 |
+| 6 | **单位写死** | 密度类指标必须写清每千字、每千词还是每句。混用会差十倍。 |
+
+两条教训直接来自实战：
+
+- **计数不等于文风。** 「单句『的』≥3」在真实句子上全是假阳性；改成「连续短修饰成链」才对。
+- **误报预算管不住质量。** 一条规则可以低频、便宜、又全错。所以第 2 项是逐条看内容，不是看数量。
+
+## 3. Set up and run
 
 ```bash
 git clone <repo> && cd paperkit
@@ -57,7 +75,7 @@ python3 -m factscribe check examples/minimal --strict
 
 ---
 
-## 3. Where things live
+## 4. Where things live
 
 | Path | Contents |
 |---|---|
@@ -81,7 +99,7 @@ Key entry points in `factscribe/`:
 
 ---
 
-## 4. Adding a gate (recipe)
+## 5. Adding a gate (recipe)
 
 1. **Pick a code name**: `UPPER_SNAKE` (`BOUND_MISMATCH`), unique in the file.
 2. **Pick a severity** and justify it:
@@ -130,7 +148,7 @@ def test_bound_line_with_foreign_number_is_red(self):
 
 ---
 
-## 5. Pull requests
+## 6. Pull requests
 
 A PR is mergeable when:
 
@@ -152,7 +170,7 @@ Keep PRs small; one gate or one lexical family per PR is ideal. Describe the
 failure you saw in real use, the reading before/after, and what you deliberately
 did **not** try to catch.
 
-## 6. Commit messages
+## 7. Commit messages
 
 Short imperative subject, then a body explaining the reading that motivated it:
 
@@ -163,7 +181,7 @@ Before: a paper with 4 TODO notes produced 4 false reds.
 After: annotations are masked; audit lists annotation_sites in --json.
 ```
 
-## 7. License
+## 8. License
 
 paperkit is published under the license in `LICENSE` (currently a placeholder
 pending the owner's decision — do not rely on it yet). By contributing you agree

@@ -70,6 +70,39 @@ def _display_issues(facts: list[Fact]) -> list[Issue]:
     return out
 
 
+# v1.3：expr 与 value 的数值比较口径沿用 check（相对 1e-9）。不新造浮点
+# 规则；fact 需要更宽/更窄的显式容差时写 ``expr_tolerance``（相对误差）。
+EXPR_REL_TOL = 1e-9
+
+
+def _expr_issues(f: Fact, known: dict[str, Fact]) -> list[Issue]:
+    """派生 fact 的 expr 求值必须与 value 相符（G5，check/audit 共用）。
+
+    报错给两侧数值与误差；容差默认是既有的 1e-9 相对口径，fact 可用
+    ``expr_tolerance`` 显式覆盖。expr 不可求值仍是 ``EXPR_INVALID``。
+    """
+    if not f.expr:
+        return []
+    loc = "%s:%s" % (f.file, f.line or "?")
+    try:
+        got = eval_expr(f.expr, known)
+        want = _declared_number(f.value)
+    except ExprError as exc:
+        return [Issue("EXPR_INVALID", "fact %r 的 expr 不可用：%s" % (f.id, exc),
+                      location=loc, token=f.id)]
+    rel = f.expr_tolerance if f.expr_tolerance is not None else EXPR_REL_TOL
+    limit = rel * max(1.0, abs(want))
+    err = abs(got - want)
+    if err > limit:
+        return [Issue(
+            "EXPR_MISMATCH",
+            "fact %r 的 expr=%r 算出 %.10g，与 value=%r（%.10g）不符："
+            "误差 %.3g 超过容差 %.3g" % (f.id, f.expr, got, f.value, want,
+                                      err, limit),
+            location=loc, token=f.id)]
+    return []
+
+
 def _mask_fact_bodies(tex: str) -> str:
     """V3：`\\fact{ID}{value}` 的 value 是**被绑定**的显示形。
 
@@ -701,18 +734,7 @@ def run_check(cfg: Config, facts: list[Fact]):
                 "fact %r 是推算值，但没写 expr——只写 derived_from 不算可复核" % f.id,
                 location=loc, token=f.id))
         if f.expr:
-            try:
-                got = eval_expr(f.expr, known)
-                want = _declared_number(f.value)
-                if abs(got - want) > 1e-9 * max(1.0, abs(want)):
-                    issues.append(Issue(
-                        "EXPR_MISMATCH",
-                        "fact %r 的 expr=%r 算出 %s，与 value=%r 不符"
-                        % (f.id, f.expr, ("%.10g" % got), f.value),
-                        location=loc, token=f.id))
-            except ExprError as exc:
-                issues.append(Issue("EXPR_INVALID", "fact %r 的 expr 不可用：%s" % (f.id, exc),
-                                    location=loc, token=f.id))
+            issues += _expr_issues(f, known)
         elif not f.derived_from and f.is_derived:
             # is_derived 只看 expr/derived_from，这里不会发生；保底留白
             pass
@@ -935,6 +957,11 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                        "line": unit["line"], "col": unit["col"]})
 
     red += _display_issues(facts)
+    # v1.3 G5：派生 fact 的 expr 与 value 不一致也要在 audit 面判红。此前
+    # 只有 `check` 判 EXPR_MISMATCH，发布闸 audit 会放行「算错但自洽」的数。
+    for f in facts:
+        if f.expr:
+            red += _expr_issues(f, fact_by_id)
     red += _source_rule_issues(cfg, sections)
     # R-05：闭包展开时 \input/\include/\subfile 指向不存在的文件——正文
     # 可能整段没进审计，属覆盖缺口（exit 5），不许静默放行。
@@ -943,6 +970,16 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             "INPUT_TARGET_MISSING",
             "\\input 目标 %r 不存在（%s:%s）——闭包展开失败，"
             "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
+            location="%s:%s" % (src_rel, line), token=ref,
+            exit_code=EXIT_INTEGRITY))
+    # R-05（v1.3）：目标含宏/#/嵌套花括号或为空——静态审计无法确定它拉进
+    # 哪个文件；覆盖不了就判红，不许静默跳过（fail-closed）。
+    for src_rel, ref, line in getattr(cfg, "dynamic_inputs", []):
+        red.append(Issue(
+            "INPUT_DYNAMIC",
+            "\\input/\\include 目标 %r 含宏、#、嵌套花括号或为空"
+            "（%s:%s）——无法静态解析，审计覆盖不了这一段（R-05）"
+            % (ref, src_rel, line),
             location="%s:%s" % (src_rel, line), token=ref,
             exit_code=EXIT_INTEGRITY))
     if cfg.is_v3:
@@ -1094,6 +1131,16 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
 
         # ---- 未被任何标记组闭合的尾段/远句 ----
         tables = tabular_regions(text)
+
+        def _line_bound_quant(line_no: int) -> list[Fact]:
+            """该行（不是该句）绑定了哪些定量 fact——用于分诊 BOUND_MISMATCH。"""
+            found: list[Fact] = []
+            for fid in scan.bindings.get(line_no, []):
+                f = fact_by_id.get(fid.strip().casefold())
+                if f is not None and f.value_keys and f not in found:
+                    found.append(f)
+            return found
+
         for unit in ungrouped:
             in_table = any(s <= unit["start_abs"] < e for s, e in tables)
             keys_known = all(k in key_to_facts for k in unit["keys"])
@@ -1137,10 +1184,26 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             location=loc, token=tok["token"], context=tok["text"],
                             severity=SEV_YELLOW))
                     else:
-                        red.append(Issue(
-                            "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value"
-                            % tok["token"], location=loc, token=tok["token"],
-                            context=tok["text"]))
+                        # v1.3 分诊：该行已经绑定了定量 fact，只是这个数字不在
+                        # 它的值域里 → BOUND_MISMATCH；真的没有任何 fact 可
+                        # 命中 → UNMATCHED_NUMBER。两者都是红、exit 1。
+                        bound_line = _line_bound_quant(tok["line"])
+                        if bound_line:
+                            red.append(Issue(
+                                "BOUND_MISMATCH",
+                                "该行绑定 %s，但数字 %s 不在其 value 里"
+                                "（内联绑定是硬约束）"
+                                % ("/".join(f.id for f in bound_line),
+                                   tok["token"]),
+                                location=loc, token=tok["token"],
+                                context=tok["text"]))
+                            red += _drift_issues(cfg, bound_line[0].id,
+                                                 tok, rel)
+                        else:
+                            red.append(Issue(
+                                "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value"
+                                % tok["token"], location=loc, token=tok["token"],
+                                context=tok["text"]))
         matched = bound + unbound_yellow
 
         for key, line, col in scan.cites:

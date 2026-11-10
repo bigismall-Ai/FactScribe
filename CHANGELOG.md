@@ -17,8 +17,13 @@ and will not change without a major version bump.
 - Rewrite rechecks: `HEADING_ECHO`, `HEADING_RELATION_CHANGED`, `HEADING_SUBJECT_LOST`, and `TERM_VARIANT`.
 
 ### Changed
-- Both READMEs rewritten against measured facts: ten commands, 18 prose rules, 538 tests, and the 1.3.0 exit-code table.
+- Both READMEs rewritten against measured facts: ten commands, 18 prose rules, 563 tests, and the 1.3.0 exit-code table.
 - `scripts/check-readme.py` now delegates prose and heading checks to `style --doc` instead of keeping a second copy of the rules.
+
+### Fixed
+- `audit`: dynamic `\input`/`\include` targets (macros, `#`, nested braces, empty) are now red `INPUT_DYNAMIC` (exit 5) instead of silently escaping the file closure.
+- `audit`: a derived fact whose `expr` disagrees with its `value` is now red `EXPR_MISMATCH` (with both numbers and the error); `expr_tolerance` allows an explicit relative tolerance.
+- `audit`: a number on a line already bound to a quantitative fact is now `BOUND_MISMATCH` when it is outside that fact's value; `UNMATCHED_NUMBER` is reserved for numbers no fact can claim. Red/yellow level and exit codes unchanged.
 
 ## [1.2.0] - 2026-11-09
 

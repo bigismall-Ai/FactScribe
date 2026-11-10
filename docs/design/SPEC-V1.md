@@ -167,6 +167,7 @@ confidence = "high"                # high | med | low
 kind = "claim"                     # claim（进全局值域）| config（只在绑定语境下核销）
 derived_from = ["A1", "A3"]        # 非空 ⇒ expr 必填
 expr = "(A1.num + A3.num) / (A1.den + A3.den) * 100"   # 只允许四则/括号/ID.num/ID.den
+expr_tolerance = "1e-6"            # 可选：expr↔value 的相对容差；缺省沿用 1e-9
 supersedes = []                    # 改事实＝新增一条并指向旧 id
 metric = ""                        # 可选：结构化冲突分组键
 scope = ""                         # 可选：metric 的作用域（数据集/切分）
@@ -177,7 +178,10 @@ note = ""
 
 - 绑定写成 `\fact{ID}`（或 `[[fact:ID]]`，多 id 用逗号），**作用于同一行**；
 - 该行每个数字都必须是所绑定 fact 的 `value` 的 token（数值规范化后等值）；
-- 未绑定但能命中某条 claim fact → 黄 `UNBOUND_NUMBER`；命中不了 → 红 `UNMATCHED_NUMBER`；
+- 该行已绑定定量 fact、但数字不在其值域内 → 红 `BOUND_MISMATCH`（不管数字在
+  同一句还是同一行的另一句）；退出码仍是 1，红级不变；
+- 该行没有任何绑定、且谁都命中不了 → 红 `UNMATCHED_NUMBER`；
+- 未绑定但能命中某条 claim fact → 黄 `UNBOUND_NUMBER`；
 - 未知 id → 红 `UNKNOWN_FACT_MARKER`；
 - 显式豁免区：`\pkignore{...}` 与 `\begin{pkignore}…\end{pkignore}`（内容照排，不进审计）；
 - 宏由 `paperkit preamble` 生成到 `audit/preamble.tex`，正文导言区 `\input` 即可。
@@ -197,6 +201,27 @@ version = 1
 规则：fact 用到的 source 不在清单 → 红；清单哈希不符 → 红；`results/` 下有文件没进
 清单 → 黄。缺清单 → 黄（不是绿）。
 
+### 3.6 v1.3 补的三条判据（KNOWN-GAPS 第二节）
+
+| 判据 | 触发 | 结果 | 退出码 |
+|---|---|---|---|
+| 动态闭包目标 | `\input{...}` / `\include{...}` 的目标含宏（`\jobname`、`\macro` 等）、`#`、嵌套花括号，或为空 | 红 `INPUT_DYNAMIC`；报 `文件:行` 与**原始目标串** | 5 |
+| 派生算式不符 | fact 同时有 `value` 与 `expr`，expr 求值结果与 value 不一致 | 红 `EXPR_MISMATCH`；报两侧数值与误差 | 1 |
+| 绑定后不符 | 该行已绑定定量 fact，但数字不在其值域内 | 红 `BOUND_MISMATCH`（不再是 `UNMATCHED_NUMBER`） | 1 |
+
+三条的边界：
+
+1. **动态目标 fail-closed**：静态审计覆盖不了的目标不许绿。静态目标（含省略 `.tex`
+   的写法）行为不变；目标不存在仍走 `INPUT_TARGET_MISSING`。注释/verbatim 里的
+   `\input` 不算；`\newcommand{\X}[1]{\input{#1}}` 的宏体是定义、不是实际包含。
+2. **表达式容差**：沿用 `check` 既有的数值比较口径——相对误差 `1e-9`（以 value 为
+   基准，`max(1, |value|)`）。fact 可写 `expr_tolerance = "1e-6"` 显式放宽/收紧；
+   不新造第二套浮点规则。没有 `expr` 的 fact 行为不变；expr 不可求值仍报
+   `EXPR_INVALID`。
+3. **分诊只改分类**：`BOUND_MISMATCH` 与 `UNMATCHED_NUMBER` 都是红、exit 1；
+   未绑定但回得到账的 `UNBOUND_NUMBER` 仍是黄、exit 3。该行没有定量 fact 绑定时，
+   才退回 `UNMATCHED_NUMBER`。
+
 ---
 
 ## 4. 闸门判定细则（v1.0 实现）
@@ -205,14 +230,15 @@ version = 1
 |---|---|---|
 | G1 内联绑定 | 行内数字 ∈ 绑定 fact 值域 | 绿；不在 → `BOUND_MISMATCH` 红 |
 | G1' 未绑定 | 命中全局 claim 值域 | `UNBOUND_NUMBER` 黄（不再换绿） |
-| G1'' 未绑定 | 谁都命中不了 | `UNMATCHED_NUMBER` 红 |
+| G1'' 未绑定 | 行内无绑定且谁都命中不了 | `UNMATCHED_NUMBER` 红 |
 | G2 源头 | 缺 sha / sha 不符 | `MISSING_SOURCE_SHA256` / `SOURCE_SHA256_MISMATCH` 红 |
 | G2' 清单 | 未签/未列/哈希不符/无 signed_by | `SOURCE_NOT_SIGNED` / `MANIFEST_HASH_MISMATCH` / `MANIFEST_UNSIGNED` 红；`NO_MANIFEST` / `UNSIGNED_RESULT` 黄 |
 | G2'' 回查 | value 数字不在 source | `VALUE_NOT_IN_SOURCE` 黄 |
 | G3 引用 | `*cite*` 全家 + 可选参数；未知命令 fail-closed | `MISSING_CITE` / `UNKNOWN_CITE_COMMAND` / `BAD_STABLE_ID_FORMAT` 红 |
-| G4 退出码 | 见 §5 | 0 / 1 / 2 / 3 / 4 |
-| G5 派生 | 无 expr / expr 算不对 / 成环 / 父被 supersedes | `MISSING_EXPR` / `EXPR_MISMATCH` / `EXPR_INVALID` / `DERIVED_CYCLE` / `SUPERSEDED_PARENT` 红 |
+| G4 退出码 | 见 §5 | 0 / 1 / 2 / 3 / 4 / 5 |
+| G5 派生 | 无 expr / expr 算不对 / 成环 / 父被 supersedes | `MISSING_EXPR` / `EXPR_MISMATCH` / `EXPR_INVALID` / `DERIVED_CYCLE` / `SUPERSEDED_PARENT` 红（`audit` 与 `check` 同判） |
 | G6 覆盖 | 闭包外 `.tex`；绑定率 <50%；重复 value；同值多 bib | `UNSCANNED_TEX` / `LOW_BINDING_RATE` / `DUPLICATE_VALUE` / `DUPLICATE_STABLE_ID` 黄 |
+| G7 闭包 | 目标不存在 / 目标动态不可解析 | `INPUT_TARGET_MISSING` / `INPUT_DYNAMIC` 红，exit 5 |
 
 ---
 

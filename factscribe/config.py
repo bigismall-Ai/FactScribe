@@ -207,6 +207,9 @@ class Config:
     # R-05：闭包展开时找不到的 \input/\include/\subfile 目标，
     # 元素为 (声明文件, 目标, 行号)。由 load_sections 填充，audit 判红。
     missing_inputs: list = field(default_factory=list)
+    # R-05（v1.3）：无法静态解析的闭包目标（宏、#、嵌套花括号、空目标），
+    # 元素同上。审计覆盖不了 ⇒ fail-closed 判红（INPUT_DYNAMIC）。
+    dynamic_inputs: list = field(default_factory=list)
 
     @property
     def is_v3(self) -> bool:
@@ -733,6 +736,20 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         # R-04 的严格 canon 判定（auto 标记）。
         display = [{"text": str(raw.get("value")), "round_to": None,
                     "setting": None, "auto": True}]
+    # v1.3：expr↔value 比较允许显式容差（相对误差）；不写就用既有 1e-9 口径。
+    tol_raw = raw.get("expr_tolerance")
+    expr_tolerance = None
+    if tol_raw not in (None, ""):
+        try:
+            expr_tolerance = float(tol_raw)
+        except (TypeError, ValueError):
+            raise ConfigError(
+                "%s 的 fact %r expr_tolerance=%r 不是数字（相对误差，例：1e-6）"
+                % (path, fid, tol_raw))
+        if expr_tolerance < 0:
+            raise ConfigError(
+                "%s 的 fact %r expr_tolerance=%r 不能为负（相对误差）"
+                % (path, fid, tol_raw))
     f = Fact(
         id=fid,
         claim=str(raw.get("claim") or ""),
@@ -745,6 +762,7 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         derived_from=[str(x) for x in (raw.get("derived_from") or [])],
         supersedes=[str(x) for x in (raw.get("supersedes") or [])],
         expr=str(raw.get("expr") or "").strip(),
+        expr_tolerance=expr_tolerance,
         metric=str(raw.get("metric") or ""),
         scope=str(raw.get("scope") or ""),
         note=str(raw.get("note") or ""),
@@ -838,10 +856,11 @@ def _glob_paths(root: Path, pattern: str) -> dict[str, Path]:
     return found
 
 
-_INPUT_RE = re.compile(r"\\(?:input|include|subfile|import)\s*\{([^}]*)\}")
+_INPUT_CMD_RE = re.compile(r"\\(?:input|include|subfile|import)\b")
 _DEF_RE = re.compile(
     r"\\(?:newcommand|renewcommand|providecommand)\*?\s*\{\s*\\([A-Za-z@]+)\s*\}"
     r"\s*(?:\[(\d)\])?\s*(?:\[[^\]]*\])?\s*\{")
+_DEF_SIMPLE_RE = re.compile(r"\\def\s*\\[A-Za-z@]+(?:\s*#\d)*\s*")
 _INPUT_WRAPPER_RE = re.compile(r"^\s*\\input\s*\{([^{}]*#(\d)[^{}]*)\}\s*$")
 _SKIP_DIRS = {".git", ".venv", "__pycache__", "audit", "node_modules", ".pytest_cache"}
 
@@ -863,6 +882,86 @@ def _balanced_braces(text: str, start: int) -> int:
                 return i + 1
         i += 1
     return len(text)
+
+
+def _input_arg_end(text: str, start: int) -> int:
+    """text[start] == '{'；返回配对 '}' 之后的位置；不平衡返回 -1。"""
+    depth = 0
+    i = start
+    while i < len(text):
+        c = text[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return -1
+
+
+def _input_refs(text: str):
+    """产出 `\\input/\\include/\\subfile/\\import` 的 (原始目标串, 行号, 是否闭合)。
+
+    用平衡花括号读取参数，而不是 `[^}]*`：`\\input{\\foo{bar}}` 的原始目标
+    是 `\\foo{bar}`，不能被截成 `\\foo{bar` 后当成静态路径去猜。目标是否
+    可静态解析由 `_dynamic_ref_reason` 判定（R-05，v1.3）；花括号没收口
+    同样算「无法静态解析」。
+    """
+    for m in _INPUT_CMD_RE.finditer(text):
+        k = m.end()
+        while k < len(text) and text[k] in " \t\r\n":
+            k += 1
+        if k >= len(text) or text[k] != "{":
+            continue
+        line = text.count("\n", 0, m.start()) + 1
+        end = _input_arg_end(text, k)
+        if end < 0:
+            yield text[k + 1:], line, False
+        else:
+            yield text[k + 1:end - 1], line, True
+
+
+def _mask_macro_defs(text: str) -> str:
+    """把宏定义体抹成空白（保留换行），避免把定义里的 `\\input{#1}` 当闭包。
+
+    `\\newcommand{\\tableinput}[1]{\\input{tables/#1}}` 是包装宏的定义，
+    不是一次实际包含；闭包由 ``_input_wrappers`` + ``_wrapper_calls`` 展开。
+    不抹掉的话，定义体里的 `#1` 会被误判成 ``INPUT_DYNAMIC``。
+    """
+    out = list(text)
+
+    def blank(start: int, end: int) -> None:
+        for k in range(start, min(end, len(out))):
+            if out[k] != "\n":
+                out[k] = " "
+
+    for m in _DEF_RE.finditer(text):
+        start = m.end() - 1
+        if start < len(text) and text[start] == "{":
+            blank(start + 1, _balanced_braces(text, start) - 1)
+    for m in _DEF_SIMPLE_RE.finditer(text):
+        start = m.end()
+        if start < len(text) and text[start] == "{":
+            blank(start + 1, _balanced_braces(text, start) - 1)
+    return "".join(out)
+
+
+def _dynamic_ref_reason(ref: str) -> str:
+    """闭包目标为什么不能静态解析；空串＝静态可解析。"""
+    s = str(ref or "").strip()
+    if not s:
+        return "目标为空"
+    if "\\" in s:
+        return "目标含宏/控制序列"
+    if "#" in s:
+        return "目标含参数占位符"
+    if "{" in s or "}" in s:
+        return "目标含嵌套花括号"
+    return ""
 
 
 def _input_wrappers(text: str) -> dict[str, tuple[str, str]]:
@@ -898,8 +997,11 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     文件边界不是句子边界（R-02）；这里只负责把「会被编译进 PDF 的文本文件」
     收齐，拼流与切句交给 texscan。闭包目标不存在时记进 ``cfg.missing_inputs``，
     由 audit 判 ``INPUT_TARGET_MISSING``（R-05）：不存在的目标不会静默放行。
+    目标含宏/`#`/嵌套花括号/为空时记进 ``cfg.dynamic_inputs``，由 audit 判
+    ``INPUT_DYNAMIC``：静态审计覆盖不了的目标一律 fail-closed，不许静默跳过。
     """
     cfg.missing_inputs = []
+    cfg.dynamic_inputs = []
     if cfg.section_files:
         # V3 形态 C：显式章节清单（不是 glob）。闭包仍从这些文件各自的
         # `\input` 展开，但不会把目录里同名的无关 main.tex 也卷进来。
@@ -946,16 +1048,27 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
             cfg.missing_inputs.append(entry)
         return False
 
+    def add_raw_ref(raw: str, bases: list[Path], src_rel: str, line: int,
+                    closed: bool = True) -> bool:
+        """记录一个闭包目标：动态目标进 dynamic_inputs，静态目标走 add_ref。"""
+        ref = str(raw or "").strip()
+        if not closed or _dynamic_ref_reason(ref):
+            entry = (src_rel, ref, line)
+            if entry not in cfg.dynamic_inputs:
+                cfg.dynamic_inputs.append(entry)
+            return False
+        return add_ref(ref, bases, src_rel, line)
+
     while True:
         # 普通 \input 闭包（注释/verbatim 里的 \input 不算引用，避免误判）
         while queue:
             p = queue.pop(0)
             text = _read_text(p, cfg.root)
-            body = strip_comments_and_verbatim(text)
+            body = _mask_macro_defs(strip_comments_and_verbatim(text))
             src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
-            for m in _INPUT_RE.finditer(body):
-                line = body.count("\n", 0, m.start()) + 1
-                add_ref(m.group(1), [p.parent, cfg.root], src_rel, line)
+            for ref, line, closed in _input_refs(body):
+                add_raw_ref(ref, [p.parent, cfg.root], src_rel, line,
+                            closed=closed)
         # 包装宏：定义可能出现在后加载的文件里，故反复扫到稳定为止
         wrappers: dict[str, tuple[str, str]] = {}
         for p in list(seen.values()):
@@ -967,7 +1080,7 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
             text = strip_comments_and_verbatim(_read_text(p, cfg.root))
             src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
             for ref, line in _wrapper_calls(text, wrappers):
-                if add_ref(ref, [p.parent, cfg.root], src_rel, line):
+                if add_raw_ref(ref, [p.parent, cfg.root], src_rel, line):
                     grew = True
         if not grew:
             break

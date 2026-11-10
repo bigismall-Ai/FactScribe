@@ -179,6 +179,7 @@ class Fact:
     derived_from: list = field(default_factory=list)
     supersedes: list = field(default_factory=list)
     expr: str = ""
+    expr_tolerance: float | None = None   # v1.3：expr↔value 相对容差（显式覆盖）
     metric: str = ""
     scope: str = ""
     note: str = ""

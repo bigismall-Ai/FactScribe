@@ -1,4 +1,4 @@
-# KNOWN GAPS — v1.2.0（盲测冻结时的如实清单）
+# KNOWN GAPS — v1.2.0 盲测冻结清单（v1.3.0 已修三条）
 
 > 依据：三套**真盲**测（#7/#8/#9，出完即跑、不返工）。
 > 判读规则（预注册）：invalid 命中 ≥10/12 且 valid 零误红。
@@ -14,13 +14,17 @@
 
 **停止线**：预注册「最多 #8/#9 两套」，已用完；此后冻结，不再对着盲测调参。
 
-## 二、#9 暴露的已知缺口（不修，如实记）
+## 二、#9 暴露的已知缺口（v1.3 已修）
 
-| 缺口 | 现象 | 影响 | 计划 |
-|---|---|---|---|
-| `free-derived-expr` | 派生 fact 的 `expr` 与实际值不符时未判红 | 可能放行“算错但自洽”的派生数 | v1.3 |
-| `tex-input-dynamic` | `\input{\macro}` 动态目标未被判红 | 可绕过文件闭包 | v1.3 |
-| `num-bind-mismatch` | 判红但码为 `UNMATCHED_NUMBER`，非 `BOUND_MISMATCH` | 分诊不便，不误判 | v1.3（码表细化） |
+| 缺口 | v1.2 现象 | v1.3 修复 | 错误码 | 落点 |
+|---|---|---|---|---|
+| `tex-input-dynamic` | `\input{\macro}` / `\input{\jobname}` 动态目标未被判红，可绕过文件闭包 | 目标含宏、`#`、嵌套花括号或为空 → 红（fail-closed）；静态目标行为不变 | `INPUT_DYNAMIC`（红/5） | `factscribe/config.py` `_input_refs` / `_dynamic_ref_reason`；`factscribe/audit.py` `run_audit` |
+| `free-derived-expr` | 派生 fact 的 `expr` 与实际值不符时 `audit` 未判红（只有 `check` 判） | `audit` 也按既有数值口径求值比对；报两侧数值与误差；可写 `expr_tolerance` 显式容差 | `EXPR_MISMATCH`（红/1）；expr 不可求值仍 `EXPR_INVALID` | `factscribe/audit.py` `_expr_issues`（`check`/`audit` 共用） |
+| `num-bind-mismatch` | 已绑定但数值对不上时报 `UNMATCHED_NUMBER`，语义错位 | 该行已绑定定量 fact → `BOUND_MISMATCH`；真的无 fact 可命中才 `UNMATCHED_NUMBER`；红/黄级别与退出码不变 | `BOUND_MISMATCH`（红/1） / `UNMATCHED_NUMBER`（红/1） | `factscribe/audit.py` `run_audit` 的未分组数字分诊 |
+
+**验证**：`tests/test_audit_gaps.py`（25 例）锁三条判据的正负例、`examples/minimal`
+恰好两红、新码 JSON 字段稳定，以及旧码 `UNMATCHED_NUMBER` 不再用于“绑定后不符”。
+实现记录见 `docs/implementation/AUDIT-GAPS.md`。
 
 ## 三、结构性与已知边界（不打算修）
 
@@ -33,7 +37,8 @@
 
 数字绑定（`UNBOUND_NUMBER`/`BOUND_MISMATCH`/`BINDING_ATTRIBUTION`/`DISPLAY_INCONSISTENT`）、
 证据链（`EVIDENCE_CHAIN_BROKEN`/`SOURCE_SHA256_MISMATCH`/`APPROVAL_STALE`）、
-TeX 结构（`NUMERIC_IN_MACRO`/`COMPUTED_VALUE_UNREGISTERED`/`INPUT_TARGET_MISSING`）、
+TeX 结构（`NUMERIC_IN_MACRO`/`COMPUTED_VALUE_UNREGISTERED`/`INPUT_TARGET_MISSING`/`INPUT_DYNAMIC`）、
+派生算式（`EXPR_MISMATCH`/`EXPR_INVALID`）、
 断言位置（`FACT_OUT_OF_SPAN`/`FACT_UNUSED_IN_SPAN`/`ASSERTION_DRIFT`）、
 引用与常量（`MISSING_CITE`/`UNUSED_BIB`/`NUMBER_AS_CROSSREF`/`UNKNOWN_FACT_MARKER`）、
 PDF/stamp（`PDF_PAGE_NO_TEXT`/`PDF_PAGE_RASTERIZED`/`PDF_LEDGER_TOKEN_MISSING`/`PDF_UNACCOUNTED_NUMBER`/`STAMP_KEY_UNTRUSTED`）。

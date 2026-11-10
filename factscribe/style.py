@@ -52,6 +52,9 @@ DEFAULT_RULES: dict = {
     # TERM_UNREGISTERED 默认关闭；只由 `style --report-unregistered` 显式打开。
     # 打开时只查标题，结果单独走 info 通道，不进 findings、不影响退出码。
     "term_unregistered": False,
+    # 批 105（B5）：ABBREV_FIRST_USE 默认关闭。四份语料里专名与通用缩写
+    # 混在一起，判「该不该展开」仍需人看；只由 `--report-abbrev` 打开。
+    "abbrev_first_use": False,
     "thresholds": {
         "connective_density": 8.0,
         # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
@@ -91,6 +94,17 @@ DEFAULT_RULES: dict = {
         "zh_de_stack_max_gap": 6,
         # 批 104：中文轻动词＋名词（按条报，>= 1 触发，无密度闸）。
         "zh_light_verb_noun": 1,
+        # 批 105（B 档）：密度型指标必须写死单位。
+        # nominalization_rate 单位＝每百词百分数（Sword 口径）：
+        # 4.5 表示每 100 个英文词里 4.5 个名词化（剥离 5 个高频术语后）。
+        "nominalization_rate": 4.5,
+        # zh_aspect_zhe 单位＝每千个汉字：0.8 表示每 1000 汉字 0.8 个「动词＋着」。
+        "zh_aspect_zhe": 0.8,
+        # 其余三条按条/处计，>= 1 触发，无密度闸。
+        "zh_dang_when": 1,
+        "zh_collocation_redundancy": 1,
+        # B5 只在打开时计；阈值 1＝首现一处即报（默认开关见顶层）。
+        "abbrev_first_use": 1,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -279,6 +293,77 @@ DEFAULT_RULES: dict = {
             "考虑": "考虑", "理解": "理解", "要求": "要求",
         },
     },
+    # 批 105 B1：英文名词化密度（NOMINALIZATION_RATE）。
+    # 先按后缀数「名词化词形」，再剥离本文词频最高的 5 个类型（当作领域
+    # 术语），最后按每百词百分数报。后缀不含裸 -al/-ic/-ive。
+    "nominalization": {
+        "suffixes": ["tion", "sion", "ment", "ance", "ence", "ity",
+                     "ness", "ism"],
+        "min_length": 5,
+        "strip_top": 5,
+    },
+    # 批 105 B2：动词后「着」（ZH_ASPECT_ZHE）。分词后只认
+    # 「动词 ＋ 着」与「动词词尾着」；词内用法（沿着/照着/接着/意味着）
+    # 不是进行体，进排除表。
+    "zh_aspect_zhe": {
+        "exclude": ["意味着", "标志着", "象征着", "预示着", "代表着",
+                    "照着", "沿着", "朝着", "向着", "随着", "接着",
+                    "跟着", "当着", "为着", "冲着", "凭着", "按着",
+                    "依着", "据着", "本着", "对着", "关于", "够得着",
+                    "够不着", "来着", "合着"],
+    },
+    # 批 105 B3：当……的时候 / 当……之后 / 当……时。
+    # 形态固定，按条报；「当成/当作/当然/当天」这类词内「当」不算。
+    "zh_dang_when": {
+        "tails": ["的时候", "之后", "时"],
+        # 「当」后紧跟这些字时是词内用法（当成/当作/当天/当时…）。
+        "forbid_heads": ["成", "作", "然", "即", "初", "场", "时", "天",
+                         "年", "月", "日", "前", "中", "下", "上", "面",
+                         "真", "众", "地", "晚", "夜", "早", "代", "今"],
+    },
+    # 批 105 B4：搭配冗余。每条给匹配式与删法；单位＝处。
+    "zh_collocation_redundancy": {
+        "items": [
+            {"label": "大约…左右",
+             "pattern": "大约[^。！？；]{0,20}左右",
+             "fix": "删「大约」或「左右」，只留一个"},
+            {"label": "唯一一个",
+             "pattern": "唯一一个",
+             "fix": "删「一个」，写「唯一」"},
+            {"label": "相互之间",
+             "pattern": "相互之间",
+             "fix": "删「相互」，写「之间」"},
+            {"label": "彼此互相",
+             "pattern": "彼此互相",
+             "fix": "删「彼此」或「互相」，只留一个"},
+            {"label": "提前预…",
+             "pattern": "提前预[先进订定约热租告测]",
+             "fix": "删「提前」，写「预订/预支/预约」"},
+            {"label": "免费赠送",
+             "pattern": "免费赠送",
+             "fix": "删「免费」，赠送本身就不收钱"},
+            {"label": "亲眼目睹",
+             "pattern": "亲眼目睹",
+             "fix": "删「亲眼」，目睹本身就是亲眼看见"},
+            {"label": "再次重申",
+             "pattern": "再次重申",
+             "fix": "删「再次」，重申就是再说一次"},
+            {"label": "一致公认",
+             "pattern": "一致公认",
+             "fix": "删「一致」，公认就是一致认为"},
+            {"label": "首先第一",
+             "pattern": "首先第一",
+             "fix": "删「首先」或「第一」，只留一个"},
+        ],
+    },
+    # 批 105 B5：缩写首现（ABBREV_FIRST_USE）。≥2 个大写字母的缩写，
+    # 首次出现时同句或前一句须有「全称（ABC）」。罗马数字与文献标记
+    # 不是缩写，进排除表。
+    "abbrev_rules": {
+        "min_letters": 2,
+        "exclude": ["II", "III", "IV", "VI", "VII", "VIII", "IX", "XI",
+                    "XII", "XIII", "XIV", "XV", "TODO", "TBD", "FIXME"],
+    },
 }
 
 # 指标方向：True = 超过阈值触发；False = 低于阈值触发；单点指标用下限。
@@ -313,6 +398,12 @@ DIRECTIONS = {
     "zh_due_to_make": "at_least",
     # 批 104
     "zh_light_verb_noun": "at_least",
+    # 批 105 B 档
+    "nominalization_rate": "above",
+    "zh_aspect_zhe": "above",
+    "zh_dang_when": "at_least",
+    "zh_collocation_redundancy": "at_least",
+    "abbrev_first_use": "at_least",
 }
 
 CODE_OF = {
@@ -346,6 +437,12 @@ CODE_OF = {
     "zh_postposed_condition": "ZH_POSTPOSED_CONDITION",
     "zh_due_to_make": "ZH_DUE_TO_MAKE",
     "zh_light_verb_noun": "ZH_LIGHT_VERB_NOUN",
+    # 批 105 B 档
+    "nominalization_rate": "NOMINALIZATION_RATE",
+    "zh_aspect_zhe": "ZH_ASPECT_ZHE",
+    "zh_dang_when": "ZH_DANG_WHEN",
+    "zh_collocation_redundancy": "ZH_COLLOCATION_REDUNDANCY",
+    "abbrev_first_use": "ABBREV_FIRST_USE",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
@@ -356,6 +453,8 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "LIGHT_VERB_NOMINALIZATION", "WORDINESS_BLOAT",
                  "ZH_DE_STACK", "ZH_POSTPOSED_CONDITION", "ZH_DUE_TO_MAKE",
                  "ZH_LIGHT_VERB_NOUN",
+                 "NOMINALIZATION_RATE", "ZH_ASPECT_ZHE", "ZH_DANG_WHEN",
+                 "ZH_COLLOCATION_REDUNDANCY", "ABBREV_FIRST_USE",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
                  "JUSTIFY_CHAIN", "REPEATED_OPENER",
@@ -708,6 +807,7 @@ class StyleResult:
     rules_path: str = ""
     stage_assessment: dict = field(default_factory=dict)
     info: list = field(default_factory=list)
+    metric_details: dict = field(default_factory=dict)
 
     @property
     def exit_code(self) -> int:
@@ -724,6 +824,7 @@ class StyleResult:
             "summary": self.summary,
             "stage_assessment": dict(self.stage_assessment),
             "rules": self.rules_path,
+            "metric_details": dict(self.metric_details),
             "disclaimer": DISCLAIMER,
         }
 
@@ -1688,7 +1789,8 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
                        paragraphs=after.paragraphs, instances=after.instances,
                        summary=summary, rules_path=after.rules_path,
                        stage_assessment=after.stage_assessment,
-                       info=list(after.info))
+                       info=list(after.info),
+                       metric_details=dict(after.metric_details))
 
 
 def _shape_bucket(n: int) -> int:
@@ -2030,6 +2132,215 @@ def _zh_light_verb_noun_findings(sentences, rules: dict) -> list[Finding]:
     return out
 
 
+def _nominalization_rate_findings(sentences, rules: dict
+                                  ) -> tuple[list[Finding], float, list[str]]:
+    """B1：英文名词化密度。单位＝每百词百分数（Sword 口径）。
+
+    先按后缀数词形（词长 ≥ min_length），再剥离本文频次最高的 strip_top
+    个类型（当作领域术语），最后算 ``保留数 × 100 / 英文词数``。
+    """
+    group = rules.get("nominalization") or {}
+    suffixes = [str(x).lower() for x in group.get("suffixes") or []
+                if str(x).strip()]
+    min_length = int(group.get("min_length") or 5)
+    strip_top = int(group.get("strip_top") or 5)
+    if not suffixes:
+        return [], 0.0, []
+    actions = {str(k).lower(): str(v)
+               for k, v in ((rules.get("light_verbs") or {})
+                            .get("actions") or {}).items()}
+
+    hits: list[tuple[_Doc, int, str, str]] = []
+    counts: dict[str, int] = {}
+    total_words = 0
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        for m in _LATIN_WORD_RE.finditer(sentence):
+            word = m.group(0).lower()
+            total_words += 1
+            if len(word) < min_length:
+                continue
+            if not any(word.endswith(suffix) for suffix in suffixes):
+                continue
+            counts[word] = counts.get(word, 0) + 1
+            hits.append((doc, start, sentence, word))
+    stripped = [word for word, _n in
+                sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:strip_top]]
+    stripped_set = set(stripped)
+    kept = [h for h in hits if h[3] not in stripped_set]
+    rate = round(len(kept) * 100.0 / total_words, 2) if total_words else 0.0
+    listed = "、".join(stripped) or "无"
+    out: list[Finding] = []
+    for doc, start, sentence, word in kept:
+        action = actions.get(word)
+        fix = ("把「%s」还原成动词「%s」" % (word, action) if action
+               else "把「%s」还原成对应的动词，或删掉多余的名词" % word)
+        out.append(Finding(
+            "NOMINALIZATION_RATE", doc.file, _line_of(doc, start),
+            _clip(sentence, 180),
+            "名词化密度 %.2f/百词（阈值 %.1f）：名词化把动作压成了名词。"
+            "%s。已剥离本文高频术语（前 %d 个）：%s。"
+            % (rate, float((rules.get("thresholds") or {}).get(
+                "nominalization_rate", 4.5)), fix, strip_top, listed),
+            "nominalization_rate"))
+    return out, rate, stripped
+
+
+_ZHE_CHARS = ("着", "著")
+
+
+def _zh_aspect_zhe_findings(sentences, rules: dict
+                            ) -> tuple[list[Finding], int]:
+    """B2：中文「动词＋着」进行体。单位＝每千汉字。
+
+    分词后只认两种形态：单独一个「着」跟在动词后；或整个词以「着」结尾
+    且词性是动词（有着）。词内用法（沿着/照着/接着/意味着）走排除表。
+    """
+    group = rules.get("zh_aspect_zhe") or {}
+    exclude = {str(x) for x in group.get("exclude") or [] if str(x).strip()}
+    out: list[Finding] = []
+    hits = 0
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        if not _cjk_heavy(sentence):
+            continue
+        tokens = segment(sentence)
+        for idx, (token, tstart, tend, pos) in enumerate(tokens):
+            phrase = ""
+            if token in _ZHE_CHARS:
+                if idx == 0 or not tokens[idx - 1][3].startswith("v"):
+                    continue
+                phrase = tokens[idx - 1][0] + token
+            elif (len(token) > 1 and token.endswith(_ZHE_CHARS)
+                  and pos.startswith("v")):
+                if token in exclude:
+                    continue
+                phrase = token
+            else:
+                continue
+            hits += 1
+            out.append(Finding(
+                "ZH_ASPECT_ZHE", doc.file, _line_of(doc, start),
+                _clip(sentence, 180),
+                "「%s」是动词＋「着」的进行体。%s"
+                % (phrase, "写「有」或「存在」即可，删掉「着」；"
+                   "只有确实在进行时才保留进行体。"
+                   if phrase.startswith(("有着", "存在著", "存在着", "存在著"))
+                   else "多数时候删掉「着」更干净，或改成「了」「过」；"
+                        "只有确实在进行时才保留进行体。"),
+                "zh_aspect_zhe"))
+    return out, hits
+
+
+def _zh_dang_when_findings(sentences, rules: dict) -> list[Finding]:
+    """B3：当……的时候 / 当……之后 / 当……时（按条报）。"""
+    group = rules.get("zh_dang_when") or {}
+    tails = [str(x) for x in group.get("tails") or []
+             if str(x).strip()]
+    forbid = {str(x) for x in group.get("forbid_heads") or []}
+    if not tails:
+        return []
+    alts = []
+    for tail in sorted(tails, key=len, reverse=True):
+        piece = re.escape(tail)
+        if tail.endswith("时") and "候" not in tail:
+            piece += "(?!候)"
+        alts.append(piece)
+    # 尾巴后面必须是一个停顿或主句标记：逗号/分号/句末/才就则便方。
+    # 否则「只有当运行时把决定权拿走」里的「运行时」会被当成「当…时」。
+    pat = re.compile(r"当(?P<body>[^。！？；：\n]{1,30}?)(?P<tail>%s)"
+                     r"(?=[，,、：:；;。！？!?]|$|才|就|则|便|方)"
+                     % "|".join(alts))
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        for m in pat.finditer(sentence):
+            body = m.group("body")
+            if body[:1] in forbid:
+                continue
+            tail = m.group("tail")
+            if tail == "之后":
+                fix = "删「当」，写「%s之后」，时间关系自己站住" % body
+            else:
+                fix = ("删「当」和「%s」，让条件自己站住 → 「%s」"
+                       % (tail, body))
+            out.append(Finding(
+                "ZH_DANG_WHEN", doc.file, _line_of(doc, start),
+                _clip(sentence, 180),
+                "「%s」是翻译腔的「当…%s」结构（英文 when 语序）。%s。"
+                % (m.group(0), tail, fix),
+                "zh_dang_when"))
+    return out
+
+
+def _zh_collocation_findings(sentences, rules: dict) -> list[Finding]:
+    """B4：搭配冗余。单位＝处，每条给删法。"""
+    items = (rules.get("zh_collocation_redundancy") or {}).get("items") or []
+    compiled = []
+    for item in items:
+        pattern = str(item.get("pattern") or "")
+        if not pattern:
+            continue
+        try:
+            compiled.append((re.compile(pattern),
+                             str(item.get("label") or pattern),
+                             str(item.get("fix") or "删掉重复的那一半")))
+        except re.error:
+            continue
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        for regex, label, fix in compiled:
+            for m in regex.finditer(sentence):
+                out.append(Finding(
+                    "ZH_COLLOCATION_REDUNDANCY", doc.file,
+                    _line_of(doc, start), _clip(sentence, 180),
+                    "「%s」是搭配冗余（%s，两个词说同一件事）：%s。"
+                    % (m.group(0), label, fix),
+                    "zh_collocation_redundancy"))
+    return out
+
+
+def _abbrev_first_use_findings(sentences, rules: dict) -> list[Finding]:
+    """B5：缩写首现未展开。默认关闭，只由 --report-abbrev 打开。"""
+    group = rules.get("abbrev_rules") or {}
+    min_letters = int(group.get("min_letters") or 2)
+    exclude = {str(x).upper() for x in group.get("exclude") or []}
+    token_re = re.compile(r"\b([A-Z]{%d,})\b" % max(min_letters, 2))
+    groups: dict[str, list[tuple[_Doc, int, str]]] = {}
+    order: list[str] = []
+    for doc, start, end, _units in sentences:
+        if doc.file not in groups:
+            groups[doc.file] = []
+            order.append(doc.file)
+        groups[doc.file].append((doc, start,
+                                 _norm_space(doc.prose[start:end])))
+    out: list[Finding] = []
+    seen: set[str] = set()
+    for name in order:
+        previous = ""
+        for doc, start, sentence in groups[name]:
+            context = (previous + " " + sentence) if previous else sentence
+            for m in token_re.finditer(sentence):
+                token = m.group(1)
+                if token in seen or token in exclude:
+                    continue
+                seen.add(token)
+                expanded = re.search(r"[（(]\s*%s\s*[）)]" % re.escape(token),
+                                     context)
+                if expanded:
+                    continue
+                out.append(Finding(
+                    "ABBREV_FIRST_USE", doc.file, _line_of(doc, start),
+                    _clip(sentence, 180),
+                    "缩写「%s」首次出现时没有展开。同句或前一句写成"
+                    "「全称（%s）」或「Expanded Name (%s)」，后文再用缩写。"
+                    % (token, token, token),
+                    "abbrev_first_use"))
+            previous = sentence
+    return out
+
+
 def _wordiness_bloat_findings(sentences, rules: dict) -> list[Finding]:
     replacements = {str(k): str(v) for k, v in
                     ((rules.get("wordiness") or {}).get("replacements") or {}).items()}
@@ -2059,6 +2370,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
             before: tuple[Config, list[tuple[str, str]]] | None = None,
             report_unregistered: bool = False,
+            report_abbrev: bool = False,
             formats: dict[str, str] | None = None
             ) -> StyleResult:
     thresholds = _thresholds(rules)
@@ -2127,6 +2439,29 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         _zh_due_to_make_findings(all_sentences, rules))
     instances["ZH_LIGHT_VERB_NOUN"].extend(
         _zh_light_verb_noun_findings(all_sentences, rules))
+
+    # ---- 批 105 B 档：两条密度型 + 三条按条型 ----
+    nom_findings, nom_rate, nom_stripped = _nominalization_rate_findings(
+        all_sentences, rules)
+    instances["NOMINALIZATION_RATE"].extend(nom_findings)
+    zhe_findings, zhe_hits = _zh_aspect_zhe_findings(all_sentences, rules)
+    instances["ZH_ASPECT_ZHE"].extend(zhe_findings)
+    instances["ZH_DANG_WHEN"].extend(
+        _zh_dang_when_findings(all_sentences, rules))
+    instances["ZH_COLLOCATION_REDUNDANCY"].extend(
+        _zh_collocation_findings(all_sentences, rules))
+    abbrev_enabled = bool(report_abbrev
+                          or rules.get("abbrev_first_use", False))
+    if abbrev_enabled:
+        instances["ABBREV_FIRST_USE"].extend(
+            _abbrev_first_use_findings(all_sentences, rules))
+    cjk_chars = sum(len(_CJK_RE.findall(d.prose)) for d in docs)
+    zhe_rate = round(zhe_hits * 1000.0 / cjk_chars, 2) if cjk_chars else 0.0
+    metric_details = {
+        "nominalization_stripped": nom_stripped,
+        "abbrev_first_use_enabled": abbrev_enabled,
+        "zh_aspect_zhe_raw_hits": zhe_hits,
+    }
 
     # ---- 1. 套话连接词 ----
     connective_hits = 0
@@ -2581,6 +2916,13 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "zh_postposed_condition": len(instances["ZH_POSTPOSED_CONDITION"]),
         "zh_due_to_make": len(instances["ZH_DUE_TO_MAKE"]),
         "zh_light_verb_noun": len(instances["ZH_LIGHT_VERB_NOUN"]),
+        # 批 105 B 档
+        "nominalization_rate": nom_rate,
+        "zh_aspect_zhe": zhe_rate,
+        "zh_dang_when": len(instances["ZH_DANG_WHEN"]),
+        "zh_collocation_redundancy":
+            len(instances["ZH_COLLOCATION_REDUNDANCY"]),
+        "abbrev_first_use": len(instances["ABBREV_FIRST_USE"]),
     }
 
     fired = []
@@ -2618,7 +2960,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
                         "zh_de_stack", "zh_postposed_condition",
-                        "zh_due_to_make", "zh_light_verb_noun"):
+                        "zh_due_to_make", "zh_light_verb_noun",
+                        "zh_dang_when", "zh_collocation_redundancy",
+                        "abbrev_first_use"):
             limit = 1
             hit = value >= limit
             shown = limit
@@ -2701,7 +3045,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                        findings=findings, paragraphs=paragraphs,
                        instances=instances, summary=summary,
                        rules_path=rules_path, stage_assessment=stage,
-                       info=info)
+                       info=info, metric_details=metric_details)
 
 
 # --------------------------------------------------------------------------
@@ -2799,6 +3143,11 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("zh_postposed_condition", "ZH_POSTPOSED_CONDITION", ">="),
         ("zh_due_to_make", "ZH_DUE_TO_MAKE", ">="),
         ("zh_light_verb_noun", "ZH_LIGHT_VERB_NOUN", ">="),
+        ("nominalization_rate", "NOMINALIZATION_RATE", ">"),
+        ("zh_aspect_zhe", "ZH_ASPECT_ZHE", ">"),
+        ("zh_dang_when", "ZH_DANG_WHEN", ">="),
+        ("zh_collocation_redundancy", "ZH_COLLOCATION_REDUNDANCY", ">="),
+        ("abbrev_first_use", "ABBREV_FIRST_USE", ">="),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
@@ -2843,6 +3192,15 @@ def render_human(result: StyleResult, project: Path) -> str:
                      "zh_postposed_condition", "zh_due_to_make",
                      "zh_light_verb_noun"):
             threshold = ">=1"
+        elif key == "nominalization_rate":
+            threshold = ">%s/100词" % _fmt(
+                result.thresholds.get("nominalization_rate", 0))
+        elif key == "zh_aspect_zhe":
+            threshold = ">%s/千字" % _fmt(
+                result.thresholds.get("zh_aspect_zhe", 0))
+        elif key in ("zh_dang_when", "zh_collocation_redundancy",
+                     "abbrev_first_use"):
+            threshold = ">=1处"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost"):
             threshold = ">=1"
@@ -2850,10 +3208,18 @@ def render_human(result: StyleResult, project: Path) -> str:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]
         status = "触发" if label in fired_codes else "ok"
+        if (key == "abbrev_first_use"
+                and not result.metric_details.get("abbrev_first_use_enabled")):
+            status = "关"
         if key == "term_unregistered" and m.get("term_unregistered"):
             status = "提示"
         lines.append("%-23s  %-8s  %-7s  %s"
                      % (label, _fmt(value), threshold, status))
+    stripped = result.metric_details.get("nominalization_stripped") or []
+    if stripped:
+        lines.append("")
+        lines.append("名词化剥离（本文高频术语，前 %d 个）：%s"
+                     % (len(stripped), "、".join(stripped)))
     lines.append("")
     if result.fired and stage.get("advice") == ADVICE_REPORT_ONLY:
         lines.append("[观察] %d 处清单（成品稿：建议不改，以下只作报告）"

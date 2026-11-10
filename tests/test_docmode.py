@@ -371,6 +371,7 @@ class TexPathRegressionTest(unittest.TestCase):
     """`.tex` 走旧路径：examples/minimal 的读数与退出码逐项锁定。"""
 
     EXPECTED_METRICS = {
+        "abbrev_first_use": 0,
         "colloquial_triad": 0,
         "connective_density": 0.0,
         "dash_parenthetical": 1,
@@ -384,6 +385,7 @@ class TexPathRegressionTest(unittest.TestCase):
         "hedge_stack": 0,
         "justify_chain": 0,
         "light_verb_nominalization": 0,
+        "nominalization_rate": 0.0,
         "paragraph_template": 0.0,
         "repeated_opener": 0,
         "rhythm_plateau": 1,
@@ -393,6 +395,9 @@ class TexPathRegressionTest(unittest.TestCase):
         "term_unregistered": 0,
         "term_variant": 0,
         "wordiness_bloat": 0,
+        "zh_aspect_zhe": 0.0,
+        "zh_collocation_redundancy": 0,
+        "zh_dang_when": 0,
         "zh_de_stack": 0,
         "zh_due_to_make": 0,
         "zh_postposed_condition": 0,

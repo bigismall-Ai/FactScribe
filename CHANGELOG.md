@@ -12,6 +12,7 @@ and will not change without a major version bump.
 ### Added
 - `segment`: a stdlib-only Chinese tokenizer with part-of-speech tags, backed by the jieba dictionary (349,046 entries, copied as data under `factscribe/terms/seg.tsv.gz`).
 - `style`: `ZH_LIGHT_VERB_NOUN` reports Chinese light-verb + noun constructions (`进行了分析` → `分析了`) with the action verb spelled out; item-counted, no density gate.
+- `style`: five B-tier syntax rules (batch 105). `NOMINALIZATION_RATE` counts English nominalization per 100 words after stripping the document's five most frequent types (reported in `metric_details.nominalization_stripped`). `ZH_ASPECT_ZHE` counts verb + 着 per 1000 Chinese characters, excluding lexicalised forms. `ZH_DANG_WHEN` reports `当……的时候/之后/时`. `ZH_COLLOCATION_REDUNDANCY` reports ten redundant collocations with a deletion fix. `ABBREV_FIRST_USE` reports an abbreviation whose first use has no expansion; it is **off by default** and only runs under `style --report-abbrev` because all four corpora exceed the 2-per-10,000-word false-positive budget.
 
 ## [1.3.0] - 2026-11-10
 

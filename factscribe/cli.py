@@ -108,6 +108,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--report-unregistered", action="store_true",
                     help="打开 TERM_UNREGISTERED 提示（默认关；只查标题，"
                          "结果进 info 通道，不进 findings、不影响退出码）")
+    sp.add_argument("--report-abbrev", action="store_true",
+                    help="打开 ABBREV_FIRST_USE（默认关；缩写首现未展开，"
+                         "按条报，进 findings）")
     sp = sub.add_parser(
         "protect", help="改写保护面比对：前后目录的 facts/数字/引用/公式/表格/交叉引用")
     sp.add_argument("--before", required=True, help="改写前目录")
@@ -293,6 +296,7 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
     cfg = Config(root=root)
     result = analyze(cfg, sections, rules, rules_path=rules_path,
                      report_unregistered=bool(args.report_unregistered),
+                     report_abbrev=bool(args.report_abbrev),
                      formats=formats)
     code = result.exit_code
 
@@ -312,6 +316,7 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
                        fired=result.fired,
                        summary=result.summary,
                        stage_assessment=dict(result.stage_assessment),
+                       metric_details=dict(result.metric_details),
                        disclaimer=DISCLAIMER,
                        rules=rules_path,
                        mode="doc",
@@ -340,7 +345,8 @@ def cmd_style(args) -> int:
         before = (before_cfg, before_sections)
     result = analyze(cfg, sections, rules, rules_path=rules_path,
                      before=before,
-                     report_unregistered=bool(args.report_unregistered))
+                     report_unregistered=bool(args.report_unregistered),
+                     report_abbrev=bool(args.report_abbrev))
     if before is not None:
         baseline = analyze(before[0], before[1], rules, rules_path=rules_path)
         result = filter_new_findings(result, baseline)
@@ -366,6 +372,7 @@ def cmd_style(args) -> int:
                        fired=result.fired,
                        summary=result.summary,
                        stage_assessment=dict(result.stage_assessment),
+                       metric_details=dict(result.metric_details),
                        disclaimer=DISCLAIMER,
                        rules=rules_path)
     if before is not None:

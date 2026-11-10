@@ -21,6 +21,11 @@ term_allow_files = ["GLOSSARY.md", "term-allow.txt"]
 # 打开时只查标题，结果单独走 info 通道：不进 findings 计数、不影响退出码。
 term_unregistered = false
 
+# ABBREV_FIRST_USE 默认关闭（批 105 B5）：四份语料里专名与通用缩写混在
+# 一起，「该不该展开」仍需人判断。只由 `style --report-abbrev` 打开；
+# 打开后进 findings。改 true 即常开（不建议，见 docs/implementation/SYNTAX-B.md）。
+abbrev_first_use = false
+
 # 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
 # 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）
 # 不承载对立关系，不进本表。英文按词边界，中文按结构匹配。
@@ -74,6 +79,20 @@ zh_de_stack_max_gap = 6
 # 批 104：中文轻动词＋名词（进行/作出/加以/给予/予以 +（的）+ 名词）。
 # 按条报，>= 1 触发；不设密度闸。词性来自 factscribe/segment.py。
 zh_light_verb_noun = 1
+
+# ---- 批 105 B 档 ----
+# 英文名词化密度：单位＝每百词（Sword 口径），即每 100 个英文词里名词化
+# 词形的个数；剥离本文频次最高的 5 个类型（当作领域术语）后再算。
+# 4.5 表示 4.5/百词；> 触发。
+nominalization_rate = 4.5
+# 中文「动词＋着」进行体：单位＝每千个汉字（不是每千词）；> 触发。
+zh_aspect_zhe = 0.8
+# 中文「当……的时候 / 当……之后 / 当……时」：单位＝处，>= 1 触发。
+zh_dang_when = 1
+# 中文搭配冗余（大约…左右/唯一一个/相互之间…）：单位＝处，>= 1 触发。
+zh_collocation_redundancy = 1
+# 缩写首现未展开：单位＝处，>= 1 触发；开关在文件顶部。
+abbrev_first_use = 1
 
 # ---- v4 新增（SPEC-V3.0 §13）----
 # 插入语破折号（—— / —）预算：出现数 > 预算才报；按处报，默认 0
@@ -339,3 +358,87 @@ exempt_phrases = ["进行中", "进行时", "作出决定"]
 "考虑" = "考虑"
 "理解" = "理解"
 "要求" = "要求"
+
+# ---- 批 105 B 档词表 ----
+
+[nominalization]
+# 英文名词化后缀；不含裸 -al/-ic/-ive（命中的几乎全是技术词）。
+suffixes = ["tion", "sion", "ment", "ance", "ence", "ity", "ness", "ism"]
+# 词长下限：短于 5 个字母的词形不算（tion 本身不是词）。
+min_length = 5
+# 剥离本文频次最高的 N 个类型，当作领域术语；报时列出被剥离的词。
+strip_top = 5
+
+[zh_aspect_zhe]
+# 动词后「着」的词内用法：不是进行体，不计入分子。
+exclude = ["意味着", "标志着", "象征着", "预示着", "代表着",
+           "照着", "沿着", "朝着", "向着", "随着", "接着", "跟着",
+           "当着", "为着", "冲着", "凭着", "按着", "依着", "据着",
+           "本着", "对着", "关于", "够得着", "够不着", "来着", "合着"]
+
+[zh_dang_when]
+# 只认这三种尾巴；「时」后面不能跟「候」（否则是「什么时候」）。
+tails = ["的时候", "之后", "时"]
+# 「当」后紧跟这些字是词内用法（当成/当作/当天/当时/当面…），不算条件。
+forbid_heads = ["成", "作", "然", "即", "初", "场", "时", "天", "年",
+                "月", "日", "前", "中", "下", "上", "面", "真", "众",
+                "地", "晚", "夜", "早", "代", "今"]
+
+[zh_collocation_redundancy]
+# 搭配冗余：每条给匹配式与删法；单位＝处。
+[[zh_collocation_redundancy.items]]
+label = "大约…左右"
+pattern = "大约[^。！？；]{0,20}左右"
+fix = "删「大约」或「左右」，只留一个"
+
+[[zh_collocation_redundancy.items]]
+label = "唯一一个"
+pattern = "唯一一个"
+fix = "删「一个」，写「唯一」"
+
+[[zh_collocation_redundancy.items]]
+label = "相互之间"
+pattern = "相互之间"
+fix = "删「相互」，写「之间」"
+
+[[zh_collocation_redundancy.items]]
+label = "彼此互相"
+pattern = "彼此互相"
+fix = "删「彼此」或「互相」，只留一个"
+
+[[zh_collocation_redundancy.items]]
+label = "提前预…"
+pattern = "提前预[先进订定约热租告测]"
+fix = "删「提前」，写「预订/预支/预约」"
+
+[[zh_collocation_redundancy.items]]
+label = "免费赠送"
+pattern = "免费赠送"
+fix = "删「免费」，赠送本身就不收钱"
+
+[[zh_collocation_redundancy.items]]
+label = "亲眼目睹"
+pattern = "亲眼目睹"
+fix = "删「亲眼」，目睹本身就是亲眼看见"
+
+[[zh_collocation_redundancy.items]]
+label = "再次重申"
+pattern = "再次重申"
+fix = "删「再次」，重申就是再说一次"
+
+[[zh_collocation_redundancy.items]]
+label = "一致公认"
+pattern = "一致公认"
+fix = "删「一致」，公认就是一致认为"
+
+[[zh_collocation_redundancy.items]]
+label = "首先第一"
+pattern = "首先第一"
+fix = "删「首先」或「第一」，只留一个"
+
+[abbrev_rules]
+# ≥2 个大写字母才算缩写。
+min_letters = 2
+# 罗马数字、文献标记不是缩写。
+exclude = ["II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII",
+           "XIII", "XIV", "XV", "TODO", "TBD", "FIXME"]

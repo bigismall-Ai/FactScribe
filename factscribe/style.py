@@ -6,8 +6,9 @@
 * 插入语破折号、标题过长/带解释、标题术语未在首句定义；
 * 节奏平台、同构三点并列在相邻段重复、套话连接词、空泛形容词、超长句；
 * 改写后复检：首句复述标题（``HEADING_ECHO``）、标题关系词变化
-  （``HEADING_RELATION_CHANGED``）、旧标题主语丢失（``HEADING_SUBJECT_LOST``），
-  以及只报新增违规的 ``style --diff <before>``。
+  （``HEADING_RELATION_CHANGED``）、旧标题主语丢失（``HEADING_SUBJECT_LOST``）、
+  只换冒号不重写（``HEADING_SUBSTITUTED``），以及只报新增违规的
+  ``style --diff <before>``。
 
 * 本工具**不评估、也不试图规避任何 AI 检测器**。它只检测可机械复算的
   写法；输出是「文件:行 + 原文 + 具体改法」，不是「像 AI」的分数。
@@ -176,6 +177,13 @@ DEFAULT_RULES: dict = {
     # （and / or / 与 / 及 / 、）不进本表——删掉它们不改变论证方向。
     "heading_relation_words": ["versus", "vs", "not", "without",
                                "对", "而非", "不是"],
+    # 批 119：标题换标点/换介词规避（HEADING_SUBSTITUTED）。旧标题带冒号、
+    # 新标题不带冒号，且把冒号换成下列 token 后与新高标题逐字相同 → 报。
+    # 只换 token 不重写，与手册第 8 条「禁止换标点过关、也禁止换介词过关」同源。
+    "heading_substitute": {
+        "punctuation": ["、", "，", ",", "（", "）"],
+        "prepositions": ["as", "with", "for", "of"],
+    },
     # 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾
     # 的标题不算「带句号」——句点是缩写的一部分，不是句子终止符。
     # 大小写不敏感；表可在项目根 style-rules.toml 覆盖。
@@ -398,6 +406,7 @@ DIRECTIONS = {
     "heading_echo": "at_least",
     "heading_relation_changed": "at_least",
     "heading_subject_lost": "at_least",
+    "heading_substituted": "at_least",
     # 批 90 术语层（TERM_UNREGISTERED 只提示，不进本表）
     "term_variant": "at_least",
     # 批 102 句法级判据（按条件计数，>= 1 触发）
@@ -437,6 +446,7 @@ CODE_OF = {
     "heading_echo": "HEADING_ECHO",
     "heading_relation_changed": "HEADING_RELATION_CHANGED",
     "heading_subject_lost": "HEADING_SUBJECT_LOST",
+    "heading_substituted": "HEADING_SUBSTITUTED",
     # 批 90 术语层
     "term_variant": "TERM_VARIANT",
     "term_unregistered": "TERM_UNREGISTERED",
@@ -458,7 +468,8 @@ CODE_OF = {
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_TOO_LONG", "HEADING_MALFORMED",
                  "HEADING_ECHO", "HEADING_RELATION_CHANGED",
-                 "HEADING_SUBJECT_LOST", "TERM_FIRST_IN_HEADING",
+                 "HEADING_SUBJECT_LOST", "HEADING_SUBSTITUTED",
+                 "TERM_FIRST_IN_HEADING",
                  "TERM_VARIANT", "TERM_UNREGISTERED",
                  "LIGHT_VERB_NOMINALIZATION", "WORDINESS_BLOAT",
                  "ZH_DE_STACK", "ZH_POSTPOSED_CONDITION", "ZH_DUE_TO_MAKE",
@@ -1326,7 +1337,7 @@ def _first_sentence_after(doc: _Doc, line: int) -> str:
 
 # --------------------------------------------------------------------------
 # v5：改写后复检（HEADING_ECHO / HEADING_RELATION_CHANGED /
-#     HEADING_SUBJECT_LOST / style --diff）
+#     HEADING_SUBJECT_LOST / HEADING_SUBSTITUTED / style --diff）
 # --------------------------------------------------------------------------
 
 _ECHO_STOP_EN = set(_TERM_STOP) | {
@@ -1620,6 +1631,71 @@ def _lost_subjects(old_title: str, new_title: str, new_first: str,
     return lost
 
 
+_COLON_RE = re.compile(r"[：:]")
+
+
+def _substitute_tokens(rules: dict) -> tuple[list[str], list[str]]:
+    """HEADING_SUBSTITUTED 的替换 token 表（项目根可覆盖）。"""
+    cfg = rules.get("heading_substitute")
+    if not isinstance(cfg, dict):
+        cfg = {}
+    punct = cfg.get("punctuation")
+    if punct is None:
+        punct = DEFAULT_RULES["heading_substitute"]["punctuation"]
+    prep = cfg.get("prepositions")
+    if prep is None:
+        prep = DEFAULT_RULES["heading_substitute"]["prepositions"]
+    if not isinstance(punct, (list, tuple)):
+        punct = [punct]
+    if not isinstance(prep, (list, tuple)):
+        prep = [prep]
+    return ([str(x) for x in punct if str(x)],
+            [str(x).strip() for x in prep if str(x).strip()])
+
+
+def _heading_substitution(old_title: str, new_title: str,
+                          rules: dict) -> tuple[str, str] | None:
+    """旧标题的冒号被纯替换成标点/介词时返回 ``(类别, token)``，否则 None。
+
+    判据（见 ``docs/design/SPEC-SYNTAX-C.md``）：
+
+    1. 旧标题含冒号（``:`` / ``：``），新标题不含冒号；
+    2. 把旧标题的冒号换成 ``、，,（）`` 之一后与新标题逐字相同（只容
+       首尾空白），或换成 ``as / with / for / of`` 之一后与新标题相同
+       （大小写不敏感，冒号两侧空白可增减）。除替换 token 外不再改动
+       别的词——改了别的词就不是「纯替换」，交给真重写。
+    """
+    old = _norm_space(old_title)
+    new = _norm_space(new_title)
+    if not old or not new:
+        return None
+    if not _COLON_RE.search(old) or _COLON_RE.search(new):
+        return None
+    punct_tokens, prep_tokens = _substitute_tokens(rules)
+    for match in _COLON_RE.finditer(old):
+        idx = match.start()
+        for token in punct_tokens:
+            candidate = old[:idx] + token + old[idx + 1:]
+            if candidate.strip() == new.strip():
+                return "标点", token
+        left = old[:idx].rstrip()
+        right = old[idx + 1:].lstrip()
+        for token in prep_tokens:
+            word = re.escape(token)
+            if left and right:
+                pattern = r"%s\s+(?i:%s)\s+%s" % (
+                    re.escape(left), word, re.escape(right))
+            elif left:
+                pattern = r"%s\s+(?i:%s)" % (re.escape(left), word)
+            elif right:
+                pattern = r"(?i:%s)\s+%s" % (word, re.escape(right))
+            else:
+                continue
+            if re.fullmatch(pattern, new, re.IGNORECASE):
+                return "介词", token
+    return None
+
+
 def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                               rules: dict) -> list[Finding]:
     """改写前后按文件、按标题出现顺序配对，报关系词变化与主语丢失。"""
@@ -1637,6 +1713,17 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
             old_title, new_title = old["title"], new["title"]
             if old_title == new_title:
                 continue
+            substitution = _heading_substitution(old_title, new_title, rules)
+            if substitution is not None:
+                kind, token = substitution
+                findings.append(Finding(
+                    "HEADING_SUBSTITUTED", doc.file, new["line"],
+                    _clip(new_title, 160),
+                    "标题只是把冒号换成了%s「%s」，没有重写（旧：「%s」；新："
+                    "「%s」）。两截结构没变，不算改写：删掉类别词，重写成能"
+                    "独立指路的名词短语，正文事实不动。"
+                    % (kind, token, _clip(old_title, 80), _clip(new_title, 80)),
+                    "heading_substituted"))
             old_rel = _relation_hits(old_title, relation_words)
             new_rel = _relation_hits(new_title, relation_words)
             old_set = {_canon_relation(w) for w in old_rel}
@@ -2627,7 +2714,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     # ---- 3b. 标题：过长 / 带解释 / 术语未在首句定义 / 首句复述标题 ----
     heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
                       "HEADING_ECHO": 0, "HEADING_RELATION_CHANGED": 0,
-                      "HEADING_SUBJECT_LOST": 0, "TERM_FIRST_IN_HEADING": 0}
+                      "HEADING_SUBJECT_LOST": 0, "HEADING_SUBSTITUTED": 0,
+                      "TERM_FIRST_IN_HEADING": 0}
     period_exempt = _period_exempt_words(rules)
     glossary = _glossary_for(rules, cfg.root)
     allow_keys, allow_canon = _term_allowlist(rules, cfg.root, glossary)
@@ -2954,6 +3042,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "heading_echo": heading_counts["HEADING_ECHO"],
         "heading_relation_changed": heading_counts["HEADING_RELATION_CHANGED"],
         "heading_subject_lost": heading_counts["HEADING_SUBJECT_LOST"],
+        "heading_substituted": heading_counts["HEADING_SUBSTITUTED"],
         "term_first_in_heading": heading_counts["TERM_FIRST_IN_HEADING"],
         "term_variant": len(variant_findings),
         "term_unregistered": len(instances["TERM_UNREGISTERED"]),
@@ -3018,7 +3107,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric in ("heading_too_long", "heading_malformed",
                         "term_first_in_heading", "heading_echo",
-                        "heading_relation_changed", "heading_subject_lost"):
+                        "heading_relation_changed", "heading_subject_lost",
+                        "heading_substituted"):
             limit = 1
             hit = value >= limit
             shown = limit
@@ -3191,6 +3281,7 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("heading_echo", "HEADING_ECHO", ">="),
         ("heading_relation_changed", "HEADING_RELATION_CHANGED", ">="),
         ("heading_subject_lost", "HEADING_SUBJECT_LOST", ">="),
+        ("heading_substituted", "HEADING_SUBSTITUTED", ">="),
         ("term_first_in_heading", "TERM_FIRST_IN_HEADING", ">="),
         ("term_variant", "TERM_VARIANT", ">="),
         ("term_unregistered", "TERM_UNREGISTERED", "提示"),
@@ -3259,7 +3350,8 @@ def render_human(result: StyleResult, project: Path) -> str:
                      "abbrev_first_use"):
             threshold = ">=1处"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
-                     "heading_relation_changed", "heading_subject_lost"):
+                     "heading_relation_changed", "heading_subject_lost",
+                     "heading_substituted"):
             threshold = ">=1"
         else:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))

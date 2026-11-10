@@ -101,6 +101,7 @@ python3 -m factscribe review --before 原稿 --after 改后
    正例（英文）：`Results: The Gate Wins on Drafts and Loses on Polished Text` → `Gate Wins on Drafts, Loses on Polished Text`（删类别词，改名词短语）。
    正例（英文）：`Conclusion: A Draft-Stage Intervention` → `A Draft-Stage Intervention`。
    正例（英文）：`Design: A Contract Before a Judge` → `Contract-first design`。
+   第 8 条由 `HEADING_SUBSTITUTED` 机械复核：`style --diff` 带 `--before` 时，旧冒号标题只换成 `、` / `，` / `,` / `（` / `）` 或 `as` / `with` / `for` / `of` 即报（细则见 `docs/design/SPEC-SYNTAX-C.md`）。
 9. **禁止只删词不重写**：标题压长度时，删掉类别词后必须仍然是一个能独立指路的短语，不许留下残句。
    反例：`结论：一项草稿阶段的干预` → `一项草稿阶段`（删掉中心词「干预」，只剩定语，不成短语）。
    正例：`结论：一项草稿阶段的干预` → `一项草稿阶段的干预`（删掉类别词「结论」，剩下的仍是完整名词短语）。

@@ -37,6 +37,13 @@ abbrev_first_use = false
 heading_relation_words = ["versus", "vs", "not", "without",
                           "对", "而非", "不是"]
 
+# 批 119：标题换标点/换介词规避（HEADING_SUBSTITUTED）。旧标题带冒号、
+# 新标题不带冒号，且把冒号换成下列 token 后与新高标题逐字相同 → 报。
+# 只换 token 不重写，与手册第 8 条「禁止换标点过关、也禁止换介词过关」同源。
+[heading_substitute]
+punctuation = ["、", "，", ",", "（", "）"]
+prepositions = ["as", "with", "for", "of"]
+
 # 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾的
 # 标题不算「带句号」——句点是缩写的一部分，不是句子终止符。大小写不敏感。
 # 批 113：\paragraph / \subparagraph 是行内标题（run-in heading），末尾句点

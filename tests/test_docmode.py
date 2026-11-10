@@ -381,6 +381,7 @@ class TexPathRegressionTest(unittest.TestCase):
         "heading_malformed": 0,
         "heading_relation_changed": 0,
         "heading_subject_lost": 0,
+        "heading_substituted": 0,
         "heading_too_long": 0,
         "hedge_stack": 0,
         "justify_chain": 0,

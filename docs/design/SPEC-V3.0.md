@@ -1811,6 +1811,15 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | 降级说明 | **不降为 `info`**：它与 §15.3 不完全重合——关系词可以保留而对象被换掉（如 `A versus B` → `A versus C`），此时只有本条能报 |
 | 对应码 | `HEADING_SUBJECT_LOST` |
 
+### 15.4b `HEADING_SUBSTITUTED`（黄，需 `--before`）
+
+只抓「旧标题冒号 → 标点/介词 token，其余逐字不动」的伪装改写。旧标题含
+冒号、新标题不含冒号，且把冒号换成 `、` / `，` / `,` / `（` / `）` 之一后
+逐字相同，或换成 `as` / `with` / `for` / `of` 之一后相同（大小写不敏感）
+即报；真重写、删类别词、删句号、除冒号外还改了别的词都不报。完整判据、
+不报边界与真实读数见 `docs/design/SPEC-SYNTAX-C.md`。与手册第 8 条
+「禁止换标点过关、也禁止换介词过关」同源。对应码 `HEADING_SUBSTITUTED`。
+
 ### 15.5 `style --diff <before 目录>`
 
 | 项 | 判据 |
@@ -1819,7 +1828,7 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | 算法 | 先按常规跑改后全文，再按同一规则跑改前全文；按 `(code, file, 规范化 text)` 做**多重集差**，只留下改后多出来的条目。改前有、改后同样有 → 不报；改前有、改后更多 → 只报多出来的条目 |
 | 输出 | `findings/fired/summary/exit_code` 都以「新增」为准；改后全文指标仍原样输出；`--json` 顶层多一个 `diff` 块：`{"before": "...", "baseline_findings": N, "new_findings": M}` |
 | 退出码 | 无新增 → 0；有新增 → 3；永不 1 |
-| 兼容 | **不传 `--diff` 时行为与 v4 完全一致**（除 §15.1/§15.2 的新增与文案）；`HEADING_RELATION_CHANGED` 与 `HEADING_SUBJECT_LOST` 只在传 `--diff` 时运行 |
+| 兼容 | **不传 `--diff` 时行为与 v4 完全一致**（除 §15.1/§15.2 的新增与文案）；`HEADING_RELATION_CHANGED`、`HEADING_SUBJECT_LOST` 与 `HEADING_SUBSTITUTED` 只在传 `--diff` 时运行 |
 
 ### 15.6 明确不实现（写死）
 
@@ -1836,6 +1845,8 @@ python3 -m factscribe protect --before <目录A> --after <目录B> [--json] [--a
 | `heading_echo.generic_terms_zh` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
 | `heading_echo.meta_openers_en` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
 | `heading_echo.meta_openers_zh` | 字符串数组 | 见 `style-rules.toml` | `HEADING_ECHO` |
+| `heading_substitute.punctuation` | 字符串数组 | `["、","，",",","（","）"]` | `HEADING_SUBSTITUTED` |
+| `heading_substitute.prepositions` | 字符串数组 | `["as","with","for","of"]` | `HEADING_SUBSTITUTED` |
 
 ### 15.8 验收
 

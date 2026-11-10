@@ -30,6 +30,7 @@ from . import mdscan
 from .config import Config, ConfigError, load_toml
 from .constants import EXIT_OK, EXIT_YELLOW
 from .livetext import _live_text
+from .segment import segment
 from .terms import Glossary, key_of, load_glossary
 from .texscan import sentence_spans
 
@@ -88,6 +89,8 @@ DEFAULT_RULES: dict = {
         # 两对相邻「的」的间隔不超过 zh_de_stack_max_gap 个汉字才算成链。
         # 不看「的」总数或整句长度（正常复句里定语再长也不报）。
         "zh_de_stack_max_gap": 6,
+        # 批 104：中文轻动词＋名词（按条报，>= 1 触发，无密度闸）。
+        "zh_light_verb_noun": 1,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -252,6 +255,30 @@ DEFAULT_RULES: dict = {
         "chinese": ["由于", "因为"],
         "effects": ["使得", "致使", "导致"],
     },
+    # 批 104：中文轻动词＋名词（ZH_LIGHT_VERB_NOUN）。词性来自分词底座
+    # factscribe/segment.py；只认名词侧（n 开头，另含 vn 动名词）。
+    "zh_light_verb_noun": {
+        "verbs": ["进行", "作出", "加以", "给予", "予以"],
+        # 正常搭配：状态/时间/既定说法，不报。
+        "exempt_phrases": ["进行中", "进行时", "作出决定"],
+        # 「动作其实是什么」：名词 -> 动词。查不到时给通用改法，不瞎猜。
+        "actions": {
+            "分析": "分析", "研究": "研究", "评估": "评估",
+            "调整": "调整", "优化": "优化", "改进": "改进",
+            "调查": "调查", "检验": "检验", "测量": "测量",
+            "管理": "管理", "建设": "建设", "发展": "发展",
+            "改革": "改革", "实验": "实验", "测试": "测试",
+            "验证": "验证", "分类": "分类", "定义": "定义",
+            "总结": "总结", "报告": "报告", "计划": "计划",
+            "贡献": "贡献", "建议": "建议", "决定": "决定",
+            "讨论": "讨论", "说明": "说明", "比较": "比较",
+            "介绍": "介绍", "解释": "解释", "描述": "描述",
+            "观察": "观察", "计算": "计算", "处理": "处理",
+            "支持": "支持", "帮助": "帮助", "保护": "保护",
+            "控制": "控制", "限制": "限制", "关注": "关注",
+            "考虑": "考虑", "理解": "理解", "要求": "要求",
+        },
+    },
 }
 
 # 指标方向：True = 超过阈值触发；False = 低于阈值触发；单点指标用下限。
@@ -284,6 +311,8 @@ DIRECTIONS = {
     "zh_de_stack": "at_least",
     "zh_postposed_condition": "at_least",
     "zh_due_to_make": "at_least",
+    # 批 104
+    "zh_light_verb_noun": "at_least",
 }
 
 CODE_OF = {
@@ -316,6 +345,7 @@ CODE_OF = {
     "zh_de_stack": "ZH_DE_STACK",
     "zh_postposed_condition": "ZH_POSTPOSED_CONDITION",
     "zh_due_to_make": "ZH_DUE_TO_MAKE",
+    "zh_light_verb_noun": "ZH_LIGHT_VERB_NOUN",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
@@ -325,6 +355,7 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "TERM_VARIANT", "TERM_UNREGISTERED",
                  "LIGHT_VERB_NOMINALIZATION", "WORDINESS_BLOAT",
                  "ZH_DE_STACK", "ZH_POSTPOSED_CONDITION", "ZH_DUE_TO_MAKE",
+                 "ZH_LIGHT_VERB_NOUN",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
                  "JUSTIFY_CHAIN", "REPEATED_OPENER",
@@ -1933,6 +1964,72 @@ def _zh_due_to_make_findings(sentences, rules: dict) -> list[Finding]:
     return out
 
 
+def _is_noun_side(pos: str) -> bool:
+    """名词侧：n 开头（n/nr/ns/nt/nz/nrt…）外加 vn（动名词）。
+
+    结巴把「分析/研究/评估/调整/优化」标成 vn；只认 n 会让
+    「进行了分析」永远报不出来。纯动词 v 不进来。
+    """
+    return pos.startswith("n") or pos == "vn"
+
+
+def _is_content_pos(pos: str) -> bool:
+    """实词（名词或动词）。用来识别「专门优化」里的修饰语。"""
+    return pos.startswith("n") or pos.startswith("v")
+
+
+def _zh_light_verb_noun_findings(sentences, rules: dict) -> list[Finding]:
+    group = rules.get("zh_light_verb_noun") or {}
+    verbs = [str(x) for x in group.get("verbs") or [] if str(x).strip()]
+    if not verbs:
+        return []
+    verb_set = set(verbs)
+    exempt = [str(x) for x in group.get("exempt_phrases") or []
+              if str(x).strip()]
+    actions = {str(k): str(v)
+               for k, v in (group.get("actions") or {}).items()}
+    out: list[Finding] = []
+    for doc, start, end, _units in sentences:
+        sentence = _norm_space(doc.prose[start:end])
+        if not any(verb in sentence for verb in verbs):
+            continue
+        tokens = segment(sentence)
+        for idx, (token, tstart, _tend, _pos) in enumerate(tokens):
+            if token not in verb_set:
+                continue
+            j = idx + 1
+            # 体标记：进行了分析 / 进行着讨论 / 进行过比较。
+            if j < len(tokens) and tokens[j][0] in ("了", "着", "过"):
+                j += 1
+            # 可选「的」：进行的研究。
+            if j < len(tokens) and tokens[j][0] == "的":
+                j += 1
+            if j >= len(tokens):
+                continue
+            noun, _ns, nend, npos = tokens[j]
+            if not _is_noun_side(npos):
+                continue
+            # 名词后面紧跟另一个名词/动词：它是修饰语，真正的中心词在
+            # 后面（如「专门优化」「数据分析」）。精度优先，不报修饰语。
+            if (j + 1 < len(tokens)
+                    and _is_content_pos(tokens[j + 1][3])):
+                continue
+            phrase = sentence[tstart:nend]
+            if any(phrase == item or phrase.startswith(item)
+                   for item in exempt):
+                continue
+            action = actions.get(noun, noun)
+            direct = action + "了"
+            out.append(Finding(
+                "ZH_LIGHT_VERB_NOUN", doc.file, _line_of(doc, start),
+                _clip(sentence, 180),
+                "「%s」是轻动词＋名词：动词是空的，动作藏在名词里。动作"
+                "其实是什么——「%s」；直接写「%s」，把「%s」删掉。"
+                % (phrase, direct, direct, token),
+                "zh_light_verb_noun"))
+    return out
+
+
 def _wordiness_bloat_findings(sentences, rules: dict) -> list[Finding]:
     replacements = {str(k): str(v) for k, v in
                     ((rules.get("wordiness") or {}).get("replacements") or {}).items()}
@@ -2028,6 +2125,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         _zh_postposed_condition_findings(all_sentences, rules))
     instances["ZH_DUE_TO_MAKE"].extend(
         _zh_due_to_make_findings(all_sentences, rules))
+    instances["ZH_LIGHT_VERB_NOUN"].extend(
+        _zh_light_verb_noun_findings(all_sentences, rules))
 
     # ---- 1. 套话连接词 ----
     connective_hits = 0
@@ -2481,6 +2580,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "zh_de_stack": len(instances["ZH_DE_STACK"]),
         "zh_postposed_condition": len(instances["ZH_POSTPOSED_CONDITION"]),
         "zh_due_to_make": len(instances["ZH_DUE_TO_MAKE"]),
+        "zh_light_verb_noun": len(instances["ZH_LIGHT_VERB_NOUN"]),
     }
 
     fired = []
@@ -2518,7 +2618,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
                         "zh_de_stack", "zh_postposed_condition",
-                        "zh_due_to_make"):
+                        "zh_due_to_make", "zh_light_verb_noun"):
             limit = 1
             hit = value >= limit
             shown = limit
@@ -2698,6 +2798,7 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("zh_de_stack", "ZH_DE_STACK", ">="),
         ("zh_postposed_condition", "ZH_POSTPOSED_CONDITION", ">="),
         ("zh_due_to_make", "ZH_DUE_TO_MAKE", ">="),
+        ("zh_light_verb_noun", "ZH_LIGHT_VERB_NOUN", ">="),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
@@ -2739,7 +2840,8 @@ def render_human(result: StyleResult, project: Path) -> str:
             threshold = "gap<=%d字" % (
                 result.thresholds["zh_de_stack_max_gap"],)
         elif key in ("light_verb_nominalization", "wordiness_bloat",
-                     "zh_postposed_condition", "zh_due_to_make"):
+                     "zh_postposed_condition", "zh_due_to_make",
+                     "zh_light_verb_noun"):
             threshold = ">=1"
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost"):

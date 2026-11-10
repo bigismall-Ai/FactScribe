@@ -23,3 +23,23 @@
 3. 真正有增量的是核心层与同义词组，两者合计不到 260 KB。
 
 需要更多词面时，复制 `jieba-dict.txt` 并另存一份来源说明，不要再引入二进制制品。
+
+## seg.tsv.gz
+
+- 内容：结巴分词自带词典，349,046 行，三列 `词 词频 词性`，UTF-8，gzip 后约 1.9 MB（1,904,875 字节）。
+- 来源：`sia-harness/nomenclator/refsrc/jieba-dict.txt`（源文件 sha256 `7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8`）。
+- 许可：MIT／结巴分词（jieba）自带词典。本仓只复制数据，不引入 jieba 依赖。
+- 生成命令（在仓根 `paperkit-dev/` 执行）：
+  ```bash
+  python3 - <<'PY'
+  import gzip, pathlib
+  src = pathlib.Path("../sia-harness/nomenclator/refsrc/jieba-dict.txt")
+  dst = pathlib.Path("factscribe/terms/seg.tsv.gz")
+  with open(src, "rb") as f, open(dst, "wb") as out:
+      with gzip.GzipFile(filename="", mode="wb", fileobj=out,
+                         mtime=0, compresslevel=9) as gz:
+          gz.write(f.read())
+  PY
+  ```
+  固定 `mtime=0` 且不写文件名，同一源文件生成的字节可复现。
+- 为什么不复制 termbank 的 179 万词面：那一层**无词频、无词性**。分词器要在「同一位置多解」时按词频消歧、判据要按词性选名词，两者都拿不到依据；纯词面只会把 `南京市` 切成 `南京/市` 这类碎片。需要词频与词性时必须回原始 `jieba-dict`，不要把二进制制品引进来。

@@ -7,6 +7,12 @@ paperkit is a pre-1.0-grade tool in behaviour but its gate contract is already
 frozen (see `SPEC-V1.md` §5): exit codes and violation codes are the public API
 and will not change without a major version bump.
 
+## [Unreleased]
+
+### Added
+- `segment`: a stdlib-only Chinese tokenizer with part-of-speech tags, backed by the jieba dictionary (349,046 entries, copied as data under `factscribe/terms/seg.tsv.gz`).
+- `style`: `ZH_LIGHT_VERB_NOUN` reports Chinese light-verb + noun constructions (`进行了分析` → `分析了`) with the action verb spelled out; item-counted, no density gate.
+
 ## [1.3.0] - 2026-11-10
 
 ### Added

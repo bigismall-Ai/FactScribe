@@ -396,6 +396,7 @@ class TexPathRegressionTest(unittest.TestCase):
         "zh_de_stack": 0,
         "zh_due_to_make": 0,
         "zh_postposed_condition": 0,
+        "zh_light_verb_noun": 0,
     }
 
     def test_examples_minimal_unchanged(self):

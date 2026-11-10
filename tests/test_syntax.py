@@ -352,7 +352,98 @@ class TestSignificantNotEmpty(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------
-# 7. 注册面与处方
+# 7. ZH_LIGHT_VERB_NOUN（批 104：分词＋词性）
+# --------------------------------------------------------------------------
+
+LIGHT_ZH_ADJUST = "这个方案经过了三轮讨论，最后我们对方案进行了调整。"
+LIGHT_ZH_ANALYZE = "研究团队对数据进行了分析。"
+LIGHT_ZH_CLASSIFY = "文件中的函数插件按照功能进行了分类。"
+LIGHT_ZH_OPTIMIZE = "公司对产品进行了优化。"
+
+LIGHT_ZH_WHITELIST_ONGOING = "会议进行时，请不要打扰。"
+LIGHT_ZH_WHITELIST_MID = "项目正在进行中。"
+LIGHT_ZH_WHITELIST_DECIDE = "董事会作出决定。"
+
+LIGHT_ZH_VERB_NOT_NOUN = "他加以说明后离开。"
+LIGHT_ZH_SUPPORT_NOT_NOUN = "公司给予支持很重要。"
+LIGHT_ZH_QUANTITY = "我们进行了三次测试。"
+LIGHT_ZH_MODIFIER = "针对 Markdown 文档的特性进行了专门优化。"
+LIGHT_ZH_SENTENCE_END = "这个问题讨论了三次，讨论仍在进行。"
+
+LIGHT_ZH_ENGLISH = "The team performed an analysis of the failing runs."
+
+
+class TestZhLightVerbNoun(unittest.TestCase):
+    def test_adjust_reports_action(self):
+        result = analyze_text(LIGHT_ZH_ADJUST)
+        found = findings(result, "ZH_LIGHT_VERB_NOUN")
+        self.assertEqual(len(found), 1)
+        self.assertIn("调整了", found[0].suggestion)
+
+    def test_analyze_reports_action(self):
+        result = analyze_text(LIGHT_ZH_ANALYZE)
+        found = findings(result, "ZH_LIGHT_VERB_NOUN")
+        self.assertEqual(len(found), 1)
+        self.assertIn("分析了", found[0].suggestion)
+
+    def test_noun_tag_triggers(self):
+        # 分类在结巴词表里是 n（纯名词）。
+        result = analyze_text(LIGHT_ZH_CLASSIFY)
+        self.assertIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_vn_also_counts_as_noun_side(self):
+        # 优化标成 vn（动名词）；只认 n 会让验收例句报不出来。
+        result = analyze_text(LIGHT_ZH_OPTIMIZE)
+        self.assertIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_whitelisted_collocations_negative(self):
+        for text in (LIGHT_ZH_WHITELIST_ONGOING, LIGHT_ZH_WHITELIST_MID,
+                     LIGHT_ZH_WHITELIST_DECIDE):
+            with self.subTest(text=text):
+                result = analyze_text(text)
+                self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_pure_verb_not_reported(self):
+        # 说明/支持在词表里是 v，不是名词；规则只认名词侧。
+        for text in (LIGHT_ZH_VERB_NOT_NOUN, LIGHT_ZH_SUPPORT_NOT_NOUN):
+            with self.subTest(text=text):
+                result = analyze_text(text)
+                self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_quantity_between_verb_and_noun_negative(self):
+        result = analyze_text(LIGHT_ZH_QUANTITY)
+        self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_modifier_before_head_noun_negative(self):
+        # 「专门」被结巴标成 n，但它是修饰语；中心词是「优化」。
+        result = analyze_text(LIGHT_ZH_MODIFIER)
+        self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_sentence_end_without_noun_negative(self):
+        result = analyze_text(LIGHT_ZH_SENTENCE_END)
+        self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+
+    def test_english_corpus_never_triggers(self):
+        result = analyze_text(LIGHT_ZH_ENGLISH)
+        self.assertNotIn("ZH_LIGHT_VERB_NOUN", codes(result))
+        self.assertEqual(result.metrics["zh_light_verb_noun"], 0)
+
+    def test_metric_is_item_count(self):
+        text = "\n".join([LIGHT_ZH_ADJUST, LIGHT_ZH_ANALYZE,
+                          LIGHT_ZH_CLASSIFY])
+        result = analyze_text(text)
+        self.assertEqual(result.metrics["zh_light_verb_noun"], 3)
+
+    def test_config_carries_whitelist(self):
+        loaded, _path = load_style_rules(ROOT)
+        group = loaded["zh_light_verb_noun"]
+        for phrase in ("进行中", "进行时", "作出决定"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, group["exempt_phrases"])
+
+
+# --------------------------------------------------------------------------
+# 8. 注册面与处方
 # --------------------------------------------------------------------------
 
 class TestRegistrationAndPrescriptions(unittest.TestCase):
@@ -360,7 +451,8 @@ class TestRegistrationAndPrescriptions(unittest.TestCase):
         loaded, _path = load_style_rules(ROOT)
         for key in ("light_verb_nominalization", "wordiness_bloat",
                     "zh_de_stack", "zh_de_stack_max_gap",
-                    "zh_postposed_condition", "zh_due_to_make"):
+                    "zh_postposed_condition", "zh_due_to_make",
+                    "zh_light_verb_noun"):
             with self.subTest(key=key):
                 self.assertIn(key, loaded["thresholds"])
 

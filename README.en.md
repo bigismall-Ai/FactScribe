@@ -52,7 +52,7 @@ The second gate is the protection surface, meaning the six classes of content th
 python3 -m factscribe protect --before old/ --after new/
 ```
 
-The third gate is the prose gate. It reports only mechanically checkable formulaic writing, across 25 rules. Four of them are rewrite rechecks: `HEADING_ECHO` catches a first sentence that restates its heading, `HEADING_RELATION_CHANGED` catches a swapped contrast word, `HEADING_SUBJECT_LOST` catches a dropped subject from an old heading, and `TERM_VARIANT` catches one term written several ways. The term layer has two lists: 33 paper terms from `paper-zh/GLOSSARY.md`, and 153 workspace process terms from the term registry.
+The third gate is the prose gate. It reports only mechanically checkable formulaic writing, across 26 rules. Four of them are rewrite rechecks: `HEADING_ECHO` catches a first sentence that restates its heading, `HEADING_RELATION_CHANGED` catches a swapped contrast word, `HEADING_SUBJECT_LOST` catches a dropped subject from an old heading, and `TERM_VARIANT` catches one term written several ways. The term layer has two lists: 33 paper terms from `paper-zh/GLOSSARY.md`, and 153 workspace process terms from the term registry.
 
 ## Change record
 

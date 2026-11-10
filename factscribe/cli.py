@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,7 @@ from .config import (Config, ConfigError, load_config, load_facts,
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .pdfgate import verify_pdf
+from .polish import (build_plan, plan_payload, playbook_text, render_plan)
 from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
                         priority_payload, render_bundle, resolve_conflicts)
 from .protect import compare as compare_protect
@@ -138,6 +140,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="关掉默认忽略表（排查用）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "polish",
+        help="润色工单：打印操作手册，或按处方优先序出工作单（不新增判据）",
+        description="润色工单：--print 打印写给执行改写的模型的操作手册；"
+                    "--plan <项目> 扫描 style 的命中，按处方优先序出工作单。"
+                    "没有处方的错误码一律标「无处方：只提示，不许为它改句子」。"
+                    "本命令不是闸门，成功永远退出 0。")
+    group = sp.add_mutually_exclusive_group(required=True)
+    group.add_argument("--print", dest="print_playbook", action="store_true",
+                       help="打印操作手册（Markdown）")
+    group.add_argument("--plan", nargs="?", const=".", default=None,
+                       metavar="PROJECT",
+                       help="打印工作单（项目目录，默认当前目录）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON；仅 --plan 有效）")
     sp = sub.add_parser(
         "prescribe",
         help="处方层：只给可执行改法（数据文件），不参与判据、不产生分数")
@@ -534,6 +551,27 @@ def _tide_restore(args) -> int:
     return code
 
 
+def _write_stdout(text: str) -> int:
+    """写 stdout；下游提前关闭（如 ``| head``）时安静退出，不报内部错误。"""
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+    return EXIT_OK
+
+
+def cmd_polish(args) -> int:
+    """润色工单：手册或工作单。不是闸门，成功永远 EXIT_OK。"""
+    if args.print_playbook:
+        return _write_stdout(playbook_text())
+    plan = build_plan(Path(args.plan))
+    data = _payload("polish", "ok", EXIT_OK, **plan_payload(plan))
+    _emit(data, render_plan(plan), args.json)
+    return EXIT_OK
+
+
 def cmd_prescribe(args) -> int:
     """处方层：只输出处方原文或清单；成功永远 EXIT_OK，不产生 findings。"""
     prescriptions = load_prescriptions()
@@ -662,6 +700,7 @@ def main(argv=None) -> int:
                 "build": cmd_build, "preamble": cmd_preamble,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
+                "polish": cmd_polish,
                 "prescribe": cmd_prescribe, "terms": cmd_terms}
     try:
         return handlers[args.command](args)

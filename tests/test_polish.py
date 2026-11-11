@@ -3,7 +3,7 @@
 
 覆盖：
 
-* 手册六节齐全、九条处方全点名、三种验收结论、五条以上禁做反例；
+* 手册六节齐全、十条处方全点名、三种验收结论、五条以上禁做反例；
 * 手册里出现的每个错误码都在 ``style.CODE_OF`` 的全集里（防写错名）；
 * 工作单对 ``style`` 的每一条命中都给条目，且顺序符合处方优先序；
 * 没有处方的码逐字标 ``无处方：只提示，不许为它改句子``；
@@ -81,11 +81,13 @@ def cli_json(*args: str, cwd: Path | None = None) -> dict:
     return json.loads(proc.stdout)
 
 
-def make_project(base: Path, body: str = STYLE_BODY) -> Path:
+def make_project(base: Path, body: str = STYLE_BODY,
+                 extra_toml: str = "") -> Path:
     root = Path(base)
     (root / "sections").mkdir(parents=True, exist_ok=True)
     (root / "facts").mkdir(parents=True, exist_ok=True)
-    (root / "paperkit.toml").write_text(PROJECT_TOML, encoding="utf-8")
+    (root / "paperkit.toml").write_text(PROJECT_TOML + extra_toml,
+                                        encoding="utf-8")
     (root / "sections" / "01_main.tex").write_text(body, encoding="utf-8")
     return root
 
@@ -114,9 +116,9 @@ class TestPlaybook(unittest.TestCase):
         # 六节之外不再有二级标题（手册结构冻结）。
         self.assertEqual(len(re.findall(r"^## ", self.text, re.M)), 6)
 
-    def test_names_all_nine_prescriptions(self):
+    def test_names_all_prescriptions(self):
         names = sorted(load_prescriptions())
-        self.assertEqual(len(names), 9)
+        self.assertEqual(len(names), 10)
         for name in names:
             with self.subTest(name=name):
                 self.assertIn("`%s`" % name, self.text)
@@ -288,6 +290,15 @@ class TestEntriesUnit(unittest.TestCase):
                 self.assertTrue(text.strip())
                 self.assertTrue(text.endswith("。"))
 
+    def test_section_length_maps_to_trim_to_budget(self):
+        """批 128：篇幅超预算不是「无处方」，必须派到 trim-to-budget。"""
+        entries = build_entries(fake_result(findings=[
+            finding("SECTION_LENGTH", text="本节 1000 词 / 预算 800 词")]))
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].prescription, "trim-to-budget")
+        self.assertTrue(entries[0].has_prescription)
+        self.assertNotIn("SECTION_LENGTH", no_prescription_codes())
+
     def test_entries_sorted_by_priority_then_location(self):
         entries = build_entries(fake_result(
             findings=[finding("DASH_PARENTHETICAL", line=9),
@@ -400,6 +411,16 @@ class TestPlanCLI(unittest.TestCase):
         first_json = cli("polish", "--plan", str(self.project), "--json")
         second_json = cli("polish", "--plan", str(self.project), "--json")
         self.assertEqual(first_json.stdout, second_json.stdout)
+
+    def test_plan_maps_section_length_to_trim_to_budget_cli(self):
+        budgeted = make_project(Path(self._tmp.name) / "budgeted",
+                                "word " * 300,
+                                extra_toml="\n[budget]\ndefault = 100\n")
+        plan = cli_json("polish", "--plan", str(budgeted))
+        hits = [e for e in plan["entries"] if e["code"] == "SECTION_LENGTH"]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["prescription"], "trim-to-budget")
+        self.assertIn("证据", hits[0]["constraint"])
 
     def test_clean_project_gets_an_empty_plan(self):
         clean = make_project(Path(self._tmp.name) / "clean", CLEAN_BODY)

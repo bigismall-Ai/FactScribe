@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import mdscan
-from .config import Config, ConfigError, load_toml
+from .config import Config, ConfigError, load_toml, section_budget
 from .constants import EXIT_OK, EXIT_YELLOW
 from .livetext import _live_text
 from .segment import segment
@@ -111,6 +111,9 @@ DEFAULT_RULES: dict = {
         "zh_collocation_redundancy": 1,
         # B5 只在打开时计；阈值 1＝首现一处即报（默认开关见顶层）。
         "abbrev_first_use": 1,
+        # 批 128：篇幅预算的宽限。超预算超过这个百分比才报 SECTION_LENGTH
+        # （20 表示「超过 120% 才算超」；正好 120% 不报）。
+        "section_length_excess_percent": 20.0,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -423,6 +426,8 @@ DIRECTIONS = {
     "zh_dang_when": "at_least",
     "zh_collocation_redundancy": "at_least",
     "abbrev_first_use": "at_least",
+    # 批 128：篇幅预算（值＝超预算最狠的百分比）
+    "section_length": "above",
 }
 
 CODE_OF = {
@@ -463,6 +468,8 @@ CODE_OF = {
     "zh_dang_when": "ZH_DANG_WHEN",
     "zh_collocation_redundancy": "ZH_COLLOCATION_REDUNDANCY",
     "abbrev_first_use": "ABBREV_FIRST_USE",
+    # 批 128
+    "section_length": "SECTION_LENGTH",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
@@ -476,6 +483,7 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "ZH_LIGHT_VERB_NOUN",
                  "NOMINALIZATION_RATE", "ZH_ASPECT_ZHE", "ZH_DANG_WHEN",
                  "ZH_COLLOCATION_REDUNDANCY", "ABBREV_FIRST_USE",
+                 "SECTION_LENGTH",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
                  "JUSTIFY_CHAIN", "REPEATED_OPENER",
@@ -2488,6 +2496,51 @@ def _wordiness_bloat_findings(sentences, rules: dict) -> list[Finding]:
     return out
 
 
+def _section_length_findings(cfg: Config, docs: list["_Doc"],
+                             tolerance: float) -> tuple[list, list, float]:
+    """批 128：篇幅预算——每节正文单元数对预算，超 20% 报一条。
+
+    返回 (findings, 逐节读数, 最狠的超出百分比)。没有 `[budget]` 时判据不跑，
+    findings 与读数都为空（向后兼容）。正文单元复用 ``units_of``：英文按词、
+    中文按汉字，LaTeX 命令与注释已在 ``prose_of`` 里剥掉。
+    """
+    if not getattr(cfg, "budget_defined", False):
+        return [], [], 0.0
+    findings: list = []
+    details: list = []
+    worst = 0.0
+    root_rel = getattr(cfg, "root_tex", "") or ""
+    for doc in docs:
+        # 主文件是容器不是一节；剥成空白的文件（只有宏定义）没有篇幅可判。
+        if root_rel and doc.file == root_rel:
+            continue
+        if units_of(doc.prose) <= 0:
+            continue
+        budget = section_budget(cfg, doc.file)
+        if not budget:
+            continue
+        actual = units_of(doc.prose)
+        excess = round(max(0.0, (actual - budget) * 100.0 / budget), 1)
+        details.append({"file": doc.file, "actual": actual, "budget": budget,
+                        "excess_percent": excess})
+        if (actual - budget) * 100.0 / budget <= tolerance:
+            continue
+        worst = max(worst, excess)
+        unit = "字" if _cjk_heavy(doc.prose) else "词"
+        start = next((i for i, ch in enumerate(doc.prose) if not ch.isspace()),
+                     0)
+        findings.append(Finding(
+            "SECTION_LENGTH", doc.file, _line_of(doc, start),
+            "本节 %d %s / 预算 %d %s（超出 %.1f%%）"
+            % (actual, unit, budget, unit, excess),
+            "按顺序压：先删重复引用的数字，再删举例，最后合并同义句。"
+            "禁做：不删论点、不删每个论点的最后一条证据、不把句子改短来凑数"
+            "（拆成短句但词数没降，不算改完）。",
+            "section_length"))
+    details.sort(key=lambda item: item["file"])
+    return findings, details, round(worst, 1)
+
+
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
             before: tuple[Config, list[tuple[str, str]]] | None = None,
@@ -2555,6 +2608,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     instances: dict[str, list[Finding]] = {code: [] for code in CODE_OF.values()}
     paragraph_infos: dict[tuple[str, int], ParagraphInfo] = {}
 
+    # ---- 批 128：篇幅预算（只在项目配了 [budget] 时跑）----
+    budget_findings, budget_details, budget_worst = _section_length_findings(
+        cfg, docs, float(thresholds["section_length_excess_percent"]))
+    instances["SECTION_LENGTH"].extend(budget_findings)
+
     # ---- 批 102：句法级判据（各按条计，无密度闸）----
     instances["LIGHT_VERB_NOMINALIZATION"].extend(
         _light_verb_findings(all_sentences, rules))
@@ -2591,6 +2649,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "abbrev_first_use_enabled": abbrev_enabled,
         "zh_aspect_zhe_raw_hits": zhe_hits,
         "rhythm_plateau_level": rhythm_level,
+        "section_budget": budget_details,
     }
 
     # ---- 1. 套话连接词 ----
@@ -3062,6 +3121,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "zh_collocation_redundancy":
             len(instances["ZH_COLLOCATION_REDUNDANCY"]),
         "abbrev_first_use": len(instances["ABBREV_FIRST_USE"]),
+        # 批 128：超预算最狠的百分比（0.0＝没有节超预算／没配预算）
+        "section_length": budget_worst,
     }
 
     fired = []
@@ -3096,6 +3157,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         elif metric == "justify_chain":
             limit = 1
             hit = bool(unique_chain)
+            shown = limit
+        elif metric == "section_length":
+            limit = thresholds["section_length_excess_percent"]
+            hit = value > limit
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
                         "zh_de_stack", "zh_postposed_condition",

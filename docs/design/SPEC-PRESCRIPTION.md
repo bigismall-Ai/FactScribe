@@ -205,7 +205,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 }
 ```
 
-## 5. 九条处方
+## 5. 十条处方
 
 | # | 名称 | 治的判据（错误码） | 优先序 | 一句话 |
 |---|---|---|---|---|
@@ -218,6 +218,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 | 7 | `drop-the-proof` | `EXPLAINER_DENSITY`、`JUSTIFY_CHAIN` | 5 文句风格 | 删掉反射式解释，让断言自己站住 |
 | 8 | `unbury-the-verb` | `LIGHT_VERB_NOMINALIZATION` | 5 文句风格 | 把埋进名词的动作挖回动词 |
 | 9 | `cut-the-de` | `ZH_DE_STACK` | 5 文句风格 | 拆掉单句里的「的」链 |
+| 10 | `trim-to-budget` | `SECTION_LENGTH` | 5 文句风格 | 先删重复的数字、再删举例、最后合并同义句；论点与证据不许动 |
 
 ### 5.1 `heading-shorten`
 
@@ -327,6 +328,28 @@ env PYTHONPATH=src python3 -m factscribe prescribe unbury-the-verb --json
 
 ```bash
 env PYTHONPATH=src python3 -m factscribe prescribe cut-the-de --json
+```
+
+### 5.10 `trim-to-budget`
+
+治「本节写超预算」（`SECTION_LENGTH`，配置与判据见 `SPEC-BUDGET.md`）。
+必做按顺序：**先删重复引用的数字 → 再删举例 → 最后合并同义句**。禁做三条：
+不删论点、不删每个论点的最后一条证据、不把句子改短来凑数（拆成短句但词数
+没降，是换法子过检查）。正例：一段 180 词压到 120 词，论点与证据都在。
+
+反例（旧 → 新）：
+
+```
+旧  模型在十六次运行里都保持稳定，只在措辞层面有变化。
+新  模型在十六次运行里。都保持稳定。只在措辞层面有变化。
+```
+
+（三行短句，词数没降，句子还残了——不是改写，是换法子过检查。）
+
+验收命令：
+
+```bash
+env PYTHONPATH=src python3 -m factscribe prescribe trim-to-budget --json
 ```
 
 ## 6. 边界与非目标

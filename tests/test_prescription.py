@@ -39,12 +39,12 @@ from factscribe.style import CODE_OF  # noqa: E402
 FIVE_CODES = ["HEADING_ECHO", "HEADING_MALFORMED", "TERM_FIRST_IN_HEADING",
               "DASH_PARENTHETICAL", "HEADING_SUBJECT_LOST",
               "EXPLAINER_DENSITY", "JUSTIFY_CHAIN",
-              "LIGHT_VERB_NOMINALIZATION", "ZH_DE_STACK"]
+              "LIGHT_VERB_NOMINALIZATION", "ZH_DE_STACK", "SECTION_LENGTH"]
 
 ALL_NAMES = ["heading-shorten", "term-first-sentence", "dash-rewrite",
              "heading-malformed", "heading-subject-keep",
              "section-completeness", "drop-the-proof",
-             "unbury-the-verb", "cut-the-de"]
+             "unbury-the-verb", "cut-the-de", "trim-to-budget"]
 
 PROJECT_TOML = """[project]
 title = "处方层隔离测试"
@@ -118,7 +118,7 @@ class TestListAndShape(unittest.TestCase):
 
     def test_every_prescription_has_all_six_sections(self):
         prescriptions = load_prescriptions()
-        self.assertEqual(len(prescriptions), 9)
+        self.assertEqual(len(prescriptions), 10)
         for name, p in prescriptions.items():
             with self.subTest(name=name):
                 self.assertEqual(set(p.fields), set(SECTION_KEYS))
@@ -198,9 +198,38 @@ class TestForCode(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------
-# 3. CLI 原文输出与用法错
+# 2b. 第 10 条：trim-to-budget（批 128）
 # --------------------------------------------------------------------------
 
+class TestBudgetPrescription(unittest.TestCase):
+    def test_tenth_prescription_is_listed_and_has_six_sections(self):
+        payload = cli_json("--list")
+        self.assertEqual(len(payload["prescriptions"]), 10)
+        item = next(i for i in payload["prescriptions"]
+                    if i["name"] == "trim-to-budget")
+        self.assertEqual(item["target_codes"], ["SECTION_LENGTH"])
+        self.assertEqual(set(item["fields"]), set(SECTION_KEYS))
+        for key in SECTION_KEYS:
+            with self.subTest(key=key):
+                self.assertTrue(item["fields"][key].strip())
+
+    def test_section_length_resolves_to_trim_to_budget(self):
+        payload = cli_json("--for", "SECTION_LENGTH")
+        self.assertEqual([i["name"] for i in payload["prescriptions"]],
+                         ["trim-to-budget"])
+
+    def test_rule_carries_mandatory_order_and_three_no_gos(self):
+        text = load_prescriptions()["trim-to-budget"].text
+        for token in ("先删重复引用的数字", "再删举例", "合并同义句",
+                      "删论点", "最后一条证据", "改短", "拆成三行短句",
+                      "180 词压到 120 词"):
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+
+# --------------------------------------------------------------------------
+# 3. CLI 原文输出与用法错
+# --------------------------------------------------------------------------
 class TestCliOutput(unittest.TestCase):
     def test_single_name_prints_rule_text_verbatim(self):
         for name in ALL_NAMES:

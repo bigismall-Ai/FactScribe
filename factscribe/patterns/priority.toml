@@ -28,6 +28,7 @@ heading-subject-keep = "structure"
 section-completeness = "structure"
 unbury-the-verb = "style"
 cut-the-de = "style"
+trim-to-budget = "style"
 
 # 压标题不得丢掉对比对象与主语（2 结构完整 ＜ 3 标题指向内容）。
 [[conflicts]]

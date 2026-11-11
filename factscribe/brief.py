@@ -22,7 +22,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import Config, ConfigError, load_config, load_facts, load_sections
+from .config import (Config, ConfigError, load_config, load_facts,
+                     load_sections, section_budget)
 from .style import _headings                     # 复用既有标题抽取，不另写一套
 from .terms import Term, load_glossary
 from .texrules import strip_comments_and_verbatim
@@ -46,14 +47,16 @@ _INPUT_RE = re.compile(r"\\(?:input|include)\s*\{([^{}]*)\}")
 
 @dataclass(frozen=True)
 class SectionRow:
-    """节清单的一行：相对文件、当前标题、该节已绑定的事实条数。"""
+    """节清单的一行：相对文件、当前标题、该节已绑定的事实条数、篇幅预算。"""
 
     file: str
     title: str
     facts: int
+    budget: int = 0     # 0＝没有可用预算（写「—」）
 
     def as_dict(self) -> dict:
-        return {"file": self.file, "title": self.title, "facts": self.facts}
+        return {"file": self.file, "title": self.title, "facts": self.facts,
+                "budget": self.budget}
 
 
 @dataclass(frozen=True)
@@ -171,7 +174,8 @@ def build_sections(cfg: Config, sections: list[tuple[str, str]]
     for rel in chosen:
         text = texts.get(rel, "")
         rows.append(SectionRow(file=rel, title=_first_title(text),
-                               facts=len(_bound_fact_ids(text))))
+                               facts=len(_bound_fact_ids(text)),
+                               budget=section_budget(cfg, rel)))
     return rows
 
 
@@ -284,12 +288,13 @@ def render(brief: Brief) -> str:
         lines.append("- 主文件：无（节清单按 `sections/` 文件名排序）")
     lines.append("- 节清单：")
     lines.append("")
-    lines.append("| # | 文件 | 当前标题 | 该节已有事实条数 |")
-    lines.append("| --- | --- | --- | --- |")
+    lines.append("| # | 文件 | 当前标题 | 该节已有事实条数 | 篇幅预算 |")
+    lines.append("| --- | --- | --- | --- | --- |")
     for index, row in enumerate(brief.sections, 1):
-        lines.append("| %d | `%s` | %s | %d |"
+        lines.append("| %d | `%s` | %s | %d | %s |"
                      % (index, row.file, _cell(row.title or "（无标题）"),
-                        row.facts))
+                        row.facts,
+                        str(row.budget) if row.budget else "—"))
     lines.append("")
 
     # ---- 2. 可用主张与数字 ----

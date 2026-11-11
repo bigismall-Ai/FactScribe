@@ -392,6 +392,7 @@ class TexPathRegressionTest(unittest.TestCase):
         "rhythm_plateau": 1,
         "sentence_length_extreme": 0,
         "sentence_uniformity": 1.0,
+        "section_length": 0.0,
         "term_first_in_heading": 0,
         "term_unregistered": 0,
         "term_variant": 0,

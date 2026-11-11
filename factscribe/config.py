@@ -113,6 +113,18 @@ def _needs_more(value: str) -> bool:
     return depth > 0
 
 
+def _table_for(root: dict, name: str):
+    """按点号分段建表：`[budget.sections]` → root["budget"]["sections"]。"""
+    table = root
+    for part in name.split("."):
+        part = part.strip().strip("\"'")
+        existing = table.setdefault(part, {})
+        if not isinstance(existing, dict):
+            raise ValueError("表 %r 与同名非表值冲突" % name)
+        table = existing
+    return table
+
+
 def _mini_toml(text: str) -> dict:
     """只覆盖 paperkit 契约用得到的子集：表、表数组、字符串、数组、数字、布尔。"""
     root: dict = {}
@@ -127,7 +139,9 @@ def _mini_toml(text: str) -> dict:
             continue
         if s.startswith("[[") and s.endswith("]]"):
             name = s[2:-2].strip()
-            arr = root.setdefault(name, [])
+            parent, _, leaf = name.rpartition(".")
+            holder = _table_for(root, parent) if parent else root
+            arr = holder.setdefault(leaf.strip().strip("\"'"), [])
             if not isinstance(arr, list):
                 raise ValueError("[[%s]] 与同名表冲突" % name)
             cur = {}
@@ -135,9 +149,7 @@ def _mini_toml(text: str) -> dict:
             continue
         if s.startswith("[") and s.endswith("]"):
             name = s[1:-1].strip()
-            tbl = root.setdefault(name, {})
-            if not isinstance(tbl, dict):
-                raise ValueError("[%s] 与同名表数组冲突" % name)
+            tbl = _table_for(root, name)
             cur = tbl
             continue
         if "=" not in s:
@@ -210,6 +222,11 @@ class Config:
     # R-05（v1.3）：无法静态解析的闭包目标（宏、#、嵌套花括号、空目标），
     # 元素同上。审计覆盖不了 ⇒ fail-closed 判红（INPUT_DYNAMIC）。
     dynamic_inputs: list = field(default_factory=list)
+    # 批 128：篇幅预算（`[budget]`，可选）。budget_defined=False 时判据不跑，
+    # 行为与批 127 完全一致。键＝节文件名去扩展名（sections/04_x.tex → 04_x）。
+    budget_defined: bool = False
+    budget_default: int = 0                    # 0＝未设
+    budget_sections: dict = field(default_factory=dict)  # {节键: 词/字数}
 
     @property
     def is_v3(self) -> bool:
@@ -298,6 +315,75 @@ def _v3_str_list(data: dict, key: str, path: Path) -> list:
     return out
 
 
+# --------------------------------------------------------------------------
+# 批 128：篇幅预算（`[budget]`，可选节）
+# --------------------------------------------------------------------------
+
+BUDGET_TABLE = "budget"
+
+
+def _budget_int(value, what: str, path: Path) -> int:
+    """预算值必须是正整数；布尔、字符串、小数、<=0 一律配置错（不猜）。"""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError("%s 的 %s 必须是正整数，现在是 %r"
+                          % (path, what, value))
+    if value <= 0:
+        raise ConfigError("%s 的 %s 必须是正整数（> 0），现在是 %r"
+                          % (path, what, value))
+    return value
+
+
+def _parse_budget(data: dict, path: Path) -> tuple[bool, int, dict]:
+    """读 `[budget]`：返回 (是否声明, 默认预算, 按节覆盖)。
+
+    没有 `[budget]` ⇒ (False, 0, {})，所有判据都不跑（向后兼容）。
+    `[budget.sections]` 的键是节文件名去扩展名（sections/04_x.tex → 04_x）。
+    """
+    raw = data.get(BUDGET_TABLE)
+    # 3.10 的极简 TOML 解析器历史上把点号表名存成扁平键；两种形态都认。
+    dotted = data.get(BUDGET_TABLE + ".sections")
+    if raw is None and dotted is None:
+        return False, 0, {}
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("%s 的 [budget] 必须是表（default / sections 两项），"
+                          "现在是 %r" % (path, raw))
+    table = dict(raw)
+    if dotted is not None and "sections" not in table:
+        table["sections"] = dotted
+
+    default = 0
+    if "default" in table and table["default"] is not None:
+        default = _budget_int(table["default"], "[budget].default", path)
+
+    sections_raw = table.get("sections") or {}
+    if not isinstance(sections_raw, dict):
+        raise ConfigError("%s 的 [budget.sections] 必须是表（节键 = 值），"
+                          "现在是 %r" % (path, sections_raw))
+    sections: dict[str, int] = {}
+    for key, value in sections_raw.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ConfigError("%s 的 [budget.sections] 里有一个非字符串/空键：%r"
+                              % (path, key))
+        sections[key.strip()] = _budget_int(
+            value, "[budget.sections].%s" % key.strip(), path)
+    return True, default, sections
+
+
+def section_budget(cfg: Config, file: str) -> int:
+    """某节文件的预算：按节覆盖优先，其次 `default`；0＝该节不判。
+
+    键＝节文件名去扩展名。章节与附录按文件分开算，互不借用预算。
+    """
+    if not getattr(cfg, "budget_defined", False):
+        return 0
+    key = Path(str(file)).stem
+    if key in cfg.budget_sections:
+        return cfg.budget_sections[key]
+    return cfg.budget_default
+
+
 def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     """旧版：顶层 [project] 表（title/sections/facts/bib/build…），行为不变。"""
     proj = data.get("project")
@@ -333,6 +419,8 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
             "bib_allow_unused", path),
         config_shape="v1",
     )
+    cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
+        _parse_budget(data, path)
     # v1 的未知字段同样不静默（判据仍不看它们，行为不变）。
     _unknown_field_warnings(cfg, proj, V1_KNOWN_FIELDS, path, "[project]")
     return cfg
@@ -402,7 +490,7 @@ V3_KNOWN_FIELDS = {
     "output", "level", "number_locale", "signing_mode", "approver_keys_file",
     "release_keys_file", "image_budget_extra", "frac_allow", "inline_images_allow",
     "numeric_macro_allow", "authors", "build", "manifest", "source_root",
-    "bib_allow_unused",
+    "bib_allow_unused", "budget",
 }
 
 # `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
@@ -588,6 +676,8 @@ def _load_v3_config(root: Path, path: Path, data: dict,
         level=level,
         config_shape=shape,
     )
+    cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
+        _parse_budget(data, path)
     # 未知字段：允许忽略，但绝不静默（进 --json 的 config.warnings）。
     # 形态 A 的声明在顶层；B/C 在 [project] 表里。两处都查，免得换个写法
     # 就把打错的字段名吞掉。

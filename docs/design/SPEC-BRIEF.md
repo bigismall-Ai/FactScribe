@@ -64,7 +64,10 @@ python3 -m factscribe brief <项目目录> [--section <前缀>] [--out <文件>]
 - 主文件（`root_tex`；没有 `root_tex` 时为 `main.tex`；再没有则说明按文件名排序）；
 - 节清单：按主文件 `\input` / `\include` 的**出现顺序**；主文件不存在时按
   `sections/*.tex` 的**文件名排序**；
-- 每节给三项：相对文件名、当前标题、**该节已有事实条数**。
+- 每节给三项：相对文件名、当前标题、**该节已有事实条数**；
+- 批 128 起再加一列「篇幅预算」：值来自 `paperkit.toml` 的 `[budget]`
+  （`default` 或 `[budget.sections]` 的按节覆盖，见 `SPEC-BUDGET.md`）；
+  没有 `[budget]` 或该节没有可用预算时写 `—`。
 
 「当前标题」取该文件第一个 `\section`/`\subsection` 等标题命令（复用 `style`
 的标题抽取）；没有标题的文件写 `（无标题）`。

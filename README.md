@@ -32,7 +32,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `build` | 执行 `factscribe.toml` 里的 `project.build`；中文缺字体时自动改用 Fandol |
 | `preamble` | 生成 `audit/preamble.tex` 里的 `\fact` 与 `\pkignore` 宏 |
 | `verify-pdf` | PDF 回检：文本层、栅格页、双向多重集、stamp 验签 |
-| `style` | 文风闸：只报公式化写作特征，黄牌，不阻断 |
+| `style` | 文风闸：只报公式化写作特征（黄牌）；证据缺钉（红，exit 1） |
 | `protect` | 改写保护面：比对改写前后六类不许变的内容 |
 | `tide` | 潮汐式改动账：涨、落、波及面、闭合，全成或全退 |
 | `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
@@ -92,7 +92,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 995 例，全离线
+python3 -m unittest discover -s tests     # 1016 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

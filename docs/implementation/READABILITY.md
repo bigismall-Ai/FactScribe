@@ -48,7 +48,16 @@
 - `we_action_density`（`hits / sentences / ratio / examples`）。
 
 触发判定沿用 `DIRECTIONS` 的 `above` 分支；`numeral_density` 多一个
-`stage != "revision"` 条件。退出码仍由 `fired` 决定：有命中 `3`，无命中 `0`。
+`stage != "revision"` 条件。退出码由已触发判据决定：有文风命中 `3`，无命中
+`0`；证据钢印红另算（批 131，`1`）。
+
+## 2.1 批 131：`NUMERAL_DENSITY` 默认降级
+
+内置阈值改为 `null`（不判）：读数照算、逐节明细照出（`threshold` 记
+`null`），但不产生 finding、不进 `fired`、不改退出码。原因见
+`docs/design/SPEC-EVIDENCE-STAMP.md` §7：它会诱导删证据。显式配非负数字阈值
+即恢复 §2 的全部行为；`polish --plan` 在 `null` 时自然不出该类条目。
+`tests/test_evidence_stamp.py` 用 4 例锁定这条降级与恢复路径。
 
 ## 3. 与保护面的冲突
 

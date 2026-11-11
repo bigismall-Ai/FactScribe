@@ -55,3 +55,8 @@ env PYTHONPATH=src python3 -m factscribe style <项目目录> --json
 看 `NUMERAL_DENSITY` 的读数是否回到阈值内；再看 `review` 的保护面是否仍然
 全绿（改写验收阶段用 `style --stage revision`；项目内写
 `numeral_density_stage` 不生效）。
+
+批 131 起 `NUMERAL_DENSITY` 默认阈值是 `null`（不判）：本处方会把模型诱导
+去删证据，只有人显式在 `style-rules.toml` 配了非负数字阈值时才跑。不论它开
+不开，`[evidence]` 声明的节都必须保住 `REQUIRED_EVIDENCE_MISSING`；改写前后
+丢绑定由 `EVIDENCE_DROPPED` 判红（见 `SPEC-EVIDENCE-STAMP.md`）。

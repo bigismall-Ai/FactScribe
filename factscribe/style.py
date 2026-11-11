@@ -12,8 +12,8 @@
 
 * 本工具**不评估、也不试图规避任何 AI 检测器**。它只检测可机械复算的
   写法；输出是「文件:行 + 原文 + 具体改法」，不是「像 AI」的分数。
-* 退出码只有 0（无触发）与 3（黄牌，仍是提示）；永不返回 1。
-  本模块只服务 ``style`` 子命令，不改 ``audit`` 的判据与退出码。
+* 退出码 0（无触发）、3（黄牌，仍是提示）与 1（证据钢印红：
+  ``REQUIRED_EVIDENCE_MISSING`` / ``EVIDENCE_DROPPED``，批 131）。
 * 阈值、词表与术语白名单来自 ``style-rules.toml``（项目根优先，其次
   仓根，最后内置默认值），改阈值即改判定。
 * 例外：``numeral_density_stage`` 是**阶段开关**，只能由命令行
@@ -33,14 +33,17 @@ from pathlib import Path
 
 from . import mdscan
 from .config import Config, ConfigError, load_toml, section_budget
-from .constants import EXIT_OK, EXIT_YELLOW
+from .constants import EXIT_OK, EXIT_RED, EXIT_YELLOW
+from .evidence import EVIDENCE_CODES, check_evidence
 from .livetext import _live_text
 from .segment import segment
 from .terms import Glossary, key_of, load_glossary
 from .texscan import sentence_spans
 
 DISCLAIMER = ("本工具不评估、也不试图规避任何 AI 检测器；它检测的是可机械判定的"
-              "公式化写作特征。黄牌只是改写提示，不阻断、不改正文。")
+              "公式化写作特征。黄牌只是改写提示，不阻断、不改正文；证据钢印"
+              "（REQUIRED_EVIDENCE_MISSING / EVIDENCE_DROPPED）除外——那是红，"
+              "阻断且退出码 1。")
 
 STYLE_RULES_NAME = "style-rules.toml"
 
@@ -48,6 +51,10 @@ STYLE_RULES_NAME = "style-rules.toml"
 # 里也不认——被判据管的正文与被测项目不得改动判据开关（否则「改规则」
 # 就能让检查消失）。
 CLI_ONLY_RULE_KEYS = ("numeral_density_stage",)
+
+# 批 131：允许显式写 null 的阈值（null＝不判）。目前只有数字密度：
+# 默认 null，因为它会诱导删证据；显式给数字即恢复旧行为。
+NULLABLE_THRESHOLDS = ("numeral_density",)
 
 # 阶段开关的合法值。``revision``＝改稿/改写验收阶段：数字受
 # PROTECT_NUMBER_CHANGED 保护，NUMERAL_DENSITY 降为 info。
@@ -137,7 +144,10 @@ DEFAULT_RULES: dict = {
         "section_length_excess_percent": 20.0,
         # 批 129：读者感觉三项的代理判据。
         # NUMERAL_DENSITY：每千词（英）/每千汉字（中）的阿拉伯数字 token 数。
-        "numeral_density": 40.0,
+        # 批 131：默认阈值改为 null（不判）——它会诱导删证据：模型为了把密度
+        # 降回阈值内，会把正文里的核心数字换成 nearly/most/some，审计仍绿而
+        # 论证被抽空。实现与配置保留：显式写一个非负数字即恢复旧行为。
+        "numeral_density": None,
         # SECTION_OVERLAP：节与节之间 8 词（英）/12 字（中）片段的重合率
         # （百分比）。重合率 = 共有片段数 ÷ 两节中较短一节的片段数。
         "section_overlap": 12.0,
@@ -524,7 +534,8 @@ CODE_OF = {
     "we_action_density": "WE_ACTION_DENSITY",
 }
 
-FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
+FINDING_ORDER = ["REQUIRED_EVIDENCE_MISSING", "EVIDENCE_DROPPED",
+                 "SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "HEADING_TOO_LONG", "HEADING_MALFORMED",
                  "HEADING_ECHO", "HEADING_RELATION_CHANGED",
                  "HEADING_SUBJECT_LOST", "HEADING_SUBSTITUTED",
@@ -712,6 +723,12 @@ def _thresholds(rules: dict) -> dict:
     out = {}
     for key, default in DEFAULT_RULES["thresholds"].items():
         value = raw.get(key, default)
+        if value is None:
+            if key in NULLABLE_THRESHOLDS:
+                out[key] = None
+                continue
+            raise ConfigError("style-rules.toml 的 thresholds.%s 不能为 null，"
+                              "必须是数字" % key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ConfigError("style-rules.toml 的 thresholds.%s 必须是数字，"
                               "现在是 %r" % (key, value))
@@ -1025,6 +1042,10 @@ class StyleResult:
 
     @property
     def exit_code(self) -> int:
+        # 批 131：证据钢印是红（阻断，退出码 1）；其余命中仍是黄。
+        if any(getattr(f, "severity", "yellow") == "red"
+               for f in self.findings):
+            return EXIT_RED
         return EXIT_YELLOW if self.fired else EXIT_OK
 
     def as_dict(self) -> dict:
@@ -2062,13 +2083,24 @@ def _finding_signature(f: Finding) -> tuple[str, str, str]:
 
 
 def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
-    """``style --diff``：只保留改后新增的违规（改前没有、改后有）。"""
+    """``style --diff``：只保留改后新增的违规（改前没有、改后有）。
+
+    批 131：证据钢印（``REQUIRED_EVIDENCE_MISSING`` / ``EVIDENCE_DROPPED``）
+    不被滤重——它们是闸门的红，不是「新增文风违规」。尤其是
+    ``REQUIRED_EVIDENCE_MISSING``：改前也缺、改后还缺时，滤重会把它当
+    「非新增」吞掉，让 ``--diff`` 比单跑更松。
+    """
     allowance: dict = {}
     for f in before.findings:
+        if f.code in EVIDENCE_CODES:
+            continue
         key = _finding_signature(f)
         allowance[key] = allowance.get(key, 0) + 1
     new_findings = []
     for f in after.findings:
+        if f.code in EVIDENCE_CODES:
+            new_findings.append(f)
+            continue
         key = _finding_signature(f)
         if allowance.get(key, 0) > 0:
             allowance[key] -= 1
@@ -2077,9 +2109,13 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
     fired_codes = {f.code for f in new_findings}
     fired = [item for item in after.fired if item["code"] in fired_codes]
     summary = dict(after.summary)
+    red_count = sum(1 for f in new_findings
+                    if getattr(f, "severity", "yellow") == "red")
     summary["findings"] = len(new_findings)
     summary["triggered"] = len(fired)
-    summary["exit_code"] = EXIT_YELLOW if new_findings else EXIT_OK
+    summary["red"] = red_count
+    summary["exit_code"] = (EXIT_RED if red_count
+                            else EXIT_YELLOW if new_findings else EXIT_OK)
     return StyleResult(metrics=after.metrics, thresholds=after.thresholds,
                        fired=fired, findings=new_findings,
                        paragraphs=after.paragraphs, instances=after.instances,
@@ -2740,7 +2776,7 @@ def _is_container(doc: "_Doc") -> bool:
     return bool(re.search(r"\\(?:input|include|subfile)\b", doc.raw or ""))
 
 
-def _numeral_density_findings(docs: list["_Doc"], threshold: float,
+def _numeral_density_findings(docs: list["_Doc"], threshold,
                               stage: str, root_file: str = ""
                               ) -> tuple[list, list, float, list]:
     """批 129 NUMERAL_DENSITY：每千词（英）/每千汉字（中）的数字 token 数。
@@ -2748,6 +2784,9 @@ def _numeral_density_findings(docs: list["_Doc"], threshold: float,
     ``stage == "revision"`` 时读数照算，但条目降为 info（不改 findings、
     不影响退出码）：改稿/改写验收阶段数字属于 PROTECT_NUMBER_CHANGED 的
     保护面。阶段只由命令行 ``--stage`` 决定（批 130）。
+
+    批 131：``threshold is None`` ⇒ 不判。逐节读数照算（``threshold`` 记
+    null），但不产生 finding、不进 info；显式配数字即恢复旧行为。
     主文件若是只 ``\\input`` 别的文件的容器，跳过（容器不是一节）。
     """
     findings: list = []
@@ -2772,6 +2811,8 @@ def _numeral_density_findings(docs: list["_Doc"], threshold: float,
         details.append({"file": doc.file, "numerals": count, "units": units,
                         "unit": unit, "density": round(density, 1),
                         "threshold": threshold})
+        if threshold is None:       # 批 131：默认不判，读数保留
+            continue
         if density <= threshold:
             continue
         first = _NUMERAL_TOKEN_RE.search(doc.prose)
@@ -3048,6 +3089,14 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                                     [i for i, c in enumerate(prose) if c == "\n"],
                                     raw, heads))
 
+    # ---- 批 131：证据钢印（只查人写的 [evidence]；丢了改前已有的事实另判）----
+    evidence_issues, evidence_details = check_evidence(
+        cfg, sections, before=before)
+    evidence_findings = [
+        Finding(issue.code, issue.file, issue.line, issue.text,
+                issue.suggestion, issue.metric, severity="red")
+        for issue in evidence_issues]
+
     total_units = sum(units_of(d.prose) for d in docs)
     all_sentences = []          # [(doc, start, end, units)]
     all_paragraphs = []         # [(doc, start, end, units)]
@@ -3077,7 +3126,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     root_rel = getattr(cfg, "root_tex", "") or ""
     numeral_findings, numeral_details, numeral_worst, numeral_info = \
         _numeral_density_findings(
-            docs, float(thresholds["numeral_density"]), numeral_stage,
+            docs, thresholds["numeral_density"], numeral_stage,
             root_file=root_rel)
     instances["NUMERAL_DENSITY"].extend(numeral_findings)
     overlap_findings, overlap_details, overlap_worst = \
@@ -3126,6 +3175,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "section_budget": budget_details,
         "numeral_density_stage": numeral_stage,
         "numeral_density_sections": numeral_details,
+        "evidence": evidence_details,
+        "evidence_sections_declared": evidence_details["declared"],
+        "evidence_sections_unknown": evidence_details["unknown_sections"],
         "section_overlap_pairs": overlap_details,
         "we_action_density": we_details,
     }
@@ -3646,6 +3698,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric == "numeral_density":
             limit = thresholds["numeral_density"]
+            if limit is None:       # 批 131：null＝不判
+                continue
             hit = numeral_stage not in ("revision", "off") and value > limit
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
@@ -3716,6 +3770,8 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     findings.sort(key=lambda f: (FINDING_ORDER.index(f.code)
                                  if f.code in FINDING_ORDER else 99,
                                  f.file, f.line))
+    # 批 131：证据钢印排在最前（红），剩下的文风命中仍是黄。
+    findings = list(evidence_findings) + findings
     info = sorted(instances.get("TERM_UNREGISTERED", []) + numeral_info,
                   key=lambda f: (f.file, f.line, f.text))
     # 批 109：RHYTHM_PLATEAU 在 info 档只做参考读数，不进 findings。
@@ -3726,6 +3782,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     paragraphs = sorted(paragraph_infos.values(), key=lambda p: (p.file, p.line))
     stage = assess_stage(len(fired), raw_cv, fired)
+    red_count = len(evidence_findings)
     summary = {
         "files": len(docs),
         "words": total_units,
@@ -3733,7 +3790,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "paragraphs": len(all_paragraphs),
         "triggered": len(fired),
         "findings": len(findings),
-        "exit_code": EXIT_YELLOW if fired else EXIT_OK,
+        "red": red_count,
+        "exit_code": (EXIT_RED if red_count
+                      else EXIT_YELLOW if fired else EXIT_OK),
         "stage": stage["stage"],
         "advice": stage["advice"],
     }
@@ -3757,6 +3816,17 @@ PROMPT_LIMIT = 400
 
 
 def build_prompt(result: StyleResult, limit: int = PROMPT_LIMIT) -> str:
+    red = [f for f in result.findings
+           if getattr(f, "severity", "yellow") == "red"]
+    if red:
+        head = ("证据钢印红（阻断，退出码 1）：把下列缺的 `\\fact{id}` 按节补回，"
+                "值与账本逐字一致；不许改 id、不许改数字、不许用 nearly/most/"
+                "some 这类定性说法顶替。")
+        items = ["%d. %s:%d 「%s」" % (idx, Path(f.file).name, f.line,
+                                      _clip(f.text, 60))
+                 for idx, f in enumerate(red[:6], 1)]
+        text = head + "\n" + "\n".join(items)
+        return text[:limit]
     # 成品稿（polished）只输出一句「建议不改」，不给逐条改写指令——盲评显示
     # 对已打磨的稿子强行改写会降低自然度（批 67–70）。
     if (result.stage_assessment or {}).get("advice") == ADVICE_REPORT_ONLY:
@@ -3919,8 +3989,9 @@ def render_human(result: StyleResult, project: Path) -> str:
                      "abbrev_first_use"):
             threshold = ">=1处"
         elif key == "numeral_density":
-            threshold = ">%s/千词(字)" % _fmt(
-                result.thresholds.get("numeral_density", 0))
+            limit = result.thresholds.get("numeral_density")
+            threshold = ("—" if limit is None
+                         else ">%s/千词(字)" % _fmt(limit))
         elif key == "section_overlap":
             threshold = ">%s%%" % _fmt(
                 result.thresholds.get("section_overlap", 0))
@@ -3947,6 +4018,9 @@ def render_human(result: StyleResult, project: Path) -> str:
                 and result.metric_details.get("numeral_density_stage")
                 in ("revision", "off")):
             status = "关"
+        if (key == "numeral_density"
+                and result.thresholds.get("numeral_density") is None):
+            status = "关（默认不判）"
         if key == "term_unregistered" and m.get("term_unregistered"):
             status = "提示"
         lines.append("%-23s  %-8s  %-7s  %s"
@@ -3957,16 +4031,28 @@ def render_human(result: StyleResult, project: Path) -> str:
         lines.append("名词化剥离（本文高频术语，前 %d 个）：%s"
                      % (len(stripped), "、".join(stripped)))
     lines.append("")
+    red = [f for f in result.findings
+           if getattr(f, "severity", "yellow") == "red"]
+    if red:
+        lines.append("[红] %d 处证据缺钉（阻断；退出码 1）" % len(red))
+        for idx, f in enumerate(red, 1):
+            lines.append(" %2d. %-22s %s:%d" % (idx, f.code, f.file, f.line))
+            lines.append("     原文：" + _clip(f.text, 160))
+            lines.append("     改法：" + f.suggestion)
     if result.fired and stage.get("advice") == ADVICE_REPORT_ONLY:
         lines.append("[观察] %d 处清单（成品稿：建议不改，以下只作报告）"
-                     % len(result.findings))
+                     % len([f for f in result.findings
+                            if getattr(f, "severity", "yellow") != "red"]))
     elif result.fired:
         lines.append("[黄] %d 处具体改法（只提示，不阻断；退出码 3）"
-                     % len(result.findings))
-    else:
+                     % len([f for f in result.findings
+                            if getattr(f, "severity", "yellow") != "red"]))
+    elif not red:
         lines.append("[黄] 0 处——所有指标在阈值内。")
     if result.fired:
-        for idx, f in enumerate(result.findings, 1):
+        yellow = [f for f in result.findings
+                  if getattr(f, "severity", "yellow") != "red"]
+        for idx, f in enumerate(yellow, 1):
             lines.append(" %2d. %-22s %s:%d" % (idx, f.code, f.file, f.line))
             lines.append("     原文：" + _clip(f.text, 160))
             lines.append("     改法：" + f.suggestion)
@@ -3995,7 +4081,8 @@ def render_human(result: StyleResult, project: Path) -> str:
                          % (p.file, p.line, p.words, "、".join(p.flags)))
     lines.append("")
     lines.append("说明：本闸只报「可机械判定的公式化写法」，不评估、也不试图规避"
-                 "任何 AI 检测器；不阻断构建、不改正文。")
+                 "任何 AI 检测器；黄牌不阻断构建、不改正文，证据钢印红例外"
+                 "（REQUIRED_EVIDENCE_MISSING / EVIDENCE_DROPPED 阻断）。")
     return "\n".join(lines)
 
 

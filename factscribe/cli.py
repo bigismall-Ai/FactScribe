@@ -152,7 +152,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="回检前先编 PDF（项目目录默认取 PDF 上一级）")
     sp.add_argument("--json", action="store_true", help="（本命令默认只输出 JSON）")
     sp = sub.add_parser(
-        "style", help="文风闸：只报公式化写作特征（黄牌 exit 3），不阻断、不改正文")
+        "style", help="文风闸：只报公式化写作特征（黄牌 exit 3）；证据钢印红 exit 1")
     sp.add_argument("project", nargs="?", default=None,
                     help="项目目录（默认当前目录；与 --doc 互斥）")
     sp.add_argument("--doc", action="append", nargs="+", default=None,

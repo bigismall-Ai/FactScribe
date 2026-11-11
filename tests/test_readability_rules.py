@@ -58,6 +58,10 @@ def make_project(tmp, files: dict, rules: str | None = None) -> Path:
 
 def run_style(tmp, files: dict, rules: str | None = None,
               stage: str = "draft"):
+    # 批 131：NUMERAL_DENSITY 默认阈值改 null（不判）；本文件原有的数字密度
+    # 契约测试都显式给 40，保留实现与边界口径。
+    if rules is None:
+        rules = "[thresholds]\nnumeral_density = 40\n"
     root = make_project(tmp, files, rules)
     cfg = load_config(root)
     info = load_style_rules_info(root)
@@ -207,7 +211,8 @@ class TestNumeralDensity(unittest.TestCase):
 
     def test_project_stage_key_is_ignored_with_warning(self):
         # 旧文档教人「在项目里设 off」；批 130 起写了也不认，只报忽略告警。
-        rules = 'numeral_density_stage = "off"\n'
+        rules = ('numeral_density_stage = "off"\n'
+                 "[thresholds]\nnumeral_density = 40\n")
         with tempfile.TemporaryDirectory() as tmp:
             result = run_style(tmp, {"01.tex": en_numeral_body(5)}, rules)
         self.assertIn("NUMERAL_DENSITY", codes(result))

@@ -121,8 +121,12 @@ zh_collocation_redundancy = 1
 abbrev_first_use = 1
 
 # ---- 批 129：读者感觉三项的代理判据（全黄，退出码不变）----
-# 每千词（英）/每千汉字（中）的阿拉伯数字 token 数；> 触发。
-numeral_density = 40
+# 批 131 起 NUMERAL_DENSITY 默认阈值改为 null＝不判：它会诱导删证据——模型
+# 为了把密度降回阈值内，会把核心数字换成 nearly/most/some，审计仍绿而论证
+# 被抽空。实现与阶段开关（--stage revision 降 info）全部保留。
+# TOML 没有 null：默认值就是「不写这个键」。要恢复旧行为，显式写一个非负
+# 数字即可，例如：numeral_density = 40
+# numeral_density = 40
 # 节与节之间 8 词（英）/12 字（中）片段的重合率（百分比）；> 触发。
 # 重合率 = 共有片段数 ÷ 两节中较短一节的片段数。
 section_overlap = 12

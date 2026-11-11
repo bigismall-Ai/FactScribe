@@ -32,7 +32,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `build` | Runs `project.build` from `factscribe.toml`; Chinese builds auto-use Fandol |
 | `preamble` | Generates the `\fact` and `\pkignore` macros in `audit/preamble.tex` |
 | `verify-pdf` | PDF check: text layer, raster pages, bidirectional multiset, stamp signature |
-| `style` | Prose gate: reports formulaic writing only, yellow, never blocking |
+| `style` | Prose gate: formulaic writing (yellow); missing stamped evidence is red (exit 1) |
 | `protect` | Rewrite protection: compares six classes of content that must not change |
 | `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing |
 | `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
@@ -94,7 +94,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 995 tests, fully offline
+python3 -m unittest discover -s tests     # 1016 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

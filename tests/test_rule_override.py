@@ -43,7 +43,9 @@ sections = "sections/*.tex"
 facts = "facts/*.toml"
 """
 
-# 约 100 个英文词 + 5 个数字 = 约 49/千词（默认阈值 40，触发）。
+# 约 100 个英文词 + 5 个数字 = 约 49/千词（显式阈值 40，触发）。
+# 批 131：NUMERAL_DENSITY 默认阈值改 null（不判）；保留实现与配置，
+# 旧行为的测试都显式给阈值 40。
 # 句长故意拉开，避免 SENTENCE_UNIFORMITY 等无关判据一起触发。
 DENSE = "\\section{Measurement}\n\n" + (
     "Results shifted. "
@@ -60,7 +62,8 @@ DENSE = "\\section{Measurement}\n\n" + (
     "and signed the note without any further comment about the run. "
     "The curve stayed flat. We stopped there.\n")
 
-OFF_RULES = 'numeral_density_stage = "off"\n'
+NUMERAL_RULES = "[thresholds]\nnumeral_density = 40\n"
+OFF_RULES = 'numeral_density_stage = "off"\n' + NUMERAL_RULES
 LOOSE_RULES = "[thresholds]\nnumeral_density = 100\n"
 DASH_RULES = "[thresholds]\ndash_budget = 5\n"
 
@@ -142,7 +145,7 @@ class RuleOverrideCase(unittest.TestCase):
                          "revision")
 
     def test_stage_draft_is_explicit_default(self):
-        root = make_project(self.tmp / "p")
+        root = make_project(self.tmp / "p", OFF_RULES)
         proc, data = style_json(root, "--stage", "draft")
         self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
         self.assertIn("NUMERAL_DENSITY", finding_codes(data))
@@ -197,10 +200,11 @@ class RuleOverrideCase(unittest.TestCase):
 
     # ------------------------------------------------------------ 5. 无规则文件行为不变
     def test_no_rules_file_has_no_override_line_and_same_behavior(self):
+        # 批 131：NUMERAL_DENSITY 默认 null（不判）；没规则文件时同样不报。
         root = make_project(self.tmp / "p")
         proc, data = style_json(root)
-        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
-        self.assertIn("NUMERAL_DENSITY", finding_codes(data))
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("NUMERAL_DENSITY", finding_codes(data))
         self.assertEqual(data["rule_overrides"]["count"], 0)
         self.assertFalse(data["rule_overrides"]["present"])
         self.assertEqual(data["rule_warnings"], [])

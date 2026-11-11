@@ -227,6 +227,10 @@ class Config:
     budget_defined: bool = False
     budget_default: int = 0                    # 0＝未设
     budget_sections: dict = field(default_factory=dict)  # {节键: 词/字数}
+    # 批 131：证据钢印（`[evidence]`，可选）。人声明「哪一节必须出现哪几个
+    # fact id」，机器照单钉死。键＝节文件名去扩展名。
+    evidence_defined: bool = False
+    evidence_sections: dict = field(default_factory=dict)  # {节键: [fact id]}
 
     @property
     def is_v3(self) -> bool:
@@ -384,6 +388,56 @@ def section_budget(cfg: Config, file: str) -> int:
     return cfg.budget_default
 
 
+# --------------------------------------------------------------------------
+# 批 131：证据钢印（`[evidence]`，可选）
+# --------------------------------------------------------------------------
+
+EVIDENCE_TABLE = "evidence"
+
+
+def _parse_evidence(data: dict, path: Path) -> tuple[bool, dict]:
+    """读 `[evidence]`：返回 (是否声明, {节键: [fact id]})。
+
+    没有 `[evidence]` ⇒ (False, {})，`REQUIRED_EVIDENCE_MISSING` 不跑。
+    键＝节文件名去扩展名；值是 fact id 字符串数组（人写的清单，机器不推导）。
+    值形态不合法即配置错（退出码 2），不猜、不截断；同一节里重复的 id
+    按一条处理（存在性判据）。
+    """
+    raw = data.get(EVIDENCE_TABLE)
+    if raw is None:
+        return False, {}
+    if not isinstance(raw, dict):
+        raise ConfigError("%s 的 [evidence] 必须是表（节键 = fact id 数组），"
+                          "现在是 %r" % (path, raw))
+    sections: dict[str, list[str]] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ConfigError("%s 的 [evidence] 里有一个非字符串/空键：%r"
+                              % (path, key))
+        if not isinstance(value, list):
+            raise ConfigError(
+                "%s 的 [evidence].%s 必须是 fact id 数组，现在是 %r"
+                % (path, key.strip(), value))
+        ids: list[str] = []
+        for item in value:
+            if not isinstance(item, str) or not item.strip():
+                raise ConfigError(
+                    "%s 的 [evidence].%s 里有非字符串/空条目：%r"
+                    % (path, key.strip(), item))
+            fid = item.strip()
+            if fid not in ids:
+                ids.append(fid)
+        sections[key.strip()] = ids
+    return True, sections
+
+
+def section_evidence(cfg: Config, file: str) -> tuple:
+    """某节文件在 `[evidence]` 里声明的 fact id（没声明 ⇒ 空元组）。"""
+    if not getattr(cfg, "evidence_defined", False):
+        return ()
+    return tuple(cfg.evidence_sections.get(Path(str(file)).stem, ()))
+
+
 def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     """旧版：顶层 [project] 表（title/sections/facts/bib/build…），行为不变。"""
     proj = data.get("project")
@@ -421,6 +475,7 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     )
     cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
         _parse_budget(data, path)
+    cfg.evidence_defined, cfg.evidence_sections = _parse_evidence(data, path)
     # v1 的未知字段同样不静默（判据仍不看它们，行为不变）。
     _unknown_field_warnings(cfg, proj, V1_KNOWN_FIELDS, path, "[project]")
     return cfg
@@ -490,7 +545,7 @@ V3_KNOWN_FIELDS = {
     "output", "level", "number_locale", "signing_mode", "approver_keys_file",
     "release_keys_file", "image_budget_extra", "frac_allow", "inline_images_allow",
     "numeric_macro_allow", "authors", "build", "manifest", "source_root",
-    "bib_allow_unused", "budget",
+    "bib_allow_unused", "budget", "evidence",
 }
 
 # `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
@@ -678,6 +733,7 @@ def _load_v3_config(root: Path, path: Path, data: dict,
     )
     cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
         _parse_budget(data, path)
+    cfg.evidence_defined, cfg.evidence_sections = _parse_evidence(data, path)
     # 未知字段：允许忽略，但绝不静默（进 --json 的 config.warnings）。
     # 形态 A 的声明在顶层；B/C 在 [project] 表里。两处都查，免得换个写法
     # 就把打错的字段名吞掉。

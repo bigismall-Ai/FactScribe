@@ -11,6 +11,7 @@
 判定（fail-closed）::
 
     保护面有红                  → 拒绝（exit 1）
+    证据钢印有红（批 131）      → 拒绝（exit 1）
     tide 不闭合                 → 拒绝（exit 1）
     新增违规 > --allow-new       → 需复核（exit 3）
     三项全过                     → 通过（exit 0）
@@ -119,6 +120,12 @@ def run_review(before: Path | str, after: Path | str, *,
         reject = True
         codes = "、".join(sorted({f.code for f in red}))
         reasons.append("保护面有 %d 条红：%s" % (len(red), codes))
+    style_red = [f for f in style_result.findings
+                 if getattr(f, "severity", "yellow") == SEV_RED]
+    if style_red:
+        reject = True
+        codes = "、".join(sorted({f.code for f in style_red}))
+        reasons.append("证据钢印有 %d 条红：%s" % (len(style_red), codes))
     if not tide_result.closed:
         reject = True
         reasons.append("tide 未闭合：%s" % ("；".join(tide_result.reasons)
@@ -248,8 +255,9 @@ def render_human(result: ReviewResult) -> str:
     if not result.style.findings:
         lines.append("  （没有新增违规）")
     for f in result.style.findings:
-        lines.append("  [黄] %s %s:%d: %s"
-                     % (f.code, f.file, f.line, f.text))
+        mark = "红" if getattr(f, "severity", "yellow") == SEV_RED else "黄"
+        lines.append("  [%s] %s %s:%d: %s"
+                     % (mark, f.code, f.file, f.line, f.text))
 
     lines.append("")
     lines.append("闭合：paired %s   hash_ok %s   pass_all %s"

@@ -24,6 +24,7 @@ from pathlib import Path
 
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections, section_budget, section_evidence)
+from .evidence import suggest_evidence
 from .style import _headings                     # 复用既有标题抽取，不另写一套
 from .terms import Term, load_glossary
 from .texrules import strip_comments_and_verbatim
@@ -55,10 +56,14 @@ class SectionRow:
     facts: int
     budget: int = 0     # 0＝没有可用预算（写「—」）
     evidence: tuple = ()  # 批 131：`[evidence]` 声明的 fact id（空＝「—」）
+    # 批 132：清单来源——declared（`[evidence]`）/ suggested（现状快照，
+    # 未冻结）/ none（本节没有引用任何 fact）。
+    evidence_source: str = "none"
 
     def as_dict(self) -> dict:
         return {"file": self.file, "title": self.title, "facts": self.facts,
-                "budget": self.budget, "evidence": list(self.evidence)}
+                "budget": self.budget, "evidence": list(self.evidence),
+                "evidence_source": self.evidence_source}
 
 
 @dataclass(frozen=True)
@@ -173,12 +178,21 @@ def build_sections(cfg: Config, sections: list[tuple[str, str]]
         if rel not in chosen:
             chosen.append(rel)
     rows: list[SectionRow] = []
+    # 批 132：没有 `[evidence]` 声明的节，用 --suggest 的即时结果（未冻结）。
+    suggestions = suggest_evidence(sections)
     for rel in chosen:
         text = texts.get(rel, "")
+        key = Path(rel).stem
+        if key in (getattr(cfg, "evidence_sections", {}) or {}):
+            evidence = section_evidence(cfg, rel)
+            source = "declared" if evidence else "none"
+        else:
+            evidence = tuple(suggestions.get(key, ()))
+            source = "suggested" if evidence else "none"
         rows.append(SectionRow(file=rel, title=_first_title(text),
                                facts=len(_bound_fact_ids(text)),
                                budget=section_budget(cfg, rel),
-                               evidence=section_evidence(cfg, rel)))
+                               evidence=evidence, evidence_source=source))
     return rows
 
 
@@ -294,15 +308,20 @@ def render(brief: Brief) -> str:
     lines.append("| # | 文件 | 当前标题 | 该节已有事实条数 | 篇幅预算 | 必须引用的事实 |")
     lines.append("| --- | --- | --- | --- | --- | --- |")
     for index, row in enumerate(brief.sections, 1):
+        cell = "、".join(row.evidence) if row.evidence else ""
+        if row.evidence_source == "suggested":
+            cell += "（未冻结）"
         lines.append("| %d | `%s` | %s | %d | %s | %s |"
                      % (index, row.file, _cell(row.title or "（无标题）"),
                         row.facts,
                         str(row.budget) if row.budget else "—",
-                        _cell("、".join(row.evidence) if row.evidence else "—")))
+                        _cell(cell)))
     lines.append("")
-    lines.append("「必须引用的事实」是人钉清单：这些 id 必须出现在该节的正文里，"
-                 "缺一条即红（`REQUIRED_EVIDENCE_MISSING`）；没有声明写「—」，"
-                 "不表示可以少写。")
+    lines.append("「必须引用的事实」取自 `[evidence]`（人钉清单：这些 id 必须出现在"
+                 "该节的正文里，缺一条即红 `REQUIRED_EVIDENCE_MISSING`）；某节没有"
+                 "声明时，用 `evidence --suggest` 的现状快照填上并标「未冻结」——"
+                 "这类清单还没有进 `audit/evidence.lock`，改动不受 EVIDENCE_SET_CHANGED 管。"
+                 "没有引用任何 fact 的节写「—」，不表示可以少写。")
 
     # ---- 2. 可用主张与数字 ----
     lines.append("## 2. 可用主张与数字")

@@ -20,9 +20,9 @@ python3 -m factscribe audit <project> --build  # build the PDF, then audit
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Fifteen commands
+## Sixteen commands
 
-`factscribe` ships fifteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
+`factscribe` ships sixteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
 
 | Command | What it does |
 |---|---|
@@ -42,6 +42,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
 | `fonts` | CJK fonts: `--fetch` caches Fandol locally, `--status` checks completeness |
 | `brief` | Drafting brief: section list, usable claims and numbers, terms, hard constraints |
+| `evidence` | Evidence list: `--suggest` prints an `[evidence]` block, `--freeze` writes `audit/evidence.lock`; edits after freezing are red |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 

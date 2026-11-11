@@ -16,6 +16,7 @@ from .config import (Config, ConfigError, _glob_paths, all_tex_files,
                      facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
                         SEV_RED, SEV_YELLOW, VERSION)
+from .evidence import CHANGED_CODE, lock_check
 from .facts import (Fact, ExprError, _cycles, _declared_number, canon_text,
                     eval_expr, literal_tokens, number_key, sha256_file)
 from .texrules import (adjacency_hits, arith_hits, display_hits,
@@ -1391,6 +1392,13 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                                "structural_masked", 0),
                            "structural_masked_by": pdf_stats.get(
                                "structural_masked_by", {})}
+
+    # 批 132：冻结后的检查——只判「冻结后有没有被改」。lock 不存在不检查。
+    lock = lock_check(cfg)
+    if lock is not None:
+        red.append(Issue(CHANGED_CODE, lock["message"],
+                         location=lock["location"],
+                         token=lock["current_sha256"][:12]))
 
     summary = {
         "facts": len(facts),

@@ -19,6 +19,7 @@ from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
+from .evidence import render_toml, suggest_evidence, write_lock
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
 from .fonts import render_fetch as render_fonts_fetch
 from .fonts import render_status as render_fonts_status
@@ -296,6 +297,22 @@ def build_parser() -> argparse.ArgumentParser:
     sa.add_argument("--glossary", default=None, metavar="TSV",
                     help="目标词表（默认 factscribe/terms/paper.tsv）")
     sa.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "evidence",
+        help="证据清单：--suggest 出 [evidence] 块，--freeze 冻结到 audit/evidence.lock",
+        description="证据清单可由人或 LLM 产出，但由机器冻结：--suggest 扫描"
+                    "正文 \\fact{} 引用，输出可直接粘进 paperkit.toml 的 "
+                    "[evidence] 块；--freeze 读当前清单，写 audit/evidence.lock"
+                    "（规范化哈希 + 明文底稿）。冻结后 audit/review 检查清单"
+                    "有没有被改，改了就红 EVIDENCE_SET_CHANGED。")
+    eg = sp.add_mutually_exclusive_group(required=True)
+    eg.add_argument("--suggest", metavar="PROJECT",
+                    help="扫描项目各节正文，输出 [evidence] TOML 块"
+                         "（stdout 只有 TOML，可重定向）")
+    eg.add_argument("--freeze", metavar="PROJECT",
+                    help="读当前 [evidence]，写 audit/evidence.lock")
+    sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
 
@@ -918,6 +935,44 @@ def cmd_terms(args) -> int:
     return EXIT_OK
 
 
+def cmd_evidence(args) -> int:
+    """证据清单：--suggest 出 TOML（stdout 纯净），--freeze 写锁。"""
+    if args.suggest is not None:
+        cfg = load_config(Path(args.suggest))
+        sections = load_sections(cfg)
+        mapping = suggest_evidence(sections)
+        text = render_toml(mapping)
+        if args.json:
+            payload = _payload(
+                "evidence", "ok", EXIT_OK, action="suggest",
+                sections=[{"section": key, "ids": list(ids)}
+                          for key, ids in mapping.items()],
+                facts=sum(len(ids) for ids in mapping.values()),
+                toml=text)
+            _emit(payload, text, True)
+            return EXIT_OK
+        print(text, end="")
+        print("扫描 %d 节，%d 节有 fact 引用，共 %d 条 id（未冻结）"
+              % (len(sections), len(mapping),
+                 sum(len(ids) for ids in mapping.values())),
+              file=sys.stderr)
+        return EXIT_OK
+
+    cfg = load_config(Path(args.freeze))
+    info = write_lock(cfg.root, dict(getattr(cfg, "evidence_sections", {}) or {}))
+    if args.json:
+        payload = _payload("evidence", "ok", EXIT_OK, action="freeze", **info)
+        _emit(payload, "", True)
+        return EXIT_OK
+    lines = ["== factscribe evidence freeze ==",
+             "写盘：%s" % info["path"],
+             "canonical_sha256：%s" % info["sha256"],
+             "entries：%d" % info["entries"],
+             "说明：清单可由人或 LLM 提出；冻结是机械动作，改动须重新冻结。"]
+    print("\n".join(lines))
+    return EXIT_OK
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
@@ -928,6 +983,7 @@ def main(argv=None) -> int:
                 "polish": cmd_polish,
                 "brief": cmd_brief,
                 "prescribe": cmd_prescribe, "terms": cmd_terms,
+                "evidence": cmd_evidence,
                 "fonts": cmd_fonts}
     try:
         return handlers[args.command](args)

@@ -20,9 +20,9 @@ python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-## 十五个命令
+## 十六个命令
 
-`factscribe` 一共十五个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
+`factscribe` 一共十六个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
 
 | 命令 | 干什么 |
 |---|---|
@@ -42,6 +42,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `polish` | 给 LLM 的润色入口：`--print` 出操作手册，`--plan` 出工作单 |
 | `fonts` | 中文字体：`--fetch` 下载 Fandol 到本地缓存，`--status` 看是否齐全 |
 | `brief` | 起草简报：从账生成节清单、可用主张与数字、术语与硬约束 |
+| `evidence` | 证据清单：`--suggest` 出 `[evidence]` 块，`--freeze` 冻结到 `audit/evidence.lock`；冻结后改动即红 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 

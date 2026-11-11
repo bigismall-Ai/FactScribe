@@ -194,14 +194,16 @@ class TestSections(BriefTestCase):
 
     def test_fact_count_is_per_section_distinct_bindings(self):
         # 01_alpha 绑定 A1（重复两次）与 A2 → 2 条；02_zeta 绑定 B1 → 1 条。
-        # 批 128：表尾多了「篇幅预算」列，没有 [budget] 时写 —。
-        # 批 131：再多了「必须引用的事实」列，没有 [evidence] 时写 —。
+        # 批 128：表尾多了「篇幅预算」列；批 132：没有 [evidence] 时，
+        # 「必须引用的事实」列用 --suggest 的现状快照并标「未冻结」。
         rows = [line for line in self.text.splitlines()
                 if line.startswith("|") and "sections/" in line]
         alpha = next(r for r in rows if "01_alpha.tex" in r)
         zeta = next(r for r in rows if "02_zeta.tex" in r)
-        self.assertTrue(alpha.rstrip().endswith("| 2 | — | — |"), alpha)
-        self.assertTrue(zeta.rstrip().endswith("| 1 | — | — |"), zeta)
+        self.assertTrue(
+            alpha.rstrip().endswith("| 2 | — | A1、A2（未冻结） |"), alpha)
+        self.assertTrue(
+            zeta.rstrip().endswith("| 1 | — | B1（未冻结） |"), zeta)
 
 
 # --------------------------------------------------------------------------

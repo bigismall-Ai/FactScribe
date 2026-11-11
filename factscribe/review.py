@@ -27,6 +27,7 @@ from pathlib import Path
 
 from .config import ConfigError, load_config, load_sections
 from .constants import EXIT_OK, EXIT_RED, EXIT_YELLOW, SEV_RED
+from .evidence import CHANGED_CODE, lock_check
 from .protect import ProtectResult
 from .protect import compare as compare_protect
 from .style import (StyleResult, analyze, filter_new_findings,
@@ -56,6 +57,7 @@ class ReviewResult:
     tide: TideResult
     verdict: str
     reasons: list[str] = field(default_factory=list)
+    evidence_lock: dict | None = None       # 批 132：清单被改的差异（无则 None）
     snapshot_requested: bool = False
     snapshot_saved: bool = False
     snapshot: SnapshotResult | None = None
@@ -130,6 +132,11 @@ def run_review(before: Path | str, after: Path | str, *,
         reject = True
         reasons.append("tide 未闭合：%s" % ("；".join(tide_result.reasons)
                                             or "三条件未全过"))
+    # 批 132：冻结后的 [evidence] 被改 → 拒绝（只判有没有被改）。
+    evidence_lock = lock_check(after_cfg)
+    if evidence_lock is not None:
+        reject = True
+        reasons.append("%s：%s" % (CHANGED_CODE, evidence_lock["message"]))
 
     if reject:
         verdict = VERDICT_REJECT
@@ -145,6 +152,7 @@ def run_review(before: Path | str, after: Path | str, *,
         protect=protect_result, style=style_result,
         baseline_findings=len(baseline.findings), tide=tide_result,
         verdict=verdict, reasons=reasons,
+        evidence_lock=evidence_lock,
         snapshot_requested=snapshot is not None)
 
     # 只有「通过」才存快照；其余一律不存（fail-closed）。
@@ -202,6 +210,7 @@ def payload(result: ReviewResult) -> dict:
             "affect": len(result.tide.affect),
             "reasons": list(result.tide.reasons),
         },
+        "evidence_lock": result.evidence_lock,
         "snapshot": {
             "requested": result.snapshot_requested,
             "saved": result.snapshot_saved,
@@ -249,6 +258,9 @@ def render_human(result: ReviewResult) -> str:
     for warning in result.style.rule_warnings or []:
         lines.append("规则告警：%s（%s）"
                      % (warning.get("code"), warning.get("message", "")))
+    if result.evidence_lock is not None:
+        lines.append("证据清单：%s（%s）"
+                     % (CHANGED_CODE, result.evidence_lock["message"]))
     lines.append("复检（只算新增）：改前 %d 处 → 新增 %d 处（允许 %d）"
                  % (result.baseline_findings, len(result.style.findings),
                     result.allow_new))

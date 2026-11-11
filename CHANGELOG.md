@@ -30,6 +30,9 @@ and will not change without a major version bump.
 - `style`: `RHYTHM_PLATEAU` is informational by default (batch 109). Its reading stays in `metrics.rhythm_plateau` and is listed under `advisories`, but it does not enter `findings`, does not affect the exit code, and does not count as a yellow card; set `rhythm_plateau_level = "yellow"` to restore the old behaviour. `SENTENCE_UNIFORMITY` is the formal rhythm criterion.
 - `tide`: when `--before`, `--after`, and `--snapshot` are all given, closure is judged first and the snapshot is saved only if it closes (batch 109). If it does not close, the command exits 1 and writes neither a snapshot nor a ledger entry. A pure `--snapshot` run now says explicitly that no closure check was performed.
 
+### Fixed
+- `evidence --suggest`: the stdout stream is pinned to the paste-ready `[evidence]` block, with regression tests for the failure mode where a human summary lands on stdout and every later command exits 2 on the unparseable config (batch 134). The summary now comes from one `suggest_summary()` call and is written only to stderr in the default form and only to the `summary` field in `--json`; the JSON payload also gains `scanned` and `sections_with_facts`. Coverage: stdout parses with `tomllib`, contains no Chinese, the summary is on stderr, `--json` stdout is pure JSON, and appending stdout to `paperkit.toml` still lets `--freeze` exit 0. Record: `docs/implementation/EVIDENCE-FREEZE.md`.
+
 ## [1.3.0] - 2026-11-10
 
 ### Added

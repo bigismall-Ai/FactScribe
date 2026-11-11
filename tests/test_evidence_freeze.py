@@ -8,6 +8,10 @@
 * ``evidence --suggest`` 的输出可被 TOML 解析，且与正文 ``\\fact{}`` 引用一致；
 * 节内 id 按首次出现顺序、去重；同输入两跑逐字节一致；
 * ``--json`` 结构稳定；
+* ``--suggest`` 的 stdout 只有 TOML（可直接重定向、直接粘配置），摘要走掉；
+* ``--suggest`` 的 stdout 可被 ``tomllib`` 直接解析，且不含中文摘要；
+* 摘要出现在 stderr；``--json`` 的 stdout 是纯 JSON 且带统计字段；
+* stdout 直接追加到 ``paperkit.toml`` 后 ``--freeze`` 仍 exit 0（批 134 回归）。
 * ``evidence --freeze`` 写 ``audit/evidence.lock``：哈希与 entries；
 * 双跑同哈希；键序/重复 id 不同但规范化相同 → 同哈希；
 * 改一个 id / 加一节 / 挪一条 / 删一条 → ``EVIDENCE_SET_CHANGED`` 红，
@@ -22,11 +26,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+try:  # 3.11+；3.10 没有 tomllib，退回工具自己的解析器
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - 3.10
+    tomllib = None
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -229,6 +239,69 @@ class TestSuggest(FreezeCase):
         proc = cli("evidence", "--suggest", str(root))
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(parse_toml(proc.stdout, self.tmp), {"evidence": {}})
+
+
+# --------------------------------------------------------------------------
+# 1b. 批 134：suggest 的输出流契约（stdout 只有 TOML，摘要不进 stdout）
+# --------------------------------------------------------------------------
+
+class TestSuggestStreams(FreezeCase):
+    """实测缺陷回归：摘要混进 stdout 会让 TOML 解析失败、后续命令 exit 2。"""
+
+    def run_suggest(self, root: Path, *extra: str):
+        return cli("evidence", "--suggest", str(root), *extra)
+
+    def test_stdout_parses_as_toml_without_preprocessing(self):
+        root = self.project("streams-pure")
+        proc = self.run_suggest(root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        if tomllib is not None:
+            block = tomllib.loads(proc.stdout)
+        else:  # pragma: no cover - 3.10
+            block = parse_toml(proc.stdout, self.tmp)
+        self.assertEqual(block["evidence"]["02_body"], ["B1", "B2"])
+
+    def test_stdout_carries_no_chinese_summary(self):
+        root = self.project("streams-no-cn")
+        proc = self.run_suggest(root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue(proc.stdout.startswith("[evidence]\n"), proc.stdout[:40])
+        self.assertIsNone(re.search(r"[\u4e00-\u9fff]", proc.stdout),
+                          proc.stdout[:200])
+
+    def test_summary_goes_to_stderr(self):
+        root = self.project("streams-stderr")
+        proc = self.run_suggest(root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("扫描", proc.stderr)
+        self.assertIn("共 2 条 id", proc.stderr)
+        self.assertNotIn("扫描", proc.stdout)
+
+    def test_json_stdout_is_pure_json_with_stats(self):
+        root = self.project("streams-json")
+        proc = self.run_suggest(root, "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stderr, "")
+        data = json.loads(proc.stdout)
+        self.assertEqual(data["scanned"], 2)
+        self.assertEqual(data["sections_with_facts"], 1)
+        self.assertEqual(data["facts"], 2)
+        self.assertIn("共 2 条 id", data["summary"])
+        self.assertIn("未冻结", data["summary"])
+        self.assertEqual(parse_toml(data["toml"], self.tmp)["evidence"],
+                         {"02_body": ["B1", "B2"]})
+
+    def test_appended_stdout_is_accepted_by_freeze(self):
+        """验收形态：重定向 → 追加配置 → freeze，必须 exit 0。"""
+        root = self.project("streams-append")
+        proc = self.run_suggest(root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        cfg_path = root / "paperkit.toml"
+        write(cfg_path,
+              cfg_path.read_text(encoding="utf-8") + proc.stdout)
+        frozen = self.freeze(root)
+        self.assertEqual(frozen.returncode, 0, frozen.stderr)
+        self.assertEqual(read_lock(root)["entries"], 2)
 
 
 # --------------------------------------------------------------------------

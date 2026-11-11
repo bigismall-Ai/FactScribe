@@ -20,7 +20,7 @@ from .config import (Config, ConfigError, load_config, load_facts,
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .evidence import (freeze_evidence, render_toml, suggest_evidence,
-                       unfreeze_evidence)
+                       suggest_summary, unfreeze_evidence)
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
 from .fonts import render_fetch as render_fonts_fetch
 from .fonts import render_status as render_fonts_status
@@ -951,20 +951,21 @@ def cmd_evidence(args) -> int:
         sections = load_sections(cfg)
         mapping = suggest_evidence(sections)
         text = render_toml(mapping)
+        note = suggest_summary(len(sections), mapping)
         if args.json:
             payload = _payload(
                 "evidence", "ok", EXIT_OK, action="suggest",
+                scanned=len(sections), sections_with_facts=len(mapping),
                 sections=[{"section": key, "ids": list(ids)}
                           for key, ids in mapping.items()],
                 facts=sum(len(ids) for ids in mapping.values()),
-                toml=text)
-            _emit(payload, text, True)
+                summary=note, toml=text)
+            _emit(payload, "", True)
             return EXIT_OK
-        print(text, end="")
-        print("扫描 %d 节，%d 节有 fact 引用，共 %d 条 id（未冻结）"
-              % (len(sections), len(mapping),
-                 sum(len(ids) for ids in mapping.values())),
-              file=sys.stderr)
+        # stdout 只有 TOML：摘要一律走 stderr，保证重定向产物可直接粘配置
+        sys.stdout.write(text)
+        sys.stdout.flush()
+        print(note, file=sys.stderr)
         return EXIT_OK
 
     if args.unfreeze is not None:

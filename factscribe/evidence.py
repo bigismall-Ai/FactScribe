@@ -210,6 +210,16 @@ def render_toml(evidence: dict[str, list[str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def suggest_summary(scanned: int, evidence: dict[str, list[str]]) -> str:
+    """``--suggest`` 的人话摘要（批 134）。
+
+    只进 stderr 与 ``--json`` 的 ``summary`` 字段，**绝不进 stdout 的 TOML**
+    ——摘要混进 TOML 会让重定向产物解析失败、后续命令 exit 2。
+    """
+    return ("扫描 %d 节，%d 节有 fact 引用，共 %d 条 id（未冻结）"
+            % (scanned, len(evidence), entry_count(evidence)))
+
+
 def _norm_ids(ids) -> list[str]:
     """去空白、按大小写不敏感去重、按大小写不敏感排序（冻结口径）。"""
     seen: set[str] = set()

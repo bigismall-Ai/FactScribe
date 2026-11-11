@@ -27,7 +27,19 @@ jobs:
       # PDF 回检依赖 poppler（pdftotext/pdfinfo）；GitHub 的 ubuntu 镜像默认没有，
       # 不装的话 PDF 相关测试在 CI 会红、在本机（homebrew 装了）却绿。
       - name: Install poppler (pdftotext)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+        # GitHub 的 apt 镜像会抽风；失败三次才真失败，别让环境噪声把代码判红。
+        run: |
+          set -e
+          for i in 1 2 3; do
+            if sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq \
+               && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq poppler-utils; then
+              break
+            fi
+            echo "apt 第 $i 次失败，10 秒后重试"
+            sleep 10
+          done
+          command -v pdftotext >/dev/null
+          pdftotext -v 2>&1 | head -1
 
       - name: Version
         run: python -m factscribe --version

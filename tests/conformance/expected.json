@@ -1,0 +1,24 @@
+{
+  "codes": {
+    "UNMATCHED_NUMBER": 1,
+    "BOUND_MISMATCH": 1,
+    "MISSING_CITE": 1,
+    "UNBOUND_NUMBER": 1
+  },
+  "core_codes": [
+    "UNMATCHED_NUMBER",
+    "BOUND_MISMATCH",
+    "MISSING_CITE",
+    "UNBOUND_NUMBER",
+    "UNKNOWN_FACT_MARKER",
+    "UNKNOWN_CITE_COMMAND",
+    "DUPLICATE_BIB_KEY",
+    "BIB_NO_STABLE_ID",
+    "UNUSED_BIB",
+    "SOURCE_SHA256_MISMATCH",
+    "EXPR_MISMATCH",
+    "EXPR_INVALID",
+    "LOW_BINDING_RATE",
+    "DUPLICATE_ID"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "一致性锁夹具",
+  "manuscript": "\\section{Claims}\n\\label{sec:claims}\n\n开臂在 16 道题里解决 10 道\\fact{A1}。\n对比臂在同一组题上解决 11 道\\fact{A1}。\n校准集共 88 个样本\\fact{A3}。\n另一组复跑只覆盖 88 道题。\n\\section{Notes}\n\\label{sec:notes}\n\n离线复跑把端到端时延压到 47.3\\,ms，这个数字还没有进账。\n可复核的做法见 \\cite{chen2023factscore}。\n相关工作另见 \\cite{ghost2024}，这是一条 bib 里不存在的条目。\n",
+  "bib": "# 一致性锁夹具的参考文献：引用的条目带 doi（否则 audit 判 BIB_NO_STABLE_ID）。\n# ghost2024 故意不在这里——它触发 MISSING_CITE。\n\n@inproceedings{chen2023factscore,\n  title     = {FActScore: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation},\n  author    = {Chen, Sewon and others},\n  booktitle = {Proceedings of EMNLP},\n  year      = {2023},\n  doi       = {10.18653/v1/2023.emnlp-main.741}\n}\n",
+  "sources": [
+    {
+      "id": "results/run.md",
+      "text": "# SWB16 复跑记录（原始产物，只读；路径由 facts.source 指过来）。\n# 内容只需覆盖账上值的回查（10 / 16 / 88），不做别的用途。\n\n## 一 口径\n\n- open 臂：允许工具调用；\n- closed 臂：不允许工具调用；\n- 同一 prompt、同一评分脚本，单次复跑。\n\n## 二 汇总表\n\n| arm   | resolved | total |\n|-------|----------|-------|\n| open  | 10       | 16    |\n| closed| 8        | 16    |\n\n## 三 校准集\n\n校准集共 88 个样本。\n",
+      "sha256": "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60"
+    }
+  ],
+  "facts": [
+    {
+      "id": "A1",
+      "claim": "开臂 resolved（16 题）",
+      "value": "10/16",
+      "source": "results/run.md",
+      "sourceSha256": "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60",
+      "locator": "§二 汇总表 open 行",
+      "confidence": "high",
+      "derivedFrom": [],
+      "expr": ""
+    },
+    {
+      "id": "A3",
+      "claim": "校准集样本数",
+      "value": "88",
+      "source": "results/run.md",
+      "sourceSha256": "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60",
+      "locator": "§三 校准集",
+      "confidence": "med",
+      "derivedFrom": [],
+      "expr": ""
+    }
+  ]
+}

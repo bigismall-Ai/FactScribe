@@ -1,0 +1,14 @@
+\documentclass[11pt]{article}
+\usepackage[UTF8]{ctex}
+% 一致性锁夹具（批 138）：同一份项目，Python 原版与 integrations/factgate
+% 的 JS 移植件必须判出同样的核心错误码。夹具故意留了红，别顺手修绿。
+% \fact{A1} 是账目绑定标记；定义放导言区，正文里只需写标记。
+\newcommand{\fact}[1]{\textsuperscript{\textsf{\footnotesize[#1]}}}
+\title{一致性锁夹具}
+\author{paperkit}
+\date{}
+\begin{document}
+\maketitle
+\input{sections/10-claims}
+\input{sections/20-notes}
+\end{document}

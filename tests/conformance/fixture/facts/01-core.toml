@@ -1,0 +1,25 @@
+# 事实账：只追加。本夹具三条红各有归属——
+#   A1 绑定的行里出现 11 道   → BOUND_MISMATCH（绑了但值对不上）
+#   47.3 ms 没有账          → UNMATCHED_NUMBER（账外数字）
+#   \cite{ghost2024}        → MISSING_CITE（bib 里没有的 key）
+# 另有 A3 的 88 在正文出现但没内联绑定 → UNBOUND_NUMBER（黄）。
+
+[[fact]]
+id = "A1"
+claim = "开臂 resolved（16 题）"
+value = "10/16"
+source = "results/run.md"
+source_sha256 = "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60"
+locator = "§二 汇总表 open 行"
+confidence = "high"
+derived_from = []
+
+[[fact]]
+id = "A3"
+claim = "校准集样本数"
+value = "88"
+source = "results/run.md"
+source_sha256 = "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60"
+locator = "§三 校准集"
+confidence = "med"
+derived_from = []

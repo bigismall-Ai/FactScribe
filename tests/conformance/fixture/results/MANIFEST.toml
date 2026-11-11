@@ -1,0 +1,9 @@
+# 人签清单：results/ 下每个文件钉一个 sha256。
+# 工具只保证「从签过那刻起没被改」，不保证「当初没编」。
+[manifest]
+signed_by = "conformance-fixture"
+signed_at = "2026-11-07T12:00:00Z"
+version = 1
+
+[files]
+"results/run.md" = "3726d0ba3884c673cd2bb4067e0bea66e5c6fed88c86e216448c36d3ed39ee60"

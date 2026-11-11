@@ -111,12 +111,18 @@ cd integrations/factgate
 node --test tests/
 ~~~
 
-26 例，全离线（`node:test` + `node:assert`，零第三方依赖）。每个判据都有正反两例：
+26 例判据层自测，全离线（`node:test` + `node:assert`，零第三方依赖）。每个判据都有正反两例：
 数字归一化与值域、绑定硬约束、引用族 fail-closed、稳定标识、派生事实重算、
 来源哈希现算（据未改）、保护面里的事实标记/数字/引用、呈现层折叠、
 以及联网核验并入后的派生视图重算。
 
-上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件互不影响。
+另有 2 例是**与 Python 原版的一致性锁**（`tests/conformance.test.mjs`）：读上游投影好的
+`tests/conformance/project.json`，跑 `auditProject`，核心错误码多重集必须与
+`tests/conformance/expected.json` 里 Python 版的读数完全相等。为什么不比、锁哪些码、
+怎么重生成，见 `docs/design/SPEC-CONFORMANCE.md`。
+
+上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
+两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
 ---
 
@@ -162,7 +168,8 @@ integrations/factgate/
 ├── icon.png
 ├── .minimax-plugin/plugin.json  # 插件清单
 ├── tests/
-│   └── audit.test.mjs           # node:test，26 例，全离线
+│   ├── audit.test.mjs           # node:test，26 例，全离线
+│   └── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css
@@ -173,6 +180,7 @@ integrations/factgate/
 - server.mjs —— REST API 与 dataDir/ 持久化（原子写）
 - demo.mjs —— 演示数据
 - tests/audit.test.mjs —— 判据层的正反例
+- tests/conformance.test.mjs —— 核心错误码与 Python 原版比对（批 138）
 
 ---
 

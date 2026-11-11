@@ -1,0 +1,8 @@
+# 一致性锁夹具的项目声明（v1 形态：glob 章节 + facts 账 + 人签清单）。
+[project]
+title = "一致性锁夹具"
+authors = ["paperkit"]
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+build = ""

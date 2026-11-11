@@ -118,7 +118,7 @@ class TestPlaybook(unittest.TestCase):
 
     def test_names_all_prescriptions(self):
         names = sorted(load_prescriptions())
-        self.assertEqual(len(names), 10)
+        self.assertEqual(len(names), 13)
         for name in names:
             with self.subTest(name=name):
                 self.assertIn("`%s`" % name, self.text)

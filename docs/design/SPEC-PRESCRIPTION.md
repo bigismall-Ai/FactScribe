@@ -205,7 +205,7 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 }
 ```
 
-## 5. 十条处方
+## 5. 十三条处方
 
 | # | 名称 | 治的判据（错误码） | 优先序 | 一句话 |
 |---|---|---|---|---|
@@ -219,6 +219,9 @@ python3 -m factscribe prescribe <name|--list> [--for <错误码>] [--json]
 | 8 | `unbury-the-verb` | `LIGHT_VERB_NOMINALIZATION` | 5 文句风格 | 把埋进名词的动作挖回动词 |
 | 9 | `cut-the-de` | `ZH_DE_STACK` | 5 文句风格 | 拆掉单句里的「的」链 |
 | 10 | `trim-to-budget` | `SECTION_LENGTH` | 5 文句风格 | 先删重复的数字、再删举例、最后合并同义句；论点与证据不许动 |
+| 11 | `thin-the-numbers` | `NUMERAL_DENSITY` | 5 文句风格 | 只在起草阶段用；每个论点只留一条证据，其余数字删掉或改成定性说法 |
+| 12 | `merge-overlap` | `SECTION_OVERLAP` | 2 结构完整 | 把重复段落并进被引用的那一节，保留本节独有结论 |
+| 13 | `shift-to-implication` | `WE_ACTION_DENSITY` | 5 文句风格 | 把「我们做了 X」改成「X 意味着 Y」，主语换成对象或结论 |
 
 ### 5.1 `heading-shorten`
 
@@ -351,6 +354,28 @@ env PYTHONPATH=src python3 -m factscribe prescribe cut-the-de --json
 ```bash
 env PYTHONPATH=src python3 -m factscribe prescribe trim-to-budget --json
 ```
+
+### 5.11 `thin-the-numbers`
+
+治「一段里数字太密」（`NUMERAL_DENSITY`，判据见 `SPEC-READABILITY.md`）。
+必做：**只在起草阶段用**；每个论点只留一条证据；其余数字删掉或改成定性
+说法；同一事实只出现一次。禁做：改写验收阶段删数字（会触发
+`PROTECT_NUMBER_CHANGED`）；把数字换成同义的新数字；删掉论点唯一的证据。
+进入改写验收时把 `numeral_density_stage` 设为 `"off"`。
+
+### 5.12 `merge-overlap`
+
+治「两节之间大段字面重复」（`SECTION_OVERLAP`，8 词/12 字片段，默认
+超过 12%）。必做：同一事实只留一个主节；本节重复段删掉，只留本节独有
+结论；后文用交叉引用指回主节。禁做：把重复段改成同义的另一段；为降重合率
+删数字或引用；把重复段搬到相邻节。
+
+### 5.13 `shift-to-implication`
+
+治「动作句多于含义句」（`WE_ACTION_DENSITY`，主语 we/我们＋动作动词，
+默认超过 15%）。必做：主语换成对象或结论；补出「所以呢」；一段最多留一句
+「我们做了」。禁做：把「我们提出」也算成动作句；改成无主残句；换成「本文」
+就算改完；新增原文没有的因果结论。
 
 ## 6. 边界与非目标
 

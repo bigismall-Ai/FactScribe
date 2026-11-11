@@ -387,6 +387,9 @@ class TexPathRegressionTest(unittest.TestCase):
         "justify_chain": 0,
         "light_verb_nominalization": 0,
         "nominalization_rate": 0.0,
+        "numeral_density": 43.8,
+        "section_overlap": 0.0,
+        "we_action_density": 0.0,
         "paragraph_template": 0.0,
         "repeated_opener": 0,
         "rhythm_plateau": 1,
@@ -413,7 +416,8 @@ class TexPathRegressionTest(unittest.TestCase):
         self.assertEqual(payload["metrics"], self.EXPECTED_METRICS)
         self.assertEqual(
             [(f["code"], f["file"], f["line"]) for f in payload["findings"]],
-            [("DASH_PARENTHETICAL", "sections/01-intro.tex", 6)])
+            [("DASH_PARENTHETICAL", "sections/01-intro.tex", 6),
+             ("NUMERAL_DENSITY", "sections/01-intro.tex", 9)])
         # 批 109：RHYTHM_PLATEAU 默认只作参考读数，不进 findings。
         self.assertEqual(
             [(f["code"], f["file"], f["line"])
@@ -421,7 +425,7 @@ class TexPathRegressionTest(unittest.TestCase):
             [("RHYTHM_PLATEAU", "sections/01-intro.tex", 9)])
         self.assertEqual(payload["summary"], {
             "files": 2, "words": 198, "sentences": 8, "paragraphs": 3,
-            "triggered": 1, "findings": 1, "exit_code": 3,
+            "triggered": 2, "findings": 2, "exit_code": 3,
             "stage": "polished", "advice": "report_only"})
 
     def test_tex_doc_extension_uses_latex_parser(self):

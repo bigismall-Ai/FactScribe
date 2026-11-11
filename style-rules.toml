@@ -31,6 +31,12 @@ rhythm_plateau_level = "info"
 # 打开后进 findings。改 true 即常开（不建议，见 docs/implementation/SYNTAX-B.md）。
 abbrev_first_use = false
 
+# 批 129：数字密度（NUMERAL_DENSITY）只在起草阶段当判据。改稿/改写验收时
+# 数字属于 PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时设
+# "off"，读数照给但降为 info（降级条目不进 findings、不改退出码）。
+# 可选值："draft"（默认）| "off"。
+numeral_density_stage = "draft"
+
 # 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
 # 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）
 # 不承载对立关系，不进本表。英文按词边界，中文按结构匹配。
@@ -112,6 +118,15 @@ zh_dang_when = 1
 zh_collocation_redundancy = 1
 # 缩写首现未展开：单位＝处，>= 1 触发；开关在文件顶部。
 abbrev_first_use = 1
+
+# ---- 批 129：读者感觉三项的代理判据（全黄，退出码不变）----
+# 每千词（英）/每千汉字（中）的阿拉伯数字 token 数；> 触发。
+numeral_density = 40
+# 节与节之间 8 词（英）/12 字（中）片段的重合率（百分比）；> 触发。
+# 重合率 = 共有片段数 ÷ 两节中较短一节的片段数。
+section_overlap = 12
+# 主语为 we/我们且谓语是动作动词的句子 ÷ 总句数；> 触发（0.15＝15%）。
+we_action_density = 0.15
 
 # ---- v4 新增（SPEC-V3.0 §13）----
 # 插入语破折号（—— / —）预算：出现数 > 预算才报；按处报，默认 0
@@ -463,3 +478,18 @@ min_letters = 2
 # 罗马数字、文献标记不是缩写。
 exclude = ["II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII",
            "XIII", "XIV", "XV", "TODO", "TBD", "FIXME"]
+
+[we_action]
+# WE_ACTION_DENSITY 的动作动词表。只收「做了一件事」的动词；
+# 提出/主张/认为/说明这类修辞或认知动词不收（「我们提出」不算动作句）。
+english = ["ran", "run", "runs", "running",
+           "did", "do", "does", "doing",
+           "tried", "try", "tries", "trying",
+           "changed", "change", "changes", "changing",
+           "added", "add", "adds", "adding",
+           "removed", "remove", "removes", "removing",
+           "tested", "test", "tests", "testing",
+           "looked", "look", "looks", "looking"]
+chinese = ["跑", "做", "试", "改", "加", "删", "测", "查", "记",
+           "尝试", "修改", "增加", "添加", "删除", "运行",
+           "测试", "测量", "检查", "记录", "核对", "查验"]

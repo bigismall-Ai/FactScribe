@@ -61,6 +61,10 @@ DEFAULT_RULES: dict = {
     # 批 105（B5）：ABBREV_FIRST_USE 默认关闭。四份语料里专名与通用缩写
     # 混在一起，判「该不该展开」仍需人看；只由 `--report-abbrev` 打开。
     "abbrev_first_use": False,
+    # 批 129：数字密度只在起草阶段当判据。改稿/改写验收时数字属于
+    # PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时设 "off"，
+    # 判据降为 info（仍给读数，但不要求删数字）。
+    "numeral_density_stage": "draft",
     "thresholds": {
         "connective_density": 8.0,
         # 句长 CV 的健康区间是 [sentence_uniformity, sentence_uniformity_high]；
@@ -114,6 +118,14 @@ DEFAULT_RULES: dict = {
         # 批 128：篇幅预算的宽限。超预算超过这个百分比才报 SECTION_LENGTH
         # （20 表示「超过 120% 才算超」；正好 120% 不报）。
         "section_length_excess_percent": 20.0,
+        # 批 129：读者感觉三项的代理判据。
+        # NUMERAL_DENSITY：每千词（英）/每千汉字（中）的阿拉伯数字 token 数。
+        "numeral_density": 40.0,
+        # SECTION_OVERLAP：节与节之间 8 词（英）/12 字（中）片段的重合率
+        # （百分比）。重合率 = 共有片段数 ÷ 两节中较短一节的片段数。
+        "section_overlap": 12.0,
+        # WE_ACTION_DENSITY：主语为 we/我们且谓语是动作动词的句子占比。
+        "we_action_density": 0.15,
     },
     "limits": {
         "max_findings_per_metric": 20,
@@ -385,6 +397,21 @@ DEFAULT_RULES: dict = {
         "exclude": ["II", "III", "IV", "VI", "VII", "VIII", "IX", "XI",
                     "XII", "XIII", "XIV", "XV", "TODO", "TBD", "FIXME"],
     },
+    # 批 129：WE_ACTION_DENSITY 的动作动词表。只收「做了一件事」的动词；
+    # 提出/主张/认为/说明这类修辞或认知动词不收（「我们提出」不算动作句）。
+    "we_action": {
+        "english": ["ran", "run", "runs", "running",
+                    "did", "do", "does", "doing",
+                    "tried", "try", "tries", "trying",
+                    "changed", "change", "changes", "changing",
+                    "added", "add", "adds", "adding",
+                    "removed", "remove", "removes", "removing",
+                    "tested", "test", "tests", "testing",
+                    "looked", "look", "looks", "looking"],
+        "chinese": ["跑", "做", "试", "改", "加", "删", "测", "查", "记",
+                    "尝试", "修改", "增加", "添加", "删除", "运行",
+                    "测试", "测量", "检查", "记录", "核对", "查验"],
+    },
 }
 
 # 指标方向：True = 超过阈值触发；False = 低于阈值触发；单点指标用下限。
@@ -428,6 +455,10 @@ DIRECTIONS = {
     "abbrev_first_use": "at_least",
     # 批 128：篇幅预算（值＝超预算最狠的百分比）
     "section_length": "above",
+    # 批 129：读者感觉三项的代理判据（全黄，退出码不变）
+    "numeral_density": "above",
+    "section_overlap": "above",
+    "we_action_density": "above",
 }
 
 CODE_OF = {
@@ -470,6 +501,10 @@ CODE_OF = {
     "abbrev_first_use": "ABBREV_FIRST_USE",
     # 批 128
     "section_length": "SECTION_LENGTH",
+    # 批 129
+    "numeral_density": "NUMERAL_DENSITY",
+    "section_overlap": "SECTION_OVERLAP",
+    "we_action_density": "WE_ACTION_DENSITY",
 }
 
 FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
@@ -484,6 +519,7 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
                  "NOMINALIZATION_RATE", "ZH_ASPECT_ZHE", "ZH_DANG_WHEN",
                  "ZH_COLLOCATION_REDUNDANCY", "ABBREV_FIRST_USE",
                  "SECTION_LENGTH",
+                 "NUMERAL_DENSITY", "SECTION_OVERLAP", "WE_ACTION_DENSITY",
                  "HEDGE_STACK", "CONNECTIVE_DENSITY", "EMPTY_ADJECTIVE",
                  "COLLOQUIAL_TRIAD", "PARAGRAPH_TEMPLATE", "EXPLAINER_DENSITY",
                  "JUSTIFY_CHAIN", "REPEATED_OPENER",
@@ -491,6 +527,25 @@ FINDING_ORDER = ["SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
 
 _CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 _LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9'’\-]*")
+
+# 批 129：读者感觉三项的代理判据。
+# 阿拉伯数字 token：整数、小数、千分位都算一个 token；斜杠两侧分开算。
+_NUMERAL_TOKEN_RE = re.compile(r"\d+(?:[.,]\d+)*")
+# SECTION_OVERLAP 的片段长度：英文 8 词、中文 12 字（固定口径，见规范）。
+_OVERLAP_SHINGLE_EN = 8
+_OVERLAP_SHINGLE_ZH = 12
+# 太短的节不判重叠：单句引用同一事实会因分母太小被误判成重复。
+_OVERLAP_MIN_SHINGLES = 20
+# WE_ACTION_DENSITY：主语与谓语之间允许出现的副词/助动词。
+_WE_EN_SKIP = {
+    "then", "also", "first", "finally", "still", "only", "not", "never",
+    "again", "now", "already", "recently", "separately", "jointly",
+    "have", "has", "had", "having", "will", "would", "can", "could",
+    "may", "might", "must", "shall", "should", "subsequently", "later",
+}
+_WE_ZH_SKIP = ("也", "又", "还", "再", "先", "随后", "接着", "然后",
+               "分别", "已经", "已", "曾", "都", "就", "便", "只", "仍",
+               "仍然", "再次", "依次", "逐一", "随后又")
 
 
 # --------------------------------------------------------------------------
@@ -2541,6 +2596,262 @@ def _section_length_findings(cfg: Config, docs: list["_Doc"],
     return findings, details, round(worst, 1)
 
 
+def _is_container(doc: "_Doc") -> bool:
+    """主文件是不是「容器」：只 \\input/\\include 别的文件，自己没有正文。
+
+    容器不该按节算密度（否则 3 个数字/27 个词的导言区会误报）；有正文的
+    单文件项目照常判。
+    """
+    return bool(re.search(r"\\(?:input|include|subfile)\b", doc.raw or ""))
+
+
+def _numeral_density_findings(docs: list["_Doc"], threshold: float,
+                              stage: str, root_file: str = ""
+                              ) -> tuple[list, list, float, list]:
+    """批 129 NUMERAL_DENSITY：每千词（英）/每千汉字（中）的数字 token 数。
+
+    ``stage == "off"`` 时读数照算，但条目降为 info（不改 findings、不影响
+    退出码）：改写验收阶段数字属于 PROTECT_NUMBER_CHANGED 的保护面。
+    主文件若是只 ``\\input`` 别的文件的容器，跳过（容器不是一节）。
+    """
+    findings: list = []
+    details: list = []
+    info: list = []
+    worst = 0.0
+    for doc in docs:
+        if root_file and doc.file == root_file and _is_container(doc):
+            continue
+        cjk = len(_CJK_RE.findall(doc.prose))
+        latin = len(_LATIN_WORD_RE.findall(doc.prose))
+        if cjk > 0 and cjk >= latin:
+            units, unit = cjk, "汉字"
+        else:
+            units, unit = latin, "词"
+        if units <= 0:
+            continue
+        count = len(_NUMERAL_TOKEN_RE.findall(doc.prose))
+        density = count * 1000.0 / units
+        worst = max(worst, density)
+        details.append({"file": doc.file, "numerals": count, "units": units,
+                        "unit": unit, "density": round(density, 1),
+                        "threshold": threshold})
+        if density <= threshold:
+            continue
+        first = _NUMERAL_TOKEN_RE.search(doc.prose)
+        pos = first.start() if first else 0
+        shown = int(threshold) if float(threshold).is_integer() else threshold
+        text = ("本节 %d 个数字 / 阈值 %s / 密度 %.1f/千%s"
+                % (count, shown, density, unit))
+        if stage == "off":
+            info.append(Finding(
+                "NUMERAL_DENSITY", doc.file, _line_of(doc, pos), text,
+                "numeral_density_stage=off：本条只报告、不要求删数字。"
+                "改写验收阶段数字受 PROTECT_NUMBER_CHANGED 保护，删数字会被"
+                "保护面判红；起草阶段才用 thin-the-numbers。",
+                "numeral_density", severity="info"))
+        else:
+            findings.append(Finding(
+                "NUMERAL_DENSITY", doc.file, _line_of(doc, pos), text,
+                "数字太密：每个论点只留一条证据，其余数字删掉或改成定性说法"
+                "（多数/少量/接近）。本条只用于起草阶段；进入改写验收前把 "
+                "numeral_density_stage 设为 off，避免与 PROTECT_NUMBER_CHANGED "
+                "冲突。",
+                "numeral_density"))
+    details.sort(key=lambda item: item["file"])
+    return findings, details, round(worst, 1), info
+
+
+def _blocks_of(doc: "_Doc") -> list[tuple[str, int, int]]:
+    """按标题把一篇拆成节/小节块：[(节名, 起点, 终点)]。
+
+    标题本身在 ``prose`` 里已被等长遮罩，所以块内容只含正文；第一个块是
+    文件里第一个标题之前的正文（通常是导言或空块）。
+    """
+    heads = sorted(doc.headings, key=lambda h: h["start"])
+    starts = [0] + [h["end"] for h in heads]
+    ends = [h["start"] for h in heads] + [len(doc.prose)]
+    names = [doc.file] + [h["title"] for h in heads]
+    out = []
+    for name, start, end in zip(names, starts, ends):
+        if end > start:
+            out.append((name, start, end))
+    return out
+
+
+def _shingle_map(text: str, start: int, end: int) -> dict:
+    """返回 {片段: 首次出现位置}；英文 8 词、中文 12 字。"""
+    segment = text[start:end]
+    cjk = len(_CJK_RE.findall(segment))
+    latin = len(_LATIN_WORD_RE.findall(segment))
+    if cjk > 0 and cjk >= latin:
+        size = _OVERLAP_SHINGLE_ZH
+        tokens = [(m.group(0), start + m.start())
+                  for m in _CJK_RE.finditer(segment)]
+    else:
+        size = _OVERLAP_SHINGLE_EN
+        tokens = [(m.group(0).lower(), start + m.start())
+                  for m in _LATIN_WORD_RE.finditer(segment)]
+    out: dict = {}
+    for i in range(len(tokens) - size + 1):
+        key = tuple(token for token, _pos in tokens[i:i + size])
+        if key not in out:
+            out[key] = tokens[i][1]
+    return out
+
+
+def _section_overlap_findings(docs: list["_Doc"], threshold: float,
+                              root_file: str = ""
+                              ) -> tuple[list, list, float]:
+    """批 129 SECTION_OVERLAP：节与节之间的 8 词/12 字片段重合率。
+
+    重合率 = 共有片段数 ÷ 两节中较短一节的片段数（取较短一节为分母，
+    避免长节把短节的整段重复稀释掉）。``prose_of`` 已排除 ``\\fact``、
+    引用、公式与 LaTeX 命令，因此片段只由正文词/字组成。
+    """
+    blocks = []
+    for doc in docs:
+        if root_file and doc.file == root_file and _is_container(doc):
+            continue
+        for name, start, end in _blocks_of(doc):
+            shingles = _shingle_map(doc.prose, start, end)
+            if len(shingles) < _OVERLAP_MIN_SHINGLES:
+                continue
+            blocks.append({"doc": doc, "name": name, "start": start,
+                           "shingles": shingles})
+    blocks.sort(key=lambda b: (b["doc"].file, b["start"]))
+    findings: list = []
+    details: list = []
+    worst = 0.0
+    for i, first in enumerate(blocks):
+        for second in blocks[i + 1:]:
+            common = set(first["shingles"]) & set(second["shingles"])
+            if not common:
+                continue
+            denom = min(len(first["shingles"]), len(second["shingles"]))
+            rate = len(common) * 100.0 / denom if denom else 0.0
+            worst = max(worst, rate)
+            if rate <= threshold:
+                continue
+            key = min(common, key=lambda sh: (second["shingles"][sh],
+                                              first["shingles"][sh]))
+            line_second = _line_of(second["doc"], second["shingles"][key])
+            line_first = _line_of(first["doc"], first["shingles"][key])
+            if first["doc"].file == second["doc"].file:
+                other = "「%s」节" % first["name"]
+            else:
+                other = "「%s」节（%s）" % (first["name"], first["doc"].file)
+            excerpt = " ".join(key)
+            findings.append(Finding(
+                "SECTION_OVERLAP", second["doc"].file, line_second,
+                _clip("本节与%s重复：重合率 %.1f%%（> %.1f%%），本节第 %d 行"
+                      " ↔ 对方第 %d 行；共有片段：%s"
+                      % (other, rate, threshold, line_second, line_first,
+                         excerpt), 220),
+                "把重复段落并进被引用的那一节，或删掉本节的重复句，只保留"
+                "本节独有的结论；数字、事实与引用一条都不许丢。",
+                "section_overlap"))
+            details.append({
+                "file": second["doc"].file, "section": second["name"],
+                "other_file": first["doc"].file,
+                "other_section": first["name"],
+                "rate": round(rate, 1), "line": line_second,
+                "other_line": line_first,
+                "shared_shingles": len(common),
+                "denominator": denom})
+    details.sort(key=lambda item: (item["file"], item["line"]))
+    return findings, details, round(worst, 1)
+
+
+def _we_action_words(rules: dict) -> tuple[set, list]:
+    group = rules.get("we_action") or {}
+    english = {str(x).lower() for x in group.get("english") or []
+               if str(x).strip()}
+    chinese = sorted((str(x) for x in group.get("chinese") or []
+                      if str(x).strip()), key=len, reverse=True)
+    return english, chinese
+
+
+def _we_action_en(text: str, verbs: set) -> str:
+    """英文句：主语 we 后（跳过副词/助动词）的第一个实义动词是动作动词。"""
+    for match in re.finditer(r"\bwe\b", text, re.I):
+        words = re.findall(r"[A-Za-z][A-Za-z'’\-]*", text[match.end():])
+        index = 0
+        while index < len(words) and index < 4:
+            word = words[index].lower()
+            if word in verbs:
+                # do/does/did 后跟否定词时是助动词，不算动作。
+                if word in ("do", "does", "did") and index + 1 < len(words) \
+                        and words[index + 1].lower() in ("not", "never"):
+                    index += 2
+                    continue
+                # do/does/did 后跟另一个动作动词时是助动词，跳到实义动词。
+                if word in ("do", "does", "did") and index + 1 < len(words) \
+                        and words[index + 1].lower() in verbs:
+                    index += 1
+                    continue
+                return words[index]
+            if word in _WE_EN_SKIP:
+                index += 1
+                continue
+            break
+    return ""
+
+
+def _we_action_zh(text: str, verbs: list) -> str:
+    """中文句：出现「我们」，其后（跳过副词）紧跟动作动词。"""
+    for match in re.finditer("我们", text):
+        rest = text[match.end():].lstrip(" \t，,、；;：:。")
+        for skip in _WE_ZH_SKIP:
+            if rest.startswith(skip):
+                rest = rest[len(skip):].lstrip(" \t，,、；;：:")
+                break
+        if rest.startswith("的"):
+            continue
+        if rest.startswith("加以"):
+            continue
+        for verb in verbs:
+            if rest.startswith(verb):
+                return verb
+    return ""
+
+
+def _we_action_findings(sentences, rules: dict) -> tuple[list, dict]:
+    """批 129 WE_ACTION_DENSITY：动作句 ÷ 总句数。
+
+    只认「主语 we/我们 ＋ 动作动词」；``we propose`` / 「我们提出」不算。
+    """
+    english, chinese = _we_action_words(rules)
+    hits = []
+    for doc, start, end, _units in sentences:
+        text = _norm_space(doc.prose[start:end])
+        if _cjk_heavy(text):
+            verb = _we_action_zh(text, chinese)
+        else:
+            verb = _we_action_en(text, english)
+        if verb:
+            hits.append((doc, start, text, verb))
+    total = len(sentences)
+    ratio = len(hits) / total if total else 0.0
+    details = {"hits": len(hits), "sentences": total,
+               "ratio": round(ratio, 3),
+               "examples": [{"file": doc.file,
+                             "line": _line_of(doc, start),
+                             "verb": verb, "text": _clip(text, 120)}
+                            for doc, start, text, verb in hits[:10]]}
+    if not hits:
+        return [], details
+    first = hits[0]
+    return [Finding(
+        "WE_ACTION_DENSITY", first[0].file, _line_of(first[0], first[1]),
+        "动作句 %d / 总句 %d = %.1f%%（阈值 %.1f%%）"
+        % (len(hits), total, ratio * 100.0,
+           float(rules.get("thresholds", {}).get("we_action_density", 0.15))
+           * 100.0),
+        "「我们做了 X」多于「X 意味着 Y」：把动作句改成「X 意味着 Y」，"
+        "主语换成对象或结论；只改主语与谓语，事实、数字与引用不动。",
+        "we_action_density")], details
+
+
 def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             rules_path: str = "",
             before: tuple[Config, list[tuple[str, str]]] | None = None,
@@ -2557,6 +2868,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         raise ConfigError("rhythm_plateau_level 只能是 \"info\" 或 \"yellow\"：%r"
                           % rules.get("rhythm_plateau_level"))
     rhythm_yellow = rhythm_level == "yellow"
+    numeral_stage = str(rules.get("numeral_density_stage", "draft")
+                        ).strip().lower()
+    if numeral_stage not in ("draft", "off"):
+        raise ConfigError("numeral_density_stage 只能是 \"draft\" 或 \"off\"：%r"
+                          % rules.get("numeral_density_stage"))
 
     connective_re = _phrase_regex(_words(rules, "connectives"))
     connective_cn = _cn_words(rules, "connectives")
@@ -2613,6 +2929,20 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         cfg, docs, float(thresholds["section_length_excess_percent"]))
     instances["SECTION_LENGTH"].extend(budget_findings)
 
+    # ---- 批 129：读者感觉三项的代理判据（全黄，退出码不变）----
+    root_rel = getattr(cfg, "root_tex", "") or ""
+    numeral_findings, numeral_details, numeral_worst, numeral_info = \
+        _numeral_density_findings(
+            docs, float(thresholds["numeral_density"]), numeral_stage,
+            root_file=root_rel)
+    instances["NUMERAL_DENSITY"].extend(numeral_findings)
+    overlap_findings, overlap_details, overlap_worst = \
+        _section_overlap_findings(
+            docs, float(thresholds["section_overlap"]), root_file=root_rel)
+    instances["SECTION_OVERLAP"].extend(overlap_findings)
+    we_findings, we_details = _we_action_findings(all_sentences, rules)
+    instances["WE_ACTION_DENSITY"].extend(we_findings)
+
     # ---- 批 102：句法级判据（各按条计，无密度闸）----
     instances["LIGHT_VERB_NOMINALIZATION"].extend(
         _light_verb_findings(all_sentences, rules))
@@ -2650,6 +2980,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "zh_aspect_zhe_raw_hits": zhe_hits,
         "rhythm_plateau_level": rhythm_level,
         "section_budget": budget_details,
+        "numeral_density_stage": numeral_stage,
+        "numeral_density_sections": numeral_details,
+        "section_overlap_pairs": overlap_details,
+        "we_action_density": we_details,
     }
 
     # ---- 1. 套话连接词 ----
@@ -3123,6 +3457,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "abbrev_first_use": len(instances["ABBREV_FIRST_USE"]),
         # 批 128：超预算最狠的百分比（0.0＝没有节超预算／没配预算）
         "section_length": budget_worst,
+        # 批 129：读者感觉三项
+        "numeral_density": numeral_worst,
+        "section_overlap": overlap_worst,
+        "we_action_density": we_details["ratio"],
     }
 
     fired = []
@@ -3161,6 +3499,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         elif metric == "section_length":
             limit = thresholds["section_length_excess_percent"]
             hit = value > limit
+            shown = limit
+        elif metric == "numeral_density":
+            limit = thresholds["numeral_density"]
+            hit = numeral_stage != "off" and value > limit
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
                         "zh_de_stack", "zh_postposed_condition",
@@ -3230,7 +3572,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
     findings.sort(key=lambda f: (FINDING_ORDER.index(f.code)
                                  if f.code in FINDING_ORDER else 99,
                                  f.file, f.line))
-    info = sorted(instances.get("TERM_UNREGISTERED", []),
+    info = sorted(instances.get("TERM_UNREGISTERED", []) + numeral_info,
                   key=lambda f: (f.file, f.line, f.text))
     # 批 109：RHYTHM_PLATEAU 在 info 档只做参考读数，不进 findings。
     advisories = []
@@ -3361,6 +3703,9 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("zh_dang_when", "ZH_DANG_WHEN", ">="),
         ("zh_collocation_redundancy", "ZH_COLLOCATION_REDUNDANCY", ">="),
         ("abbrev_first_use", "ABBREV_FIRST_USE", ">="),
+        ("numeral_density", "NUMERAL_DENSITY", ">"),
+        ("section_overlap", "SECTION_OVERLAP", ">"),
+        ("we_action_density", "WE_ACTION_DENSITY", ">"),
         ("rhythm_plateau", "RHYTHM_PLATEAU", ">="),
         ("colloquial_triad", "COLLOQUIAL_TRIAD", ">="),
         ("connective_density", "CONNECTIVE_DENSITY", ">"),
@@ -3414,6 +3759,15 @@ def render_human(result: StyleResult, project: Path) -> str:
         elif key in ("zh_dang_when", "zh_collocation_redundancy",
                      "abbrev_first_use"):
             threshold = ">=1处"
+        elif key == "numeral_density":
+            threshold = ">%s/千词(字)" % _fmt(
+                result.thresholds.get("numeral_density", 0))
+        elif key == "section_overlap":
+            threshold = ">%s%%" % _fmt(
+                result.thresholds.get("section_overlap", 0))
+        elif key == "we_action_density":
+            threshold = ">%s%%" % _fmt(
+                result.thresholds.get("we_action_density", 0) * 100.0)
         elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost",
                      "heading_substituted"):
@@ -3421,6 +3775,8 @@ def render_human(result: StyleResult, project: Path) -> str:
         else:
             threshold = "%s" % _fmt(result.thresholds.get(key, 0))
         value = m[key]
+        value_shown = (("%.1f%%" % (value * 100.0))
+                       if key == "we_action_density" else _fmt(value))
         status = "触发" if label in fired_codes else "ok"
         if key == "rhythm_plateau" and not result.metric_details.get(
                 "rhythm_plateau_level") == "yellow":
@@ -3428,10 +3784,13 @@ def render_human(result: StyleResult, project: Path) -> str:
         if (key == "abbrev_first_use"
                 and not result.metric_details.get("abbrev_first_use_enabled")):
             status = "关"
+        if (key == "numeral_density"
+                and result.metric_details.get("numeral_density_stage") == "off"):
+            status = "关"
         if key == "term_unregistered" and m.get("term_unregistered"):
             status = "提示"
         lines.append("%-23s  %-8s  %-7s  %s"
-                     % (label, _fmt(value), threshold, status))
+                     % (label, value_shown, threshold, status))
     stripped = result.metric_details.get("nominalization_stripped") or []
     if stripped:
         lines.append("")

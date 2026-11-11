@@ -44,7 +44,8 @@ FIVE_CODES = ["HEADING_ECHO", "HEADING_MALFORMED", "TERM_FIRST_IN_HEADING",
 ALL_NAMES = ["heading-shorten", "term-first-sentence", "dash-rewrite",
              "heading-malformed", "heading-subject-keep",
              "section-completeness", "drop-the-proof",
-             "unbury-the-verb", "cut-the-de", "trim-to-budget"]
+             "unbury-the-verb", "cut-the-de", "trim-to-budget",
+             "thin-the-numbers", "merge-overlap", "shift-to-implication"]
 
 PROJECT_TOML = """[project]
 title = "处方层隔离测试"
@@ -118,7 +119,7 @@ class TestListAndShape(unittest.TestCase):
 
     def test_every_prescription_has_all_six_sections(self):
         prescriptions = load_prescriptions()
-        self.assertEqual(len(prescriptions), 10)
+        self.assertEqual(len(prescriptions), 13)
         for name, p in prescriptions.items():
             with self.subTest(name=name):
                 self.assertEqual(set(p.fields), set(SECTION_KEYS))
@@ -204,7 +205,7 @@ class TestForCode(unittest.TestCase):
 class TestBudgetPrescription(unittest.TestCase):
     def test_tenth_prescription_is_listed_and_has_six_sections(self):
         payload = cli_json("--list")
-        self.assertEqual(len(payload["prescriptions"]), 10)
+        self.assertEqual(len(payload["prescriptions"]), 13)
         item = next(i for i in payload["prescriptions"]
                     if i["name"] == "trim-to-budget")
         self.assertEqual(item["target_codes"], ["SECTION_LENGTH"])

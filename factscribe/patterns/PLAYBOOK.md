@@ -40,7 +40,7 @@
 5. 三项都过就收工；有新增违规，只回退或重改造成新增的那几条，其它已通过的不要动。
 6. 复跑 `review`。最多 3 轮；3 轮不达标按 §6 停手。
 
-十条处方速查（处方原文以 `prescribe <名>` 为准）：
+十三条处方速查（处方原文以 `prescribe <名>` 为准）：
 
 | 处方 | 治的错误码 | 一句话 |
 |---|---|---|
@@ -54,6 +54,9 @@
 | `unbury-the-verb` | `LIGHT_VERB_NOMINALIZATION` | 把埋在名词里的动作写成动词 |
 | `cut-the-de` | `ZH_DE_STACK` | 拆掉「的」链，让定语回到动词 |
 | `trim-to-budget` | `SECTION_LENGTH` | 先删重复的数字、再删举例、最后合并同义句；论点与每条论点的最后一条证据不许动 |
+| `thin-the-numbers` | `NUMERAL_DENSITY` | 只在起草阶段用；每个论点只留一条证据，其余数字删掉或改成定性说法 |
+| `merge-overlap` | `SECTION_OVERLAP` | 把重复段落并进被引用的那一节，或删掉本节的重复句，保留本节独有结论 |
+| `shift-to-implication` | `WE_ACTION_DENSITY` | 把「我们做了 X」改成「X 意味着 Y」，主语换成对象或结论 |
 
 「无处方」的条目不要去找处方：工作单已经写了它没有处方。
 

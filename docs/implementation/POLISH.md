@@ -40,12 +40,12 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
 |---|---|---|
 | 1 | 目标与边界 | 只做机械可判的润色；不改观点、事实、论证方向；工作单没列的句子一字不动 |
 | 2 | 绝对不许动的 | `protect` 六面（`\fact{}`、数字、`\cite` 家族、公式、表格行、`\label/\ref/\eqref`）＋三条保护面查不到的红线 |
-| 3 | 流程 | 读工作单 → 查处方 → 逐条改 → 跑 `review` → 看三项明细 → 达标或放弃 → 最多 3 轮；附九条处方速查表 |
+| 3 | 流程 | 读工作单 → 查处方 → 逐条改 → 跑 `review` → 看三项明细 → 达标或放弃 → 最多 3 轮；附十三条处方速查表 |
 | 4 | 验收 | `factscribe review --before 原稿 --after 改后`；通过（0）/ 需复核（3）/ 拒绝（1）各自怎么处理 |
 | 5 | 已知坏改法 | 七条禁做，各带反例：复述标题（`摘要。`）、删对比对象、替换关系词、垫话与设问、为过规则改僵、换套语、换破折号 |
 | 6 | 什么时候停 | 3 轮不达标即停手，报告「改不动」，不许继续硬改 |
 
-测试机械断言：六节标题恰好是 `## 1.` 到 `## 6.`；九条处方名全部出现；
+测试机械断言：六节标题恰好是 `## 1.` 到 `## 6.`；十三条处方名全部出现；
 三种验收结论与退出码 0/3/1 全部出现；「反例」至少 5 处且六条关键反例逐字在场；
 手册里出现的每个错误码都在全集内（`style.CODE_OF` ∪ 处方绑定的码）。
 
@@ -82,7 +82,7 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
   `heading-malformed`（3）。
 - 确定性：同一输入两跑，文本与 JSON 均逐字节一致（`test_plan_output_is_byte_deterministic`）。
 
-## 5. 无处方清单（20 条，机器现算）
+## 5. 无处方清单（21 条，机器现算）
 
 规则：`style` 注册表里没有任何处方绑定的码，一律标
 **`无处方：只提示，不许为它改句子`**，约束列写死为
@@ -104,8 +104,8 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
 | 9 | `ZH_COLLOCATION_REDUNDANCY` | 19 | `ZH_LIGHT_VERB_NOUN` |
 | 10 | `ZH_DANG_WHEN` | 20 | `ZH_POSTPOSED_CONDITION` |
 
-`style` 注册表 31 个码 − 11 个有处方的码（第 12 个处方码
-`SECTION_INCOMPLETE` 是处方层自有检查码，`style` 不产生它）＝ 20 条。
+`style` 注册表 36 个码 − 15 个有处方的码（处方层共 13 条处方、绑定 16 个码；
+其中 `SECTION_INCOMPLETE` 是处方层自有检查码，`style` 不产生它）＝ 21 条。
 任务点名的 13 条（`RHYTHM_PLATEAU`、`SENTENCE_UNIFORMITY`、
 `REPEATED_OPENER`、`CONNECTIVE_DENSITY`、`PARAGRAPH_TEMPLATE`、
 `HEDGE_STACK`、`EMPTY_ADJECTIVE`、`COLLOQUIAL_TRIAD`、
@@ -223,7 +223,7 @@ python3 -m factscribe polish --plan <项目目录> [--json]  # 打印工作单
 | 组 | 例数 | 覆盖 |
 |---|---|---|
 | 手册 | 10 | 六节标题、九条处方名、三种结论与退出码、≥5 条反例与逐字反例、码全集校验、protect 六面、3 轮停手、无处方原句、`--print` 与数据文件逐字节一致、无需项目 |
-| 命中→条目 | 6 | 无处方标注与约束、处方映射、约束表覆盖九条、优先序排序、无处方全集与注册表一致、注册表每码二分覆盖 |
+| 命中→条目 | 6 | 无处方标注与约束、处方映射、约束表覆盖十三条、优先序排序、无处方全集与注册表一致、注册表每码二分覆盖 |
 | 工作单 CLI | 9 | 每条 finding 有条目、顺序符合优先序、处方名可在 `prescribe --list` 查到、JSON 键集合稳定、两跑逐字节一致、空单、默认当前目录、缺模式退 2、`--print/--plan` 互斥退 2 |
 
 全量：`env PYTHONPATH=src python3 -m unittest discover -s tests`

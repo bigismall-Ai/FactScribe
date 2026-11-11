@@ -19,7 +19,8 @@ from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
-from .evidence import render_toml, suggest_evidence, write_lock
+from .evidence import (freeze_evidence, render_toml, suggest_evidence,
+                       unfreeze_evidence)
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
 from .fonts import render_fetch as render_fonts_fetch
 from .fonts import render_status as render_fonts_status
@@ -300,18 +301,26 @@ def build_parser() -> argparse.ArgumentParser:
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "evidence",
-        help="证据清单：--suggest 出 [evidence] 块，--freeze 冻结到 audit/evidence.lock",
+        help="证据清单：--suggest 出 [evidence] 块，--freeze/--unfreeze 冻结与解冻",
         description="证据清单可由人或 LLM 产出，但由机器冻结：--suggest 扫描"
                     "正文 \\fact{} 引用，输出可直接粘进 paperkit.toml 的 "
                     "[evidence] 块；--freeze 读当前清单，写 audit/evidence.lock"
                     "（规范化哈希 + 明文底稿）。冻结后 audit/review 检查清单"
-                    "有没有被改，改了就红 EVIDENCE_SET_CHANGED。")
+                    "有没有被改，改了就红 EVIDENCE_SET_CHANGED。"
+                    "--unfreeze 必须先写理由，解冻记录进 audit/evidence-log.ndjson；"
+                    "改完必须重新 --freeze。")
     eg = sp.add_mutually_exclusive_group(required=True)
     eg.add_argument("--suggest", metavar="PROJECT",
                     help="扫描项目各节正文，输出 [evidence] TOML 块"
                          "（stdout 只有 TOML，可重定向）")
     eg.add_argument("--freeze", metavar="PROJECT",
-                    help="读当前 [evidence]，写 audit/evidence.lock")
+                    help="读当前 [evidence]，写 audit/evidence.lock 并记一条 freeze")
+    eg.add_argument("--unfreeze", metavar="PROJECT",
+                    help="解冻清单：必须带 --reason，记一条 unfreeze 后允许改")
+    sp.add_argument("--reason", default=None, metavar="TEXT",
+                    help="为什么改（--unfreeze 必填）/ 本次冻结说明（--freeze 可选）")
+    sp.add_argument("--at", default="", metavar="YYYY-MM-DD",
+                    help="解冻时间（不传则写空，由人补；不读系统时钟）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
@@ -936,7 +945,7 @@ def cmd_terms(args) -> int:
 
 
 def cmd_evidence(args) -> int:
-    """证据清单：--suggest 出 TOML（stdout 纯净），--freeze 写锁。"""
+    """证据清单：--suggest 出 TOML，--freeze/--unfreeze 冻结与解冻。"""
     if args.suggest is not None:
         cfg = load_config(Path(args.suggest))
         sections = load_sections(cfg)
@@ -958,17 +967,48 @@ def cmd_evidence(args) -> int:
               file=sys.stderr)
         return EXIT_OK
 
+    if args.unfreeze is not None:
+        cfg = load_config(Path(args.unfreeze))
+        info = unfreeze_evidence(cfg.root, args.reason, args.at)
+        if args.json:
+            payload = _payload("evidence", "ok", EXIT_OK, **info)
+            _emit(payload, "", True)
+            return EXIT_OK
+        if info["idempotent"]:
+            lines = ["== factscribe evidence unfreeze ==",
+                     "已处于解冻状态，不重复写记录。",
+                     "理由：%s" % info["reason"],
+                     "hash_before：%s" % info["hash_before"]]
+        else:
+            lines = ["== factscribe evidence unfreeze ==",
+                     "写盘：%s" % info["path"],
+                     "理由：%s" % info["reason"],
+                     "hash_before：%s" % info["hash_before"],
+                     "at：%s" % (info["at"] or "（空，由人补）"),
+                     "下一步：改清单 → evidence --freeze --reason \"...\""]
+        print("\n".join(lines))
+        return EXIT_OK
+
     cfg = load_config(Path(args.freeze))
-    info = write_lock(cfg.root, dict(getattr(cfg, "evidence_sections", {}) or {}))
+    info = freeze_evidence(cfg.root,
+                           dict(getattr(cfg, "evidence_sections", {}) or {}),
+                           args.reason)
     if args.json:
         payload = _payload("evidence", "ok", EXIT_OK, action="freeze", **info)
         _emit(payload, "", True)
         return EXIT_OK
-    lines = ["== factscribe evidence freeze ==",
-             "写盘：%s" % info["path"],
-             "canonical_sha256：%s" % info["sha256"],
-             "entries：%d" % info["entries"],
-             "说明：清单可由人或 LLM 提出；冻结是机械动作，改动须重新冻结。"]
+    if info["idempotent"]:
+        lines = ["== factscribe evidence freeze ==",
+                 "已冻结且哈希未变：幂等，不重复写记录。",
+                 "canonical_sha256：%s" % info["sha256"],
+                 "entries：%d" % info["entries"]]
+    else:
+        lines = ["== factscribe evidence freeze ==",
+                 "写盘：%s" % info["path"],
+                 "canonical_sha256：%s" % info["sha256"],
+                 "entries：%d" % info["entries"],
+                 "理由：%s" % (info["reason"] or "（未写）"),
+                 "说明：清单可由人或 LLM 提出；冻结是机械动作，改动须重新冻结。"]
     print("\n".join(lines))
     return EXIT_OK
 

@@ -27,7 +27,8 @@ from pathlib import Path
 
 from .config import ConfigError, load_config, load_sections
 from .constants import EXIT_OK, EXIT_RED, EXIT_YELLOW, SEV_RED
-from .evidence import CHANGED_CODE, lock_check
+from .evidence import (CHANGED_CODE, UNFROZEN_CODE, lock_check,
+                       unfrozen_info)
 from .protect import ProtectResult
 from .protect import compare as compare_protect
 from .style import (StyleResult, analyze, filter_new_findings,
@@ -58,6 +59,7 @@ class ReviewResult:
     verdict: str
     reasons: list[str] = field(default_factory=list)
     evidence_lock: dict | None = None       # 批 132：清单被改的差异（无则 None）
+    evidence_unfrozen: dict | None = None   # 批 133：解冻状态（黄，不拒绝）
     snapshot_requested: bool = False
     snapshot_saved: bool = False
     snapshot: SnapshotResult | None = None
@@ -137,6 +139,8 @@ def run_review(before: Path | str, after: Path | str, *,
     if evidence_lock is not None:
         reject = True
         reasons.append("%s：%s" % (CHANGED_CODE, evidence_lock["message"]))
+    # 批 133：解冻状态是黄，不进拒绝面；也不塞进 reasons（reasons 只写拒绝原因）。
+    evidence_unfrozen = unfrozen_info(after_cfg.root)
 
     if reject:
         verdict = VERDICT_REJECT
@@ -153,6 +157,7 @@ def run_review(before: Path | str, after: Path | str, *,
         baseline_findings=len(baseline.findings), tide=tide_result,
         verdict=verdict, reasons=reasons,
         evidence_lock=evidence_lock,
+        evidence_unfrozen=evidence_unfrozen,
         snapshot_requested=snapshot is not None)
 
     # 只有「通过」才存快照；其余一律不存（fail-closed）。
@@ -211,6 +216,7 @@ def payload(result: ReviewResult) -> dict:
             "reasons": list(result.tide.reasons),
         },
         "evidence_lock": result.evidence_lock,
+        "evidence_unfrozen": result.evidence_unfrozen,
         "snapshot": {
             "requested": result.snapshot_requested,
             "saved": result.snapshot_saved,
@@ -261,6 +267,10 @@ def render_human(result: ReviewResult) -> str:
     if result.evidence_lock is not None:
         lines.append("证据清单：%s（%s）"
                      % (CHANGED_CODE, result.evidence_lock["message"]))
+    if result.evidence_unfrozen is not None:
+        lines.append("证据清单：%s（黄，不拒绝）——%s"
+                     % (UNFROZEN_CODE,
+                        result.evidence_unfrozen["message"]))
     lines.append("复检（只算新增）：改前 %d 处 → 新增 %d 处（允许 %d）"
                  % (result.baseline_findings, len(result.style.findings),
                     result.allow_new))

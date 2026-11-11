@@ -42,7 +42,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 | `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
 | `fonts` | CJK fonts: `--fetch` caches Fandol locally, `--status` checks completeness |
 | `brief` | Drafting brief: section list, usable claims and numbers, terms, hard constraints |
-| `evidence` | Evidence list: `--suggest` prints an `[evidence]` block, `--freeze` writes `audit/evidence.lock`; edits after freezing are red |
+| `evidence` | Evidence list: `--suggest` prints an `[evidence]` block, `--freeze` writes `audit/evidence.lock`, `--unfreeze --reason` records why; edits after freezing are red, an unfrozen list is yellow |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 

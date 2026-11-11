@@ -1,6 +1,6 @@
-# SPEC-EVIDENCE-STAMP｜证据钢印：人钉清单、机器执行（批 131）
+# SPEC-EVIDENCE-STAMP｜证据钢印：人钉清单、机器执行（批 131；批 132/133 追加）
 
-状态：批 131 冻结（实施依据）。
+状态：批 131 冻结（实施依据）；批 132 追加清单冻结，批 133 追加解冻—重冻。
 范围：`paperkit.toml` 新增可选节 `[evidence]`；`style` 新增两条**红**判据
 `REQUIRED_EVIDENCE_MISSING` / `EVIDENCE_DROPPED`；`review` 把两条判据算进
 拒绝面；`brief` 节清单加「必须引用的事实」列；`NUMERAL_DENSITY` 默认阈值
@@ -194,3 +194,86 @@ entries = 8
 简报的「必须引用的事实」列直接取 `[evidence]`；某节没有声明时，用
 `--suggest` 的即时结果填上，并在单元格标注「（未冻结）」。冻结与否不改变
 该列来源口径：声明优先，未声明才回落到现状快照。
+
+## 9. 解冻与重冻（批 133）
+
+批 132 冻结后，改清单只剩一条路：直接改、再 `--freeze`，差异看得见，但
+**为什么改**全靠 commit message，容易丢。批 133 补一个强制动作：**改之前
+先解冻并写理由，改完必须重新冻结。**
+
+### 9.1 为什么允许改
+
+清单是人的判断（`[evidence]` 声明「本节必须出现哪些事实」），不是正文。
+新增段落、补实验、删掉不成立的论点，都可能让清单需要增删 id。禁止改会
+逼人绕过闸门；所以清单**不拒绝任何人改写**（人、LLM、工具都行）。
+
+### 9.2 为什么必须留理由
+
+放行不等于无声放行。解冻时必须写「为什么改」，理由进 append-only 流水账：
+
+- 事后能回答「这条 id 是什么时候、因为什么加/删的」，不依赖 commit message；
+- LLM 与人共用同一流程，理由字段是唯一能区分「结构调整」与「偷偷删证据」
+  的位置；
+- 理由不是判据，机器不判断理由写得好不好；**只判它有没有**。
+
+### 9.3 命令
+
+```bash
+python3 -m factscribe evidence --unfreeze <项目> --reason "<为什么改>" [--at YYYY-MM-DD]
+python3 -m factscribe evidence --freeze   <项目> [--reason "<本次冻结说明>"]
+```
+
+- `--unfreeze` 的 `--reason` **必填且非空**；缺了或只有空白 ⇒ 退出码 2，
+  流水账一个字节不动；
+- 没有 `audit/evidence.lock` 时 `--unfreeze` 退出码 2（无冻可解）；
+- 已经在解冻状态再 `--unfreeze` ⇒ 幂等，不重复写记录；
+- `--freeze` 的 `--reason` 可选，写进 freeze 记录。
+
+### 9.4 流水账（`audit/evidence-log.ndjson`）
+
+append-only，一行一个 JSON 对象，只用调用方给的字段：
+
+```json
+{"action":"unfreeze","reason":"补 B9，因新增段落","hash_before":"036da978950abf48","at":"2026-11-11"}
+{"action":"freeze","hash":"036da978…（64 位 sha256）","entries":103,"reason":"重冻"}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `action` | `unfreeze` / `freeze`，闭集 |
+| `reason` | 解冻理由（必填）/ 本次冻结说明（可空） |
+| `hash_before` | 解冻时的 lock 哈希**前 16 位**（改前指纹） |
+| `at` | `--at` 原样写入；未传写 `""`，由人补 |
+| `hash` / `entries` | 冻结后的规范化哈希与 id 条数 |
+
+**确定性时间口径**：工具**不读系统时钟**。时间只从 `--at YYYY-MM-DD` 来；
+没传就写空串。同一个项目、同一组输入与 `--at`，两跑流水账逐字节一致
+（测试 `test_at_two_runs_are_byte_identical`）。
+
+坏行（非 JSON 对象）按配置错处理（退出码 2）：流水账坏了不能静默当成
+「没解冻」，否则黄判据会悄悄消失。
+
+### 9.5 判据（`audit` / `review`）
+
+| 情况 | 行为 |
+|---|---|
+| 无 lock 且无 log | 不检查（向后兼容） |
+| lock 存在、哈希不符 | 红 `EVIDENCE_SET_CHANGED`（批 132，保持） |
+| log 最后一条是 `unfreeze` | 黄 `EVIDENCE_UNFROZEN`，消息带最近一次解冻理由 |
+| 哈希相符、最后一条是 `freeze` | 不判 |
+
+- 解冻状态**不豁免**红：解冻后改了清单、还没重冻，哈希仍不符 ⇒ 红照旧，
+  另加黄；
+- `review` 把 `EVIDENCE_UNFROZEN` 作为黄信息挂在报告里，**不进拒绝面**
+  （只有红才拒绝）；解冻本身不是违规，忘记重冻才是；
+- 无 lock、但有历史 log 且最后一条是 `unfreeze`：仍报黄（状态以 log 为准）。
+
+### 9.6 幂等与验收
+
+- 已冻结且哈希未变，再 `--freeze` ⇒ 幂等：不重写 lock、不追加记录；
+- 解冻后**没改**直接 `--freeze` ⇒ 追加一条 freeze 记录，把状态从「解冻」
+  关回「已冻结」（这是必要的状态转换，不算重复写）；
+- 验收（`../paper-b` 副本）：`--suggest` → 粘清单 → `--freeze --reason
+  "初始清单"`（0）→ 未解冻改一条 id → `audit` 红（1）→ `--unfreeze
+  --reason ... --at 2026-11-11`（0）→ 解冻未改跑 `audit` 黄（3）→ 改回 →
+  `--freeze --reason "重冻"`（0）→ `audit` 绿（0）。

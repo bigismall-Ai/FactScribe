@@ -16,7 +16,7 @@ from .config import (Config, ConfigError, _glob_paths, all_tex_files,
                      facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
                         SEV_RED, SEV_YELLOW, VERSION)
-from .evidence import CHANGED_CODE, lock_check
+from .evidence import CHANGED_CODE, UNFROZEN_CODE, lock_check, unfrozen_info
 from .facts import (Fact, ExprError, _cycles, _declared_number, canon_text,
                     eval_expr, literal_tokens, number_key, sha256_file)
 from .texrules import (adjacency_hits, arith_hits, display_hits,
@@ -1399,6 +1399,13 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         red.append(Issue(CHANGED_CODE, lock["message"],
                          location=lock["location"],
                          token=lock["current_sha256"][:12]))
+
+    # 批 133：处在解冻状态（log 最后一条是 unfreeze）→ 黄，不改退出码语义。
+    unfrozen = unfrozen_info(cfg.root)
+    if unfrozen is not None:
+        yellow.append(Issue(UNFROZEN_CODE, unfrozen["message"],
+                            location=unfrozen["location"], token="unfreeze",
+                            severity=SEV_YELLOW))
 
     summary = {
         "facts": len(facts),

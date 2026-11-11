@@ -8,7 +8,9 @@
 * ``EVIDENCE_DROPPED``：改前本节有的 ``\\fact{id}``，改后本节没有
   （只在 ``style --diff`` / ``review`` 有 before 时运行，不依赖声明）；
 * ``EVIDENCE_SET_CHANGED``（批 132）：`[evidence]` 与 ``audit/evidence.lock``
-  的规范化哈希不符（``audit`` / ``review`` 都判；lock 不存在不检查）。
+  的规范化哈希不符（``audit`` / ``review`` 都判；lock 不存在不检查）；
+* ``EVIDENCE_UNFROZEN``（批 133，黄）：清单处在「已解冻、未重冻」状态
+  （``audit/evidence-log.ndjson`` 最后一条是 ``unfreeze``）。
 
 硬边界：
 
@@ -23,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,11 +35,14 @@ from .texscan import scan_tex
 MISSING_CODE = "REQUIRED_EVIDENCE_MISSING"
 DROPPED_CODE = "EVIDENCE_DROPPED"
 CHANGED_CODE = "EVIDENCE_SET_CHANGED"
-EVIDENCE_CODES = (MISSING_CODE, DROPPED_CODE, CHANGED_CODE)
+UNFROZEN_CODE = "EVIDENCE_UNFROZEN"
+EVIDENCE_CODES = (MISSING_CODE, DROPPED_CODE, CHANGED_CODE, UNFROZEN_CODE)
 
 #: 冻结件相对项目根的路径（批 132）。
 LOCK_REL = "audit/evidence.lock"
 LOCK_HEADER = "# 冻结时间由使用者填写（不用系统时钟，保持确定性）"
+#: 解冻/冻结流水账相对项目根的路径（批 133，append-only）。
+LOG_REL = "audit/evidence-log.ndjson"
 
 
 @dataclass(frozen=True)
@@ -290,6 +296,133 @@ def read_lock(project_root: Path) -> dict | None:
             sections[str(key)] = list(value)
     return {"path": LOCK_REL, "sha256": digest.strip().lower(),
             "entries": data.get("entries"), "sections": sections}
+
+
+# --------------------------------------------------------------------------
+# 批 133：解冻与重冻（SPEC-EVIDENCE-STAMP §9）
+# --------------------------------------------------------------------------
+
+def read_log(project_root: Path) -> list[dict]:
+    """读 ``audit/evidence-log.ndjson``；不存在返回空列表。
+
+    一行一个 JSON 对象，append-only。坏行是配置错（退出码 2）：流水账坏了
+    不能静默当成「没解冻」，否则黄判据会悄悄消失。
+    """
+    path = Path(project_root) / LOG_REL
+    if not path.is_file():
+        return []
+    records: list[dict] = []
+    for number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ConfigError("%s 第 %d 行不是合法 JSON：%s"
+                              % (path, number, exc.msg))
+        if not isinstance(record, dict):
+            raise ConfigError("%s 第 %d 行必须是 JSON 对象" % (path, number))
+        records.append(record)
+    return records
+
+
+def append_log(project_root: Path, record: dict) -> None:
+    """追加一条流水账；只用调用方给的字段，不碰系统时钟。"""
+    path = Path(project_root) / LOG_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False,
+                                separators=(",", ":")) + "\n")
+
+
+def log_state(project_root: Path) -> dict:
+    """流水账的最后状态：最后一条是不是 ``unfreeze``。"""
+    records = read_log(project_root)
+    if not records:
+        return {"count": 0, "action": None, "unfrozen": False,
+                "reason": "", "at": "", "last": None}
+    last = records[-1]
+    action = last.get("action")
+    return {"count": len(records), "action": action,
+            "unfrozen": action == "unfreeze",
+            "reason": str(last.get("reason") or ""),
+            "at": str(last.get("at") or ""), "last": last}
+
+
+def unfrozen_info(project_root: Path) -> dict | None:
+    """解冻状态 → 黄判据的明细；已重冻或从未解冻 → ``None``。"""
+    state = log_state(project_root)
+    if not state["unfrozen"]:
+        return None
+    reason = state["reason"] or "（未写理由）"
+    return {
+        "code": UNFROZEN_CODE,
+        "message": ("[evidence] 处于解冻状态（%s 最后一条是 unfreeze）："
+                    "最近一次解冻理由「%s」。改完清单必须重新 "
+                    "`evidence --freeze --reason \"...\"`，让差异留在版本账里。"
+                    % (LOG_REL, reason)),
+        "location": LOG_REL,
+        "reason": state["reason"],
+        "at": state["at"],
+        "hash_before": str(state["last"].get("hash_before") or ""),
+    }
+
+
+def _clean_reason(reason) -> str:
+    text = str(reason or "").strip()
+    if not text:
+        raise ConfigError("--unfreeze 必须带非空 --reason（为什么改），"
+                          "理由会写进 %s" % LOG_REL)
+    return text
+
+
+def unfreeze_evidence(project_root: Path, reason, at="") -> dict:
+    """解冻：写一条 ``unfreeze`` 记录（含 hash_before）；已解冻则幂等。"""
+    text = _clean_reason(reason)
+    stamp = str(at or "").strip()
+    if stamp and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", stamp):
+        raise ConfigError("--at 必须是 YYYY-MM-DD（例：2026-11-11），"
+                          "不许用系统时钟")
+    root = Path(project_root)
+    lock = read_lock(root)
+    if lock is None:
+        raise ConfigError("尚未冻结（没有 %s）：无冻可解，先 evidence --freeze"
+                          % LOCK_REL)
+    state = log_state(root)
+    if state["unfrozen"]:
+        return {"path": LOG_REL, "action": "unfreeze",
+                "reason": state["reason"] or text,
+                "hash_before": str(state["last"].get("hash_before") or
+                                   lock["sha256"][:16]),
+                "at": state["at"], "idempotent": True}
+    record = {"action": "unfreeze", "reason": text,
+              "hash_before": lock["sha256"][:16], "at": stamp}
+    append_log(root, record)
+    return {"path": LOG_REL, "action": "unfreeze", "reason": text,
+            "hash_before": record["hash_before"], "at": stamp,
+            "idempotent": False}
+
+
+def freeze_evidence(project_root: Path, evidence: dict, reason="") -> dict:
+    """冻结：写 lock 并记一条 ``freeze``；已冻结且哈希未变则幂等不写。"""
+    root = Path(project_root)
+    normal = _norm_sections(evidence)
+    digest = canonical_sha256(normal)
+    entries = entry_count(normal)
+    note = str(reason or "")
+    lock = read_lock(root)
+    state = log_state(root)
+    if (lock is not None and lock["sha256"] == digest
+            and not state["unfrozen"]):
+        return {"path": LOCK_REL, "sha256": digest, "entries": entries,
+                "sections": normal, "reason": note, "idempotent": True}
+    info = write_lock(root, evidence)
+    append_log(root, {"action": "freeze", "hash": info["sha256"],
+                      "entries": info["entries"], "reason": note})
+    info["reason"] = note
+    info["idempotent"] = False
+    return info
 
 
 def _id_sets(evidence: dict) -> dict[str, tuple[str, list[str]]]:

@@ -20,29 +20,30 @@ python3 -m factscribe audit <project> --build  # build the PDF, then audit
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Sixteen commands
+## Eighteen commands
 
-`factscribe` ships sixteen subcommands, and each one solves a single narrow problem. A fact ledger is an append-only list that records every number, its source file, and the hash of that file.
+`factscribe` ships eighteen subcommands. Two get you started; the rest are grouped by purpose.
 
 | Command | What it does |
 |---|---|
-| `check` | Validates the fact ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
+| `init` | Scaffolds a minimal paper: project file, empty ledger, manifest template, section stub |
+| `fact` | Bookkeeping: `add` computes the hash and writes one fact; it never signs the manifest for you |
+| `check` | Validates the ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
 | `audit` | Core check: inline binding, number-to-ledger, citation stability, coverage report |
 | `matrix` | Writes the traceability matrix to `audit/matrix.md` |
-| `build` | Runs `project.build` from `factscribe.toml`; Chinese builds auto-use Fandol |
+| `build` | Compiles the PDF; falls back to tectonic, with a CJK font fallback |
 | `preamble` | Generates the `\fact` and `\pkignore` macros in `audit/preamble.tex` |
 | `verify-pdf` | PDF check: text layer, raster pages, bidirectional multiset, stamp signature |
-| `style` | Prose gate: formulaic writing (yellow); missing stamped evidence is red (exit 1) |
-| `protect` | Rewrite protection: compares six classes of content that must not change |
-| `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing |
-| `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
-| `terms` | Term candidates for human pick, then `add`; no automatic merge |
-| `fonts` | On-demand Fandol font download and local cache: `--status` / `--fetch` |
-| `review` | Rewrite acceptance: protection, re-check, closure in one verdict |
+| `style` | Prose gate: formulaic writing in yellow; missing stamped evidence in red |
+| `protect` | Rewrite protection: six classes of content that must not change |
+| `tide` | Change ledger: rise, fall, blast radius, closure, all or nothing; snapshots for rollback |
+| `review` | Rewrite acceptance: protection, re-check and closure in one verdict |
 | `polish` | LLM entry point: `--print` for the playbook, `--plan` for the worklist |
-| `fonts` | CJK fonts: `--fetch` caches Fandol locally, `--status` checks completeness |
-| `brief` | Drafting brief: section list, usable claims and numbers, terms, hard constraints |
-| `evidence` | Evidence list: `--suggest` prints an `[evidence]` block, `--freeze` writes `audit/evidence.lock`, `--unfreeze --reason` records why; edits after freezing are red, an unfrozen list is yellow |
+| `brief` | Drafting brief: sections, usable claims and numbers, terms, length budget |
+| `evidence` | Evidence list: `--suggest`, `--freeze`, `--unfreeze --reason`; edits after freezing are red |
+| `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
+| `fonts` | Fandol fonts: `--status` to check, `--fetch` to cache locally |
+| `terms` | Term candidates: `suggest`, then `add` only what you picked |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 
@@ -95,7 +96,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1057 tests, fully offline
+python3 -m unittest discover -s tests     # 1106 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

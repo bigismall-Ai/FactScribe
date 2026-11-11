@@ -20,29 +20,30 @@ python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-## 十六个命令
+## 十八个命令
 
-`factscribe` 一共十六个子命令。事实账是一份只追加的清单，每行记一个数字、它的来源文件与来源文件的哈希。
+`factscribe` 一共十八个子命令。上手两条，其余按用途分。
 
 | 命令 | 干什么 |
 |---|---|
+| `init` | 生成最小论文骨架：项目声明、空账、人签清单模板、正文占位 |
+| `fact` | 记账：`add` 自动算哈希写一条事实，但**不替你签**清单 |
 | `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
 | `audit` | 核心校验：内联绑定、数字回账、引用落稳定标识、覆盖报告 |
 | `matrix` | 生成追溯矩阵 `audit/matrix.md` |
-| `build` | 执行 `factscribe.toml` 里的 `project.build`；中文缺字体时自动改用 Fandol |
+| `build` | 编译 PDF；没有配置构建命令时自动用 tectonic，中文缺字体自动兜底 |
 | `preamble` | 生成 `audit/preamble.tex` 里的 `\fact` 与 `\pkignore` 宏 |
 | `verify-pdf` | PDF 回检：文本层、栅格页、双向多重集、stamp 验签 |
-| `style` | 文风闸：只报公式化写作特征（黄牌）；证据缺钉（红，exit 1） |
+| `style` | 文风闸：公式化写法报黄；证据缺钉报红 |
 | `protect` | 改写保护面：比对改写前后六类不许变的内容 |
-| `tide` | 潮汐式改动账：涨、落、波及面、闭合，全成或全退 |
-| `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
-| `terms` | 术语候选抽取与人工入表：suggest 提候选，add 只写你勾的 |
-| `fonts` | Fandol 中文字体按需下载与本地缓存：`--status` 看状态，`--fetch` 下载 |
+| `tide` | 改动账：涨、落、波及面、闭合，全成或全退；可存快照回滚 |
 | `review` | 改写验收：保护面 + 复检 + 闭合一次判完，给通过、需复核或拒绝 |
-| `polish` | 给 LLM 的润色入口：`--print` 出操作手册，`--plan` 出工作单 |
-| `fonts` | 中文字体：`--fetch` 下载 Fandol 到本地缓存，`--status` 看是否齐全 |
-| `brief` | 起草简报：从账生成节清单、可用主张与数字、术语与硬约束 |
-| `evidence` | 证据清单：`--suggest` 出 `[evidence]` 块，`--freeze` 冻结到 `audit/evidence.lock`，`--unfreeze --reason` 解冻并留痕；冻结后改动即红，解冻未重冻即黄 |
+| `polish` | 给 LLM 的润色入口：`--print` 出手册，`--plan` 出工作单 |
+| `brief` | 起草简报：从账生成节清单、可用主张与数字、术语、篇幅预算 |
+| `evidence` | 证据清单：`--suggest` 出清单，`--freeze` 冻结，`--unfreeze --reason` 解冻留痕 |
+| `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
+| `fonts` | Fandol 中文字体：`--status` 看状态，`--fetch` 下载到本地缓存 |
+| `terms` | 术语候选：`suggest` 提候选，`add` 只写你勾的 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 
@@ -93,7 +94,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1057 例，全离线
+python3 -m unittest discover -s tests     # 1106 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

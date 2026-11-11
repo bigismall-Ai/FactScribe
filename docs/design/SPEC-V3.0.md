@@ -959,6 +959,18 @@ python3 tools/spec_lint.py --no-construction
 | SOURCE_NOT_SIGNED | source 未签 | source 不在人签清单里 | red | 1 | R-14 |
 | PKIGNORE_QUANT | \pkignore 内出现定量 | 被豁免文本里含数字 | red | 1 | R-07 |
 
+**§8.1 注·`UNSCANNED_TEX` 的「有东西可扫」口径（批 135）**：闭包外的
+`.tex` 不是一律报黄，只报**确有可审计内容**的。判定：去掉注释、去掉
+`\begin{document}` 之前的一切之后，须**同时**满足三条才豁免——
+
+1. 正文为空或只剩空白/命令（结构参数不算正文）；
+2. 没有阿拉伯数字 token（口径同 `_extract_numbers`，命令参数不算）；
+3. 没有 `\fact{}`、没有 `\cite` 家族、没有 `\label`/`\ref` 家族。
+
+任一条不满足而文件又不在闭包里 → 照旧报黄（`severity` 不变，fail-closed）。
+典型豁免例：只含 `\documentclass[11pt]`、`margin=1in`、`\usepackage` 与
+`\input` 的主文件——它没有可审计内容，报「未扫描」是噪声。
+
 ### 8.2 V2.2 §19.2 沿用码（逐条列全）
 
 > 未在 §8.1 列出的旧码全部继续有效；`severity` 由 tier 机械派生：ADVISORY→yellow，其余→red。

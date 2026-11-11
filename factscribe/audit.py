@@ -12,8 +12,8 @@ from pathlib import Path
 
 from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
                         unused_bib_entries, valid_stable_id)
-from .config import (Config, ConfigError, _glob_paths, all_tex_files,
-                     facts_digest, git_commit, load_toml)
+from .config import (Config, ConfigError, _glob_paths, _read_text,
+                     all_tex_files, facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
                         SEV_RED, SEV_YELLOW, VERSION)
 from .evidence import CHANGED_CODE, UNFROZEN_CODE, lock_check, unfrozen_info
@@ -23,8 +23,8 @@ from .texrules import (adjacency_hits, arith_hits, display_hits,
                        numeric_macro_hits, pkignore_quant_hits,
                        tabular_regions)
 from .texscan import (_balanced, _blank, _extract_numbers,
-                      _merge_number_units, scan_tex, sentence_index,
-                      sentence_spans, structural_whitelist)
+                      _merge_number_units, has_auditable_content, scan_tex,
+                      sentence_index, sentence_spans, structural_whitelist)
 
 # --------------------------------------------------------------------------
 # 问题单
@@ -852,6 +852,19 @@ def _resolve_doi(doi: str) -> tuple[str, str]:
     return "unverified", "doi.org 响应无法判定"
 
 
+def _needs_scan(cfg: Config, rel: str) -> bool:
+    """闭包外的 `.tex` 是否仍须报 `UNSCANNED_TEX`（批 135）。
+
+    只有导言区命令与 `\\input` 的文件没有可审计内容——它没东西可扫，报
+    「未扫描」是噪声。读不了的文件照旧报（fail-closed）。
+    """
+    try:
+        text = _read_text(cfg.root / rel, cfg.root)
+    except ConfigError:
+        return True
+    return has_auditable_content(text)
+
+
 def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
               resolve: bool = False):
     if not facts:
@@ -1302,9 +1315,11 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             % (e.key, e.key, e.key),
             location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_YELLOW))
 
-    # 覆盖：闭包外还有 .tex 从未被审计 -> 黄（红队 B4/B8）
+    # 覆盖：闭包外还有 .tex 从未被审计 -> 黄（红队 B4/B8）。
+    # 批 135：只含导言区/`\input`、没有可审计内容的文件不报（它没东西可扫）。
     all_tex = all_tex_files(cfg)
-    unscanned = [p for p in all_tex if p not in scanned]
+    unscanned = [p for p in all_tex
+                 if p not in scanned and _needs_scan(cfg, p)]
     for p in unscanned:
         yellow.append(Issue(
             "UNSCANNED_TEX", "%s 不在审计闭包里（未被扫描）" % p,

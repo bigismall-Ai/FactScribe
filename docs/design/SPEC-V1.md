@@ -240,6 +240,12 @@ version = 1
 | G6 覆盖 | 闭包外 `.tex`；绑定率 <50%；重复 value；同值多 bib | `UNSCANNED_TEX` / `LOW_BINDING_RATE` / `DUPLICATE_VALUE` / `DUPLICATE_STABLE_ID` 黄 |
 | G7 闭包 | 目标不存在 / 目标动态不可解析 | `INPUT_TARGET_MISSING` / `INPUT_DYNAMIC` 红，exit 5 |
 
+> G6 `UNSCANNED_TEX` 的口径（批 135）：只报**确有可审计内容**的闭包外
+> `.tex`。去掉注释、去掉 `\begin{document}` 之前的一切后，须同时满足三条才
+> 豁免——正文为空或只剩空白/命令；没有阿拉伯数字 token（命令参数不算）；
+> 没有 `\fact{}`/`\cite` 家族/`\label`/`\ref`。任一条不满足仍报黄
+> （fail-closed），读不了的文件也照旧报。详见 `SPEC-V3.0.md` §8.1 注。
+
 ---
 
 ## 5. 退出码与 `--json`

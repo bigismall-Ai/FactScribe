@@ -422,6 +422,64 @@ def scan_tex(tex: str) -> ScanResult:
 
 
 # --------------------------------------------------------------------------
+# 可审计内容判定（UNSCANNED_TEX 的噪声豁免，批 135）
+#
+# 闭包外的 `.tex` 一律报「未扫描」是噪声：只含导言区命令与 `\input` 的主
+# 文件没东西可扫。豁免口径写死：去掉注释、去掉 `\begin{document}` 之前
+# 的一切之后，须**同时**满足——
+#   1. 正文为空或只剩空白/命令（结构参数不算正文）；
+#   2. 没有阿拉伯数字 token（口径同 `_extract_numbers`：命令参数不算）；
+#   3. 没有 `\fact{}`、没有 `\cite` 家族、没有 `\label`/`\ref` 家族。
+# 任一条不满足而文件又不在闭包里 → 照旧报黄（fail-closed 不变）。
+# --------------------------------------------------------------------------
+
+_DOC_BEGIN_RE = re.compile(r"\\begin\s*\{document\}")
+_DOC_END_RE = re.compile(r"\\end\s*\{document\}")
+# `\fact` / `\cite` 家族 / `\label`/`\ref` 家族：出现即有可审计内容
+_CONTENT_CMD_RE = re.compile(
+    r"\\([A-Za-z]*[Cc]ite[A-Za-z]*|fact|label|ref|eqref|pageref|autoref|"
+    r"cref|Cref|nameref|vref)\b")
+# 一次抹掉「命令名 + 紧随其后的可选/必选参数」；反复跑到不动点，即可
+# 从内向外吃掉嵌套花括号。
+_STRUCT_CMD_RE = re.compile(r"\\[A-Za-z]+\*?\s*(?:\{[^{}]*\}|\[[^\[\]]*\])*")
+
+
+def _document_body(tex: str) -> str:
+    """正文区：`\\begin{document}` 之后、`\\end{document}` 之前。
+
+    没有 `\\begin{document}` 的文件（`\\input` 的章节件）整份都是正文。
+    """
+    m = _DOC_BEGIN_RE.search(tex)
+    body = tex[m.end():] if m else tex
+    e = _DOC_END_RE.search(body)
+    return body[:e.start()] if e else body
+
+
+def _only_structural_left(text: str) -> bool:
+    """抹掉全部命令与其参数后是否已无正文（空白/命令以外的字符都算正文）。"""
+    s = text
+    while True:
+        nxt = _STRUCT_CMD_RE.sub(" ", s)
+        if nxt == s:
+            return not s.strip()
+        s = nxt
+
+
+def has_auditable_content(tex: str) -> bool:
+    """该 `.tex` 是否有可审计内容（无内容时 `UNSCANNED_TEX` 不报）。"""
+    body = _document_body(strip_comments_and_verbatim(tex))
+    if not body.strip():
+        return False
+    for m in _CONTENT_CMD_RE.finditer(body):
+        if m.group(1) not in _CITE_IGNORE:
+            return True
+    scan = scan_tex(body)
+    if _NUM_RE.search(scan.masked):
+        return True
+    return not _only_structural_left(body)
+
+
+# --------------------------------------------------------------------------
 # 结构性 token 白名单（PDF 回检用；全部在源文件解析阶段推导）
 #
 # PDF 里的章节号、浮动体编号、页码、参考文献年份不是正文定量断言，却会被

@@ -26,6 +26,9 @@ and will not change without a major version bump.
 - `style`: `RHYTHM_PLATEAU` is informational by default (batch 109). Its reading stays in `metrics.rhythm_plateau` and is listed under `advisories`, but it does not enter `findings`, does not affect the exit code, and does not count as a yellow card; set `rhythm_plateau_level = "yellow"` to restore the old behaviour. `SENTENCE_UNIFORMITY` is the formal rhythm criterion.
 - `tide`: when `--before`, `--after`, and `--snapshot` are all given, closure is judged first and the snapshot is saved only if it closes (batch 109). If it does not close, the command exits 1 and writes neither a snapshot nor a ledger entry. A pure `--snapshot` run now says explicitly that no closure check was performed.
 
+### Fixed
+- `integrations/factgate`: 移植件在暗色主题下有两个肉眼可见的缺陷，均已修好并补上回归测试。① 悬停主按钮时，通用规则 `.btn:hover` 的底色会盖掉 `.btn-primary`（同特异性、声明更靠前），白底深字的主按钮变成深底深字，整块按钮直接"消失"；现由 `.btn-primary:hover` 同时声明底色与文字色并排在 `.btn:hover` 之后，次级按钮的悬停底色改由 `--mcode-surface-muted` 与 `--mcode-text` 混色得出（浅色压深、暗色提亮），不再写死主题色值。② 页面没有声明 `color-scheme`，浏览器原生滚动条仍按浅色渲染，暗色里是一根接近纯白（`#f3f3f3`）的竖条，特别刺眼；现声明 `color-scheme: light dark`（系统为暗色时走 `dark`），并给所有滚动容器统一的中性灰滑块与透明轨道（实测滑块由 `#f3f3f3` 变为 `#5b5b5b`）。新增 `integrations/factgate/tests/styles.test.mjs`：把上述不变量与暗色对比度钉死，用修复前的样式跑会失败。
+
 ## [1.3.0] - 2026-11-10
 
 ### Added

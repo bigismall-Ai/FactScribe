@@ -1,5 +1,8 @@
 :root,
 [data-theme='light'] {
+  /* 让浏览器原生控件（滚动条、下拉、文本框）跟随系统配色。
+     只声明"都支持"，具体走哪套由系统偏好决定，不强制主题。 */
+  color-scheme: light dark;
   --mcode-bg: #ffffff;
   --mcode-bg-secondary: #f5f5f5;
   --mcode-surface: #ffffff;
@@ -23,6 +26,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --mcode-bg: #171717;
     --mcode-bg-secondary: #1c1c1c;
     --mcode-surface: #262626;
@@ -46,6 +50,26 @@
 }
 
 * { box-sizing: border-box; }
+
+/* ---------- 滚动条 ---------- */
+/* 浏览器默认滚动条在暗色下仍是亮色，横向滚动条尤其刺眼。
+   滑块用 --mcode-text-subtle（暗色 #666666）这类安静中性灰，
+   轨道透明，与表面色融在一起；不能用 --mcode-border-strong，
+   暗色下它接近纯白，反而更刺眼。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mcode-text-subtle) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--mcode-text-subtle);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--mcode-text-muted); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
 
 body {
   margin: 0;
@@ -112,12 +136,19 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   border: 1px solid var(--mcode-border); background: var(--mcode-surface-muted);
   color: var(--mcode-text); font-size: 13px; font-family: inherit;
 }
-.btn:hover { background: var(--mcode-bg-secondary); }
+/* 次级按钮 hover 要跟着主题走：浅色下压深、深色下提亮，
+   都由两个语义变量混出来，不写死主题色值。 */
+.btn:hover { background: color-mix(in srgb, var(--mcode-surface-muted) 90%, var(--mcode-text)); }
 .btn:focus-visible { outline: 2px solid var(--mcode-accent); outline-offset: 1px; }
-.btn-primary { background: var(--mcode-primary-action-bg); color: var(--mcode-primary-action-text); border-color: transparent; }
+/* 主按钮不能吃 .btn:hover 的底色：暗色下主按钮是白底深字，
+   被改成深底会变成深底深字，按钮直接"消失"。 */
+.btn-primary,
+.btn-primary:hover { background: var(--mcode-primary-action-bg); color: var(--mcode-primary-action-text); border-color: transparent; }
 .btn-primary:hover { opacity: .88; }
 .btn-ghost { background: transparent; }
+.btn-ghost:hover { background: var(--mcode-surface-muted); }
 .btn-danger { color: var(--mcode-danger); border-color: transparent; background: var(--mcode-danger-soft); }
+.btn-danger:hover { background: var(--mcode-danger-soft); }
 .btn-block { width: 100%; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .link-btn {

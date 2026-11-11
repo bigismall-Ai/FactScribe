@@ -100,6 +100,11 @@ python3 -m unittest discover -s tests     # 1106 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 
+**CI does not verify the PDF layer.** The GitHub runner cannot install poppler (the apt mirror is unreachable),
+so the install step is best-effort: it warns and continues. The 31 PDF-layer tests then skip themselves
+(`skipped=` in the test summary) and everything else still runs. Full PDF-layer coverage lives locally:
+`./scripts/preflight-ci.sh` (`skipped=0` when poppler is installed).
+
 `examples/minimal/` is the acceptance sample: three facts, two sections, one fabricated number, and one fake citation. `audit` must report exactly those two reds.
 
 Specs live in `docs/design/`, implementation notes in `docs/implementation/`, and history in `CHANGELOG.md`. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request, and bring tests with it.

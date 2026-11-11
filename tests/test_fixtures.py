@@ -18,6 +18,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 FACTSCRIBE = [sys.executable, "-m", "factscribe"]
 FIXTURES = REPO / "fixtures"
+sys.path.insert(0, str(REPO / "tests"))
+
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 
 def _load_expect(case: Path) -> dict:
@@ -160,14 +163,17 @@ class HostileFixtureTest(unittest.TestCase):
         """SPEC-V2.2 R-04（2-B2）：display 的 `round_to` 不得把 0.91 放宽成 0.9 → DISPLAY_INCONSISTENT。"""
         self._assert_hostile("R2-ROUNDTO")
 
+    @requires_pdftotext
     def test_R3_pdf_raster(self):
         """SPEC-V3.0 P-02/P-03：纯图片页必须红 → PDF_PAGE_NO_TEXT + PDF_PAGE_RASTERIZED（exit 5）。"""
         self._assert_hostile("R3-PDF-RASTER")
 
+    @requires_pdftotext
     def test_R3_pdf_one_way_inclusion(self):
         """SPEC-V3.0 P-04/P-05：ledger ⊆ PDF 的单向包含会放行缺数 → PDF_LEDGER_TOKEN_MISSING（exit 5）。"""
         self._assert_hostile("R3-PDF-ONEWAY")
 
+    @requires_pdftotext
     def test_R3_stamp_self_signed(self):
         """SPEC-V3.0 P-08/S-01：公钥在项目内即不可信 → STAMP_KEY_UNTRUSTED（exit 5）。"""
         self._assert_hostile("R3-STAMP-SELFSIGN")
@@ -195,9 +201,14 @@ class BenignFixtureTest(unittest.TestCase):
 
 
 def _make_benign(name: str):
+    case = FIXTURES / "benign" / name
+
     def test(self):
         BenignFixtureTest._assert_benign(self, name)
     test.__doc__ = "benign 近邻 %s：必须 exit 0。" % name
+    # 只有带 main.pdf 的夹具才走 PDF 层（要调 pdftotext）；纯 TeX 夹具照常跑。
+    if (case / "main.pdf").is_file():
+        test = requires_pdftotext(test)
     return test
 
 

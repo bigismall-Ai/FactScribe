@@ -21,9 +21,11 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
 
 import factscribe as fs  # noqa: E402
 from factscribe import pdfgate  # noqa: E402
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 FACT = """[[fact]]
 id = "A2"
@@ -239,6 +241,7 @@ class PdfGateTest(unittest.TestCase):
             base / "main.pdf", base / "audit" / "report.json",
             stamp if stamp.is_file() else None, keys)
 
+    @requires_pdftotext
     def test_raster_page_is_red(self):
         issues, _warnings, code = self._verify("hostile/R3-PDF-RASTER")
         self.assertEqual(code, 5)
@@ -246,16 +249,19 @@ class PdfGateTest(unittest.TestCase):
         self.assertIn("PDF_PAGE_NO_TEXT", codes)
         self.assertIn("PDF_PAGE_RASTERIZED", codes)
 
+    @requires_pdftotext
     def test_one_way_inclusion_is_red(self):
         issues, _warnings, code = self._verify("hostile/R3-PDF-ONEWAY")
         self.assertEqual(code, 5)
         self.assertIn("PDF_LEDGER_TOKEN_MISSING", {i.code for i in issues})
 
+    @requires_pdftotext
     def test_self_signed_stamp_is_untrusted(self):
         issues, _warnings, code = self._verify("hostile/R3-STAMP-SELFSIGN")
         self.assertEqual(code, 5)
         self.assertIn("STAMP_KEY_UNTRUSTED", {i.code for i in issues})
 
+    @requires_pdftotext
     def test_external_key_stamp_passes(self):
         issues, _warnings, code = self._verify("benign/R3-STAMP-SELFSIGN")
         self.assertEqual(code, 0, [i.as_dict() for i in issues])

@@ -31,6 +31,9 @@
 1. **信任根是人签**：若 agent 同时伪造 `runs/` 与 `facts/`，工具无法发现——只能保证“账、据、文自洽且据未被改”。
 2. **强隔离做不到**：出题人与实现方同机，盲测属“弱盲测”（靠纪律，不靠权限）。
 3. **PDF 回检依赖 poppler**：缺 `pdftotext` 时明确 `PDF_TOOL_MISSING`（exit 8），不静默放行。
+   **CI 不验证 PDF 层**：GitHub runner 装不上 poppler（apt 镜像连不上），workflow 里装 poppler 是「尽力而为」，
+   装不上则 PDF 层 31 例自动跳过（`tests/_pdfdep.py` 的 `requires_pdftotext`，输出带 `skipped=`）、其余照跑；
+   本机 `./scripts/preflight-ci.sh` 覆盖全量（有 poppler 时 `skipped=0`）。
 4. **不做 OCR**：图片承载定量一律红，把问题挡在源头。
 
 ## 四、判据覆盖面（已实现，供对照）

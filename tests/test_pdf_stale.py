@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from factscribe import pdfgate  # noqa: E402
 from test_pdfgate_masking import write_pdf  # noqa: E402
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 V3_TOML = """schema = "factscribe/3.0"
 root_tex = "main.tex"
@@ -211,6 +212,7 @@ class AuditPdfStaleTest(unittest.TestCase):
             self.assertEqual(code, 5, proc.stdout + proc.stderr)
             self.assertIn("PDF_STALE", {i["code"] for i in data["issues"]})
 
+    @requires_pdftotext
     def test_audit_build_regenerates_pdf_and_is_clean(self):
         """--build 先编（假引擎产出新 PDF）→ 不再过期，exit 0。"""
         with tempfile.TemporaryDirectory() as tmp:

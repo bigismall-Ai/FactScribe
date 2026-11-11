@@ -18,9 +18,11 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
 
 from factscribe import pdfgate  # noqa: E402
 from factscribe.texscan import structural_whitelist  # noqa: E402
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 FILLER = "Structural masking test page content only for this fixture."
 
@@ -170,6 +172,7 @@ class StructuralSourceTest(unittest.TestCase):
         self.assertNotIn("2024", years)
 
 
+@requires_pdftotext
 class PdfMaskingTest(unittest.TestCase):
     """PDF 侧的放行与仍报红。"""
 
@@ -277,6 +280,7 @@ pointer = "/summary/on_resolved"
 
 
 class AuditJsonTest(unittest.TestCase):
+    @requires_pdftotext
     def test_audit_json_exposes_structural_masked(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

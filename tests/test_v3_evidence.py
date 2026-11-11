@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
 
 from factscribe import pdfgate  # noqa: E402
 from factscribe.audit import _aggregate_exit, _v3_whitelist  # noqa: E402
@@ -25,6 +26,7 @@ from factscribe.config import load_config  # noqa: E402
 from factscribe.facts import Fact  # noqa: E402
 from factscribe.v3 import (bu_index, assertion_issues,  # noqa: E402
                            key_trust_issues, numeric_macro_issues)
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 
 def run_audit(project: Path):
@@ -236,12 +238,14 @@ class PdfMultisetTest(unittest.TestCase):
         self.assertEqual(counts["62.5"], 1)
         self.assertEqual(counts["0.625"], 1)
 
+    @requires_pdftotext
     def test_equal_multiset_is_green(self):
         issues, _warnings = pdfgate.verify_document(
             self.BENIGN, {"number_ledger": [
                 {"fact_id": "A1", "keys": ["10", "16"]}], "pdf_whitelist": []})
         self.assertEqual(issues, [])
 
+    @requires_pdftotext
     def test_missing_ledger_token_is_red(self):
         issues, _warnings = pdfgate.verify_document(
             self.BENIGN, {"number_ledger": [
@@ -249,12 +253,14 @@ class PdfMultisetTest(unittest.TestCase):
                 "pdf_whitelist": []})
         self.assertIn("PDF_LEDGER_TOKEN_MISSING", {i.code for i in issues})
 
+    @requires_pdftotext
     def test_unaccounted_number_is_red(self):
         issues, _warnings = pdfgate.verify_document(
             self.BENIGN, {"number_ledger": [
                 {"fact_id": "A1", "keys": ["10"]}], "pdf_whitelist": []})
         self.assertIn("PDF_UNACCOUNTED_NUMBER", {i.code for i in issues})
 
+    @requires_pdftotext
     def test_whitelisted_reference_number_is_green(self):
         issues, _warnings = pdfgate.verify_document(
             self.BENIGN, {"number_ledger": [
@@ -264,6 +270,7 @@ class PdfMultisetTest(unittest.TestCase):
         # PDF 里没有 2024 → 只应有「白名单未用」的黄，不判红
         self.assertEqual(issues, [])
 
+    @requires_pdftotext
     def test_rasterized_page_is_red(self):
         issues, _warnings = pdfgate.verify_document(
             self.RASTER, {"number_ledger": [], "pdf_whitelist": []})
@@ -289,6 +296,7 @@ class AuditIntegrationTest(unittest.TestCase):
     BENIGN = ROOT / "fixtures" / "benign" / "R3-PDF-RASTER" / "main.pdf"
     RASTER = ROOT / "fixtures" / "hostile" / "R3-PDF-RASTER" / "main.pdf"
 
+    @requires_pdftotext
     def test_v3_project_with_matching_pdf_is_green(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_v3(Path(tmp), pdf_from=self.BENIGN)
@@ -296,6 +304,7 @@ class AuditIntegrationTest(unittest.TestCase):
             self.assertEqual(code, 0, data.get("findings"))
             self.assertEqual(codes_of(data), set())
 
+    @requires_pdftotext
     def test_v3_project_with_raster_pdf_is_red(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_v3(Path(tmp), pdf_from=self.RASTER)

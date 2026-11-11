@@ -18,6 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
+
+from _pdfdep import requires_pdftotext  # noqa: E402
 
 BIB_OK = """@inproceedings{chen2023,
   title = {A Paper},
@@ -247,6 +250,7 @@ class VerifyPdfBuildTest(unittest.TestCase):
         (dest / "main.tex").write_text(EN_TEX, encoding="utf-8")
         return dest
 
+    @requires_pdftotext
     def test_verify_pdf_build_success_then_checks(self):
         """verify-pdf --build：先编（真实 PDF 覆盖），再回检，exit 0。"""
         with tempfile.TemporaryDirectory() as tmp:
@@ -291,6 +295,7 @@ class VerifyPdfBuildTest(unittest.TestCase):
             self.assertEqual(data["build"]["ok"], False)
             self.assertNotIn("structural_masked", data)
 
+    @requires_pdftotext
     def test_verify_pdf_without_build_never_invokes_engine(self):
         """verify-pdf 不传 --build：只回检，假 tectonic 不被调用。"""
         with tempfile.TemporaryDirectory() as tmp:

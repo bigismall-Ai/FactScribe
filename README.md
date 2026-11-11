@@ -98,6 +98,10 @@ python3 -m unittest discover -s tests     # 1106 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 
+**CI 不验证 PDF 层**：GitHub runner 装不上 poppler（apt 镜像连不上），workflow 里那步是「尽力而为」，
+装不上就告警继续；PDF 层用例（31 例）自动跳过并在测试尾部显示 `skipped=`，其余照常跑。
+PDF 层的全量覆盖在本地：`./scripts/preflight-ci.sh`（本机装了 poppler 时 `skipped=0`）。
+
 `examples/minimal/` 是验收样例：三条事实、两节正文，故意混入一个编造数字与一个假引用。`audit` 必须只报这两处红。
 
 规范在 `docs/design/`，实现记录在 `docs/implementation/`，历史在 `CHANGELOG.md`。提交前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，PR 必须带测试。

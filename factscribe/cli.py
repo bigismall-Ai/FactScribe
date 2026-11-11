@@ -35,6 +35,7 @@ from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
 from .review import payload as review_payload
 from .review import render_human as render_review
 from .review import run_review
+from .scaffold import add_fact, init_project
 from .style import (DISCLAIMER, STAGE_DRAFT, STAGE_VALUES, analyze,
                     build_prompt, filter_new_findings,
                     load_style_rules_info, project_rule_report, render_human)
@@ -114,6 +115,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version="factscribe %s" % VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
+    sp = sub.add_parser(
+        "init",
+        help="上手第一步：生成最小可用项目骨架（7 个文件，确定性别名）",
+        description="生成最小可用项目骨架：paperkit.toml / main.tex / "
+                    "sections/01-intro.tex / facts/01-core.toml / "
+                    "results/MANIFEST.toml / refs.bib / README.md。"
+                    "不写时间戳、不写绝对路径（同参数两次生成逐字节一致）；"
+                    "目标目录非空拒绝，除非 --force。")
+    sp.add_argument("directory", help="目标目录（不存在则创建）")
+    sp.add_argument("--title", default=None, help="论文标题（缺省为按语言的占位标题）")
+    sp.add_argument("--author", default=None, help="作者（写进 project.authors）")
+    sp.add_argument("--lang", choices=("zh", "en"), default="zh",
+                    help="模板语言（默认 zh）")
+    sp.add_argument("--force", action="store_true",
+                    help="目标目录非空也写：覆盖本命令的 7 个同名文件，其他文件不动")
+    sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
+
     for name, help_text in (
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
         ("audit", "核心：内联绑定 + 数字回账 + 引用落稳定标识 + 覆盖报告"),
@@ -143,6 +161,36 @@ def build_parser() -> argparse.ArgumentParser:
                             help="中文字体文件（缺省用 fc-match 找 STHeiti）")
             sp.add_argument("--keep-temp", action="store_true",
                             help="保留临时副本并打印路径（默认清理）")
+    sp = sub.add_parser(
+        "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
+        description="事实账命令组。fact add 校验 id 与 source，自动把 sha256 写进 "
+                    "source_sha256，再往 facts/01-core.toml 末尾追加一条 [[fact]]；"
+                    "它只提醒人把对应行抄进人签清单，绝不替你签。")
+    fp = sp.add_subparsers(dest="fact_action", required=True)
+    fa = fp.add_parser("add", help="追加一条 fact：自动算 sha256，不代签")
+    fa.add_argument("project", nargs="?", default=".",
+                    help="项目目录（默认当前目录）")
+    fa.add_argument("--id", required=True, metavar="ID",
+                    help="账本键（字母开头；不许与账上现有 id 重复）")
+    fa.add_argument("--claim", required=True, metavar="TEXT",
+                    help="一句话主张（人话）")
+    fa.add_argument("--value", required=True, metavar="VALUE",
+                    help="正文要绑的数字原文（例 10/16、56.25%%、42）")
+    fa.add_argument("--source", required=True, metavar="FILE",
+                    help="项目内原始产物路径（v1：results/ 下）")
+    fa.add_argument("--locator", default="", metavar="TEXT",
+                    help="数字在 source 里的位置（强烈建议填，例 §二 汇总表）")
+    fa.add_argument("--confidence", default="med",
+                    choices=("high", "med", "low"),
+                    help="置信度（默认 med）")
+    fa.add_argument("--expr", default=None, metavar="EXPR",
+                    help="推算式（--derived-from 必配）")
+    fa.add_argument("--derived-from", dest="derived_from", default=None,
+                    metavar="IDS", help="父 fact id，逗号分隔（例 A1,A3）")
+    fa.add_argument("--note", default=None, metavar="TEXT", help="备注（可选）")
+    fa.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+
     sp = sub.add_parser("verify-pdf", help="PDF 回检：文本层/栅格/双向多重集/stamp（V3.0）")
     sp.add_argument("pdf", help="最终 PDF 路径")
     sp.add_argument("--report", required=True, help="audit/report.json（被签的那一份）")
@@ -324,6 +372,46 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     return p
+
+
+def cmd_init(args) -> int:
+    info = init_project(Path(args.directory), title=args.title,
+                        author=args.author, lang=args.lang,
+                        force=args.force)
+    if args.json:
+        payload = _payload("init", "ok", EXIT_OK, **info)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return EXIT_OK
+    zh = info["lang"] == "zh"
+    head = ("已生成最小项目：%s（lang=%s，%d 个文件）"
+            % (args.directory, info["lang"], len(info["files"])) if zh else
+            "Created minimal project: %s (lang=%s, %d files)"
+            % (args.directory, info["lang"], len(info["files"])))
+    lines = [head] + ["  " + name for name in info["files"]]
+    lines.append("")
+    lines.append("下一步（三条命令）：" if zh else "Next (three commands):")
+    lines += info["next"]
+    print("\n".join(lines))
+    return EXIT_OK
+
+
+def cmd_fact(args) -> int:
+    if getattr(args, "fact_action", None) != "add":  # argparse 已保证，防御一手
+        raise ConfigError("fact 目前只有 add 子命令")
+    info = add_fact(
+        Path(args.project), fid=args.id, claim=args.claim, value=args.value,
+        source=args.source, locator=args.locator,
+        confidence=args.confidence, expr=args.expr or "",
+        derived_from=args.derived_from or "", note=args.note or "")
+    if args.json:
+        payload = _payload("fact", "ok", EXIT_OK, action="add", **info)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return EXIT_OK
+    print("已写入 fact %s：%s = %s（source %s）"
+          % (info["id"], info["claim"], info["value"], info["source"]))
+    print("别忘了把这一行加进 %s 并签上你的名字：%s"
+          % (info["manifest"], info["manifest_line"]))
+    return EXIT_OK
 
 
 def cmd_check(args) -> int:
@@ -1018,6 +1106,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
+                "init": cmd_init, "fact": cmd_fact,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,

@@ -361,7 +361,8 @@ env PYTHONPATH=src python3 -m factscribe prescribe trim-to-budget --json
 必做：**只在起草阶段用**；每个论点只留一条证据；其余数字删掉或改成定性
 说法；同一事实只出现一次。禁做：改写验收阶段删数字（会触发
 `PROTECT_NUMBER_CHANGED`）；把数字换成同义的新数字；删掉论点唯一的证据。
-进入改写验收时把 `numeral_density_stage` 设为 `"off"`。
+进入改写验收时用命令行 `style --stage revision`（项目内写
+`numeral_density_stage` 不生效，批 130）。
 
 ### 5.12 `merge-overlap`
 

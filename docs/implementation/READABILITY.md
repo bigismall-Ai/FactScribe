@@ -8,7 +8,7 @@
 | 路径 | 内容 |
 |---|---|
 | `factscribe/style.py` | 三条判据的实现与 `analyze` 集成；三档配置；`metric_details` |
-| `style-rules.toml` | `numeral_density_stage`、三条阈值、`[we_action]` 词表 |
+| `style-rules.toml` | 三条阈值、`[we_action]` 词表（`numeral_density_stage` 批 130 起移出：只由命令行 `--stage` 控制） |
 | `factscribe/patterns/thin-the-numbers/RULE.md` | 第 11 条处方（`NUMERAL_DENSITY`） |
 | `factscribe/patterns/merge-overlap/RULE.md` | 第 12 条处方（`SECTION_OVERLAP`） |
 | `factscribe/patterns/shift-to-implication/RULE.md` | 第 13 条处方（`WE_ACTION_DENSITY`） |
@@ -24,7 +24,7 @@
 `analyze()` 在 `instances` 初始化后、句法级判据之前跑三条：
 
 - `_numeral_density_findings(docs, threshold, stage, root_file)`：
-  逐节算密度；`stage=="off"` 时返回 `info` 通道；容器主文件跳过。
+  逐节算密度；`stage=="revision"` 时返回 `info` 通道；容器主文件跳过。
 - `_section_overlap_findings(docs, threshold, root_file)`：
   `_blocks_of` 按标题切块 → `_shingle_map` 做 8 词/12 字片段 →
   两两求「共有 ÷ 较短一节」；少于 20 片段的小块不判。
@@ -48,19 +48,21 @@
 - `we_action_density`（`hits / sentences / ratio / examples`）。
 
 触发判定沿用 `DIRECTIONS` 的 `above` 分支；`numeral_density` 多一个
-`stage != "off"` 条件。退出码仍由 `fired` 决定：有命中 `3`，无命中 `0`。
+`stage != "revision"` 条件。退出码仍由 `fired` 决定：有命中 `3`，无命中 `0`。
 
 ## 3. 与保护面的冲突
 
-删数字会触发 `PROTECT_NUMBER_CHANGED`。实现不猜项目是否在验收，只认
-`style-rules.toml` 的 `numeral_density_stage`：
+删数字会触发 `PROTECT_NUMBER_CHANGED`。实现不猜项目是否在验收，阶段
+**只从命令行来**（批 130）：
 
-- 默认 `"draft"`：正常黄牌；
-- `"off"`：读数照算，命中转 `info`，建议文字明写保护面原因，不改退出码；
-- 非法值（除 `draft/off` 外）按配置错抛 `ConfigError`（CLI 退出 `2`）。
+- 默认 `--stage draft`：正常黄牌；
+- `--stage revision`：读数照算，命中转 `info`，建议文字明写保护面原因，
+  不改退出码；
+- 项目内 `style-rules.toml` 写 `numeral_density_stage` 一律不读，只输出
+  `RULES_OVERRIDE_IGNORED` 告警（列出被忽略的键）。
 
 `thin-the-numbers` 的「必做」第 1 条、`PLAYBOOK.md` 与规范 §1.4 都要求
-进入改写验收前设 `off`。
+进入改写验收时用 `style --stage revision`。
 
 ## 4. 测试
 
@@ -68,7 +70,7 @@
 
 | 组 | 例数 | 覆盖 |
 |---|---|---|
-| `NUMERAL_DENSITY` | 6 | 英文正/负、英文阈值边界（40 不报/50 报）、中文正例与边界（300 汉字 12 个=40 不报，13 个报）、`stage=off` 降 info、非法 stage 报配置错 |
+| `NUMERAL_DENSITY` | 6 | 英文正/负、英文阈值边界（40 不报/50 报）、中文正例与边界（300 汉字 12 个=40 不报，13 个报）、`stage=revision` 降 info、项目内 stage 键被忽略并告警 |
 | `SECTION_OVERLAP` | 5 | 英文真重复（100%）、英文只引用同一事实（不报）、中文真重复、中文只引用同一事实（不报）、阈值边界（100 不报/99 报） |
 | `WE_ACTION_DENSITY` | 5 | 英文正例、`we propose/claim/argue/believe/suggest` 不计入、中文正例、`我们提出/主张/认为/建议` 不计入、阈值边界（0.5 不报/0.49 报） |
 | 处方映射 | 2 | 三条码各自映射到 `thin-the-numbers` / `merge-overlap` / `shift-to-implication`；三条都不再是「无处方」 |
@@ -138,3 +140,74 @@ python3 -m factscribe polish --plan <项目>
   处理，需要单独批次与基线更新。
 - `NUMERAL_DENSITY` 对短节（摘要、结论）与结果节偏严，已知误报面见 §5.2；
   本批不引入「按节类型豁免」——那需要新的节分类判据，不在本批范围。
+
+## 7. 批 130：规则覆盖可见化（开关只能在被测物之外）
+
+### 7.1 缺陷
+
+一次「按工作单修数字密度」的实验里，模型没改正文，只在项目根新建
+`style-rules.toml` 写 `numeral_density_stage = "off"`，`NUMERAL_DENSITY`
+就降为 `info`，检查消失。它还引用旧文档说「改稿阶段就该关」——照文档做，
+结果绕过了检查。根因：判据开关放在被测物里，被测物可以自己关掉判据。
+
+### 7.2 改动
+
+| 路径 | 内容 |
+|---|---|
+| `factscribe/style.py` | `CLI_ONLY_RULE_KEYS`；装载时剥离 `numeral_density_stage`；`project_rule_report()` 逐键比较；`analyze(stage=..., rule_report=...)`；`StyleResult` 增加 `rule_overrides / rule_warnings / stage` |
+| `factscribe/cli.py` | `style --stage draft\|revision`；`style` / `style --doc` / `audit` 输出覆盖行与 `RULES_OVERRIDE_IGNORED`；JSON 增加 `rule_overrides / rule_warnings / stage` |
+| `factscribe/review.py` | 复用同一份覆盖读数，`review` 汇总里打印「本项目覆盖了 N 个规则键」；JSON `style.rule_overrides` |
+| `style-rules.toml` | 删除已无意义的 `numeral_density_stage` 键，注释改为命令行 `--stage` |
+| `factscribe/patterns/thin-the-numbers/RULE.md`、`factscribe/polish.py`、`docs/design/SPEC-PRESCRIPTION.md` | 把「项目里设 off」的旧指令改为 `style --stage revision`，并注明项目内写了不生效 |
+| `docs/design/SPEC-READABILITY.md` | §1.4 重写，新增 §1.5「开关只能在被测物之外」原则 |
+| `tests/test_rule_override.py` | 13 例门禁测试 |
+
+覆盖清单只列与内置默认**不同**的键（点号路径，如
+`thresholds.dash_budget`）；把默认文件整份抄进项目不会报几十个覆盖。
+覆盖是收紧还是放宽机器无法判断，所以只列键名、不评判；不进 findings、
+不改退出码。`audit` 的读数只报告，不装载规则、不影响审计判据。
+
+### 7.3 验收读数
+
+复现原场景（`/tmp/loop2` 是 `/tmp/loop/proj` 的副本，项目内
+`style-rules.toml` 第 38 行仍写着 `numeral_density_stage = "off"`）：
+
+```bash
+python3 -m factscribe style /tmp/loop2 --json
+python3 -m factscribe style /tmp/loop2 --stage revision --json
+```
+
+| 读数 | 默认（draft） | `--stage revision` |
+|---|---|---|
+| 退出码 | **3** | **0** |
+| `findings` 里的 `NUMERAL_DENSITY` | **4 条**（摘要 56.3、结果案例 69.9、结论 73.7、讨论 56.6，均 /千词） | 0 条 |
+| `info` 里的 `NUMERAL_DENSITY` | 0 条 | **4 条**（同一组读数） |
+| `metric_details.numeral_density_stage` | `draft` | `revision` |
+| `rule_warnings` | `RULES_OVERRIDE_IGNORED`（`numeral_density_stage`） | 同左 |
+| `rule_overrides` | `count=2`：`heading_substitute.heading_period_exempt`、`zh_dang_when.min_per_paragraph` | 同左 |
+
+`style` 人读输出（默认）前 5 行：
+
+```
+覆盖    : 本项目覆盖了 2 个规则键：heading_substitute.heading_period_exempt、zh_dang_when.min_per_paragraph
+规则告警：RULES_OVERRIDE_IGNORED（项目内 style-rules.toml 设置了只允许命令行控制的键：numeral_density_stage。这些键已被忽略；阶段开关请用 style --stage draft|revision。）
+```
+
+`review --before /tmp/loop/proj_before --after /tmp/loop2` 的汇总里也带同一
+行覆盖；该次判定为「需复核（exit 3）」，复检新增 1 条
+`NUMERAL_DENSITY`（讨论节 56.6/千词）——项目里写 `off` 再也藏不住它。
+
+### 7.4 测试
+
+`tests/test_rule_override.py` 共 **13 例**：
+
+| 组 | 例数 | 覆盖 |
+|---|---|---|
+| 项目内 `off` 失效 | 3 | JSON 仍触发且 `stage=draft`；`RULES_OVERRIDE_IGNORED` 带键名；人读输出含告警 |
+| 命令行阶段开关 | 3 | `revision` 降 info、退出 0；`draft` 显式默认仍触发；阶段不改读数 |
+| 普通键仍可覆盖 | 3 | 阈值 100 生效；覆盖清单键名；人读覆盖行 |
+| `review` 看得见 | 2 | 人读含覆盖行；JSON `style.rule_overrides` |
+| 无规则文件行为不变 | 1 | 无覆盖行、无告警、判据照常 |
+| `audit` 看得见 | 1 | JSON `rule_overrides` 与真值一致；人读含覆盖行 |
+
+全仓：`995 tests ... OK`。

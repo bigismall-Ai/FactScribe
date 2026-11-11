@@ -1,6 +1,7 @@
 # SPEC-READABILITY｜读者感觉三项的代理判据（批 129）
 
-> 状态：**冻结**（批 129）。本件规定 `style` 里三条「读者感觉」判据的口径、
+> 状态：**冻结**（批 129；批 130 修订 §1.4，新增 §1.5「开关只能在被测物
+> 之外」）。本件规定 `style` 里三条「读者感觉」判据的口径、
 > 阈值、排除面与处方映射。三条都只出黄牌（`exit 3`），不阻断、不改正文；
 > 不新增 `audit` / `protect` / `review` 的判据，也不改变它们的退出码。
 
@@ -51,16 +52,41 @@
 
 ### 1.4 与改写保护面的冲突（一等公民）
 
-删数字会触发 `PROTECT_NUMBER_CHANGED`。因此本判据**只用于起草阶段**：
+删数字会触发 `PROTECT_NUMBER_CHANGED`。因此本判据按**阶段**分档：
 
-- 配置项 `numeral_density_stage = "draft" | "off"`，默认 `"draft"`；
-- 进入改写验收（`review --before/--after`）前，项目 `style-rules.toml`
-  必须设 `numeral_density_stage = "off"`；
-- `"off"` 时：读数照算，命中降为 `info`（`severity="info"`），
-  不进 `findings`、不改退出码，建议文字明写
-  「改写验收阶段数字受 `PROTECT_NUMBER_CHANGED` 保护，本条只报告」；
-- `style` 无法知道项目是否正在验收，所以不自动判断，只认这个配置项。
-  文档与处方 `thin-the-numbers` 都要求改稿时设 `off`。
+- 阶段开关 `style --stage draft|revision`，默认 `draft`：
+  - `draft`：正常判定；
+  - `revision`：读数照算，命中降为 `info`（`severity="info"`），
+    不进 `findings`、不改退出码，建议文字明写
+    「改稿阶段数字受 `PROTECT_NUMBER_CHANGED` 保护，本条只报告」。
+- **开关只能从命令行来（批 130）**：`numeral_density_stage` 写在项目内
+  `style-rules.toml` 里**不生效**，只输出一条 `RULES_OVERRIDE_IGNORED`
+  告警并列出被忽略的键。`style` 无法知道项目是否正在验收，但它能保证
+  「被判据管的正文／被测项目」改不动判据开关；阶段由运行方在命令行声明。
+
+### 1.5 原则：开关只能在被测物之外（批 130）
+
+一次实测暴露了绕过面：模型没改正文，只在项目根新建 `style-rules.toml`
+写 `numeral_density_stage = "off"`，`NUMERAL_DENSITY` 就降级成 `info`，
+检查消失；它还引用我们的文档说「改稿阶段就该关」——**照文档做，结果绕过
+了检查**。
+
+由此立一条通用原则：
+
+> 判据的开关、阈值口径与「是否接受检查」不得由被测物自己声明。
+> 被测物只能提供**判据要读的材料**（词表、阈值），不能提供**判据的
+> 开关**（开/关、阶段、跳过）。
+
+落地方式：
+
+- 阶段类开关只从命令行来（`--stage`）；项目内写了不认并报
+  `RULES_OVERRIDE_IGNORED`；
+- 普通配置键（词表、阈值）仍可覆盖——它们是「按本项目口径判」，
+  不是「不判」；
+- 项目规则文件被改动要**看得见**：`style` / `review` / `audit` 读到
+  项目内 `style-rules.toml` 时逐键与内置默认比较，输出
+  「本项目覆盖了 N 个规则键」并列出键名。覆盖是收紧还是放宽机器无法
+  判断，所以只列键名、不评判；这一行 informational，不进 findings。
 
 ## 2. `SECTION_OVERLAP`
 

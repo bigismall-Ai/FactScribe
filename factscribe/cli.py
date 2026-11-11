@@ -33,8 +33,9 @@ from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
 from .review import payload as review_payload
 from .review import render_human as render_review
 from .review import run_review
-from .style import (DISCLAIMER, analyze, build_prompt, filter_new_findings,
-                    load_style_rules, render_human)
+from .style import (DISCLAIMER, STAGE_DRAFT, STAGE_VALUES, analyze,
+                    build_prompt, filter_new_findings,
+                    load_style_rules_info, project_rule_report, render_human)
 from .term_suggest import (add_from_tsv, json_payload, render_tsv,
                            suggest)
 from .tide import DEFAULT_SNAPSHOT_ROOT
@@ -164,6 +165,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
     sp.add_argument("--rules", default=None,
                     help="style-rules.toml 路径（默认项目根，其次仓根）")
+    sp.add_argument("--stage", choices=list(STAGE_VALUES), default=STAGE_DRAFT,
+                    help="数字密度阶段开关（只从命令行来，项目内规则文件"
+                         "写了也不认）：draft（默认，正常判定）| "
+                         "revision（改稿阶段，NUMERAL_DENSITY 降为 info）")
     sp.add_argument("--diff", default=None, metavar="BEFORE",
                     help="改写前目录：只报本次改写新增的违规，并启用标题"
                          "关系词/主语丢失比对（需该目录有 paperkit.toml）")
@@ -316,6 +321,14 @@ def cmd_check(args) -> int:
 
 def cmd_audit(args) -> int:
     cfg = load_config(Path(args.project))
+    # 批 130：audit 也把「本项目改过规则」摆在报告里（informational，
+    # 不进 findings、不改退出码）。
+    try:
+        rule_report = project_rule_report(cfg.root)
+    except ConfigError as exc:
+        rule_report = {"present": True, "path": None, "source": "project",
+                       "count": 0, "keys": [], "ignored": [],
+                       "error": str(exc)}
     build = {"ran": False, "ok": True, "pdf_bytes": 0}
     if getattr(args, "build", False):
         bcode, bout, binfo = run_build_step(cfg, font_fallback=True)
@@ -335,6 +348,16 @@ def cmd_audit(args) -> int:
     code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
                            integrity_first=cfg.is_v3)
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    if rule_report.get("present"):
+        keys = list(rule_report.get("keys") or [])
+        if keys:
+            text += ("\n覆盖    : 本项目覆盖了 %d 个规则键：%s"
+                     % (len(keys), "、".join(keys)))
+        else:
+            text += "\n覆盖    : 本项目覆盖了 0 个规则键（与内置默认一致）"
+    if rule_report.get("ignored"):
+        text += ("\n规则告警：RULES_OVERRIDE_IGNORED（%s 只允许命令行控制，"
+                 "已忽略）" % "、".join(rule_report["ignored"]))
     if build["ran"]:
         text += "\nbuild  : 已编译（%d 字节）" % build["pdf_bytes"]
     if cfg.warnings:
@@ -348,7 +371,8 @@ def cmd_audit(args) -> int:
                        hints=[h.as_dict() for h in hints],
                        coverage=summary.get("coverage", {}),
                        resolved=unresolved,
-                       build=build)
+                       build=build,
+                       rule_overrides=rule_report)
     payload["config"] = _config_block(cfg)
     payload["config_warnings"] = list(cfg.warnings)
     _emit(payload, text, args.json)
@@ -469,12 +493,14 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
             raise ConfigError("--doc 指向的 %s 不存在" % raw)
         sections.append((raw, path.read_text(encoding="utf-8")))
         formats[raw] = mdscan.format_of(raw)
-    rules, rules_path = load_style_rules(root, args.rules)
+    rules_info = load_style_rules_info(root, args.rules)
     cfg = Config(root=root)
-    result = analyze(cfg, sections, rules, rules_path=rules_path,
+    result = analyze(cfg, sections, rules_info.rules,
+                     rules_path=rules_info.path,
                      report_unregistered=bool(args.report_unregistered),
                      report_abbrev=bool(args.report_abbrev),
-                     formats=formats)
+                     formats=formats, stage=args.stage,
+                     rule_report=rules_info.report)
     code = result.exit_code
 
     if args.prompt and not args.json:
@@ -497,7 +523,10 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
                        stage_assessment=dict(result.stage_assessment),
                        metric_details=dict(result.metric_details),
                        disclaimer=DISCLAIMER,
-                       rules=rules_path,
+                       rules=rules_info.path,
+                       rule_overrides=dict(result.rule_overrides),
+                       rule_warnings=list(result.rule_warnings),
+                       stage=result.stage,
                        mode="doc",
                        documents=[{"file": raw, "format": formats.get(raw, "text")}
                                   for raw in paths])
@@ -515,19 +544,22 @@ def cmd_style(args) -> int:
         return _cmd_style_doc(args, doc_paths)
     cfg = load_config(Path(args.project or "."))
     sections = load_sections(cfg)
-    rules, rules_path = load_style_rules(cfg.root, args.rules)
+    rules_info = load_style_rules_info(cfg.root, args.rules)
     before = None
     baseline = None
     if getattr(args, "diff", None):
         before_cfg = load_config(Path(args.diff))
         before_sections = load_sections(before_cfg)
         before = (before_cfg, before_sections)
-    result = analyze(cfg, sections, rules, rules_path=rules_path,
-                     before=before,
+    result = analyze(cfg, sections, rules_info.rules,
+                     rules_path=rules_info.path, before=before,
                      report_unregistered=bool(args.report_unregistered),
-                     report_abbrev=bool(args.report_abbrev))
+                     report_abbrev=bool(args.report_abbrev),
+                     stage=args.stage, rule_report=rules_info.report)
     if before is not None:
-        baseline = analyze(before[0], before[1], rules, rules_path=rules_path)
+        baseline = analyze(before[0], before[1], rules_info.rules,
+                           rules_path=rules_info.path, stage=args.stage,
+                           rule_report=rules_info.report)
         result = filter_new_findings(result, baseline)
     code = result.exit_code
 
@@ -555,7 +587,10 @@ def cmd_style(args) -> int:
                        stage_assessment=dict(result.stage_assessment),
                        metric_details=dict(result.metric_details),
                        disclaimer=DISCLAIMER,
-                       rules=rules_path)
+                       rules=rules_info.path,
+                       rule_overrides=dict(result.rule_overrides),
+                       rule_warnings=list(result.rule_warnings),
+                       stage=result.stage)
     if before is not None:
         payload["diff"] = {"before": str(Path(args.diff)),
                            "baseline_findings": len(baseline.findings),

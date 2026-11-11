@@ -29,7 +29,7 @@ from .constants import EXIT_OK, EXIT_RED, EXIT_YELLOW, SEV_RED
 from .protect import ProtectResult
 from .protect import compare as compare_protect
 from .style import (StyleResult, analyze, filter_new_findings,
-                    load_style_rules)
+                    load_style_rules_info)
 from .tide import SnapshotResult, TideResult, run_tide, save_snapshot
 
 VERDICT_PASS = "pass"
@@ -96,12 +96,14 @@ def run_review(before: Path | str, after: Path | str, *,
     after_cfg = load_config(after)
     before_sections = load_sections(before_cfg)
     after_sections = load_sections(after_cfg)
-    rules, rules_path = load_style_rules(after_cfg.root)
-    after_style = analyze(after_cfg, after_sections, rules,
-                          rules_path=rules_path,
-                          before=(before_cfg, before_sections))
-    baseline = analyze(before_cfg, before_sections, rules,
-                       rules_path=rules_path)
+    rules_info = load_style_rules_info(after_cfg.root)
+    after_style = analyze(after_cfg, after_sections, rules_info.rules,
+                          rules_path=rules_info.path,
+                          before=(before_cfg, before_sections),
+                          rule_report=rules_info.report)
+    baseline = analyze(before_cfg, before_sections, rules_info.rules,
+                       rules_path=rules_info.path,
+                       rule_report=rules_info.report)
     style_result = filter_new_findings(after_style, baseline)
 
     # 3) 闭合：tide 的涨/落/波及面判定原样复用。账本放临时目录，
@@ -177,6 +179,8 @@ def payload(result: ReviewResult) -> dict:
             "allow_new": result.allow_new,
             "baseline_findings": result.baseline_findings,
             "rejected": result.verdict == VERDICT_REVIEW,
+            "rule_overrides": dict(result.style.rule_overrides),
+            "rule_warnings": list(result.style.rule_warnings),
             "findings": [f.as_dict() for f in result.style.findings],
         },
         "tide": {
@@ -227,6 +231,17 @@ def render_human(result: ReviewResult) -> str:
                         f.code, loc, f.message))
 
     lines.append("")
+    overrides = result.style.rule_overrides or {}
+    if overrides.get("present"):
+        keys = list(overrides.get("keys") or [])
+        if keys:
+            lines.append("规则    : 本项目覆盖了 %d 个规则键：%s"
+                         % (len(keys), "、".join(keys)))
+        else:
+            lines.append("规则    : 本项目覆盖了 0 个规则键（与内置默认一致）")
+    for warning in result.style.rule_warnings or []:
+        lines.append("规则告警：%s（%s）"
+                     % (warning.get("code"), warning.get("message", "")))
     lines.append("复检（只算新增）：改前 %d 处 → 新增 %d 处（允许 %d）"
                  % (result.baseline_findings, len(result.style.findings),
                     result.allow_new))

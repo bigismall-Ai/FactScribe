@@ -3,7 +3,9 @@
 
 覆盖：
 
-* ``NUMERAL_DENSITY``：英文/中文正例、负例、阈值边界、``stage="off"`` 降级；
+* ``NUMERAL_DENSITY``：英文/中文正例、负例、阈值边界、``stage="revision"``
+  降级；项目内写 ``numeral_density_stage`` 不生效（批 130，详见
+  ``test_rule_override.py``）；
 * ``SECTION_OVERLAP``：英文/中文「真重复」正例、「正常引用同一事实」负例、
   阈值边界；
 * ``WE_ACTION_DENSITY``：英文/中文正例、``we propose`` 不计入、阈值边界；
@@ -26,7 +28,8 @@ sys.path.insert(0, str(ROOT))
 from factscribe.config import load_config, load_sections  # noqa: E402
 from factscribe.polish import build_entries, no_prescription_codes  # noqa: E402
 from factscribe.prescribe import prescriptions_for  # noqa: E402
-from factscribe.style import Finding, analyze, load_style_rules  # noqa: E402
+from factscribe.style import (Finding, analyze,  # noqa: E402
+                              load_style_rules_info)
 
 PROJECT_TOML = """[project]
 title = "readability"
@@ -53,11 +56,14 @@ def make_project(tmp, files: dict, rules: str | None = None) -> Path:
     return root
 
 
-def run_style(tmp, files: dict, rules: str | None = None):
+def run_style(tmp, files: dict, rules: str | None = None,
+              stage: str = "draft"):
     root = make_project(tmp, files, rules)
     cfg = load_config(root)
-    loaded, path = load_style_rules(root)
-    return analyze(cfg, load_sections(cfg), loaded, rules_path=path)
+    info = load_style_rules_info(root)
+    return analyze(cfg, load_sections(cfg), info.rules,
+                   rules_path=info.path, stage=stage,
+                   rule_report=info.report)
 
 
 def codes(result) -> set:
@@ -184,10 +190,12 @@ class TestNumeralDensity(unittest.TestCase):
         self.assertIn("NUMERAL_DENSITY", codes(over))
         self.assertGreater(over.metrics["numeral_density"], 40.0)
 
-    def test_stage_off_downgrades_to_info(self):
-        rules = 'numeral_density_stage = "off"\n'
+    def test_stage_revision_downgrades_to_info(self):
+        # 批 130：阶段开关只从命令行来；项目内写 off 不再生效（另见
+        # tests/test_rule_override.py）。
         with tempfile.TemporaryDirectory() as tmp:
-            result = run_style(tmp, {"01.tex": en_numeral_body(5)}, rules)
+            result = run_style(tmp, {"01.tex": en_numeral_body(5)},
+                               stage="revision")
         self.assertNotIn("NUMERAL_DENSITY", codes(result))
         self.assertGreater(result.metrics["numeral_density"], 40.0)
         info = [f for f in result.info if f.code == "NUMERAL_DENSITY"]
@@ -197,11 +205,16 @@ class TestNumeralDensity(unittest.TestCase):
         self.assertNotIn("NUMERAL_DENSITY",
                          {f["code"] for f in result.fired})
 
-    def test_bad_stage_is_config_error(self):
-        rules = 'numeral_density_stage = "rewrite"\n'
+    def test_project_stage_key_is_ignored_with_warning(self):
+        # 旧文档教人「在项目里设 off」；批 130 起写了也不认，只报忽略告警。
+        rules = 'numeral_density_stage = "off"\n'
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaises(Exception):
-                run_style(tmp, {"01.tex": en_numeral_body(5)}, rules)
+            result = run_style(tmp, {"01.tex": en_numeral_body(5)}, rules)
+        self.assertIn("NUMERAL_DENSITY", codes(result))
+        self.assertEqual(result.metric_details["numeral_density_stage"],
+                         "draft")
+        self.assertEqual([w["code"] for w in result.rule_warnings],
+                         ["RULES_OVERRIDE_IGNORED"])
 
 
 # --------------------------------------------------------------------------

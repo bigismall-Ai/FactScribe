@@ -31,11 +31,12 @@ rhythm_plateau_level = "info"
 # 打开后进 findings。改 true 即常开（不建议，见 docs/implementation/SYNTAX-B.md）。
 abbrev_first_use = false
 
-# 批 129：数字密度（NUMERAL_DENSITY）只在起草阶段当判据。改稿/改写验收时
-# 数字属于 PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时设
-# "off"，读数照给但降为 info（降级条目不进 findings、不改退出码）。
-# 可选值："draft"（默认）| "off"。
-numeral_density_stage = "draft"
+# 批 129/130：数字密度（NUMERAL_DENSITY）只在起草阶段当判据。改稿/改写验收时
+# 数字属于 PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时用
+# 命令行 `style --stage revision`，读数照给但降为 info（降级条目不进
+# findings、不改退出码）。
+# 注意：阶段开关**只能从命令行来**，本文件（以及项目内同名文件）写
+# numeral_density_stage 一律不生效，只报 RULES_OVERRIDE_IGNORED。
 
 # 标题关系词：只收承载「对立/否定」的关系词。改写前后旧标题里的这组词
 # 被删除或被替换即报 HEADING_RELATION_CHANGED。并列连接（and / 与 / 及 / 、）

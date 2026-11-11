@@ -16,6 +16,10 @@
   本模块只服务 ``style`` 子命令，不改 ``audit`` 的判据与退出码。
 * 阈值、词表与术语白名单来自 ``style-rules.toml``（项目根优先，其次
   仓根，最后内置默认值），改阈值即改判定。
+* 例外：``numeral_density_stage`` 是**阶段开关**，只能由命令行
+  ``style --stage draft|revision`` 决定（默认 draft）。项目内规则文件写了
+  也不认（输出 ``RULES_OVERRIDE_IGNORED`` 告警）——判据开关不能放在
+  被测物里（批 130）。
 
 LaTeX 正文的遮罩保持原长度、保留换行，所以任何位置都能直接换算回
 源文件行号；公式、图表、文献表、verbatim 与批注宏不参与文风统计。
@@ -40,6 +44,17 @@ DISCLAIMER = ("本工具不评估、也不试图规避任何 AI 检测器；它�
 
 STYLE_RULES_NAME = "style-rules.toml"
 
+# 批 130：只允许命令行控制的规则键。这些键写在项目内 style-rules.toml
+# 里也不认——被判据管的正文与被测项目不得改动判据开关（否则「改规则」
+# 就能让检查消失）。
+CLI_ONLY_RULE_KEYS = ("numeral_density_stage",)
+
+# 阶段开关的合法值。``revision``＝改稿/改写验收阶段：数字受
+# PROTECT_NUMBER_CHANGED 保护，NUMERAL_DENSITY 降为 info。
+STAGE_DRAFT = "draft"
+STAGE_REVISION = "revision"
+STAGE_VALUES = (STAGE_DRAFT, STAGE_REVISION)
+
 # --------------------------------------------------------------------------
 # 内置默认规则（与仓根 style-rules.toml 同构；文件缺失时兜底）
 # --------------------------------------------------------------------------
@@ -61,9 +76,11 @@ DEFAULT_RULES: dict = {
     # 批 105（B5）：ABBREV_FIRST_USE 默认关闭。四份语料里专名与通用缩写
     # 混在一起，判「该不该展开」仍需人看；只由 `--report-abbrev` 打开。
     "abbrev_first_use": False,
-    # 批 129：数字密度只在起草阶段当判据。改稿/改写验收时数字属于
-    # PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时设 "off"，
-    # 判据降为 info（仍给读数，但不要求删数字）。
+    # 批 129/130：数字密度只在起草阶段当判据。改稿/改写验收时数字属于
+    # PROTECT_NUMBER_CHANGED 的保护面，删数字会被保护面判红；此时阶段开关
+    # 把判据降为 info（仍给读数，但不要求删数字）。
+    # 批 130：本键**只能由命令行** ``style --stage draft|revision`` 决定，
+    # 项目内 style-rules.toml 写了也不认（见 CLI_ONLY_RULE_KEYS）。
     "numeral_density_stage": "draft",
     "thresholds": {
         "connective_density": 8.0,
@@ -565,23 +582,129 @@ def _merge(base: dict, override: dict) -> dict:
 
 def _rules_candidates(project_root: Path) -> list[Path]:
     here = Path(__file__).resolve().parent
-    return [project_root / STYLE_RULES_NAME,
+    return [Path(project_root) / STYLE_RULES_NAME,
             here.parent / STYLE_RULES_NAME,
             here / STYLE_RULES_NAME]
+
+
+def _flatten_override_keys(raw: dict, base: dict = DEFAULT_RULES,
+                           prefix: str = "") -> list[str]:
+    """把文件里的键展开成点号路径，只留与内置默认**不同**的键。
+
+    值相等的不算覆盖（把默认文件整份抄进项目不会报「覆盖了 60 个键」）。
+    未知键也算覆盖——它们同样改变了判定面。
+    """
+    keys: list[str] = []
+    for key, value in (raw or {}).items():
+        dotted = prefix + key
+        if key not in base:
+            keys.append(dotted)
+        elif isinstance(value, dict) and isinstance(base.get(key), dict):
+            keys.extend(_flatten_override_keys(value, base[key], dotted + "."))
+        elif value != base.get(key):
+            keys.append(dotted)
+    return keys
+
+
+def _strip_cli_only(raw: dict) -> tuple[dict, list[str]]:
+    """去掉只允许命令行控制的键；返回 (干净配置, 被忽略的键名)。"""
+    ignored = [key for key in CLI_ONLY_RULE_KEYS if key in (raw or {})]
+    if not ignored:
+        return raw or {}, []
+    clean = {key: value for key, value in raw.items()
+             if key not in CLI_ONLY_RULE_KEYS}
+    return clean, ignored
+
+
+def _rule_report(raw: dict, path: Path, source: str,
+                 ignored: list[str]) -> dict:
+    clean, stripped = _strip_cli_only(raw)
+    ignored = list(ignored or []) + [k for k in stripped if k not in ignored]
+    keys = [k for k in _flatten_override_keys(clean)
+            if k not in CLI_ONLY_RULE_KEYS]
+    return {"present": True, "path": str(path), "source": source,
+            "count": len(keys), "keys": keys, "ignored": ignored}
+
+
+def project_rule_report(project_root: Path) -> dict:
+    """只读项目内 style-rules.toml，与内置默认逐键比较（不装载规则）。
+
+    ``style`` / ``review`` / ``audit`` 共用这一份读数：本项目覆盖了哪些
+    规则键、哪些键因为「只能命令行控制」而被忽略。没文件时
+    ``present=False``，输出里不出现覆盖行。
+    """
+    path = Path(project_root) / STYLE_RULES_NAME
+    if not path.is_file():
+        return {"present": False, "path": None, "source": "default",
+                "count": 0, "keys": [], "ignored": []}
+    return _rule_report(load_toml(path), path, "project", [])
+
+
+def _ignored_warning(report: dict) -> dict | None:
+    """把「被忽略的键」装成一条 ``RULES_OVERRIDE_IGNORED`` 告警。"""
+    ignored = list((report or {}).get("ignored") or [])
+    if not ignored:
+        return None
+    return {
+        "code": "RULES_OVERRIDE_IGNORED",
+        "severity": "warning",
+        "keys": ignored,
+        "ignored": ignored,
+        "message": ("项目内 %s 设置了只允许命令行控制的键：%s。这些键已被"
+                    "忽略；阶段开关请用 style --stage draft|revision。"
+                    % (STYLE_RULES_NAME, "、".join(ignored))),
+    }
+
+
+@dataclass
+class RulesLoad:
+    """装载结果：规则本体＋来源＋覆盖/忽略读数（批 130）。"""
+
+    rules: dict
+    path: str
+    source: str
+    report: dict
+
+
+def load_style_rules_info(project_root: Path, explicit: str | None = None
+                          ) -> RulesLoad:
+    """装载规则，并报告项目覆盖了哪些键、哪些键被忽略（批 130）。"""
+    if explicit:
+        path = Path(explicit)
+        if not path.is_file():
+            raise ConfigError("--rules 指向的 %s 不存在" % path)
+        raw = load_toml(path)
+        report = _rule_report(raw, path, "explicit", [])
+        clean, _ignored = _strip_cli_only(raw)
+        return RulesLoad(_merge(DEFAULT_RULES, clean), str(path),
+                         "explicit", report)
+    for index, path in enumerate(_rules_candidates(project_root)):
+        if not path.is_file():
+            continue
+        raw = load_toml(path)
+        if index == 0:
+            report = _rule_report(raw, path, "project", [])
+        else:
+            # 仓根/发行包自带文件不是「被测项目的覆盖」，只静默去掉
+            # 命令行专属键，不进覆盖清单。
+            clean, _ignored = _strip_cli_only(raw)
+            report = {"present": False, "path": str(path), "source": "repo",
+                      "count": 0, "keys": [], "ignored": []}
+            return RulesLoad(_merge(DEFAULT_RULES, clean), str(path),
+                             "repo", report)
+        clean, _ignored = _strip_cli_only(raw)
+        return RulesLoad(_merge(DEFAULT_RULES, clean), str(path),
+                         "project", report)
+    return RulesLoad(_merge(DEFAULT_RULES, {}), "内置默认值", "default",
+                     {"present": False, "path": None, "source": "default",
+                      "count": 0, "keys": [], "ignored": []})
 
 
 def load_style_rules(project_root: Path, explicit: str | None = None
                      ) -> tuple[dict, str]:
     """返回 (规则, 来源说明)。显式 --rules 缺失即配置错；默认文件缺失走内置。"""
-    if explicit:
-        path = Path(explicit)
-        if not path.is_file():
-            raise ConfigError("--rules 指向的 %s 不存在" % path)
-        return _merge(DEFAULT_RULES, load_toml(path)), str(path)
-    for path in _rules_candidates(project_root):
-        if path.is_file():
-            return _merge(DEFAULT_RULES, load_toml(path)), str(path)
-    return _merge(DEFAULT_RULES, {}), "内置默认值"
+    info = load_style_rules_info(project_root, explicit)
+    return info.rules, info.path
 
 
 def _thresholds(rules: dict) -> dict:
@@ -893,6 +1016,12 @@ class StyleResult:
     info: list = field(default_factory=list)
     advisories: list = field(default_factory=list)
     metric_details: dict = field(default_factory=dict)
+    # 批 130：规则覆盖读数（informational，不进 findings、不改退出码）。
+    rule_overrides: dict = field(default_factory=lambda: {
+        "present": False, "path": None, "source": "default",
+        "count": 0, "keys": [], "ignored": []})
+    rule_warnings: list = field(default_factory=list)
+    stage: str = STAGE_DRAFT
 
     @property
     def exit_code(self) -> int:
@@ -911,6 +1040,9 @@ class StyleResult:
             "stage_assessment": dict(self.stage_assessment),
             "rules": self.rules_path,
             "metric_details": dict(self.metric_details),
+            "rule_overrides": dict(self.rule_overrides),
+            "rule_warnings": list(self.rule_warnings),
+            "stage": self.stage,
             "disclaimer": DISCLAIMER,
         }
 
@@ -1955,7 +2087,10 @@ def filter_new_findings(after: StyleResult, before: StyleResult) -> StyleResult:
                        stage_assessment=after.stage_assessment,
                        info=list(after.info),
                        advisories=list(after.advisories),
-                       metric_details=dict(after.metric_details))
+                       metric_details=dict(after.metric_details),
+                       rule_overrides=dict(after.rule_overrides),
+                       rule_warnings=list(after.rule_warnings),
+                       stage=after.stage)
 
 
 def _paragraph_triads(text: str, base: int) -> list[tuple]:
@@ -2610,13 +2745,15 @@ def _numeral_density_findings(docs: list["_Doc"], threshold: float,
                               ) -> tuple[list, list, float, list]:
     """批 129 NUMERAL_DENSITY：每千词（英）/每千汉字（中）的数字 token 数。
 
-    ``stage == "off"`` 时读数照算，但条目降为 info（不改 findings、不影响
-    退出码）：改写验收阶段数字属于 PROTECT_NUMBER_CHANGED 的保护面。
+    ``stage == "revision"`` 时读数照算，但条目降为 info（不改 findings、
+    不影响退出码）：改稿/改写验收阶段数字属于 PROTECT_NUMBER_CHANGED 的
+    保护面。阶段只由命令行 ``--stage`` 决定（批 130）。
     主文件若是只 ``\\input`` 别的文件的容器，跳过（容器不是一节）。
     """
     findings: list = []
     details: list = []
     info: list = []
+    paused = stage in ("revision", "off")
     worst = 0.0
     for doc in docs:
         if root_file and doc.file == root_file and _is_container(doc):
@@ -2642,20 +2779,19 @@ def _numeral_density_findings(docs: list["_Doc"], threshold: float,
         shown = int(threshold) if float(threshold).is_integer() else threshold
         text = ("本节 %d 个数字 / 阈值 %s / 密度 %.1f/千%s"
                 % (count, shown, density, unit))
-        if stage == "off":
+        if paused:
             info.append(Finding(
                 "NUMERAL_DENSITY", doc.file, _line_of(doc, pos), text,
-                "numeral_density_stage=off：本条只报告、不要求删数字。"
-                "改写验收阶段数字受 PROTECT_NUMBER_CHANGED 保护，删数字会被"
-                "保护面判红；起草阶段才用 thin-the-numbers。",
+                "--stage revision：本条只报告、不要求删数字。改稿阶段数字受 "
+                "PROTECT_NUMBER_CHANGED 保护，删数字会被保护面判红；起草阶段"
+                "（--stage draft）才用 thin-the-numbers。",
                 "numeral_density", severity="info"))
         else:
             findings.append(Finding(
                 "NUMERAL_DENSITY", doc.file, _line_of(doc, pos), text,
                 "数字太密：每个论点只留一条证据，其余数字删掉或改成定性说法"
-                "（多数/少量/接近）。本条只用于起草阶段；进入改写验收前把 "
-                "numeral_density_stage 设为 off，避免与 PROTECT_NUMBER_CHANGED "
-                "冲突。",
+                "（多数/少量/接近）。本条只用于起草阶段；进入改写验收前加 "
+                "--stage revision，避免与 PROTECT_NUMBER_CHANGED 冲突。",
                 "numeral_density"))
     details.sort(key=lambda item: item["file"])
     return findings, details, round(worst, 1), info
@@ -2857,7 +2993,9 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             before: tuple[Config, list[tuple[str, str]]] | None = None,
             report_unregistered: bool = False,
             report_abbrev: bool = False,
-            formats: dict[str, str] | None = None
+            formats: dict[str, str] | None = None,
+            stage: str = STAGE_DRAFT,
+            rule_report: dict | None = None
             ) -> StyleResult:
     thresholds = _thresholds(rules)
     limits = _limits(rules)
@@ -2868,11 +3006,17 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         raise ConfigError("rhythm_plateau_level 只能是 \"info\" 或 \"yellow\"：%r"
                           % rules.get("rhythm_plateau_level"))
     rhythm_yellow = rhythm_level == "yellow"
-    numeral_stage = str(rules.get("numeral_density_stage", "draft")
-                        ).strip().lower()
-    if numeral_stage not in ("draft", "off"):
-        raise ConfigError("numeral_density_stage 只能是 \"draft\" 或 \"off\"：%r"
-                          % rules.get("numeral_density_stage"))
+    # 批 130：阶段开关只从命令行来，rules 里即使有同名字段也不读。
+    numeral_stage = str(stage or STAGE_DRAFT).strip().lower()
+    if numeral_stage == "off":       # 旧内部值，等价于 revision
+        numeral_stage = STAGE_REVISION
+    if numeral_stage not in STAGE_VALUES:
+        raise ConfigError("--stage 只能是 \"draft\" 或 \"revision\"：%r"
+                          % stage)
+    report = dict(rule_report or {"present": False, "path": None,
+                                  "source": "default", "count": 0,
+                                  "keys": [], "ignored": []})
+    ignored_warning = _ignored_warning(report)
 
     connective_re = _phrase_regex(_words(rules, "connectives"))
     connective_cn = _cn_words(rules, "connectives")
@@ -3502,7 +3646,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             shown = limit
         elif metric == "numeral_density":
             limit = thresholds["numeral_density"]
-            hit = numeral_stage != "off" and value > limit
+            hit = numeral_stage not in ("revision", "off") and value > limit
             shown = limit
         elif metric in ("light_verb_nominalization", "wordiness_bloat",
                         "zh_de_stack", "zh_postposed_condition",
@@ -3598,7 +3742,11 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                        instances=instances, summary=summary,
                        rules_path=rules_path, stage_assessment=stage,
                        info=info, advisories=advisories,
-                       metric_details=metric_details)
+                       metric_details=metric_details,
+                       rule_overrides=report,
+                       rule_warnings=([ignored_warning]
+                                      if ignored_warning else []),
+                       stage=numeral_stage)
 
 
 # --------------------------------------------------------------------------
@@ -3673,6 +3821,17 @@ def render_human(result: StyleResult, project: Path) -> str:
              % (result.summary["files"], result.summary["words"],
                 result.summary["sentences"], result.summary["paragraphs"]),
              "规则    : %s" % result.rules_path]
+    overrides = result.rule_overrides or {}
+    if overrides.get("present"):
+        keys = list(overrides.get("keys") or [])
+        if keys:
+            lines.append("覆盖    : 本项目覆盖了 %d 个规则键：%s"
+                         % (len(keys), "、".join(keys)))
+        else:
+            lines.append("覆盖    : 本项目覆盖了 0 个规则键（与内置默认一致）")
+    for warning in result.rule_warnings or []:
+        lines.append("规则告警：%s（%s）"
+                     % (warning.get("code"), warning.get("message", "")))
     if stage_line:
         lines.append(stage_line)
     lines += ["",
@@ -3785,7 +3944,8 @@ def render_human(result: StyleResult, project: Path) -> str:
                 and not result.metric_details.get("abbrev_first_use_enabled")):
             status = "关"
         if (key == "numeral_density"
-                and result.metric_details.get("numeral_density_stage") == "off"):
+                and result.metric_details.get("numeral_density_stage")
+                in ("revision", "off")):
             status = "关"
         if key == "term_unregistered" and m.get("term_unregistered"):
             status = "提示"

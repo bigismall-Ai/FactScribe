@@ -10,8 +10,9 @@
 
 1. **只在起草阶段用**：稿子还没被 `protect` 冻结时，删数字是改写；进入
    改写验收后，数字属于保护面，删数字会被 `PROTECT_NUMBER_CHANGED` 判红。
-   验收阶段把项目 `style-rules.toml` 里的 `numeral_density_stage` 设为
-   `"off"`，让本条降为 info。
+   验收阶段用命令行 `style --stage revision`，让本条降为 info。
+   **注意**：阶段开关不能写在项目内 `style-rules.toml` 里——写了也不认，
+   只报 `RULES_OVERRIDE_IGNORED`（批 130：判据开关只能来自被测物之外）。
 2. 每个论点只留**一条**证据：找出这个论点靠哪个数字站住，其余数字删掉。
 3. 删掉的数字若承载限定（样本量、区间、单位），改成定性说法：
    「多数」「少量」「接近一半」「在窄区间内」，不要凭空造新数字。
@@ -52,4 +53,5 @@ env PYTHONPATH=src python3 -m factscribe style <项目目录> --json
 ```
 
 看 `NUMERAL_DENSITY` 的读数是否回到阈值内；再看 `review` 的保护面是否仍然
-全绿（改写验收阶段必须先设 `numeral_density_stage = "off"`）。
+全绿（改写验收阶段用 `style --stage revision`；项目内写
+`numeral_density_stage` 不生效）。

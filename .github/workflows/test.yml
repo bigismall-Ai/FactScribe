@@ -47,3 +47,22 @@ jobs:
             echo "::error::examples/minimal audit exit=$code, expected 1 (red)"
             exit 1
           fi
+
+  # 第三方移植件的测试：integrations/ 不进 factscribe 包，但代码要跑。
+  # 零依赖：只要求 node，不装 npm 包。
+  integrations:
+    name: node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Node tests (integrations)
+        run: node --test integrations/factgate/tests/*.test.mjs

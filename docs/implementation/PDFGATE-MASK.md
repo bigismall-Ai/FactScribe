@@ -62,3 +62,36 @@ for key, actual in pdf_counts:
 
 测试：`tests/test_pdfgate_masking.py` 21 例（源层 10 + PDF 10 + audit JSON 1）。
 全量 `python3 -m unittest discover -s tests` → 879 tests OK。
+
+## 5. 实验背景：旧 PDF 当答案提示（批 127）
+
+实测暴露的漏洞不来自结构白名单本身，而来自「PDF 只要存在就被当成可回检
+的最终件」这个前提：
+
+- 一次「空白模型按简报起草一节」的实验里，模型把旧 `main.pdf` 读出来，
+  比对数字多重集，反推出「这一节应当包含哪些数字」，然后照着写。
+- 它没有编数字，`audit` 判绿（`PDF_UNACCOUNTED_NUMBER` 为零）；但它的
+  来源是**旧 PDF 这份现成答案**，不是 facts/runs 里的证据。
+- 旧工程里没有任何「PDF 是否比源文件新」的检查，所以这种模仿查不出来：
+  数字全对得上，恰恰因为它是从上一版 PDF 抄的。
+
+因此新增 P-01S `PDF_STALE`（红，exit 5）：
+
+1. PDF 存在且 mtime **早于**闭包内任一 `.tex` / `.bib` / `facts/*.toml`
+   → 报红，要求先重编；
+2. 命中时**跳过整个 PDF 层**——旧 PDF 的数字不参与 P-04/P-05 多重集比对，
+   避免它继续充当答案提示；
+3. 没有 PDF 不报；`--build` 先编再判，天然不命中。
+
+判据只用 mtime 不用内容哈希：PDF 编译非确定性（时间戳/对象顺序/ID），
+同一批源两次编出的字节不同，哈希无法表达「这份 PDF 是哪批源编的」。
+
+读数（批 127，`paper-b`）：
+
+| 命令 | 读数 |
+|---|---|
+| `touch main.tex && python3 -m factscribe audit ../paper-b` | `PDF_STALE` 1 红，exit 5 |
+| `python3 -m factscribe audit ../paper-b --build` | 0 红 0 黄，exit 0 |
+
+测试：`tests/test_pdf_stale.py` 11 例；全量 942 tests OK。
+

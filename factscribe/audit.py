@@ -1368,17 +1368,24 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     struct_sections = list(sections) + [("main.tex", shell)]
             structural = structural_whitelist(
                 struct_sections, bib_entries, struct_root)
+            # P-01S（批 127）：闭包内所有 .tex / .bib / facts/*.toml 都是
+            # 「这一节该写什么」的源；旧 PDF 比它们新不了才算现编件。
+            pdf_sources = [cfg.root / rel for rel, _text in sections]
+            pdf_sources += list(bib_paths)
+            pdf_sources += sorted(p for p in cfg.root.glob(cfg.facts_glob)
+                                  if p.is_file())
             pdf_stats: dict = {}
             pdf_red, pdf_yellow = verify_document(
                 pdf_path, {"number_ledger": ledger,
                            "pdf_whitelist": whitelist,
                            "structural_whitelist": structural},
-                stats=pdf_stats)
+                stats=pdf_stats, sources=pdf_sources)
             red += pdf_red
             yellow += pdf_yellow
             pdf_summary = {"checked": True, "file": cfg.output,
                            "ledger": len(ledger),
                            "whitelist": len(whitelist),
+                           "stale": bool(pdf_stats.get("stale", False)),
                            "red": len(pdf_red), "yellow": len(pdf_yellow),
                            "structural_masked": pdf_stats.get(
                                "structural_masked", 0),

@@ -10,6 +10,7 @@ and will not change without a major version bump.
 ## [Unreleased]
 
 ### Added
+- `audit`: `PDF_STALE` (red, exit 5) rejects a `main.pdf` older than any `.tex`/`.bib`/`facts/*.toml` in the audit closure (batch 127). A stale PDF is skipped entirely: its numbers no longer feed the P-04/P-05 multiset comparison, because a model can read the previous PDF and copy the numbers it "should" write instead of deriving them from evidence. `--build` compiles first, so it never trips this check; a project without a PDF is not affected.
 - `fonts`: on-demand Fandol font cache (batch 123). `fonts --status` reports the cache at `~/.cache/factscribe/fonts/fandol` (override with `FACTSCRIBE_FONT_CACHE`); `fonts --fetch` downloads the 26.7 MB CTAN package with `urllib` (proxy-aware), extracts the four required OTFs (Song/Hei/Kai/Fang) plus licence text and bold variants, writes `SOURCE.txt`, and exits 4 on network failure or a missing font. Nothing is committed to git.
 - `segment`: a stdlib-only Chinese tokenizer with part-of-speech tags, backed by the jieba dictionary (349,046 entries, copied as data under `factscribe/terms/seg.tsv.gz`).
 - `style`: `ZH_LIGHT_VERB_NOUN` reports Chinese light-verb + noun constructions (`进行了分析` → `分析了`) with the action verb spelled out; item-counted, no density gate.

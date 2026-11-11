@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .audit import Issue
-from .constants import EXIT_MISSING, EXIT_OK, SEV_YELLOW
+from .constants import EXIT_INTEGRITY, EXIT_MISSING, EXIT_OK, SEV_YELLOW
 from .facts import _NUM_RE, number_key
 
 # --------------------------------------------------------------------------
@@ -466,12 +466,58 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
 
 
 # --------------------------------------------------------------------------
+# P-01S PDF 新鲜度：旧 PDF 不得当答案提示（批 127）
+# --------------------------------------------------------------------------
+
+def stale_pdf_issue(pdf: Path, sources) -> Issue | None:
+    """PDF 早于闭包内任一源文件 → `PDF_STALE`（红 / exit 5）。
+
+    实测漏洞：模型不必编数字，只要读旧 `main.pdf`、比对数字多重集，就能
+    反推「这一节该包含哪些数字」再照着写——`audit` 判绿，但结论的来源是
+    旧 PDF 而不是证据。判据只看 mtime（PDF 非确定性，内容哈希每次不同），
+    且只认闭包内的 `.tex` / `.bib` / `facts/*.toml`。
+
+    PDF 不存在时返回 None：缺 PDF 不属本判据。
+    """
+    try:
+        pdf_mtime = pdf.stat().st_mtime_ns
+    except OSError:
+        return None
+    newest_path: Path | None = None
+    newest_mtime: int | None = None
+    for raw in sources or ():
+        path = Path(raw)
+        try:
+            mtime = path.stat().st_mtime_ns
+        except OSError:
+            continue
+        if newest_mtime is None or mtime > newest_mtime:
+            newest_path, newest_mtime = path, mtime
+    if newest_path is None:
+        return None
+    if newest_mtime is not None and newest_mtime <= pdf_mtime:
+        return None
+    return Issue(
+        "PDF_STALE",
+        "PDF 比源文件旧，先重编：%s 比 %s 新——旧 PDF 可以当答案提示，"
+        "过期时它的数字不参与比对；请跑 `--build` 或手动重编后再审（P-01S）"
+        % (newest_path.name, pdf.name),
+        location=str(newest_path), exit_code=EXIT_INTEGRITY)
+
+
+# --------------------------------------------------------------------------
 # 页面与数字（P-02..P-05）：audit 与 verify-pdf 共用
 # --------------------------------------------------------------------------
 
 def verify_document(pdf: Path, report: dict,
-                    stats: dict | None = None) -> tuple[list[Issue], list[Issue]]:
-    """P-02/P-03/P-04/P-05：只判磁盘上的 PDF 字节与报告里的账/白名单。
+                    stats: dict | None = None,
+                    sources=None) -> tuple[list[Issue], list[Issue]]:
+    """P-01S/P-02/P-03/P-04/P-05：只判磁盘上的 PDF 字节与报告里的账/白名单。
+
+    `sources` 是审计闭包内的源文件（`.tex` / `.bib` / `facts/*.toml`）。
+    给了源文件就先用 P-01S 判新鲜度：PDF 过期时**整个 PDF 层直接跳过**
+    （不读页文本、不比对数字），只报 `PDF_STALE`——否则旧 PDF 会继续当
+    答案提示。`sources=None`（直接调 verify_document 的老路径）不判。
 
     `report.structural_whitelist` 是源层推导的章节号/浮动体编号/bib 年份；
     页码由本函数按实际页数补 1..P。命中这些形态的**盈余 token** 不判红，
@@ -479,6 +525,15 @@ def verify_document(pdf: Path, report: dict,
     """
     issues: list[Issue] = []
     warnings: list[Issue] = []
+
+    stale = stale_pdf_issue(pdf, sources) if sources is not None else None
+    if stale is not None:
+        if stats is not None:
+            stats.clear()
+            stats.update({"stale": True, "structural_masked": 0,
+                          "structural_masked_by": {},
+                          "structural_masked_keys": {}})
+        return [stale], warnings
 
     try:
         texts = page_texts(pdf)

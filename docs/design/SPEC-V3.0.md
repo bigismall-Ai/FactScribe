@@ -233,7 +233,7 @@ C13 输出 token：{raw, key(s), span, file/page, line, col}。
 ## 3. PDF 回检（P-01..P-10）
 
 > 运行位置：只有 L2 与 `release`。输入永远是**磁盘上的最终 PDF 字节**，不是内存对象；签名前不重新编译。
-> **执行顺序写死**：P-01（工具）→ **P-08（信任链）** → P-02..P-07（页面与数字）→ P-09（新鲜度）。P-08 失败立即退出，**不得**拿未验签的 `report.json` 继续做允许集判定。
+> **执行顺序写死**：P-01（工具）→ **P-08（信任链）** → **P-01S（PDF 新鲜度）** → P-02..P-07（页面与数字）→ P-09（新鲜度）。P-08 失败立即退出，**不得**拿未验签的 `report.json` 继续做允许集判定；P-01S 命中即跳过整个 PDF 层，**不得**用过期的 PDF 做数字比对。
 
 ### P-01 工具链与版本
 
@@ -244,6 +244,18 @@ C13 输出 token：{raw, key(s), span, file/page, line, col}。
 | 误报/漏报 | 无（工具存在性）；不同发行版输出格式差异只影响解析，不影响判定，解析失败按工具缺失处理 |
 | 失败等级 | `PDF_TOOL_MISSING` → 红/CONFIG，exit 2；`release` 直接拒绝 |
 | fixture | `FX-PDF-00`（缺工具，mock PATH）、`FX-PDF-00b`（正常）、`FX-PDF-14`（尺寸回退，黄） |
+
+### P-01S PDF 新鲜度：`PDF_STALE`（旧 PDF 不得当答案提示）
+
+| 项 | 内容 |
+|---|---|
+| 输入 | 磁盘 `main.pdf` 的 mtime；审计闭包内全部 `.tex`（含 `\input` 展开）、`.bib`（含正文声明的多 bib）、`facts/*.toml` 的 mtime |
+| 算法 | 若 PDF 存在且 mtime **早于**闭包内任一源文件的 mtime → `PDF_STALE`。命中即**整个 PDF 层跳过**（不抽页文本、不做 P-02..P-05 数字比对），只报这一条：旧 PDF 里的数字不许继续当「这一节该写什么」的提示 |
+| 为什么用 mtime | PDF 编译非确定性（时间戳、对象顺序、ID），内容哈希每次都不同；mtime 是「这份 PDF 是不是这批源编出来的」的可用近似。源文件的内容锚仍由 facts 的 `source_sha256` / 审批对象负责 |
+| 误报/漏报 | 误报：`touch` 源文件但没改内容、或从归档解出旧 mtime 的源 → 重编一次即消。漏报：把源文件 mtime 伪造成旧值（mtime 不是内容锚，防篡改靠 P-08 与审批对象） |
+| 失败等级 | `PDF_STALE` → 红/INTEGRITY，exit 5；消息写明「PDF 比源文件旧，先重编」 |
+| 边界 | 项目没有 PDF → 不报（缺 PDF 不属本判据）；`--build` 先编再判，天然不命中；`verify-pdf` 单独回检不带闭包源，不判本条 |
+| fixture | `tests/test_pdf_stale.py`（tex/bib/facts 变新、无 PDF、`--build`、过期 PDF 的数字不参与比对） |
 
 ### P-02 每页必须有可抽取文本层（零文本页 → 红）
 

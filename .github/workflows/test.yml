@@ -27,12 +27,13 @@ jobs:
       # PDF 回检依赖 poppler（pdftotext/pdfinfo）；GitHub 的 ubuntu 镜像默认没有，
       # 不装的话 PDF 相关测试在 CI 会红、在本机（homebrew 装了）却绿。
       - name: Install poppler (pdftotext)
-        # GitHub 的 apt 镜像会抽风；失败三次才真失败，别让环境噪声把代码判红。
+        # apt 会抽风：强制 IPv4（runner 上 IPv6 常挂）+ 单次超时 + 三次重试。
         run: |
           set -e
+          export DEBIAN_FRONTEND=noninteractive
           for i in 1 2 3; do
-            if sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq \
-               && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq poppler-utils; then
+            if timeout 150 sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=20 -o Acquire::Retries=2 update -qq \
+               && timeout 150 sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::http::Timeout=20 -o Acquire::Retries=2 install -y -qq poppler-utils; then
               break
             fi
             echo "apt 第 $i 次失败，10 秒后重试"

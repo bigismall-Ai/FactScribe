@@ -101,3 +101,5 @@ python3 -m unittest discover -s tests     # 942 tests, fully offline
 `examples/minimal/` is the acceptance sample: three facts, two sections, one fabricated number, and one fake citation. `audit` must report exactly those two reds.
 
 Specs live in `docs/design/`, implementation notes in `docs/implementation/`, and history in `CHANGELOG.md`. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request, and bring tests with it.
+
+Third-party port: `integrations/factgate/` runs the same mechanical gates as a Mini App (in the MiniMax Code panel, locally; it does not enter the `factscribe/` package and does not change upstream criteria or exit codes). See [`integrations/factgate/README.md`](integrations/factgate/README.md).

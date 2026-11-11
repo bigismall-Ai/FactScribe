@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "artifacts": {
+    "client": [
+      "./miniapp/client"
+    ],
+    "node": [
+      "./miniapp/node"
+    ]
+  },
+  "runtime": {
+    "kind": "process",
+    "entry": "./miniapp/node/server.mjs",
+    "lifecycle": "on-demand"
+  },
+  "surface": {
+    "path": "/factgate",
+    "window": {
+      "width": 1280,
+      "height": 860,
+      "minWidth": 720,
+      "minHeight": 480,
+      "resizable": true
+    }
+  },
+  "mcpEndpoints": []
+}

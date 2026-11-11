@@ -99,3 +99,5 @@ python3 -m unittest discover -s tests     # 942 例，全离线
 `examples/minimal/` 是验收样例：三条事实、两节正文，故意混入一个编造数字与一个假引用。`audit` 必须只报这两处红。
 
 规范在 `docs/design/`，实现记录在 `docs/implementation/`，历史在 `CHANGELOG.md`。提交前请读 [`CONTRIBUTING.md`](CONTRIBUTING.md)，PR 必须带测试。
+
+第三方移植件：`integrations/factgate/` 是本项目机械闸门的 Mini App 版本（MiniMax Code 面板里本地跑，不进 `factscribe/` 包，不改上游判据与退出码）。说明见 [`integrations/factgate/README.md`](integrations/factgate/README.md)。

@@ -11,6 +11,9 @@ from pathlib import Path
 
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check
+from .brief import build_brief
+from .brief import payload as brief_payload
+from .brief import render as render_brief
 from .buildpdf import _is_font_error, auto_build
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
@@ -227,6 +230,20 @@ def build_parser() -> argparse.ArgumentParser:
                        help="打印工作单（项目目录，默认当前目录）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON；仅 --plan 有效）")
+    sp = sub.add_parser(
+        "brief",
+        help="写作简报：从账里生成起草依据（任务/事实/术语/硬约束/验收）",
+        description="写作简报：把项目名、节结构、可用 fact 的 claim/value、术语"
+                    "正名与禁用变体、五条硬约束、验收命令装成一份 Markdown，"
+                    "交给写作模型当依据。只读账，不判断文字好坏；没有 fact 或"
+                    "节即 exit 2，不输出空简报。")
+    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("--section", default=None, metavar="PREFIX",
+                    help="只出某一节：按节文件名词干前缀匹配（例：04）")
+    sp.add_argument("--out", default=None, metavar="FILE",
+                    help="把 Markdown 写到文件（默认只出 stdout）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "prescribe",
         help="处方层：只给可执行改法（数据文件），不参与判据、不产生分数")
@@ -727,6 +744,23 @@ def cmd_polish(args) -> int:
     return EXIT_OK
 
 
+def cmd_brief(args) -> int:
+    """写作简报：只读账、只出 Markdown；成功永远 EXIT_OK。"""
+    brief = build_brief(Path(args.project), section=args.section)
+    text = render_brief(brief)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text if text.endswith("\n") else text + "\n",
+                       encoding="utf-8")
+        if not args.json:
+            print("简报已写入 %s" % args.out, file=sys.stderr)
+            return EXIT_OK
+    data = _payload("brief", "ok", EXIT_OK, **brief_payload(brief))
+    _emit(data, text, args.json)
+    return EXIT_OK
+
+
 def cmd_prescribe(args) -> int:
     """处方层：只输出处方原文或清单；成功永远 EXIT_OK，不产生 findings。"""
     prescriptions = load_prescriptions()
@@ -857,6 +891,7 @@ def main(argv=None) -> int:
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,
                 "polish": cmd_polish,
+                "brief": cmd_brief,
                 "prescribe": cmd_prescribe, "terms": cmd_terms,
                 "fonts": cmd_fonts}
     try:

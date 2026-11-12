@@ -44,6 +44,12 @@
 
 一致，不等于判得对。
 
+## 安全边界
+
+只对**你自己信任的项目**跑 `build` / `audit --build`：`project.build` 是项目声明里的 shell 命令，工具会照原样执行。`audit` 本身不编译、不执行它；`--build` 才会。
+
+`audit --resolve` 会把引用里的 arXiv / DOI 编号发给对应的解析服务；不发正文，也不发你的本地路径。
+
 ## 自己验
 
 ```bash

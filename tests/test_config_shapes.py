@@ -116,6 +116,25 @@ class TestThreeShapes(unittest.TestCase):
             self.assertEqual(cfg.config_shape, "v1")
             self.assertEqual(cfg.root_tex, "")
 
+    def test_single_file_sections_with_facts_is_v1(self):
+        """单文件 sections 不再被误判成 V3（否则 fact add 会拒绝）。"""
+        toml = ('[project]\ntitle = "old"\n'
+                'sections = "sections/main.tex"\nfacts = "facts/*.toml"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = load_config(write_base(Path(tmp), toml))
+            self.assertFalse(cfg.is_v3)
+            self.assertEqual(cfg.config_shape, "v1")
+            self.assertEqual(cfg.sections_glob, "sections/main.tex")
+
+    def test_single_file_sections_with_v3_marker_stays_v3(self):
+        """有 V3 标记（output/level…）时仍是 V3，不被单文件规则吞掉。"""
+        toml = ('[project]\ntitle = "new"\n'
+                'sections = "sections/main.tex"\nfacts = "facts/*.toml"\n'
+                'level = "l2"\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = load_config(write_base(Path(tmp), toml))
+            self.assertTrue(cfg.is_v3)
+
 
 class TestDefaultsAndErrors(unittest.TestCase):
     def test_level_alias_and_default(self):

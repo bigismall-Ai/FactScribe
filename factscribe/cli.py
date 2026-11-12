@@ -19,6 +19,8 @@ from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
+from .doctor import collect as collect_doctor
+from .doctor import render_human as render_doctor
 from .evidence import (freeze_evidence, render_toml, suggest_evidence,
                        suggest_summary, unfreeze_evidence)
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
@@ -111,7 +113,7 @@ def _exit_code(red: int, yellow: int, strict: bool = False) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="factscribe",
-        description="论文数字与引用的机械闸门（check / audit / matrix / build / preamble / style / protect）")
+        description="论文数字与引用的机械闸门（doctor / check / audit / style / protect / review …）")
     p.add_argument("--version", action="version", version="factscribe %s" % VERSION)
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -130,6 +132,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="模板语言（默认 zh）")
     sp.add_argument("--force", action="store_true",
                     help="目标目录非空也写：覆盖本命令的 7 个同名文件，其他文件不动")
+    sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
+
+    sp = sub.add_parser(
+        "doctor",
+        help="上手第一步：环境与项目自检（缺什么、怎么修；不判定、不产生分数）",
+        description="检查跑 audit 之前需要的东西：Python 版本、tectonic、"
+                    "poppler、中文字体、git，以及项目声明、章节、事实账、"
+                    "人签清单、证据冻结。每项给一句人话和一条修复命令；"
+                    "本命令不是闸门，退出码恒为 0（用法错仍为 2）。")
+    sp.add_argument("project", nargs="?", default=".",
+                    help="项目目录（默认当前目录）")
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
 
     for name, help_text in (
@@ -392,6 +405,14 @@ def cmd_init(args) -> int:
     lines.append("下一步（三条命令）：" if zh else "Next (three commands):")
     lines += info["next"]
     print("\n".join(lines))
+    return EXIT_OK
+
+
+def cmd_doctor(args) -> int:
+    """环境与项目自检：只报告，不判定；成功永远 exit 0。"""
+    info = collect_doctor(Path(args.project))
+    payload = _payload("doctor", "ok", EXIT_OK, **info)
+    _emit(payload, render_doctor(info), args.json)
     return EXIT_OK
 
 
@@ -1107,6 +1128,7 @@ def main(argv=None) -> int:
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,
+                "doctor": cmd_doctor,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,

@@ -16,17 +16,22 @@ What a reading does and does not support is spelled out in [`docs/WHAT-IT-PROVES
 
 ```bash
 python3 -m pip install -e .                    # optional; PYTHONPATH works too
+python3 -m factscribe doctor <project>         # check what is missing, with fixes
 python3 -m factscribe audit <project> --build  # build the PDF, then audit
 python3 -m factscribe style --doc README.md    # prose check for one file
 ```
 
-## Eighteen commands
+First time? Follow [`docs/QUICKSTART.md`](docs/QUICKSTART.md) (zero to a first green in five minutes).
+Staring at a wall of red? Read [`docs/TRIAGE.md`](docs/TRIAGE.md) (what to fix first, what to ignore).
 
-`factscribe` ships eighteen subcommands. Two get you started; the rest are grouped by purpose.
+## Nineteen commands
+
+`factscribe` ships nineteen subcommands. Two get you started; the rest are grouped by purpose.
 
 | Command | What it does |
 |---|---|
 | `init` | Scaffolds a minimal paper: project file, empty ledger, manifest template, section stub |
+| `doctor` | Pre-flight check: environment (Python/tectonic/poppler/fonts/git) and project (config/ledger/manifest/freeze), each with a fix command; not a gate, it never changes a verdict |
 | `fact` | Bookkeeping: `add` computes the hash and writes one fact; it never signs the manifest for you |
 | `check` | Validates the ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
 | `audit` | Core check: inline binding, number-to-ledger, citation stability, coverage report |

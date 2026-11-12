@@ -1,4 +1,4 @@
-# 事实闸 FactGate —— FactScribe 的 Mini App 移植件
+# MiniFactScribe —— FactScribe 的 Mini App
 
 把 FactScribe 的**机械闸门**搬到 MiniMax Code 的 Mini App 面板里，在浏览器本地跑。
 不装 Python、不连服务器、不写论文正文。
@@ -6,7 +6,7 @@
 > **这是一个第三方移植件，不是 FactScribe 的一部分。**
 > 它不进入 `factscribe/` 包，不参与本仓库的 Python 打包、测试矩阵与退出码契约。
 > 上游 `factscribe/` 的行为、退出码与违规码一律未改。
-> 移植件自身的缺陷请开在 `integrations/factgate/` 下的 issue，不要混进上游判据问题。
+> 移植件自身的缺陷请开在 `integrations/minifactscribe/` 下的 issue，不要混进上游判据问题。
 
 ---
 
@@ -85,13 +85,13 @@ Mini App 有五个页签：
 
 ### 作为 Mini App 装到 MiniMax Code
 
-把 integrations/factgate/ 整个目录拷进 MiniMax Code 的工作区，用 miniapp init 绑定，
-然后 miniapp publish。面板里会出现「事实闸 FactGate」。
+把 integrations/minifactscribe/ 整个目录拷进 MiniMax Code 的工作区，用 miniapp init 绑定，
+然后 miniapp publish。面板里会出现「事实闸 FactScribe」。
 
 ### 单独跑引擎（不依赖 Mini App 宿主）
 
 ~~~bash
-cd integrations/factgate
+cd integrations/minifactscribe
 node --input-type=module -e '
 import { createHash } from "node:crypto";
 import { auditProject } from "./miniapp/node/audit.mjs";
@@ -110,7 +110,7 @@ console.log(a.verdict, a.exitCode, a.red.map((i) => i.code), a.yellow.map((i) =>
 ## 测试
 
 ~~~bash
-cd integrations/factgate
+cd integrations/minifactscribe
 node --test tests/
 ~~~
 
@@ -169,7 +169,7 @@ node --test tests/
 ## 目录
 
 ~~~
-integrations/factgate/
+integrations/minifactscribe/
 ├── README.md                    # 本文件
 ├── package.json                 # Mini App 包声明
 ├── icon.png
@@ -192,6 +192,18 @@ integrations/factgate/
 - tests/conformance.test.mjs —— 核心错误码与 Python 原版比对（批 138）
 - tests/styles.test.mjs —— 暗色主题不变量（主按钮 hover、滚动条配色）
 - tests/ui.test.mjs —— 呈现层可读性不变量（中文短名、过期提示、危险动作确认）
+
+## Tested environment
+
+- macOS，MiniMax Code 3.1.14（Mini App 3.1.14）
+- Node 24.19
+- 零第三方依赖；`node --test tests/` 全离线
+
+## Data & access
+
+- 默认不联网：审计与演示数据都在本地；只有点「联网核验存在性」会访问 Crossref / arXiv。
+- 项目数据存在宿主分配的私有 `dataDir`，不写工作区。
+- 目前不声明 `agentAccess` / `toolAccess`；以后若声明，会在这里写清 Agent 会读写什么、调用哪些工具。
 
 ---
 

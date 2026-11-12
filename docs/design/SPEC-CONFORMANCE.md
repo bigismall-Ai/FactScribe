@@ -11,7 +11,7 @@
 
 ## 1. 为什么锁（问题面）
 
-`integrations/factgate/miniapp/node/audit.mjs` 是第三方把 `factscribe/audit.py`
+`integrations/minifactscribe/miniapp/node/audit.mjs` 是第三方把 `factscribe/audit.py`
 的审计语义重写了一遍，导出 `auditProject(project)`。它自带 26 个用例，但全部
 是**对着自己的实现**断言的——从来没有和 Python 原版比对过。
 
@@ -190,7 +190,7 @@ PY
 | 位置 | 断言 |
 |---|---|
 | `tests/test_conformance.py` | ① `factscribe audit <夹具> --json` 的核心码多重集 == `expected.json`；② 重跑投影脚本，输出与已提交的 `project.json` **逐字节**一致；③ 投影确定性、无本机绝对路径 |
-| `integrations/factgate/tests/conformance.test.mjs` | 读 `project.json` → `auditProject` → 同一份核心码多重集 == `expected.json`（Python 读数） |
+| `integrations/minifactscribe/tests/conformance.test.mjs` | 读 `project.json` → `auditProject` → 同一份核心码多重集 == `expected.json`（Python 读数） |
 
 两侧都离线可跑：Python 侧只跑本地审计（不联网、不编译），JS 侧只读两个 JSON。
 
@@ -198,7 +198,7 @@ PY
 
 ```bash
 env PYTHONPATH=src python3 -m unittest discover -s tests
-node --test integrations/factgate/tests/*.test.mjs
+node --test integrations/minifactscribe/tests/*.test.mjs
 ./scripts/preflight-ci.sh
 ```
 

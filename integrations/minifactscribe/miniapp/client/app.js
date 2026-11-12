@@ -1008,14 +1008,15 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       try {
-        localStorage.setItem('factgate.tab', state.tab);
+        localStorage.setItem('minifactscribe.tab', state.tab);
       } catch {
         /* 视图偏好写不进去就算了，不影响数据 */
       }
     }
   });
   try {
-    const saved = localStorage.getItem('factgate.tab');
+    const saved = localStorage.getItem('minifactscribe.tab')
+      ?? localStorage.getItem('factgate.tab');
     if (saved) switchTab(saved);
   } catch {
     /* 忽略 */

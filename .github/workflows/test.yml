@@ -118,4 +118,4 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Node tests (integrations)
-        run: node --test integrations/factgate/tests/*.test.mjs
+        run: node --test integrations/minifactscribe/tests/*.test.mjs

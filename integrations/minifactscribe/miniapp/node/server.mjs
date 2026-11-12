@@ -122,7 +122,7 @@ export async function start(context) {
   async function checkCrossref(entry, sid) {
     const url = 'https://api.crossref.org/works/' + encodeURIComponent(sid.value);
     const res = await fetch(url, {
-      headers: { 'user-agent': 'FactGate/1.0 (MiniMax Code Mini App; local verification)' },
+      headers: { 'user-agent': 'FactScribe/1.0 (MiniMax Code Mini App; local verification)' },
       signal: AbortSignal.timeout(12000),
     });
     if (res.status === 404) return { status: 'not_found', detail: 'Crossref 没有这条 DOI。' };
@@ -142,7 +142,7 @@ export async function start(context) {
   async function checkArxiv(entry, sid) {
     const url = 'https://export.arxiv.org/api/query?id_list=' + encodeURIComponent(sid.value) + '&max_results=1';
     const res = await fetch(url, {
-      headers: { 'user-agent': 'FactGate/1.0 (MiniMax Code Mini App; local verification)' },
+      headers: { 'user-agent': 'FactScribe/1.0 (MiniMax Code Mini App; local verification)' },
       signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return { status: 'unverified', detail: 'arXiv 返回 ' + res.status + '。' };
@@ -250,7 +250,7 @@ export async function start(context) {
   function buildManifest(current, audit) {
     return JSON.stringify(
       {
-        tool: 'factgate',
+        tool: 'minifactscribe',
         project: current.name || 'untitled',
         generatedAt: new Date().toISOString(),
         verdict: audit.verdict,
@@ -285,13 +285,13 @@ export async function start(context) {
     const url = new URL(request.url ?? '/', 'http://miniapp.local');
     const path = url.pathname;
     try {
-      if (request.method === 'GET' && (path === '/factgate' || path === '/factgate/')) {
+      if (request.method === 'GET' && (path === '/minifactscribe' || path === '/minifactscribe/')) {
         const html = await readFile(join(context.pluginRoot, CLIENT_DIR, 'index.html'));
         sendText(response, 200, html, CONTENT_TYPES['.html']);
         return;
       }
-      if (request.method === 'GET' && path.startsWith('/factgate/')) {
-        const rel = normalize(path.slice('/factgate/'.length)).replace(/^(\.\.(\/|\\))+/, '');
+      if (request.method === 'GET' && path.startsWith('/minifactscribe/')) {
+        const rel = normalize(path.slice('/minifactscribe/'.length)).replace(/^(\.\.(\/|\\))+/, '');
         if (rel.includes('..')) {
           sendText(response, 404, 'not_found');
           return;
@@ -369,7 +369,7 @@ export async function start(context) {
       }
       sendText(response, 404, 'not_found');
     } catch (err) {
-      context.logger.warn('factgate.request.failed', { path, message: err.message });
+      context.logger.warn('minifactscribe.request.failed', { path, message: err.message });
       sendJson(response, 500, { ok: false, error: err.message });
     }
   });
@@ -382,7 +382,7 @@ export async function start(context) {
       resolve();
     });
   });
-  context.logger.info('factgate.runtime.listening');
+  context.logger.info('minifactscribe.runtime.listening');
 
   let disposal;
   const dispose = () => {

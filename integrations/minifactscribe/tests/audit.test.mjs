@@ -1,6 +1,6 @@
-// 事实闸 FactGate 测试：离线、零依赖（node:test + node:assert）。
+// 事实闸 FactScribe 测试：离线、零依赖（node:test + node:assert）。
 //
-// 跑法（integrations/factgate 目录）：
+// 跑法（integrations/minifactscribe 目录）：
 //   node --test tests/
 //
 // 覆盖三类：

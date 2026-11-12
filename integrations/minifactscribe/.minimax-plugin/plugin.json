@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "name": "factgate",
-  "displayName": "事实闸 FactGate",
+  "name": "minifactscribe",
+  "displayName": "MiniFactScribe",
   "version": "1.0.0",
   "description": "给 AI 写论文的人用的机械闸门：正文里的每个数字都必须钉回一份签过哈希的事实，每条引用都必须落到一个稳定标识。",
   "author": "User",
   "icon": "icon.png",
   "category": "Productivity",
   "exampleQueries": [
-    "打开事实闸，审计我的论文里的数字和引用"
+    "打开 MiniFactScribe，审计我的论文里的数字和引用"
   ],
   "apps": [],
   "mcpServers": [],

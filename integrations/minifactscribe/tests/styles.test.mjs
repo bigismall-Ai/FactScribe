@@ -1,6 +1,6 @@
-// 事实闸 FactGate 暗色模式回归测试：离线、零依赖（node:test + node:assert）。
+// 事实闸 FactScribe 暗色模式回归测试：离线、零依赖（node:test + node:assert）。
 //
-// 跑法（integrations/factgate 目录）：
+// 跑法（integrations/minifactscribe 目录）：
 //   node --test tests/
 //
 // 背景：宿主面板是暗色时踩过两个坑，都不是"看起来不对"，而是可复现的规则问题，

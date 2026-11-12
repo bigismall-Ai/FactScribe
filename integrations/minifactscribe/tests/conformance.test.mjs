@@ -7,7 +7,7 @@
 // 不比行号、不比措辞：两边的文本模型不同（同一个数 JS 记 "47.3ms"、
 // Python 记 "47.3"），能锁的只有「哪几个码、各几次」。
 //
-// 跑法（integrations/factgate）：node --test tests/
+// 跑法（integrations/minifactscribe）：node --test tests/
 // 离线、零依赖（node:test + node:assert）。
 
 import assert from 'node:assert/strict';

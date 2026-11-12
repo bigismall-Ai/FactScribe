@@ -92,6 +92,23 @@ class TestFactAddHappyPath(unittest.TestCase):
             self.assertTrue((root / "ledger" / "01-core.toml").is_file())
             self.assertEqual(len(load_facts(load_config(root))), 1)
 
+    def test_single_file_sections_can_add_facts(self):
+        """sections 写单个文件名时也走 v1；以前会被判成 V3，fact add 直接拒绝。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = new_project(tmp)
+            cfg_path = root / "paperkit.toml"
+            cfg_path.write_text(
+                cfg_path.read_text(encoding="utf-8").replace(
+                    'sections = "sections/*.tex"',
+                    'sections = "sections/01-intro.tex"'),
+                encoding="utf-8")
+            proc = add(root, "--id", "A1", "--claim", "示例",
+                       "--value", "3/4", "--source", MANIFEST_REL)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            cfg = load_config(root)
+            self.assertFalse(cfg.is_v3)
+            self.assertEqual(len(load_facts(cfg)), 1)
+
     def test_sha256_is_computed_from_the_source_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)

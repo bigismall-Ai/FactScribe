@@ -815,6 +815,13 @@ def load_config(root: Path) -> Config:
                 and any(ch in sections for ch in "*?[")
                 and proj.get("facts")):
             return _load_v1_config(root, path, data)
+        # 单文件 sections（例 "ms.tex"）配了 facts：按 v1 处理。否则会落进
+        # 下面的 V3 marker 分支，`fact add` 随即拒绝——用户只是想让审计
+        # 从这一节/这个主文件开始，不该被当成 V3 的显式清单。
+        if (isinstance(sections, str) and proj.get("facts")
+                and not has_root
+                and not any(k in proj for k in V3_MARKER_FIELDS - {"sections"})):
+            return _load_v1_config(root, path, data)
         if any(k in proj for k in V3_MARKER_FIELDS):
             return _load_v3_config(root, path, data,
                                    shape="project-root" if has_root

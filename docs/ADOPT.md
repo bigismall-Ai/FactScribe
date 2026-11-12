@@ -61,8 +61,8 @@ manifest = "results/MANIFEST.toml"
 配置里的 `bib` 必须存在（`init` 会给一个空 `refs.bib`）。正文 `\bibliography{a,b}` 声明到的其他 `.bib`
 会自动加入，**不用先合并**；只有配置与正文都没声明、却想额外加一本时，才需要显式处理。
 
-**`sections` 要写 glob（必须含 `*`）。** 写单个文件名（例 `"ms.tex"`）会被识别成 V3 声明，
-而 `fact add` 目前只支持 v1 的 `[project]` 表。
+`sections` 写 glob（例 `"*.tex"`）或单个文件（例 `"ms.tex"`）都行；单文件也按 v1 处理，
+`fact add` 可用。只有同时出现 `output` / `level` 等 V3 标记字段时，才会按 V3 解析。
 
 **5. 补引用标识。** 两种常见情况：
 

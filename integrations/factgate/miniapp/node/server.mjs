@@ -89,7 +89,9 @@ export async function start(context) {
     res.end(JSON.stringify(payload));
   }
 
-  function sendText(res, code, body, type) {
+  function sendText(res, code, body, type = 'text/plain; charset=utf-8') {
+    // type 必须有默认值：漏传会让 writeHead 抛 "Invalid value undefined for
+    // header content-type"，把本该是 404 的未知路径变成 500。
     res.writeHead(code, { 'content-type': type });
     res.end(body);
   }
@@ -294,7 +296,14 @@ export async function start(context) {
           sendText(response, 404, 'not_found');
           return;
         }
-        const file = await readFile(join(context.pluginRoot, CLIENT_DIR, rel));
+        let file;
+        try {
+          file = await readFile(join(context.pluginRoot, CLIENT_DIR, rel));
+        } catch {
+          // 静态资源不存在是 404，不是 500——面板里误点链接不该看到服务端错误
+          sendText(response, 404, 'not_found');
+          return;
+        }
         sendText(response, 200, file, CONTENT_TYPES[extname(rel)] || 'application/octet-stream');
         return;
       }

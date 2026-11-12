@@ -114,7 +114,7 @@ cd integrations/factgate
 node --test tests/
 ~~~
 
-26 例判据层自测，全离线（`node:test` + `node:assert`，零第三方依赖）。每个判据都有正反两例：
+31 例判据层自测，全离线（`node:test` + `node:assert`，零第三方依赖）。每个判据都有正反两例：
 数字归一化与值域、绑定硬约束、引用族 fail-closed、稳定标识、派生事实重算、
 来源哈希现算（据未改）、保护面里的事实标记/数字/引用、呈现层折叠、
 以及联网核验并入后的派生视图重算。
@@ -126,6 +126,10 @@ node --test tests/
 
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
+
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）与 16 例呈现层可读性不变量
+（`tests/ui.test.mjs`）：违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、
+判定不能只靠颜色承载、危险动作必须先确认、表单错误要指到字段。四组共 56 例，全部离线。
 
 ---
 
@@ -171,8 +175,10 @@ integrations/factgate/
 ├── icon.png
 ├── .minimax-plugin/plugin.json  # 插件清单
 ├── tests/
-│   ├── audit.test.mjs           # node:test，26 例，全离线
-│   └── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
+│   ├── audit.test.mjs           # node:test，31 例，全离线
+│   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
+│   ├── styles.test.mjs          # 暗色主题不变量，7 例
+│   └── ui.test.mjs              # 呈现层可读性不变量，16 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css
@@ -184,6 +190,8 @@ integrations/factgate/
 - demo.mjs —— 演示数据
 - tests/audit.test.mjs —— 判据层的正反例
 - tests/conformance.test.mjs —— 核心错误码与 Python 原版比对（批 138）
+- tests/styles.test.mjs —— 暗色主题不变量（主按钮 hover、滚动条配色）
+- tests/ui.test.mjs —— 呈现层可读性不变量（中文短名、过期提示、危险动作确认）
 
 ---
 

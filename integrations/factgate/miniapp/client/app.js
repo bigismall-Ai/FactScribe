@@ -1,12 +1,101 @@
 // 事实闸 · Client
 // 呈现与交互；所有写操作走 Node 领域服务，页面不直接落盘。
+//
+// 呈现层的三条自律（2026-11 改版）：
+//   1. 过期就说过期——内容改了、审计没重跑，旧结论不许继续冒充现状。
+//   2. 状态不靠颜色单独承载——每个判定都带符号和文字（WCAG 1.4.1）。
+//   3. 危险动作先问一句——覆盖项目、删事实、改哈希，都是「先确认再执行」。
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const state = { project: null, audit: null, verify: null, tab: 'manuscript', editingFactId: null };
+const state = {
+  project: null,
+  audit: null,
+  verify: null,
+  tab: 'manuscript',
+  editingFactId: null,
+  auditSig: null,
+  stale: false,
+  saveFailed: false,
+};
+
+// ------------------------------------------------------------------ 词汇表
+// 内部违规码是给机器看的；给人看的必须是中文短名。
+const ISSUE_LABEL = {
+  UNMATCHED_NUMBER: '数字回不到账',
+  BOUND_MISMATCH: '数字与绑定冲突',
+  UNBOUND_NUMBER: '回得到账但没钉住',
+  MISSING_CITE: '引用缺 bib 条目',
+  BIB_NO_STABLE_ID: '引用缺稳定标识',
+  UNKNOWN_CITE_COMMAND: '未知引用命令',
+  DUPLICATE_BIB_KEY: 'bib 键重复',
+  UNUSED_BIB: '文献没被引用',
+  UNUSED_FACT: '事实没被使用',
+  DUPLICATE_VALUE: '同值待判断',
+  MISSING_SOURCE: '事实缺来源',
+  MISSING_SOURCE_FIELD: '事实未填来源字段',
+  MISSING_SOURCE_SHA256: '事实缺来源哈希',
+  SOURCE_SHA256_MISMATCH: '来源材料被改过',
+  DUPLICATE_ID: '事实 ID 重复',
+  EXPR_MISMATCH: '推算值对不上',
+  EXPR_INVALID: '算式无法求值',
+  DERIVED_CYCLE: '推算链成环',
+  NUMBER_AS_CROSSREF: '结构编号当成了数据',
+  LOW_BINDING_RATE: '绑定率偏低',
+  CITE_FAKE: '文献查无此文',
+  CITE_SUSPECT: '文献元数据对不上',
+  CITE_UNVERIFIED: '文献本轮没核验成',
+  RESOLVE_DEGRADED: '联网核验大面积失败',
+  UNKNOWN_FACT_MARKER: '正文指向不存在的事实',
+  BAD_ID_FORMAT: '事实 ID 格式不对',
+  BAD_SOURCE_PATH: '来源指向不存在的材料',
+  CONFIG: '项目没配好',
+  PROTECT_NUMBER: '改写动了数字',
+  PROTECT_CITE: '改写动了引用',
+  PROTECT_FACT: '改写动了事实标记',
+  PROTECT_FORMULA: '改写动了公式',
+  PROTECT_TABLE: '改写动了表格',
+  PROTECT_XREF: '改写动了交叉引用',
+};
+
+function labelOf(code) {
+  return ISSUE_LABEL[code] || '未归类的问题';
+}
+
+// 数字判定的符号：颜色之外还要有形状，色弱与单色打印才读得出。
+const CHIP = {
+  ok: { sym: '✓', label: '已绑定且对得上' },
+  warn: { sym: '!', label: '回得到账但没钉住' },
+  bad: { sym: '✕', label: '回不到账或与绑定冲突' },
+  mute: { sym: '·', label: '结构编号，不作数据' },
+};
+
+// 事实账与覆盖矩阵共用一套状态词，别一个叫「已内联绑定」一个叫「已绑定」。
+const USED_IN_LABEL = {
+  '已内联绑定': '已绑定',
+  '只命中值域（未绑定）': '未绑定',
+  '未被引用': '未被引用',
+};
+
+/** 位置串翻译成人话。 */
+function formatLocation(loc) {
+  if (!loc) return '';
+  let m = /^正文:(\d+)$/.exec(loc);
+  if (m) return '正文 第 ' + m[1] + ' 行';
+  m = /^事实账:(.+)$/.exec(loc);
+  if (m) return '事实 ' + m[1];
+  m = /^来源:(.+)$/.exec(loc);
+  if (m) return '来源材料 ' + m[1];
+  m = /^refs\.bib:(.+)$/.exec(loc);
+  if (m) return 'bib 条目 ' + m[1];
+  if (loc === '事实账') return '事实账';
+  if (loc === '正文') return '正文';
+  if (loc === '引用核验') return '引用核验';
+  return loc;
+}
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
@@ -21,6 +110,7 @@ async function api(path, opts = {}) {
 }
 
 async function sha256Hex(text) {
+  if (!globalThis.crypto || !globalThis.crypto.subtle) throw new Error('当前环境不支持现算哈希');
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text ?? '')));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -36,21 +126,73 @@ function toast(message) {
   }, 2600);
 }
 
+// ------------------------------------------------------------------ 过期检测
+// 审计结论只在「正文 + 引用 + 事实账 + 来源材料」这套内容上成立。
+// 内容一改，旧结论就是过期结论——必须说出来，不能让旧红黄牌继续冒充现状。
+function sigOf(project) {
+  const p = project || {};
+  const parts = [p.manuscript ?? '', p.bib ?? ''];
+  for (const s of p.sources || []) parts.push(s.id + '\u0000' + (s.text ?? ''));
+  for (const f of p.facts || []) {
+    parts.push(
+      [f.id, f.claim, f.value, f.source, f.sourceSha256, f.locator, f.confidence, f.expr, f.dupOk ? 1 : 0, f.notes]
+        .join('\u0001'),
+    );
+  }
+  const str = parts.join('\u0002');
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < str.length; i += 1) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+  }
+  return h1.toString(16) + '-' + h2.toString(16);
+}
+
+function refreshStale() {
+  state.stale = Boolean(state.audit && state.auditSig && sigOf(state.project) !== state.auditSig);
+  const banner = $('#stale-banner');
+  banner.hidden = !state.stale;
+  if (state.stale) {
+    $('#stale-text').textContent =
+      '你在上次审计之后改过正文 / 事实账 / 引用。下面显示的还是改动前的结果——点「重新审计」刷新。';
+  }
+  renderVerdict();
+}
+
+// ------------------------------------------------------------------ 保存状态
+
 let saveTimer = null;
 function scheduleSave() {
-  $('#save-state').textContent = '未保存';
+  setSaveState('未保存', false);
+  refreshStale();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveNow, 600);
 }
 
+function setSaveState(text, failed) {
+  const el = $('#save-state');
+  el.textContent = text;
+  state.saveFailed = Boolean(failed);
+  el.classList.toggle('is-failed', Boolean(failed));
+  el.title = failed
+    ? '保存失败，点这里重试'
+    : text === '无改动'
+      ? '当前内容与上次保存一致'
+      : '改动会自动保存到本地数据目录';
+}
+
 async function saveNow() {
-  $('#save-state').textContent = '保存中…';
+  setSaveState('保存中…', false);
   try {
     await api('/api/project', { method: 'PUT', body: JSON.stringify({ project: state.project }) });
-    $('#save-state').textContent = '已保存';
+    setSaveState('已保存', false);
+    return true;
   } catch (err) {
-    $('#save-state').textContent = '保存失败';
+    setSaveState('保存失败 · 点此重试', true);
     toast('保存失败：' + err.message);
+    return false;
   }
 }
 
@@ -79,17 +221,36 @@ function renderTab() {
 
 // ------------------------------------------------------------------ 顶栏
 
+function verdictSentence(a) {
+  const shown = a.verdict === 'red' ? (a.redShown || a.red).length : a.verdict === 'yellow' ? (a.yellowShown || a.yellow).length : 0;
+  const base = {
+    green: '绿牌：账有据、据未改、文有绑。',
+    red: '红牌 ' + shown + ' 处，必须改。',
+    yellow: '黄牌 ' + shown + ' 处，待人判断。',
+  }[a.verdict];
+  return base + '（退出码 ' + a.exitCode + '）';
+}
+
 function renderVerdict() {
   const el = $('#verdict');
   if (!state.audit) {
     el.className = 'verdict verdict-idle';
     el.textContent = '未审计';
+    el.title = '还没跑过审计——点右上角「运行审计」';
+    return;
+  }
+  if (state.stale) {
+    el.className = 'verdict verdict-stale';
+    el.textContent = '结果已过期';
+    el.title = '内容改过但没重跑审计。上次结论：' + verdictSentence(state.audit);
     return;
   }
   const a = state.audit;
-  const word = { green: '绿', red: '红', yellow: '黄' }[a.verdict];
+  const word = { green: '绿牌', red: '红牌', yellow: '黄牌' }[a.verdict];
+  const n = a.verdict === 'red' ? (a.redShown || a.red).length : a.verdict === 'yellow' ? (a.yellowShown || a.yellow).length : 0;
   el.className = 'verdict verdict-' + a.verdict;
-  el.textContent = word + ' · exit ' + a.exitCode;
+  el.textContent = word + (n ? ' ' + n + ' 处' : '');
+  el.title = verdictSentence(a);
 }
 
 // ------------------------------------------------------------------ 正文
@@ -125,10 +286,10 @@ function renderManuscript() {
     for (const num of line.numbers) {
       const hits = (byLine.get(line.line) || []).filter((i) => i.token === num.token);
       let cls = 'ok';
-      let title = '已绑定且对得上';
+      let title = CHIP.ok.label;
       if (num.crossref) {
         cls = 'mute';
-        title = '结构编号，不作数据';
+        title = CHIP.mute.label;
       } else if (hits.some((h) => h.severity === 'red')) {
         cls = 'bad';
         title = hits.find((h) => h.severity === 'red').message;
@@ -137,16 +298,20 @@ function renderManuscript() {
         title = hits.find((h) => h.severity === 'yellow').message;
       } else if (!line.bound.length) {
         cls = 'warn';
-        title = '没绑定';
+        title = CHIP.warn.label;
       }
-      chips.push('<span class="num-chip ' + cls + '" title="' + esc(title) + '">' + esc(num.token) + '</span>');
+      const sym = CHIP[cls].sym;
+      chips.push(
+        '<span class="num-chip ' + cls + '" title="' + esc(title) + '"><span class="chip-sym" aria-hidden="true">' + sym + '</span>' +
+          '<span class="sr-only">' + esc(CHIP[cls].label) + '：</span>' + esc(num.token) + '</span>',
+      );
     }
     const bound = line.bound.length
-      ? line.bound.map((id) => '<span class="fact-chip">' + esc(id) + '</span>').join('')
-      : '<span class="fact-chip none">未绑定</span>';
+      ? line.bound.map((id) => '<span class="fact-chip">绑 ' + esc(id) + '</span>').join('')
+      : '<span class="fact-chip none">这行没绑定</span>';
     rows.push(
       '<div class="line-row">' +
-        '<div class="line-no">L' + line.line + '</div>' +
+        '<div class="line-no">第 ' + line.line + ' 行</div>' +
         '<div class="line-main">' +
           '<div class="line-text">' + esc(line.text.trim() || '（空行）') + '</div>' +
           '<div class="line-meta">' + bound + chips.join('') + '</div>' +
@@ -158,7 +323,9 @@ function renderManuscript() {
 
   const s = state.audit.stats;
   $('#manuscript-stats').textContent = s
-    ? '内联绑定 ' + s.bound + '/' + s.denom + '（' + (s.denom ? Math.round((s.bound / s.denom) * 100) : 0) + '%）'
+    ? s.denom
+      ? s.denom + ' 个数据数字：' + s.bound + ' 已绑定 · ' + s.unboundYellow + ' 有账没钉住 · ' + s.unmatched + ' 回不到账'
+      : '正文里没有数据数字'
     : '';
 }
 
@@ -180,23 +347,40 @@ function factStatus(id) {
   return { cls: 'mute', text: '未被引用' };
 }
 
+/** 账本里钉住的来源哈希（可能多条事实钉了同一个来源）。 */
+function pinnedHashOf(sourceId) {
+  const pinned = (state.project.facts || [])
+    .filter((f) => f.source === sourceId)
+    .map((f) => String(f.sourceSha256 || ''))
+    .filter(Boolean);
+  return pinned[0] || '';
+}
+
 function renderLedger() {
   const facts = state.project.facts || [];
   const tbody = $('#facts-tbody');
-  tbody.innerHTML = facts
-    .map((f) => {
-      const st = factStatus(f.id);
-      return (
-        '<tr class="clickable" data-fact="' + esc(f.id) + '">' +
-          '<td class="mono">' + esc(f.id) + '</td>' +
-          '<td>' + esc(f.claim) + '</td>' +
-          '<td class="mono">' + esc(f.value) + '</td>' +
-          '<td>' + esc(f.source || '—') + '</td>' +
-          '<td><span class="status-dot"><span class="dot dot-' + st.cls + '"></span>' + st.text + '</span></td>' +
-        '</tr>'
-      );
-    })
-    .join('');
+  $('#facts-count').textContent = facts.length ? '共 ' + facts.length + ' 条事实' : '账上还没有事实';
+
+  if (!facts.length) {
+    tbody.innerHTML =
+      '<tr class="table-empty-row"><td colspan="6">账上还没有事实。点右上角「新增事实」，先记一条有来源的数。</td></tr>';
+  } else {
+    tbody.innerHTML = facts
+      .map((f) => {
+        const st = factStatus(f.id);
+        return (
+          '<tr class="clickable" data-fact="' + esc(f.id) + '" title="点击编辑这条事实">' +
+            '<td class="mono">' + esc(f.id) + '</td>' +
+            '<td>' + esc(f.claim) + '</td>' +
+            '<td class="mono">' + esc(f.value) + '</td>' +
+            '<td>' + esc(f.source || '—') + '</td>' +
+            '<td><span class="status-dot"><span class="dot dot-' + st.cls + '"></span>' + st.text + '</span></td>' +
+            '<td><button class="link-btn edit-btn" type="button" data-edit-fact="' + esc(f.id) + '">编辑</button></td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+  }
 
   const sourceSel = $('#f-source');
   const current = sourceSel.value;
@@ -209,22 +393,69 @@ function renderLedger() {
   sources.innerHTML = (state.project.sources || [])
     .map((s) => {
       const usedBy = facts.filter((f) => f.source === s.id).length;
+      const pinned = pinnedHashOf(s.id);
       return (
         '<div class="source-card" data-source="' + esc(s.id) + '">' +
           '<div class="source-head">' +
-            '<span class="source-id">' + esc(s.name || s.id) + ' <span class="muted-note">（' + esc(s.id) + '，' + usedBy + ' 条事实引用）</span></span>' +
+            '<span class="source-id">' + esc(s.name || s.id) +
+              ' <span class="muted-note">（' + esc(s.id) + '，' + usedBy + ' 条事实引用）</span></span>' +
             '<span class="source-actions">' +
-              '<span class="hash-note">sha256 ' + esc(String(s.sha256 || '').slice(0, 16)) + '…</span>' +
               '<button class="btn" type="button" data-rehash="' + esc(s.id) + '">更新哈希</button>' +
             '</span>' +
           '</div>' +
-          '<textarea class="editor editor-bib" data-source-text="' + esc(s.id) + '" spellcheck="false" aria-label="' + esc(s.id) + ' 内容">' + esc(s.text) + '</textarea>' +
+          '<div class="source-hashes">' +
+            '<span class="hash-note">账内钉住 <b data-pinned-sha="' + esc(s.id) + '">' +
+              (pinned ? esc(pinned.slice(0, 16)) + '…' : '（没有）') + '</b></span>' +
+            '<span class="hash-note">材料现算 <b data-live-sha="' + esc(s.id) + '">计算中…</b></span>' +
+            '<span class="sha-cmp mute" data-sha-cmp="' + esc(s.id) + '">比对中…</span>' +
+          '</div>' +
+          '<textarea class="editor editor-bib" data-source-text="' + esc(s.id) + '" spellcheck="false" aria-label="' + esc(s.id) + ' 内容">'
+            + esc(s.text) + '</textarea>' +
+          '<div class="confirm-box" data-rehash-confirm="' + esc(s.id) + '" hidden>' +
+            '<span>更新哈希＝承认现在这份材料就是正确版本，并把账本钉住的值改成它。这会洗掉「来源材料被改过」的红牌。</span>' +
+            '<div class="confirm-actions">' +
+              '<button class="btn btn-danger" type="button" data-rehash-ok="' + esc(s.id) + '">确认更新</button>' +
+              '<button class="btn" type="button" data-rehash-cancel="' + esc(s.id) + '">取消</button>' +
+            '</div>' +
+          '</div>' +
         '</div>'
       );
     })
     .join('') || '<div class="line-empty">还没有来源材料。每条事实都要指到一份来源。</div>';
 
+  refreshLiveHashes();
   loadFactForm(state.editingFactId);
+}
+
+/** 现算每份材料的 sha256，和账本钉住的值摆在一起对照。 */
+function refreshLiveHashes() {
+  for (const s of state.project.sources || []) {
+    const id = String(s.id);
+    sha256Hex(s.text ?? '')
+      .then((h) => {
+        const liveEl = document.querySelector('[data-live-sha="' + CSS.escape(id) + '"]');
+        if (liveEl) liveEl.textContent = h.slice(0, 16) + '…';
+        const cmpEl = document.querySelector('[data-sha-cmp="' + CSS.escape(id) + '"]');
+        if (!cmpEl) return;
+        const pinned = pinnedHashOf(id);
+        const same = Boolean(pinned) && pinned === h;
+        cmpEl.className = 'sha-cmp ' + (!pinned ? 'mute' : same ? 'ok' : 'bad');
+        cmpEl.textContent = !pinned
+          ? '账内没钉住哈希 → 会判红'
+          : same
+            ? '与账内钉住的一致'
+            : '与账内钉住的不一致 → 会判红';
+      })
+      .catch(() => {
+        const liveEl = document.querySelector('[data-live-sha="' + CSS.escape(id) + '"]');
+        if (liveEl) liveEl.textContent = '此环境无法现算';
+        const cmpEl = document.querySelector('[data-sha-cmp="' + CSS.escape(id) + '"]');
+        if (cmpEl) {
+          cmpEl.className = 'sha-cmp mute';
+          cmpEl.textContent = '无法比对';
+        }
+      });
+  }
 }
 
 function loadFactForm(id) {
@@ -238,10 +469,12 @@ function loadFactForm(id) {
   $('#f-locator').value = f ? f.locator : '';
   $('#f-confidence').value = f ? f.confidence || 'high' : 'high';
   $('#f-expr').value = f ? f.expr : '';
+  $('#f-notes').value = f ? f.notes : '';
   $('#f-dup').checked = f ? Boolean(f.dupOk) : false;
-  const src = (state.project.sources || []).find((s) => s.id === (f ? f.source : $('#f-source').value));
-  $('#f-hash').textContent = src ? '来源哈希现算：' + String(src.sha256 || '').slice(0, 24) + '…' : '';
-  $('#btn-delete-fact').disabled = !f;
+  $('#btn-delete-fact').hidden = !f;
+  $('#fact-delete-confirm').hidden = true;
+  $('#fact-delete-id').textContent = f ? f.id : '';
+  showFormErrors([]);
 }
 
 // ------------------------------------------------------------------ 引用
@@ -257,26 +490,35 @@ function renderRefs() {
     unverified: ['warn', '未核验成'],
     no_id: ['bad', '无稳定标识'],
   };
-  $('#bib-tbody').innerHTML = rows
-    .map((r) => {
-      const v = verifyMap.get(r.key);
-      const st = v ? statusText[v.status] || ['mute', v.status] : ['mute', '未核验'];
-      const sid = r.stableId ? r.stableId.kind + ':' + r.stableId.value : '无';
-      return (
-        '<tr>' +
-          '<td class="mono">' + esc(r.key) + '</td>' +
-          '<td>' + esc(r.title) + '</td>' +
-          '<td class="mono">' + esc(sid) + '</td>' +
-          '<td>' + r.cited + '</td>' +
-          '<td><span class="status-dot" title="' + esc(v?.detail || '') + '"><span class="dot dot-' + st[0] + '"></span>' + st[1] + '</span></td>' +
-        '</tr>'
-      );
-    })
-    .join('');
+  $('#refs-count').textContent = rows.length ? '共 ' + rows.length + ' 条 bib 条目' : 'bib 里还没有条目';
+
+  if (!rows.length) {
+    $('#bib-tbody').innerHTML =
+      '<tr class="table-empty-row"><td colspan="5">bib 里还没有条目。上面贴一段 .bib 原文，这里会列出每条文献。</td></tr>';
+  } else {
+    $('#bib-tbody').innerHTML = rows
+      .map((r) => {
+        const v = verifyMap.get(r.key);
+        const st = v ? statusText[v.status] || ['mute', v.status] : ['mute', '未核验'];
+        const sid = r.stableId ? r.stableId.kind + ':' + r.stableId.value : '无';
+        return (
+          '<tr>' +
+            '<td class="mono">' + esc(r.key) + '</td>' +
+            '<td>' + esc(r.title) + '</td>' +
+            '<td class="mono">' + esc(sid) + '</td>' +
+            '<td class="cell-num">' + r.cited + ' 次</td>' +
+            '<td><span class="status-dot" title="' + esc(v?.detail || '') + '"><span class="dot dot-' + st[0] + '"></span>' + st[1] + '</span></td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+  }
   const note = $('#verify-note');
   if (state.verify) {
     note.textContent =
-      '本轮联网核验 ' + state.verify.results.length + ' 条，其中 ' + state.verify.failures + ' 条没核验成（网络/限流），没核验成不等于核验失败。';
+      '本轮联网核验 ' + state.verify.results.length + ' 条，其中 ' + state.verify.failures +
+      ' 条没核验成（网络/限流），没核验成不等于核验失败。' +
+      (state.stale ? '　注意：正文或引用改过了，这轮结论只适用于改之前的内容。' : '');
   } else {
     note.textContent = '点「联网核验存在性」去 Crossref / arXiv 查这条引用到底存不存在。';
   }
@@ -287,6 +529,10 @@ function renderRefs() {
 function renderProtect() {
   $('#protect-before').value = state.project.protect?.before ?? '';
   $('#protect-after').value = state.project.protect?.after ?? '';
+  const box = $('#protect-result');
+  if (!box.innerHTML.trim()) {
+    box.innerHTML = '<div class="line-empty">还没比对过。左边贴改前、右边贴改后，点「比对保护面」。</div>';
+  }
 }
 
 // ------------------------------------------------------------------ 审计
@@ -317,11 +563,15 @@ function renderAudit() {
       '<div><div class="verdict-word">' + word + '</div><div class="verdict-note">退出码 ' + a.exitCode + '</div></div>' +
       '<div class="verdict-note" style="flex:1">' + esc(note) + '</div>' +
     '</div>' +
+    (state.stale
+      ? '<div class="stale-strip">这是改动前的审计结果——正文 / 事实账 / 引用改过了，点右上角「重新审计」刷新。</div>'
+      : '') +
     '<div class="kpi-row">' +
-      kpi(redShown, redShown === redTotal ? '红牌（必须改）' : '红牌 ' + redShown + ' 类 / ' + redTotal + ' 条', 'bad') +
-      kpi(yellowShown, yellowShown === yellowTotal ? '黄牌（待人判断）' : '黄牌 ' + yellowShown + ' 类 / ' + yellowTotal + ' 条', 'warn') +
-      kpi((state.project.facts || []).length, '账上事实', '') +
-      kpi(s.denom ? Math.round((s.bound / s.denom) * 100) + '%' : '—', '内联绑定率', '') +
+      kpi(redShown, '红牌 · 必须改', 'bad', redShown === redTotal ? null : '共 ' + redTotal + ' 条，折叠成 ' + redShown + ' 类') +
+      kpi(yellowShown, '黄牌 · 待人判断', 'warn', yellowShown === yellowTotal ? null : '共 ' + yellowTotal + ' 条，折叠成 ' + yellowShown + ' 类') +
+      kpi((state.project.facts || []).length, '账上事实', null, null) +
+      kpi(s.denom ? Math.round((s.bound / s.denom) * 100) + '%' : '—', '正文数字已绑定', null,
+        s.denom ? s.bound + '/' + s.denom + ' 个数据数字用 \\fact{} 钉住' : null) +
     '</div>';
 
   const list = $('#issues-list');
@@ -334,18 +584,20 @@ function renderAudit() {
       .map((i) => {
         const p = a.prescriptions[i.code];
         const sev = i.severity === 'red' ? 'chip-red' : 'chip-yellow';
-        const sevText = i.severity === 'red' ? '红' : '黄';
+        const sevText = i.severity === 'red' ? '红牌' : '黄牌';
         return (
           '<article class="issue">' +
             '<div class="issue-head">' +
               '<span class="chip ' + sev + '">' + sevText + '</span>' +
-              '<span class="code">' + esc(i.code) + '</span>' +
-              (i.location ? '<span class="loc">' + esc(i.location) + '</span>' : '') +
+              '<span class="issue-label">' + esc(labelOf(i.code)) + '</span>' +
+              '<span class="code" title="内部违规码">' + esc(i.code) + '</span>' +
+              (i.location ? '<span class="loc">' + esc(formatLocation(i.location)) + '</span>' : '') +
+              (i.folded ? '<span class="loc">（折叠了 ' + i.folded + ' 条）</span>' : '') +
             '</div>' +
             '<p class="issue-msg">' + esc(i.message) + '</p>' +
             (i.context ? '<p class="issue-ctx">' + esc(i.context) + '</p>' : '') +
             (p
-              ? '<button class="link-btn" type="button" data-pres="' + esc(i.code) + '">怎么办？</button>' +
+              ? '<button class="link-btn" type="button" data-pres="' + esc(i.code) + '">怎么修</button>' +
                 '<div class="prescription" hidden data-pres-body="' + esc(i.code) + '">' +
                   '<h4>' + esc(p.title) + '</h4><ol>' + p.steps.map((s) => '<li>' + esc(s) + '</li>').join('') + '</ol>' +
                   (p.note ? '<p class="pres-note">' + esc(p.note) + '</p>' : '') +
@@ -358,22 +610,73 @@ function renderAudit() {
   }
 
   const m = a.matrix || { facts: [], citations: [] };
+  $('#matrix-count').textContent = m.facts.length ? '共 ' + m.facts.length + ' 条事实' : '';
   $('#matrix-tables').innerHTML =
     '<div class="ledger-table-wrap"><table class="data-table">' +
       '<caption class="sr-only">事实覆盖矩阵</caption><thead><tr><th scope="col">事实</th><th scope="col">主张</th><th scope="col">值</th><th scope="col">正文位置</th><th scope="col">状态</th></tr></thead><tbody>' +
-      m.facts
-        .map(
-          (r) =>
-            '<tr><td class="mono">' + esc(r.id) + '</td><td>' + esc(r.claim) + '</td><td class="mono">' + esc(r.value) +
-            '</td><td class="mono">' + esc(r.boundLines.length ? r.boundLines.map((l) => 'L' + l).join(', ') : '—') +
-            '</td><td>' + esc(r.usedIn) + '</td></tr>',
-        )
-        .join('') +
+      (m.facts.length
+        ? m.facts
+            .map(
+              (r) =>
+                '<tr><td class="mono">' + esc(r.id) + '</td><td>' + esc(r.claim) + '</td><td class="mono">' + esc(r.value) +
+                '</td><td class="mono">' + esc(r.boundLines.length ? r.boundLines.map((l) => '第 ' + l + ' 行').join('、') : '—') +
+                '</td><td>' + esc(USED_IN_LABEL[r.usedIn] || r.usedIn) + '</td></tr>',
+            )
+            .join('')
+        : '<tr class="table-empty-row"><td colspan="5">账上还没有事实，矩阵是空的。</td></tr>') +
       '</tbody></table></div>';
 }
 
-function kpi(value, label, cls) {
-  return '<div class="kpi"><div class="kpi-value"' + (cls ? ' style="color:var(--mcode-' + cls + ')"' : '') + '>' + esc(String(value)) + '</div><div class="kpi-label">' + esc(label) + '</div></div>';
+function kpi(value, label, cls, hint) {
+  return (
+    '<div class="kpi"><div class="kpi-value"' + (cls ? ' style="color:var(--mcode-' + cls + ')"' : '') + '>' + esc(String(value)) +
+    '</div><div class="kpi-label">' + esc(label) + '</div>' +
+    (hint ? '<div class="kpi-hint">' + esc(hint) + '</div>' : '') + '</div>'
+  );
+}
+
+// ------------------------------------------------------------------ 表单校验
+
+function validateFact() {
+  const errs = [];
+  const id = $('#f-id').value.trim();
+  const claim = $('#f-claim').value.trim();
+  const value = $('#f-value').value.trim();
+  const sourceId = $('#f-source').value;
+  if (!id) {
+    errs.push({ field: 'f-id', msg: '给这条事实一个 ID，正文里要用 \fact{ID} 指它' });
+  } else if (/\s/.test(id)) {
+    errs.push({ field: 'f-id', msg: 'ID 里不能有空格' });
+  } else {
+    const dup = (state.project.facts || []).find(
+      (f) => String(f.id).toLowerCase() === id.toLowerCase() && f.id !== state.editingFactId,
+    );
+    if (dup) errs.push({ field: 'f-id', msg: '已经有一条 ID 为 ' + dup.id + ' 的事实了' });
+  }
+  if (!claim) errs.push({ field: 'f-claim', msg: '写一句主张——这条事实到底在讲什么' });
+  if (!value) errs.push({ field: 'f-value', msg: '填这个数（支持 10/16、56.25%、90431）' });
+  if (!sourceId) errs.push({ field: 'f-source', msg: '指一份来源材料；没有来源的事实会被判红' });
+  return errs;
+}
+
+function showFormErrors(errs) {
+  const box = $('#form-errors');
+  const list = $('#form-errors-list');
+  list.innerHTML = errs
+    .map((e) => '<li><button type="button" class="link-btn" data-goto="' + e.field + '">' + esc(e.msg) + '</button></li>')
+    .join('');
+  box.hidden = errs.length === 0;
+  for (const f of ['f-id', 'f-claim', 'f-value', 'f-source']) {
+    const el = $('#' + f + '-error');
+    const e = errs.find((x) => x.field === f);
+    if (el) {
+      el.textContent = e ? e.msg : '';
+      el.hidden = !e;
+    }
+    const input = $('#' + f);
+    input.classList.toggle('has-error', Boolean(e));
+    input.setAttribute('aria-invalid', e ? 'true' : 'false');
+  }
 }
 
 // ------------------------------------------------------------------ 动作
@@ -383,9 +686,17 @@ async function runAudit(opts = {}) {
   btn.disabled = true;
   btn.textContent = '审计中…';
   try {
+    // 先落盘再审计：服务端审的是它持久化的项目，不是屏幕上的草稿。
+    // 不先保存，会把「旧稿的结论」按「新稿的指纹」记成新鲜——正好砸掉过期检测。
+    const saved = await saveNow();
+    if (!saved) {
+      toast('保存失败，未审计（先重试保存）');
+      return;
+    }
     const data = await api('/api/audit', { method: 'POST' });
     state.audit = data.audit;
-    renderVerdict();
+    state.auditSig = sigOf(state.project);
+    refreshStale();
     renderTab();
     // 首屏自动审计不抢页签；手动点「运行审计」才跳到审计页
     if (opts.focus !== false && state.tab !== 'audit') switchTab('audit');
@@ -403,7 +714,12 @@ async function loadDemo() {
   state.audit = null;
   state.verify = null;
   state.editingFactId = null;
+  state.auditSig = null;
+  state.stale = false;
   $('#project-name').value = state.project.name;
+  setSaveState('无改动', false);
+  $('#demo-confirm').hidden = true;
+  $('#btn-demo').hidden = false;
   renderVerdict();
   switchTab('manuscript');
   await runAudit();
@@ -413,7 +729,30 @@ async function loadDemo() {
 function wire() {
   for (const btn of $$('.nav-item')) btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   $('#btn-audit').addEventListener('click', () => runAudit());
-  $('#btn-demo').addEventListener('click', () => loadDemo().catch((e) => toast(e.message)));
+  $('#btn-rerun').addEventListener('click', () => runAudit());
+
+  $('#save-state').addEventListener('click', () => {
+    if (state.saveFailed) saveNow();
+  });
+
+  // 载入演示数据 = 覆盖当前项目，先确认再执行。
+  $('#btn-demo').addEventListener('click', () => {
+    const p = state.project || {};
+    const hasContent = (p.manuscript || '').trim() || (p.bib || '').trim() || (p.facts || []).length;
+    if (!hasContent) {
+      loadDemo().catch((e) => toast(e.message));
+      return;
+    }
+    $('#demo-confirm').hidden = false;
+    $('#btn-demo').hidden = true;
+  });
+  $('#btn-demo-cancel').addEventListener('click', () => {
+    $('#demo-confirm').hidden = true;
+    $('#btn-demo').hidden = false;
+  });
+  $('#btn-demo-ok').addEventListener('click', () => {
+    loadDemo().catch((e) => toast(e.message));
+  });
 
   $('#project-name').addEventListener('input', (e) => {
     state.project.name = e.target.value;
@@ -438,8 +777,14 @@ function wire() {
     });
   }
 
-  // 事实账：点行编辑
+  // 事实账：点行或点「编辑」都能编辑
   $('#facts-tbody').addEventListener('click', (e) => {
+    const editBtn = e.target.closest('button[data-edit-fact]');
+    if (editBtn) {
+      state.editingFactId = editBtn.dataset.editFact;
+      loadFactForm(state.editingFactId);
+      return;
+    }
     const tr = e.target.closest('tr[data-fact]');
     if (!tr) return;
     state.editingFactId = tr.dataset.fact;
@@ -456,19 +801,22 @@ function wire() {
 
   $('#fact-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    const id = $('#f-id').value.trim();
-    if (!id) {
-      toast('事实必须有 id');
+    const errs = validateFact();
+    showFormErrors(errs);
+    if (errs.length) {
+      const first = $('#' + errs[0].field);
+      if (first) first.focus();
       return;
     }
+    const id = $('#f-id').value.trim();
     const sourceId = $('#f-source').value;
     const src = (state.project.sources || []).find((s) => s.id === sourceId);
     const facts = state.project.facts || [];
     const existing = facts.find((f) => f.id === id);
     const next = {
       id,
-      claim: $('#f-claim').value,
-      value: $('#f-value').value,
+      claim: $('#f-claim').value.trim(),
+      value: $('#f-value').value.trim(),
       source: sourceId,
       sourceSha256: src ? src.sha256 : '',
       locator: $('#f-locator').value,
@@ -476,7 +824,7 @@ function wire() {
       derivedFrom: existing ? existing.derivedFrom : [],
       expr: $('#f-expr').value,
       dupOk: $('#f-dup').checked,
-      notes: existing ? existing.notes : '',
+      notes: $('#f-notes').value,
     };
     if (existing) Object.assign(existing, next);
     else facts.push(next);
@@ -487,31 +835,75 @@ function wire() {
     toast('已保存事实 ' + id);
   });
 
+  // 表单错误摘要：点一条就跳到出问题的字段
+  $('#form-errors-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-goto]');
+    if (!btn) return;
+    const input = $('#' + btn.dataset.goto);
+    if (input) input.focus();
+  });
+
+  // 删除事实：先确认，不弹「Are you sure?」
   $('#btn-delete-fact').addEventListener('click', () => {
+    const id = state.editingFactId;
+    if (!id) return;
+    $('#fact-delete-id').textContent = id;
+    $('#fact-delete-confirm').hidden = false;
+    $('#btn-delete-fact').hidden = true;
+  });
+  $('#btn-delete-cancel').addEventListener('click', () => {
+    $('#fact-delete-confirm').hidden = true;
+    $('#btn-delete-fact').hidden = Boolean(state.editingFactId);
+  });
+  $('#btn-delete-ok').addEventListener('click', () => {
     const id = state.editingFactId;
     if (!id) return;
     state.project.facts = (state.project.facts || []).filter((f) => f.id !== id);
     state.editingFactId = null;
     scheduleSave();
     renderLedger();
+    toast('已删除事实 ' + id);
   });
 
   // 来源材料
   $('#sources-list').addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-rehash]');
-    if (!btn) return;
-    const src = (state.project.sources || []).find((s) => s.id === btn.dataset.rehash);
-    if (!src) return;
-    const textEl = $('textarea[data-source-text="' + CSS.escape(src.id) + '"]');
-    if (textEl) src.text = textEl.value;
-    src.sha256 = await sha256Hex(src.text);
-    // 账本里引用了这个来源的事实，同步更新它们记录的哈希
-    for (const f of state.project.facts || []) {
-      if (f.source === src.id) f.sourceSha256 = src.sha256;
+    const cancel = e.target.closest('[data-rehash-cancel]');
+    if (cancel) {
+      const card = cancel.closest('.source-card');
+      const box = card && card.querySelector('[data-rehash-confirm]');
+      if (box) box.hidden = true;
+      const btn = card && card.querySelector('button[data-rehash]');
+      if (btn) btn.hidden = false;
+      return;
     }
-    scheduleSave();
-    renderLedger();
-    toast('来源哈希已更新（账本内引用同步）');
+    const ok = e.target.closest('[data-rehash-ok]');
+    if (ok) {
+      const src = (state.project.sources || []).find((s) => s.id === ok.dataset.rehashOk);
+      if (!src) return;
+      const textEl = $('textarea[data-source-text="' + CSS.escape(src.id) + '"]');
+      if (textEl) src.text = textEl.value;
+      try {
+        src.sha256 = await sha256Hex(src.text);
+      } catch (err) {
+        toast('无法现算哈希：' + err.message);
+        return;
+      }
+      // 账本里引用了这个来源的事实，同步更新它们记录的哈希
+      for (const f of state.project.facts || []) {
+        if (f.source === src.id) f.sourceSha256 = src.sha256;
+      }
+      scheduleSave();
+      renderLedger();
+      toast('来源哈希已更新（账本内引用同步）');
+      return;
+    }
+    const btn = e.target.closest('button[data-rehash]');
+    if (btn) {
+      const card = btn.closest('.source-card');
+      const box = card && card.querySelector('[data-rehash-confirm]');
+      if (box) box.hidden = false;
+      btn.hidden = true;
+    }
   });
 
   $('#sources-list').addEventListener('input', (e) => {
@@ -531,8 +923,11 @@ function wire() {
     try {
       const data = await api('/api/verify', { method: 'POST' });
       state.verify = data.verify;
-      if (data.audit) state.audit = data.audit;
-      renderVerdict();
+      if (data.audit) {
+        state.audit = data.audit;
+        state.auditSig = sigOf(state.project);
+      }
+      refreshStale();
       renderRefs();
       renderTab();
       toast('核验完成：' + data.verify.results.length + ' 条');
@@ -554,7 +949,13 @@ function wire() {
       const r = data.result;
       const box = $('#protect-result');
       box.innerHTML = r.issues.length
-        ? r.issues.map((i) => '<div class="protect-row"><b>' + esc(i.code) + '</b> ' + esc(i.message) + '</div>').join('')
+        ? r.issues
+            .map(
+              (i) =>
+                '<div class="protect-row"><b>' + esc(labelOf(i.code)) + '</b> ' + esc(i.message) +
+                ' <span class="code">' + esc(i.code) + '</span></div>',
+            )
+            .join('')
         : '<div class="protect-ok">保护面全绿：六类内容都没变。</div>';
     } catch (err) {
       toast('比对失败：' + err.message);
@@ -599,6 +1000,7 @@ async function init() {
     return;
   }
   $('#project-name').value = state.project.name;
+  setSaveState('无改动', false);
   wire();
   renderVerdict();
   switchTab('manuscript');

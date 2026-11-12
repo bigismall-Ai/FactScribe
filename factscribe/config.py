@@ -300,6 +300,19 @@ def _v3_rel_path(raw: str, key: str, path: Path) -> str:
     return p.as_posix()
 
 
+def _v1_rel_path(raw, key: str, path: Path) -> str:
+    """v1 的 sections/facts/bib/manifest：同样只许项目内相对路径。
+
+    不做这层校验时，`sections = "../elsewhere/*.tex"` 会 glob 到项目外，
+    再在算相对路径时抛裸 `ValueError`（exit 4）；`facts` 更糟——直接读项目外
+    的账本而不报错。配置错必须是 exit 2，且说清是哪个键。
+    """
+    text = str(raw or "").strip()
+    if not text:
+        raise ConfigError("%s 的 %s 不能为空" % (path, key))
+    return _v3_rel_path(text, key, path)
+
+
 def _v3_str_list(data: dict, key: str, path: Path) -> list:
     raw = data.get(key)
     if raw is None:
@@ -461,8 +474,8 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
         root=root,
         title=str(proj.get("title") or ""),
         authors=[str(a) for a in authors],
-        sections_glob=str(proj["sections"]),
-        facts_glob=str(proj["facts"]),
+        sections_glob=_v1_rel_path(proj["sections"], "sections", path),
+        facts_glob=_v1_rel_path(proj["facts"], "facts", path),
         bib=str(proj.get("bib") or "refs.bib"),
         build=str(proj.get("build") or ""),
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
@@ -501,8 +514,8 @@ def _v3_facts_glob(raw: str, path: Path) -> str:
     if not text:
         return "facts/*.toml"
     if any(ch in text for ch in "*?["):
-        return text
-    return text.rstrip("/") + "/*.toml"
+        return _v3_rel_path(text, "facts", path)
+    return _v3_rel_path(text.rstrip("/"), "facts", path) + "/*.toml"
 
 
 def _v3_macro_rules(data: dict, path: Path) -> tuple[list[str], list[dict]]:
@@ -996,9 +1009,20 @@ def _glob_paths(root: Path, pattern: str) -> dict[str, Path]:
             pats.append((d + "/**/" + base) if d else ("**/" + base))
     found: dict[str, Path] = {}
     for pat in pats:
-        for p in root.glob(pat):
-            if p.is_file():
-                found[p.relative_to(root).as_posix()] = p
+        try:
+            matches = list(root.glob(pat))
+        except (NotImplementedError, ValueError) as exc:
+            raise ConfigError("glob 模式不合法：%r（%s）" % (pat, exc))
+        for p in matches:
+            if not p.is_file():
+                continue
+            try:
+                rel = p.relative_to(root).as_posix()
+            except ValueError:
+                raise ConfigError(
+                    "glob 越出项目根：%r——sections/facts 只许项目内相对路径"
+                    % pat)
+            found[rel] = p
     return found
 
 

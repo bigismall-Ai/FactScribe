@@ -102,13 +102,31 @@ class DoctorTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         project = {c["name"]: c for c in data["checks"]}["project"]
         self.assertEqual(project["level"], "fail")
-        self.assertIn("已有 1 个 .tex", project["detail"])
+        self.assertIn("论文主文件", project["detail"])
+        self.assertIn("像是一篇写完的论文", project["detail"])
         self.assertIn("ADOPT", project["detail"])
         self.assertIn("--force", project["fix"])
         # 会覆盖的现有文件必须在「先备份」里点名
         self.assertIn("README.md", project["fix"])
         self.assertEqual((legacy / "README.md").read_text(encoding="utf-8"),
                          "my real paper")
+
+    def test_nested_tex_in_a_source_repo_is_not_called_a_paper(self):
+        """源码仓的 .tex 在 fixtures/examples 里，不能建议在仓库根 init --force。"""
+        repo = self.tmp / "repo"
+        (repo / "examples").mkdir(parents=True)
+        (repo / "examples" / "main.tex").write_text(
+            "\\documentclass{article}\n\\begin{document}\nX\n\\end{document}\n",
+            encoding="utf-8")
+        (repo / "README.md").write_text("source repo", encoding="utf-8")
+        r, data = self._json(str(repo))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        project = {c["name"]: c for c in data["checks"]}["project"]
+        self.assertEqual(project["level"], "fail")
+        self.assertNotIn("像是一篇写完的论文", project["detail"])
+        self.assertNotIn("--force", project["fix"])
+        self.assertEqual((repo / "README.md").read_text(encoding="utf-8"),
+                         "source repo")
 
     def test_nonexistent_directory_is_usage_error(self):
         r = run("doctor", str(self.tmp / "nope"))

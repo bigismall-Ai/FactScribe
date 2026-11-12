@@ -155,6 +155,20 @@ def _git_check(root: Path, which) -> dict:
         fix="git init")
 
 
+def _looks_like_paper(root: Path) -> bool:
+    """根目录下有没有一篇论文的主文件（`\\documentclass` 在根级 .tex 里）。
+
+    只在根级找：源码仓的 `.tex` 藏在 fixtures/examples/tests 深处，不能因为
+    「递归数到 57 个 .tex」就建议 `init --force`——那会覆盖仓库自己的 README。
+    """
+    for path in sorted(root.glob("*.tex")):
+        if not path.is_file():
+            continue
+        if "\\documentclass" in _read_text(path, limit=65536):
+            return True
+    return False
+
+
 def _project_check(root: Path) -> tuple[dict, Config | None]:
     try:
         cfg = load_config(root)
@@ -162,15 +176,11 @@ def _project_check(root: Path) -> tuple[dict, Config | None]:
         if any((root / name).is_file() for name in ("factscribe.toml", "paperkit.toml")):
             return (_check("project", "项目声明", LEVEL_FAIL, str(exc),
                            fix="按报错修项目声明"), None)
-        texs = sorted(p.relative_to(root).as_posix()
-                      for p in root.rglob("*.tex")
-                      if not {".git", ".venv", "node_modules",
-                              "__pycache__"} & set(p.parts))
-        if texs:
+        if _looks_like_paper(root):
             clashes = [name for name in INIT_FILES[1:] if (root / name).is_file()]
-            detail = ("%s；目录里已有 %d 个 .tex，像是一篇写完的论文——"
-                      "init 需要空目录。接入步骤见 docs/ADOPT.md"
-                      % (exc, len(texs)))
+            detail = ("%s；根目录下有论文主文件（含 \\documentclass），"
+                      "像是一篇写完的论文——init 需要空目录。接入步骤见 "
+                      "docs/ADOPT.md" % exc)
             if clashes:
                 detail += "；--force 会覆盖同名文件：%s" % "、".join(clashes)
                 fix = ("先备份 %s，再跑：%s"
@@ -182,9 +192,16 @@ def _project_check(root: Path) -> tuple[dict, Config | None]:
                            "--force")
             return (_check("project", "项目声明", LEVEL_FAIL, detail, fix=fix),
                     None)
+        entries = list(root.iterdir())
+        if not entries:
+            return (_check(
+                "project", "项目声明", LEVEL_FAIL, str(exc),
+                fix=_cmd("python3", "-m", "factscribe", "init", str(root))), None)
         return (_check(
-            "project", "项目声明", LEVEL_FAIL, str(exc),
-            fix=_cmd("python3", "-m", "factscribe", "init", str(root))), None)
+            "project", "项目声明", LEVEL_FAIL,
+            "%s；目录非空，init 需要空目录，而这里也没有可识别的论文主文件"
+            "（根级 .tex 含 \\documentclass）" % exc,
+            fix="换一个空目录建项目：python3 -m factscribe init <新目录>"), None)
     shape = getattr(cfg, "config_shape", "") or ("v3" if cfg.is_v3 else "v1")
     detail = "%s（形态 %s" % (cfg.root / "paperkit.toml", shape)
     if cfg.title:

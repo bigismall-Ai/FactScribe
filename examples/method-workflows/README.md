@@ -22,6 +22,28 @@
 
 阶段 2 没有命令——那是写作本身，工具不参与。
 
+## 阶段 1.5：把方法论的产出变成事实账草稿
+
+方法论常常在动笔前就产出了结构化材料（实体清单、数据点、文献候选）。与其手填账本，不如批处理：
+
+```bash
+python3 draft-facts.py <项目> claims.tsv          # 写入
+python3 draft-facts.py <项目> claims.tsv --dry-run # 只看命令，不写
+```
+
+`claims.tsv` 是制表符分隔，表头固定：
+
+```
+id	claim	value	source	locator	confidence	expr	derived_from
+A1	开臂 resolved（16 题）	10/16	results/swb16.md	§二 汇总表 open 行	high
+```
+
+规则：
+
+- **先整体校验，再写**：任一行缺 id／source 不存在／派生项缺 expr，一条都不写；
+- 数据源文件必须在项目内，脚本会现算哈希；
+- **它不签字**：跑完只打印「该抄进 `results/MANIFEST.toml` 的那一行」，签不签由人决定。
+
 ## 三条边界
 
 1. **阶段由命令选，判据不感知阶段**。同一段文字在 `brief`（起草参考）和 `review`（改写验收）里看到的结果必须一致，否则读数不能当证据。

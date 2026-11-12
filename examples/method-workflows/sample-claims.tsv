@@ -1,0 +1,4 @@
+# 方法论某一步的产出：一行一条主张。工具只负责写账，不负责签字。
+id	claim	value	source	locator	confidence	expr	derived_from
+A1	开臂 resolved（16 题）	10/16	results/swb16.md	§二 汇总表 open 行	high		
+A2	对比臂 resolved（16 题）	8/16	results/swb16.md	§二 汇总表 closed 行	high		

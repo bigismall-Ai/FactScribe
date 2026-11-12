@@ -1,0 +1,160 @@
+// 事实闸 FactGate 呈现层回归测试：离线、零依赖（node:test + node:assert）。
+//
+// 跑法（integrations/factgate 目录）：
+//   node --test tests/
+//
+// 这一组盯的是"人看得懂"这件事，不是判据。判据层的正反例在 audit.test.mjs。
+// 之所以要钉死：呈现层的退化（英文码直接怼脸、状态只靠颜色、过期结果冒充现状）
+// 不会让任何测试变红，但会让工具变得没法用。
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
+const HTML = readFileSync(new URL('../miniapp/client/index.html', import.meta.url), 'utf8');
+const JS = readFileSync(new URL('../miniapp/client/app.js', import.meta.url), 'utf8');
+const CSS = readFileSync(new URL('../miniapp/client/styles.css', import.meta.url), 'utf8');
+const AUDIT = readFileSync(new URL('../miniapp/node/audit.mjs', import.meta.url), 'utf8');
+const SERVER = readFileSync(new URL('../miniapp/node/server.mjs', import.meta.url), 'utf8');
+
+/** 从 app.js 里取出 ISSUE_LABEL 的键。 */
+function issueLabelKeys() {
+  const block = JS.slice(JS.indexOf('const ISSUE_LABEL = {'), JS.indexOf('};', JS.indexOf('const ISSUE_LABEL = {')));
+  return new Set([...block.matchAll(/^\s{2}'?([A-Z_]+)'?:/gm)].map((m) => m[1]));
+}
+
+/** 引擎里出现过的全部违规码：issue(...) 调用 + PRESCRIPTIONS 的键。 */
+function engineCodes() {
+  const codes = new Set();
+  for (const m of AUDIT.matchAll(/issue\(\s*'(?:red|yellow)'\s*,\s*'([A-Z_]+)'/g)) codes.add(m[1]);
+  const block = AUDIT.slice(AUDIT.indexOf('export const PRESCRIPTIONS = {'), AUDIT.indexOf('};', AUDIT.indexOf('export const PRESCRIPTIONS = {')));
+  for (const m of block.matchAll(/^\s{2}([A-Z_]+):\s*\{/gm)) codes.add(m[1]);
+  return codes;
+}
+
+// ------------------------------------------------------- 1. 违规码必须有人话
+
+test('引擎里的每个违规码都有中文短名：新增码不许只留英文常量', () => {
+  const labels = issueLabelKeys();
+  const missing = [...engineCodes()].filter((c) => !labels.has(c)).sort();
+  assert.deepEqual(missing, [], '这些违规码还没有中文短名：' + missing.join('、'));
+});
+
+test('中文短名本身真的是中文，且不是空串', () => {
+  const block = JS.slice(JS.indexOf('const ISSUE_LABEL = {'), JS.indexOf('};', JS.indexOf('const ISSUE_LABEL = {')));
+  const pairs = [...block.matchAll(/^\s{2}'?([A-Z_]+)'?:\s*'([^']*)'/gm)];
+  assert.ok(pairs.length > 20, '短名表不该只有几条');
+  for (const [, code, label] of pairs) {
+    assert.match(label, /[\u4e00-\u9fff]/, code + ' 的短名里没有中文');
+  }
+});
+
+// ------------------------------------------------------------- 2. 过期要说出来
+
+test('改了内容但没重跑审计，界面必须声明结果已过期', () => {
+  assert.match(JS, /function refreshStale\(\)/, '客户端应有过期判定');
+  assert.match(JS, /state\.auditSig/, '应记录审计时的内容指纹');
+  assert.match(JS, /sigOf\(state\.project\)\s*!==\s*state\.auditSig/, '过期判定应基于内容指纹比对');
+  assert.match(HTML, /id="stale-banner"/, '页面应有过期提示条');
+  assert.match(HTML, /id="btn-rerun"/, '过期时要有"重新审计"的出路');
+});
+
+test('过期时顶栏结论不能继续用红/黄牌冒充现状', () => {
+  assert.match(JS, /verdict-stale/, '应有独立的过期样式分支');
+  const block = JS.slice(JS.indexOf('function renderVerdict'), JS.indexOf('// ------------------------------------------------------------------ 正文'));
+  assert.match(block, /state\.stale[\s\S]*结果已过期/, '过期时应显示"结果已过期"而不是旧的绿/黄/红');
+});
+
+test('审计前先保存：否则服务端审旧稿，结论却按新稿记为新鲜', () => {
+  const block = JS.slice(JS.indexOf('async function runAudit'), JS.indexOf('async function loadDemo'));
+  assert.match(block, /await saveNow\(\)/, '审计前必须先把当前项目落到服务端');
+  assert.match(block, /if \(!saved\)/, '保存失败时不能继续审计');
+  assert.match(block, /saveNow\(\)[\s\S]*api\('\/api\/audit'/, '保存必须发生在审计请求之前');
+});
+
+test('[hidden] 必须压过组件自己的 display：否则"隐藏"只改了属性', () => {
+  assert.match(
+    CSS,
+    /\[hidden\]\s*\{\s*display:\s*none\s*!important/,
+    '组件用了 display:flex 时，hidden 属性会被顶掉，必须有全局兜底规则'
+  );
+});
+
+// --------------------------------------------------- 3. 判定不能只靠颜色
+
+test('数字判定同时给符号和文字：色弱与单色打印也读得出', () => {
+  assert.match(JS, /const CHIP = \{/, '应有判定符号表');
+  for (const key of ['ok', 'warn', 'bad', 'mute']) {
+    assert.match(JS, new RegExp(key + ':\\s*\\{\\s*sym:'), key + ' 判定应有符号');
+  }
+  assert.match(JS, /chip-sym/, '符号应渲染进 chip');
+  assert.match(HTML, /chip-legend/, '页面应有判定图例');
+  for (const sym of ['✓', '!', '✕']) {
+    assert.ok(HTML.includes(sym), '图例里应有符号 ' + sym);
+  }
+});
+
+// ----------------------------------------------- 4. 术语与位置要说人话
+
+test('事实账与覆盖矩阵用同一套状态词', () => {
+  assert.match(JS, /const USED_IN_LABEL = \{/, '应有状态词映射表');
+  assert.match(JS, /'已内联绑定':\s*'已绑定'/, '"已内联绑定"应统一显示为"已绑定"');
+});
+
+test('问题位置翻成人话，不再直接甩 "正文:12"', () => {
+  assert.match(JS, /function formatLocation/, '应有位置格式化函数');
+  assert.match(JS, /正文 第 /, '正文位置应带行号说明');
+});
+
+test('内部违规码降级为次要信息，中文短名当主角', () => {
+  assert.match(JS, /issue-label/, '问题卡应有中文短名元素');
+  assert.match(JS, /class="code" title="内部违规码"/, '违规码应标成内部信息');
+});
+
+// ------------------------------------------------- 5. 危险动作必须先确认
+
+test('覆盖项目、删事实、改哈希都要先确认', () => {
+  assert.match(HTML, /id="demo-confirm"/, '载入演示数据应有确认');
+  assert.match(HTML, /id="fact-delete-confirm"/, '删除事实应有确认');
+  assert.match(JS, /data-rehash-confirm/, '更新哈希应有确认');
+  assert.match(JS, /确认更新/, '更新哈希的确认要说清后果');
+});
+
+test('删除按钮只在编辑态出现，不给一个永远灰着的按钮', () => {
+  assert.match(JS, /\$\('#btn-delete-fact'\)\.hidden = !f/, '删除按钮应随编辑态显隐');
+});
+
+// ------------------------------------------------------ 6. 表单要能填错
+
+test('必填字段有标记与字段级错误，不靠一个 toast 打发了事', () => {
+  assert.ok((HTML.match(/aria-required="true"/g) || []).length >= 4, '必填字段应有 aria-required');
+  assert.match(HTML, /id="form-errors"/, '应有错误摘要区');
+  assert.match(HTML, /class="field-error"/, '应有字段级错误位');
+  assert.match(JS, /function validateFact/, '应有校验函数');
+  assert.match(JS, /function showFormErrors/, '应有错误呈现函数');
+});
+
+// --------------------------------------------------- 7. 表头与表格可读
+
+test('表头不换行：中文表头被压成竖排时整张表都读不下去', () => {
+  assert.match(
+    CSS,
+    /\.data-table th\s*\{[^}]*white-space:\s*nowrap/,
+    '表头应 nowrap'
+  );
+});
+
+test('正文与 bib 的编辑框有可见 label，不只靠 aria-label', () => {
+  assert.match(HTML, /for="manuscript-input"/, '正文应有可见 label');
+  assert.match(HTML, /for="bib-input"/, 'bib 应有可见 label');
+});
+
+// -------------------------------------------------------- 8. 服务端别乱报 500
+
+test('未知路径回 404 而不是 500：content-type 不能是 undefined', () => {
+  assert.match(
+    SERVER,
+    /function sendText\([^)]*type\s*=\s*'text\/plain/,
+    'sendText 的 content-type 必须有默认值'
+  );
+});

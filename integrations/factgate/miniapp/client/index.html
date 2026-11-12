@@ -20,8 +20,10 @@
         <input id="project-name" type="text" aria-label="项目名称" autocomplete="off" />
       </label>
       <div class="topbar-right">
-        <span id="save-state" class="save-state" role="status" aria-live="polite">—</span>
-        <div id="verdict" class="verdict verdict-idle" role="status" aria-live="polite">未审计</div>
+        <span id="save-state" class="save-state" role="status" aria-live="polite"
+          title="改动会自动保存到本地数据目录">无改动</span>
+        <div id="verdict" class="verdict verdict-idle" role="status" aria-live="polite"
+          title="还没跑过审计">未审计</div>
         <button id="btn-demo" class="btn btn-ghost" type="button">载入演示数据</button>
         <button id="btn-audit" class="btn btn-primary" type="button">运行审计</button>
       </div>
@@ -42,6 +44,26 @@
       </nav>
 
       <main class="main">
+        <div id="demo-confirm" class="confirm-banner" role="alert" hidden>
+          <div class="confirm-body">
+            <b>载入演示数据会覆盖当前项目</b>
+            <span>现在的正文、事实账、引用都会被替换成演示内容，这一步不能撤销。</span>
+          </div>
+          <div class="confirm-actions">
+            <button id="btn-demo-ok" class="btn btn-danger" type="button">确认覆盖</button>
+            <button id="btn-demo-cancel" class="btn" type="button">取消</button>
+          </div>
+        </div>
+
+        <div id="stale-banner" class="stale-banner" role="status" aria-live="polite" hidden>
+          <span class="stale-icon" aria-hidden="true">!</span>
+          <div class="stale-body">
+            <b>审计结果已过期</b>
+            <span id="stale-text">你在上次审计之后改过正文 / 事实账 / 引用，下面显示的还是改动前的结果。</span>
+          </div>
+          <button id="btn-rerun" class="btn btn-primary" type="button">重新审计</button>
+        </div>
+
         <section id="panel-manuscript" class="panel is-active" role="tabpanel">
           <div class="panel-head">
             <div>
@@ -52,10 +74,17 @@
               <span id="manuscript-stats" class="muted-note"></span>
             </div>
           </div>
+          <label class="editor-label" for="manuscript-input">正文内容（LaTeX 片段）</label>
           <textarea id="manuscript-input" class="editor" spellcheck="false" aria-label="正文内容"></textarea>
           <div class="subhead">
             <h3>逐行体检</h3>
-            <p class="panel-desc">每个数字按判定着色：绿＝已绑定且对得上，黄＝回得到账但没钉住，红＝回不到账或与绑定冲突。</p>
+            <p class="panel-desc">只列出含数字或绑定的行；行号与正文一一对应，中间跳号是正常的。</p>
+          </div>
+          <div class="chip-legend" role="list" aria-label="数字判定图例">
+            <span class="lg" role="listitem"><span class="num-chip ok">✓</span> 已绑定且对得上</span>
+            <span class="lg" role="listitem"><span class="num-chip warn">!</span> 回得到账但没钉住</span>
+            <span class="lg" role="listitem"><span class="num-chip bad">✕</span> 回不到账或与绑定冲突</span>
+            <span class="lg" role="listitem"><span class="num-chip mute">·</span> 结构编号，不作数据</span>
           </div>
           <div id="line-report" class="line-report"></div>
         </section>
@@ -64,9 +93,10 @@
           <div class="panel-head">
             <div>
               <h2>事实账</h2>
-              <p class="panel-desc">只追加的清单。每条事实记一个数、它的来源文件与来源文件的哈希；改数＝新增一条并写 supersedes，不就地改。</p>
+              <p class="panel-desc">每条事实记一个数、它的来源材料与那份材料的哈希。<b>改值会覆盖原条目</b>——想留住旧值就新增一条事实，并在备注里写「取代 A1」。</p>
             </div>
             <div class="panel-actions">
+              <span id="facts-count" class="muted-note"></span>
               <button id="btn-add-fact" class="btn" type="button">新增事实</button>
             </div>
           </div>
@@ -75,34 +105,84 @@
               <table class="data-table">
                 <caption class="sr-only">事实账清单</caption>
                 <thead>
-                  <tr><th scope="col">ID</th><th scope="col">主张</th><th scope="col">值</th><th scope="col">来源</th><th scope="col">状态</th></tr>
+                  <tr><th scope="col">ID</th><th scope="col">主张</th><th scope="col">值</th><th scope="col">来源</th><th scope="col">状态</th><th scope="col">操作</th></tr>
                 </thead>
                 <tbody id="facts-tbody"></tbody>
               </table>
             </div>
-            <form id="fact-form" class="side-form">
-              <h3 id="fact-form-title">编辑事实</h3>
-              <label class="field"><span>ID</span><input id="f-id" type="text" autocomplete="off" /></label>
-              <label class="field"><span>主张</span><input id="f-claim" type="text" autocomplete="off" /></label>
-              <label class="field"><span>值</span><input id="f-value" type="text" autocomplete="off" placeholder="10/16、56.25%、90431" /></label>
-              <label class="field"><span>来源</span><select id="f-source"></select></label>
-              <label class="field"><span>定位</span><input id="f-locator" type="text" autocomplete="off" placeholder="§二 汇总表 open 行" /></label>
-              <label class="field"><span>置信度</span>
-                <select id="f-confidence"><option value="high">high</option><option value="med">med</option><option value="low">low</option></select>
+            <form id="fact-form" class="side-form" novalidate>
+              <h3 id="fact-form-title">新增事实</h3>
+              <div id="form-errors" class="form-errors" role="alert" hidden>
+                <b>还差这几项才能保存</b>
+                <ul id="form-errors-list"></ul>
+              </div>
+              <label class="field" for="f-id">
+                <span>ID <span class="req">必填</span></span>
+                <input id="f-id" type="text" autocomplete="off" aria-required="true" aria-describedby="f-id-error" />
+                <span class="field-error" id="f-id-error" hidden></span>
               </label>
-              <label class="field"><span>算式（可选，派生事实）</span><input id="f-expr" type="text" autocomplete="off" placeholder="(A1.num + A3.num) / (A1.den + A3.den) * 100" /></label>
-              <label class="checkbox"><input id="f-dup" type="checkbox" /><span>同值已人工认可（dup_ok）</span></label>
-              <p id="f-hash" class="hash-note"></p>
+              <label class="field" for="f-claim">
+                <span>主张 <span class="req">必填</span></span>
+                <input id="f-claim" type="text" autocomplete="off" aria-required="true" aria-describedby="f-claim-error"
+                  placeholder="一句话说清这条事实在讲什么" />
+                <span class="field-error" id="f-claim-error" hidden></span>
+              </label>
+              <label class="field" for="f-value">
+                <span>值 <span class="req">必填</span></span>
+                <input id="f-value" type="text" autocomplete="off" aria-required="true" aria-describedby="f-value-error"
+                  placeholder="10/16、56.25%、90431" />
+                <span class="field-error" id="f-value-error" hidden></span>
+              </label>
+              <label class="field" for="f-source">
+                <span>来源 <span class="req">必填</span></span>
+                <select id="f-source" aria-required="true" aria-describedby="f-source-error"></select>
+                <span class="field-error" id="f-source-error" hidden></span>
+              </label>
+              <label class="field" for="f-locator">
+                <span>定位</span>
+                <input id="f-locator" type="text" autocomplete="off" placeholder="§二 汇总表 open 行" />
+                <span class="field-hint">在来源材料里的哪一行／哪一段能找到这个数</span>
+              </label>
+              <label class="field" for="f-confidence">
+                <span>置信度</span>
+                <select id="f-confidence" aria-describedby="f-confidence-hint">
+                  <option value="high">高 · 材料里直接写明</option>
+                  <option value="med">中 · 换算或取整得到</option>
+                  <option value="low">低 · 推断或估计</option>
+                </select>
+                <span class="field-hint" id="f-confidence-hint">只作记录，不参与判定</span>
+              </label>
+              <label class="field" for="f-expr">
+                <span>算式（可选，派生事实）</span>
+                <input id="f-expr" type="text" autocomplete="off" placeholder="(A1.num + A3.num) / (A1.den + A3.den) * 100" />
+                <span class="field-hint">填了算式，审计会重算一遍，跟「值」对不上就判红</span>
+              </label>
+              <label class="field" for="f-notes">
+                <span>备注</span>
+                <input id="f-notes" type="text" autocomplete="off" placeholder="取代 A1；2024 年 3 月版报告第 4 页" />
+              </label>
+              <label class="checkbox" for="f-dup">
+                <input id="f-dup" type="checkbox" />
+                <span>同值已人工认可</span>
+              </label>
+              <span class="field-hint">两条事实的值撞上时，勾选可以避免报「同值待判断」黄牌</span>
               <div class="form-actions">
                 <button class="btn btn-primary" type="submit">保存事实</button>
-                <button id="btn-delete-fact" class="btn btn-danger" type="button">删除</button>
+                <button id="btn-delete-fact" class="btn btn-danger" type="button" hidden>删除</button>
+              </div>
+              <div id="fact-delete-confirm" class="confirm-box" hidden>
+                <span>删掉 <b id="fact-delete-id"></b> 之后，正文里对它的 <code>\fact{}</code> 绑定会变成红牌。这一步不能撤销。</span>
+                <div class="confirm-actions">
+                  <button id="btn-delete-ok" class="btn btn-danger" type="button">确认删除</button>
+                  <button id="btn-delete-cancel" class="btn" type="button">取消</button>
+                </div>
               </div>
             </form>
           </div>
 
           <div class="subhead">
             <h3>来源材料</h3>
-            <p class="panel-desc">来源哈希在这里现算。账本里记的哈希与现算不一致＝据被改过，红牌。</p>
+            <p class="panel-desc">审计时对材料正文<b>现算</b> sha256，跟账本里钉住的值比对——不一致就是「据被改过」，判红。</p>
           </div>
           <div id="sources-list" class="sources-list"></div>
         </section>
@@ -114,10 +194,16 @@
               <p class="panel-desc">正文里的每个 <code>\cite{key}</code> 都必须在 bib 里；每条 bib 必须有 doi、arXiv 或 url 之一，否则不可复核。</p>
             </div>
             <div class="panel-actions">
+              <span id="refs-count" class="muted-note"></span>
               <button id="btn-verify" class="btn btn-primary" type="button">联网核验存在性</button>
             </div>
           </div>
-          <textarea id="bib-input" class="editor editor-bib" spellcheck="false" aria-label="bib 文件内容"></textarea>
+          <label class="editor-label" for="bib-input">bib 文件内容</label>
+          <textarea id="bib-input" class="editor editor-bib" spellcheck="false" aria-label="bib 文件内容"
+            placeholder="@article{key,
+  title   = {…},
+  doi     = {10.0000/xxxxx}
+}"></textarea>
           <div class="subhead">
             <h3>条目</h3>
             <p id="verify-note" class="panel-desc"></p>
@@ -144,9 +230,18 @@
             </div>
           </div>
           <div class="protect-grid">
-            <label class="field"><span>改前</span><textarea id="protect-before" class="editor editor-half" spellcheck="false"></textarea></label>
-            <label class="field"><span>改后</span><textarea id="protect-after" class="editor editor-half" spellcheck="false"></textarea></label>
+            <label class="field" for="protect-before">
+              <span>改前</span>
+              <textarea id="protect-before" class="editor editor-half" spellcheck="false"
+                placeholder="改写前的原文，例如：\fact{A1} 的准确率是 10/16。"></textarea>
+            </label>
+            <label class="field" for="protect-after">
+              <span>改后</span>
+              <textarea id="protect-after" class="editor editor-half" spellcheck="false"
+                placeholder="改写后的版本，例如：\fact{A1} 的准确率是 10/16（见附录 B）。"></textarea>
+            </label>
           </div>
+          <p class="field-hint">两边都空着就没有可比内容；只改标点、断句、措辞，应当保持全绿。</p>
           <div id="protect-result" class="protect-result"></div>
         </section>
 
@@ -171,7 +266,15 @@
             <pre id="export-body"></pre>
           </div>
           <div id="issues-list" class="issues-list"></div>
-          <div class="subhead"><h3>覆盖矩阵</h3></div>
+          <div class="subhead">
+            <h3>覆盖矩阵</h3>
+            <span id="matrix-count" class="muted-note"></span>
+          </div>
+          <div class="status-legend">
+            <span class="lg"><b>已绑定</b>：正文用 <code>\fact{}</code> 绑到了这条事实</span>
+            <span class="lg"><b>未绑定</b>：正文数字命中了它的值，但没绑定</span>
+            <span class="lg"><b>未被引用</b>：正文里根本没用这条事实</span>
+          </div>
           <div id="matrix-tables" class="matrix-tables"></div>
         </section>
       </main>

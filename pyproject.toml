@@ -32,5 +32,18 @@ factscribe = "factscribe.cli:main"
 [tool.setuptools]
 packages = ["factscribe"]
 
+# 运行时要读的数据文件：处方（patterns/）与词表/分词词典（terms/）。
+# 少了它们，`pip install` 出来的包能 import，但 prescribe 与中文 style 会在
+# 运行时才报“文件不存在”——editable 安装看不出来，必须打进 wheel。
+[tool.setuptools.package-data]
+factscribe = [
+  "terms/*.tsv",
+  "terms/*.gz",
+  "terms/*.md",
+  "patterns/*.toml",
+  "patterns/*.md",
+  "patterns/*/*.md",
+]
+
 [tool.setuptools.dynamic]
 version = { attr = "factscribe.constants.VERSION" }

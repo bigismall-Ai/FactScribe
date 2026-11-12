@@ -58,7 +58,8 @@ build = ""
 manifest = "results/MANIFEST.toml"
 ```
 
-工具只读一个 `bib` 文件。原文有多个 `.bib`（例：正文一个、附录一个）时，先合并成一个。
+配置里的 `bib` 必须存在（`init` 会给一个空 `refs.bib`）。正文 `\bibliography{a,b}` 声明到的其他 `.bib`
+会自动加入，**不用先合并**；只有配置与正文都没声明、却想额外加一本时，才需要显式处理。
 
 **`sections` 要写 glob（必须含 `*`）。** 写单个文件名（例 `"ms.tex"`）会被识别成 V3 声明，
 而 `fact add` 目前只支持 v1 的 `[project]` 表。

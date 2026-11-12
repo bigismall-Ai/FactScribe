@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +64,40 @@ jobs:
           set -e
           if [ "$code" -ne 1 ]; then
             echo "::error::examples/minimal audit exit=$code, expected 1 (red)"
+            exit 1
+          fi
+
+  # wheel 安装面：editable 安装读源码目录，数据文件缺了也看不出来；
+  # 这里真打一个 wheel、真装进新 venv，跑会读 patterns/ 与 terms/ 的命令。
+  packaging:
+    name: wheel install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build and install wheel
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip wheel . --no-deps -w dist
+          python -m venv venv
+          venv/bin/pip install dist/factscribe-*.whl
+
+      - name: Runtime data is present
+        run: |
+          venv/bin/factscribe prescribe --list > /tmp/prescribe.txt
+          grep -q "处方：" /tmp/prescribe.txt
+          printf '这是一个中文句子，用来确认分词词典已随包安装。\n' > /tmp/zh.md
+          set +e
+          venv/bin/factscribe style --doc /tmp/zh.md > /tmp/style.txt 2>&1
+          code=$?
+          set -e
+          cat /tmp/style.txt
+          if [ "$code" -eq 4 ] || grep -qE "SegmentError|词表不存在|No such file" /tmp/style.txt; then
+            echo "::error::wheel 缺少运行时数据文件"
             exit 1
           fi
 

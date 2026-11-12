@@ -77,6 +77,21 @@ class TestFactAddHappyPath(unittest.TestCase):
             self.assertEqual(f.confidence, "high")
             self.assertEqual(f.derived_from, [])
 
+    def test_custom_facts_glob_gets_a_ledger_inside_the_glob(self):
+        """账本路径必须落在 cfg.facts_glob 内，否则写了也读不到。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = new_project(tmp)
+            cfg_path = root / "paperkit.toml"
+            cfg_path.write_text(
+                cfg_path.read_text(encoding="utf-8").replace(
+                    'facts = "facts/*.toml"', 'facts = "ledger/*.toml"'),
+                encoding="utf-8")
+            proc = add(root, "--id", "A1", "--claim", "示例",
+                       "--value", "3/4", "--source", MANIFEST_REL)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertTrue((root / "ledger" / "01-core.toml").is_file())
+            self.assertEqual(len(load_facts(load_config(root))), 1)
+
     def test_sha256_is_computed_from_the_source_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)

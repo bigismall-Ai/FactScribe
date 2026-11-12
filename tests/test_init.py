@@ -155,6 +155,21 @@ class TestInitRefusals(unittest.TestCase):
             self.assertEqual(load_config(target).title, "Forced")
             self.assertEqual((target / "keep.txt").read_text(encoding="utf-8"), "mine")
 
+    def test_force_names_the_files_it_overwrote(self):
+        """覆盖不能静默：人读与 --json 都要点名被覆盖的现有文件。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "proj"
+            target.mkdir()
+            (target / "README.md").write_text("my own readme", encoding="utf-8")
+            proc = run("init", str(target), "--force", "--json")
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            data = json.loads(proc.stdout)
+            self.assertEqual(data["overwritten"], ["README.md"])
+            human = run("init", str(target), "--force")
+            self.assertEqual(human.returncode, 0, human.stderr)
+            self.assertIn("覆盖了已存在的 7 个文件", human.stdout)
+            self.assertIn("README.md", human.stdout)
+
 
 class TestInitDeterminism(unittest.TestCase):
     """确定性：无时间戳、无绝对路径；同参数逐字节一致。"""

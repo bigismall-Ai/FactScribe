@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .config import ConfigError, load_config, load_facts, load_toml
+from .config import Config, ConfigError, load_config, load_facts, load_toml
 from .constants import CONFIDENCE_OK
 from .facts import sha256_file
 
@@ -396,6 +396,7 @@ def init_project(root: Path, *, title: str | None = None,
     clean_title = (title or "").strip() or DEFAULT_TITLE[lang]
     clean_author = (author or "").strip()
     files = _render(lang, clean_title, clean_author)
+    overwritten = [name for name in files if (root / name).is_file()]
 
     root.mkdir(parents=True, exist_ok=True)
     for name, text in files.items():
@@ -410,6 +411,7 @@ def init_project(root: Path, *, title: str | None = None,
         "authors": [clean_author] if clean_author else [],
         "force": bool(force),
         "files": list(INIT_FILES),
+        "overwritten": overwritten,
         "next": [line.format(d=root) for line in _NEXT_STEPS[lang]],
     }
 
@@ -491,17 +493,48 @@ def _check_source(root: Path, cfg, source: str) -> tuple[str, Path]:
     return rel, full
 
 
+def _ledger_path(root: Path, cfg: Config) -> Path:
+    """`fact add` 写哪本账：必须落在 ``cfg.facts_glob`` 里，否则写了也读不到。
+
+    默认 ``facts/*.toml`` → ``facts/01-core.toml``。项目改成
+    ``ledger/*.toml`` 这类固定目录的 glob 时，用同目录下的 ``01-core.toml``；
+    无法判定（glob 太自由）就明确报错，绝不静默写到 glob 外。
+    """
+    import fnmatch
+
+    candidate = root / FACTS_FILE
+    rel = candidate.relative_to(root).as_posix()
+    if fnmatch.fnmatchcase(rel, cfg.facts_glob):
+        return candidate
+    # 取 glob 里第一个通配符之前的目录前缀（例："ledger/*.toml" → "ledger/"）
+    prefix = re.split(r"[*?\[]", cfg.facts_glob, maxsplit=1)[0]
+    directory = Path(prefix)
+    if not prefix.endswith("/"):
+        directory = directory.parent
+    target = root / directory / Path(FACTS_FILE).name
+    try:
+        target_rel = target.relative_to(root).as_posix()
+    except ValueError:
+        target_rel = ""
+    if target_rel and fnmatch.fnmatchcase(target_rel, cfg.facts_glob):
+        return target
+    raise ConfigError(
+        "项目声明的 facts 是 %r，fact add 无法确定该写哪本账——"
+        "请把它改成形如 facts/*.toml 的 glob，或手工入账"
+        % cfg.facts_glob)
+
+
 def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
              locator: str = "", confidence: str = "med", expr: str = "",
              derived_from=None, note: str = "") -> dict:
-    """往 facts/01-core.toml 追加一条事实；返回落账信息（含 sha256）。"""
+    """往项目声明的账本追加一条事实；返回落账信息（含 sha256）。"""
     root = Path(root)
     cfg = load_config(root)
     if cfg.is_v3:
         raise ConfigError("fact add 目前只支持 v1 项目（[project] 表；"
                           "V3 的审批目标请按 SPEC-V3.0 写在 schema 声明里）")
     known = load_facts(cfg)
-    ledger = root / FACTS_FILE
+    ledger = _ledger_path(root, cfg)
     if ledger.is_file():
         load_toml(ledger)  # 账坏了就别往上追加
 
@@ -565,7 +598,7 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
         "derived_from": parents,
         "expr": expr,
         "note": str(note or "").strip(),
-        "ledger": FACTS_FILE,
+        "ledger": ledger.relative_to(root).as_posix(),
         "manifest": cfg.manifest,
         "manifest_line": manifest_line,
     }

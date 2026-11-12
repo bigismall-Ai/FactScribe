@@ -401,6 +401,11 @@ def cmd_init(args) -> int:
             "Created minimal project: %s (lang=%s, %d files)"
             % (args.directory, info["lang"], len(info["files"])))
     lines = [head] + ["  " + name for name in info["files"]]
+    if info.get("overwritten"):
+        lines.append("")
+        lines.append("覆盖了已存在的 %d 个文件：%s"
+                     % (len(info["overwritten"]),
+                        "、".join(info["overwritten"])))
     lines.append("")
     lines.append("下一步（三条命令）：" if zh else "Next (three commands):")
     lines += info["next"]

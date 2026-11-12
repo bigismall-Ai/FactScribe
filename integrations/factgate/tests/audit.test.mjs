@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 
 import {
+  PRESCRIPTIONS,
   auditProject,
   factValueKeys,
   foldIssues,
@@ -145,6 +146,46 @@ test('账本没记来源哈希 → MISSING_SOURCE_SHA256（红）', () => {
   p.facts[0].sourceSha256 = '';
   const a = auditProject(p);
   assert.ok(a.red.some((i) => i.code === 'MISSING_SOURCE_SHA256'));
+});
+
+// 同名不同义（批 139）：MISSING_SOURCE 在 Python 侧指「source 指向的文件不存在」，
+// 缺 source 字段另报 MISSING_SOURCE_FIELD。JS 移植件曾把两者都叫 MISSING_SOURCE。
+
+test('事实没有 source 字段 → MISSING_SOURCE_FIELD（与 Python 对齐）', () => {
+  const p = buildDemoProject(sha256);
+  p.facts[0].source = '';
+  const a = auditProject(p);
+  assert.ok(codes(a, 'red').includes('MISSING_SOURCE_FIELD'));
+  assert.ok(!codes(a, 'red').includes('MISSING_SOURCE'), '缺字段不许报 MISSING_SOURCE');
+});
+
+test('事实有 source 但 sources 里没有 → MISSING_SOURCE（来源文件不存在）', () => {
+  const p = buildDemoProject(sha256);
+  p.facts[0].source = 'results/ghost.md';
+  const a = auditProject(p);
+  assert.ok(codes(a, 'red').includes('MISSING_SOURCE'));
+  assert.ok(!codes(a, 'red').includes('MISSING_SOURCE_FIELD'), '有字段就不该报缺字段');
+});
+
+test('两个来源码一次只报一个，且只报一条', () => {
+  const p = buildDemoProject(sha256);
+  p.facts[0].source = '';
+  p.facts[1].source = 'results/ghost.md';
+  const red = codes(auditProject(p), 'red');
+  assert.equal(red.filter((c) => c === 'MISSING_SOURCE_FIELD').length, 1);
+  assert.equal(red.filter((c) => c === 'MISSING_SOURCE').length, 1);
+});
+
+test('正常事实不报来源类码', () => {
+  const red = codes(auditProject(buildDemoProject(sha256)), 'red');
+  assert.ok(!red.includes('MISSING_SOURCE'));
+  assert.ok(!red.includes('MISSING_SOURCE_FIELD'));
+});
+
+test('两个来源码各有处方，标题不同（报告不许打架）', () => {
+  assert.ok(PRESCRIPTIONS.MISSING_SOURCE);
+  assert.ok(PRESCRIPTIONS.MISSING_SOURCE_FIELD);
+  assert.notEqual(PRESCRIPTIONS.MISSING_SOURCE.title, PRESCRIPTIONS.MISSING_SOURCE_FIELD.title);
 });
 
 // ---------------------------------------------------------------- 改写保护

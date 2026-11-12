@@ -92,5 +92,42 @@ class TestProjectionIsFresh(unittest.TestCase):
         self.assertNotIn("/private/", text, "投影里漏出了本机绝对路径")
 
 
+class TestDiffListIsHonest(unittest.TestCase):
+    """差异清单不是装饰：已修的差异要真的标成已修，且写明两侧同义。
+
+    批 139 修的是同名不同义：JS 曾把「缺 source 字段」也叫 MISSING_SOURCE，
+    而 Python 那个码指「来源文件不存在」。这里只锁文档口径——判据本身由
+    两侧的审计测试守（JS 侧见 integrations/factgate/tests/audit.test.mjs）。
+    """
+
+    SPEC = ROOT / "docs" / "design" / "SPEC-CONFORMANCE.md"
+
+    def _row(self, code: str) -> list[str]:
+        text = self.SPEC.read_text(encoding="utf-8")
+        rows = [ln for ln in text.splitlines() if ln.startswith("| %s " % code)]
+        self.assertEqual(len(rows), 1, "§7 差异清单里 %s 应恰好一行" % code)
+        return [c.strip() for c in rows[0].strip().strip("|").split("|")]
+
+    def test_missing_source_is_marked_fixed_and_same_meaning(self):
+        cells = self._row("D1")
+        self.assertEqual(len(cells), 5, "§7 的表格应有 5 列")
+        _no, name, py, js, action = cells
+        self.assertIn("MISSING_SOURCE", name)
+        for side, cell in (("Python 原版", py), ("JS 移植件", js)):
+            self.assertIn("来源文件不存在", cell,
+                          "D1 的「%s」一列必须写明「来源文件不存在」——只写一列"
+                          "等于语义仍可能分家" % side)
+        self.assertIn("已修", action, "D1 修好后必须标成已修")
+
+    def test_missing_source_field_code_is_named_on_both_sides(self):
+        cells = self._row("D1b")
+        _no, _name, py, js, action = cells
+        for side, cell in (("Python 原版", py), ("JS 移植件", js)):
+            self.assertIn("MISSING_SOURCE_FIELD", cell,
+                          "D1b 的「%s」一列要写明 `MISSING_SOURCE_FIELD`"
+                          "（不能仍写 `MISSING_SOURCE`）" % side)
+        self.assertIn("已修", action, "D1b 修好后必须标成已修")
+
+
 if __name__ == "__main__":
     unittest.main()

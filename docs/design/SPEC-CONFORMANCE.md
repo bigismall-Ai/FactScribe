@@ -164,9 +164,9 @@ PY
 
 | # | 码 / 行为 | Python 原版 | JS 移植件 | 处理 |
 |---|---|---|---|---|
-| D1 | `MISSING_SOURCE` | 指 **source 指向的文件不存在** | 指 **事实没有 source 字段** | 同名不同义，**不入核心** |
-| D1b | 缺 source 字段 | 报 `MISSING_SOURCE_FIELD` | 报 `MISSING_SOURCE` | 码名不同，**不入核心** |
-| D1c | `BAD_SOURCE_PATH` | 指 URL / 绝对路径 / `..` 越界 | 指 source id 在投影里找不到 | 同名不同义，**不入核心** |
+| D1 | `MISSING_SOURCE` | 指 **来源文件不存在**（`source` 指向的文件不是普通文件） | 指 **来源文件不存在**（`source` 指向的来源 id 不在投影里） | **已修（批 139）**：两侧同为「来源文件不存在」；语义已对齐，但尚无夹具探针实测，暂不入核心 |
+| D1b | 缺 `source` 字段 | 报 `MISSING_SOURCE_FIELD` | 报 `MISSING_SOURCE_FIELD` | **已修（批 139）**：码名与含义同 Python；同上，待夹具探针验证后再议入核心 |
+| D1c | `BAD_SOURCE_PATH` | 指 URL / 绝对路径 / `..` 越界（路径**合法性**） | 不判：JS 拿到的投影里没有文件系统，「来源 id 找不到」已改报 `MISSING_SOURCE` | 只剩 Python 有（JS 无路径模型），**不入核心** |
 | D2 | `NUMBER_AS_CROSSREF` | 只在 V3 项目判；v1 项目里手写「表 3」落 `UNMATCHED_NUMBER` | 每次审计都判（黄） | **不入核心**（V3 专属 vs 全量） |
 | D3 | `TABLE_UNBOUND` | v1 对 tabular 里回不到账的数字给专属码（exit 5） | 没有表格概念，按普通数字判 `UNMATCHED_NUMBER` | **不入核心** |
 | D4 | `UNUSED_FACT` | 是 hint（info）：不进 red/yellow、不改退出码 | 是黄牌，进 yellow | **不入核心**（严重度不同） |

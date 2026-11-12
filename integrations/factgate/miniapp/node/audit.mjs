@@ -710,9 +710,17 @@ export const PRESCRIPTIONS = {
     note: '同值可能是笔误，也可能是有意重述——需要人判断。',
   },
   MISSING_SOURCE: {
-    title: '事实没有来源',
-    steps: ['在事实账填 source，并把对应的原始材料贴进「来源材料」。'],
-    note: '没有来源的事实，账有据这一条就无从谈起。',
+    title: '来源文件不存在',
+    steps: [
+      '核对这条事实的 source 指向：路径写错了就改正。',
+      '材料还没贴进来，就把对应的原始产物贴进「来源材料」。',
+    ],
+    note: '与「没填 source 字段」是两回事：这里字段填了，但指向的来源在项目里找不到。',
+  },
+  MISSING_SOURCE_FIELD: {
+    title: '事实缺来源字段',
+    steps: ['在事实账里填 source，并把对应的原始材料贴进「来源材料」。'],
+    note: '没有来源字段的事实，账有据这一条就无从谈起。',
   },
   MISSING_SOURCE_SHA256: {
     title: '事实没有记录来源哈希',
@@ -861,13 +869,16 @@ export function auditProject(project) {
   }
 
   for (const f of facts) {
-    if (!f.source) {
-      issues.push(issue('red', 'MISSING_SOURCE', `事实 ${f.id} 没有来源。`, { location: `事实账:${f.id}` }));
+    // 与 Python 侧对齐（批 139）：缺 source 字段报 MISSING_SOURCE_FIELD；
+    // 字段填了但指向的来源在投影里找不到，才报 MISSING_SOURCE（来源文件不存在）。
+    const sourceRef = String(f.source ?? '').trim();
+    if (!sourceRef) {
+      issues.push(issue('red', 'MISSING_SOURCE_FIELD', `事实 ${f.id} 缺 source 字段。`, { location: `事实账:${f.id}` }));
       continue;
     }
-    const src = sourceById.get(f.source);
+    const src = sourceById.get(sourceRef);
     if (!src) {
-      issues.push(issue('red', 'BAD_SOURCE_PATH', `事实 ${f.id} 指向的来源 ${f.source} 不存在。`, { location: `事实账:${f.id}` }));
+      issues.push(issue('red', 'MISSING_SOURCE', `事实 ${f.id} 的 source 指向的来源 ${sourceRef} 不存在。`, { location: `事实账:${f.id}` }));
       continue;
     }
     if (!f.sourceSha256) {
@@ -876,7 +887,7 @@ export function auditProject(project) {
     }
     const live = sourceDigest.get(String(src.id));
     if (live && f.sourceSha256 !== live) {
-      issues.push(issue('red', 'SOURCE_SHA256_MISMATCH', `事实 ${f.id} 的来源材料已被改动（账本哈希 ${String(f.sourceSha256).slice(0, 12)}… vs 现算 ${String(live).slice(0, 12)}…）。`, { location: `来源:${f.source}` }));
+      issues.push(issue('red', 'SOURCE_SHA256_MISMATCH', `事实 ${f.id} 的来源材料已被改动（账本哈希 ${String(f.sourceSha256).slice(0, 12)}… vs 现算 ${String(live).slice(0, 12)}…）。`, { location: `来源:${sourceRef}` }));
     }
   }
 

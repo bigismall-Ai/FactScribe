@@ -23,6 +23,7 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 
 First time? Follow [`docs/QUICKSTART.md`](docs/QUICKSTART.md) (zero to a first green in five minutes).
 Staring at a wall of red? Read [`docs/TRIAGE.md`](docs/TRIAGE.md) (what to fix first, what to ignore).
+Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a migration, not an install, and it starts with measured readings.
 
 ## Nineteen commands
 

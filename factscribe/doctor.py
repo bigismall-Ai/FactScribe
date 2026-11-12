@@ -25,6 +25,7 @@ from .buildpdf import find_cjk_font, find_fandol_fonts
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections, load_toml)
 from .evidence import LOCK_REL, read_lock, unfrozen_info
+from .scaffold import INIT_FILES
 
 LEVEL_OK = "ok"
 LEVEL_WARN = "warn"
@@ -158,6 +159,29 @@ def _project_check(root: Path) -> tuple[dict, Config | None]:
     try:
         cfg = load_config(root)
     except ConfigError as exc:
+        if any((root / name).is_file() for name in ("factscribe.toml", "paperkit.toml")):
+            return (_check("project", "项目声明", LEVEL_FAIL, str(exc),
+                           fix="按报错修项目声明"), None)
+        texs = sorted(p.relative_to(root).as_posix()
+                      for p in root.rglob("*.tex")
+                      if not {".git", ".venv", "node_modules",
+                              "__pycache__"} & set(p.parts))
+        if texs:
+            clashes = [name for name in INIT_FILES[1:] if (root / name).is_file()]
+            detail = ("%s；目录里已有 %d 个 .tex，像是一篇写完的论文——"
+                      "init 需要空目录。接入步骤见 docs/ADOPT.md"
+                      % (exc, len(texs)))
+            if clashes:
+                detail += "；--force 会覆盖同名文件：%s" % "、".join(clashes)
+                fix = ("先备份 %s，再跑：%s"
+                       % ("、".join(clashes),
+                          _cmd("python3", "-m", "factscribe", "init", str(root),
+                               "--force")))
+            else:
+                fix = _cmd("python3", "-m", "factscribe", "init", str(root),
+                           "--force")
+            return (_check("project", "项目声明", LEVEL_FAIL, detail, fix=fix),
+                    None)
         return (_check(
             "project", "项目声明", LEVEL_FAIL, str(exc),
             fix=_cmd("python3", "-m", "factscribe", "init", str(root))), None)

@@ -91,6 +91,25 @@ class DoctorTest(unittest.TestCase):
         self.assertNotIn("manifest", by_name)
         self.assertIn("python", by_name)  # 环境照查
 
+    def test_existing_paper_gets_force_fix_and_backup_warning(self):
+        legacy = self.tmp / "legacy"
+        legacy.mkdir()
+        (legacy / "ms.tex").write_text(
+            "\\documentclass{article}\n\\begin{document}\nHi.\n\\end{document}\n",
+            encoding="utf-8")
+        (legacy / "README.md").write_text("my real paper", encoding="utf-8")
+        r, data = self._json(str(legacy))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        project = {c["name"]: c for c in data["checks"]}["project"]
+        self.assertEqual(project["level"], "fail")
+        self.assertIn("已有 1 个 .tex", project["detail"])
+        self.assertIn("ADOPT", project["detail"])
+        self.assertIn("--force", project["fix"])
+        # 会覆盖的现有文件必须在「先备份」里点名
+        self.assertIn("README.md", project["fix"])
+        self.assertEqual((legacy / "README.md").read_text(encoding="utf-8"),
+                         "my real paper")
+
     def test_nonexistent_directory_is_usage_error(self):
         r = run("doctor", str(self.tmp / "nope"))
         self.assertEqual(r.returncode, 2)

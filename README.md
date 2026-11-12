@@ -22,7 +22,8 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
 第一次用，走 [`docs/QUICKSTART.md`](docs/QUICKSTART.md)（五分钟从零到第一个绿灯）；
-第一次跑出一片红，查 [`docs/TRIAGE.md`](docs/TRIAGE.md)（先修什么、什么可以不管）。
+第一次跑出一片红，查 [`docs/TRIAGE.md`](docs/TRIAGE.md)（先修什么、什么可以不管）；
+已有论文要接进来，先看 [`docs/ADOPT.md`](docs/ADOPT.md)（实测读数 + 六步迁移，别当成安装）。
 
 ## 十九个命令
 

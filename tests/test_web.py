@@ -67,6 +67,16 @@ class WebUITest(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(json.loads(body)["error"]["code"], "UNAUTHORIZED")
 
+    def test_fact_form_is_present(self):
+        status, body = self._get("/")
+        self.assertEqual(status, 200)
+        self.assertIn('id="fact-form"', body)
+        self.assertIn('id="btn-add-fact"', body)
+        status, js = self._get("/app.js")
+        self.assertEqual(status, 200)
+        self.assertIn("/api/facts", js)
+        self.assertIn("manifest_line", js)
+
     def test_api_works_with_token(self):
         status, body = self._get("/api/project", token=TOKEN)
         self.assertEqual(status, 200)

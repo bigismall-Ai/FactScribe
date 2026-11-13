@@ -29,11 +29,13 @@ URL：http://127.0.0.1:<port>
 |---|---|
 | 左 | 章节列表（项目闭包内 `.tex`），点选加载 |
 | 中 | 当前章节编辑器；保存按钮；只读时禁用 |
-| 右 | 审计结论与 findings、事实账表、证据冻结状态与按钮 |
+| 右 | 审计结论与 findings、事实账表 + 追加事实表单、证据冻结状态与按钮 |
 
 - 启动后自动载入 `/api/project` 并跑一次 `/api/audit`；
 - 保存走 `PUT /api/sections`，保存后不自动重审，由「运行审计」按钮触发；
 - 审计红黄显示代码、中文短名、位置与消息；只显示前 40 条；
+- 事实表单走 `POST /api/facts`；ID/主张/值/来源必填，来源可从项目 sources 选；
+  追加后刷新事实表并重跑审计；工具只打印该抄进清单的那一行，**不代签**；
 - 证据区显示 lock 哈希/条数、mismatch、unfrozen 与最后动作；
 - 冻结/解冻走 `POST /api/evidence/*`；解冻必须填理由。
 
@@ -47,10 +49,11 @@ URL：http://127.0.0.1:<port>
 ## 4. 非目标
 
 - 不做富文本/Markdown 预览；正文就是 LaTeX 源码；
-- 不做 bib 编辑、事实表单、PDF 编译（仍走 CLI / MiniFactScribe）；
+- 不做 bib 编辑、PDF 编译（仍走 CLI / MiniFactScribe）；
+- 事实表单只追加，不编辑/删除已有事实；
 - 不引入前端构建链或第三方依赖。
 
 ## 5. 验收
 
-`tests/test_web.py`（4 例）：首页免 token、静态资源、API 仍要 token、带 token 读项目；
+`tests/test_web.py`（5 例）：首页免 token、静态资源、事实表单、API 仍要 token、带 token 读项目；
 `tests/test_packaging.py` 覆盖 `web/*` 是否随 wheel 发布。

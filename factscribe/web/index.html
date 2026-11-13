@@ -48,6 +48,31 @@
         <details class="card" id="facts-card">
           <summary>事实账 <span id="facts-count" class="muted"></span></summary>
           <div id="facts-body"></div>
+          <form id="fact-form" class="fact-form">
+            <div class="form-grid">
+              <label class="field">ID<input id="fact-id" required /></label>
+              <label class="field">值<input id="fact-value" required placeholder="10/16" /></label>
+              <label class="field wide">主张<input id="fact-claim" required placeholder="一句话说清这条事实" /></label>
+              <label class="field wide">来源<input id="fact-source" list="fact-sources" required placeholder="results/…" /></label>
+              <datalist id="fact-sources"></datalist>
+              <label class="field">定位<input id="fact-locator" placeholder="§二 汇总表" /></label>
+              <label class="field">置信度
+                <select id="fact-confidence">
+                  <option value="high">高</option>
+                  <option value="med" selected>中</option>
+                  <option value="low">低</option>
+                </select>
+              </label>
+              <label class="field">推算父项<input id="fact-derived" placeholder="A1,A3（可选）" /></label>
+              <label class="field">算式<input id="fact-expr" placeholder="(A1.num + A3.num) / (A1.den + A3.den) * 100" /></label>
+              <label class="field wide">备注<input id="fact-note" placeholder="可选" /></label>
+            </div>
+            <div class="editor-actions">
+              <button id="btn-add-fact" class="btn primary" type="submit">追加事实</button>
+              <span class="muted">工具不代签：跑完会给你该抄进清单的那一行。</span>
+            </div>
+            <div id="fact-result" class="muted"></div>
+          </form>
         </details>
 
         <div class="card" id="evidence-card">

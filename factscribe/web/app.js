@@ -66,12 +66,7 @@ async function api(path, options = {}) {
 
 // ------------------------------------------------------------------ 加载
 
-async function load() {
-  if (!state.token) {
-    $('#token-panel').hidden = false;
-    return;
-  }
-  sessionStorage.setItem('factscribe.token', state.token);
+async function loadProject() {
   const project = await api('/api/project');
   state.project = project;
   $('#project').textContent = (project.project || '未命名') + ' · ' +
@@ -87,8 +82,24 @@ async function load() {
   renderSections();
   renderFacts();
   const saved = localStorage.getItem('factscribe.section');
-  const first = project.sections.find((s) => s.file === saved) || project.sections[0];
-  if (first) selectSection(first.file);
+  const keep = state.current && project.sections.find((s) => s.file === state.current);
+  const first = keep || project.sections.find((s) => s.file === saved) || project.sections[0];
+  if (first) {
+    selectSection(first.file);
+  } else {
+    state.current = null;
+    $('#section-title').textContent = '没有章节';
+    $('#section-text').value = '';
+  }
+}
+
+async function load() {
+  if (!state.token) {
+    $('#token-panel').hidden = false;
+    return;
+  }
+  sessionStorage.setItem('factscribe.token', state.token);
+  await loadProject();
   await loadEvidence();
   await runAudit();
 }
@@ -179,7 +190,11 @@ function renderFindings() {
 
 function renderFacts() {
   const facts = state.project?.facts || [];
+  const sources = state.project?.sources || [];
   $('#facts-count').textContent = facts.length + ' 条';
+  $('#fact-form').hidden = Boolean(state.project?.read_only);
+  $('#fact-sources').innerHTML = sources.map((s) =>
+    '<option value="' + esc(s.id) + '"></option>').join('');
   if (!facts.length) {
     $('#facts-body').innerHTML = '<div class="empty">账里还没有事实。</div>';
     return;
@@ -188,6 +203,39 @@ function renderFacts() {
     facts.map((f) => '<tr><td>' + esc(f.id) + '</td><td>' + esc(f.claim) +
       '</td><td class="code">' + esc(f.value) + '</td><td class="code">' +
       esc(f.source) + '</td></tr>').join('') + '</tbody></table>';
+}
+
+async function addFact(event) {
+  event.preventDefault();
+  const body = {
+    id: $('#fact-id').value.trim(),
+    claim: $('#fact-claim').value.trim(),
+    value: $('#fact-value').value.trim(),
+    source: $('#fact-source').value.trim(),
+    locator: $('#fact-locator').value.trim(),
+    confidence: $('#fact-confidence').value,
+    derived_from: $('#fact-derived').value.trim(),
+    expr: $('#fact-expr').value.trim(),
+    note: $('#fact-note').value.trim(),
+  };
+  if (!body.id || !body.claim || !body.value || !body.source) {
+    throw new Error('ID、主张、值、来源都要填');
+  }
+  if (body.derived_from && !body.expr) throw new Error('填了推算父项就要填算式');
+  if (body.expr && !body.derived_from) throw new Error('填了算式就要填推算父项');
+  const data = await api('/api/facts', {
+    method: 'POST', body: JSON.stringify(body),
+  });
+  $('#fact-result').textContent = '已追加 ' + data.id + '。该抄进清单：' +
+    (data.manifest_line || '（看服务输出）');
+  $('#fact-form').reset();
+  toast('已追加 ' + data.id);
+  const project = await api('/api/project');
+  state.project.facts = project.facts;
+  state.project.sources = project.sources;
+  state.project.read_only = project.read_only;
+  renderFacts();
+  await runAudit();
 }
 
 // ------------------------------------------------------------------ 证据
@@ -252,6 +300,12 @@ function wire() {
   });
   $('#btn-unfreeze').addEventListener('click', () => {
     unfreezeEvidence().catch((e) => toast('解冻失败：' + e.message));
+  });
+  $('#fact-form').addEventListener('submit', (e) => {
+    addFact(e).catch((err) => {
+      $('#fact-result').textContent = '追加失败：' + err.message;
+      toast('追加失败：' + err.message);
+    });
   });
   $('#btn-token').addEventListener('click', () => {
     const token = $('#token-input').value.trim();

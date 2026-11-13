@@ -431,3 +431,17 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   .project-field { order: 3; flex-basis: 100%; }
   .stale-banner, .confirm-banner { flex-wrap: wrap; }
 }
+
+/* 本地工作台：只连本机 serve，不把 token 写进页面 */
+.workbench-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 12px 0;
+}
+.workbench-form .field { min-width: 0; }
+.workbench-actions { display: flex; gap: 8px; }
+@media (max-width: 760px) {
+  .workbench-form { grid-template-columns: 1fr; }
+}

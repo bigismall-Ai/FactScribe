@@ -3,7 +3,7 @@
 // 持久化落在 context.dataDir；浏览器只管呈现。
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { auditProject, mergeVerifyIssues, parseBib, protectDiff, stableIdOf } from './audit.mjs';
@@ -22,11 +22,84 @@ function sha256(text) {
   return createHash('sha256').update(String(text ?? ''), 'utf8').digest('hex');
 }
 
+// ---------------------------------------------------------------- 本地工作台
+// 只连本机 `factscribe serve`。地址必须回环，不把 token 暴露给页面。
+
+export function normalizeWorkbenchUrl(raw) {
+  const text = String(raw ?? '').trim();
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    throw new Error('工作台地址不是合法 URL');
+  }
+  if (url.protocol !== 'http:') throw new Error('工作台只支持 http://（本机回环）');
+  if (!['127.0.0.1', 'localhost'].includes(url.hostname)) {
+    throw new Error('工作台只允许 127.0.0.1 / localhost');
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error('工作台地址不能带账号、查询串或锚点');
+  }
+  if (url.pathname !== '/' && url.pathname !== '') {
+    throw new Error('工作台地址只填 origin，不带路径');
+  }
+  return url.origin;
+}
+
+export async function workbenchFetch(base, token, path, method = 'GET') {
+  const response = await fetch(base + path, {
+    method,
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10000),
+  });
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('工作台返回的不是 JSON');
+  }
+  if (!response.ok || data?.ok === false) {
+    const reason = data?.error?.message || data?.error || `HTTP ${response.status}`;
+    throw new Error(String(reason));
+  }
+  return data;
+}
+
+export async function probeWorkbench(base, token) {
+  const health = await workbenchFetch(base, token, '/api/health');
+  if (!health?.ok) throw new Error('工作台 health 未通过');
+  const caps = await workbenchFetch(base, token, '/api/capabilities');
+  if (caps?.engine !== 'python') throw new Error('工作台不是 Python 引擎');
+  return caps;
+}
+
 export async function start(context) {
   const dataDir = context.dataDir;
   const projectFile = join(dataDir, 'project.json');
   const verifyFile = join(dataDir, 'verify.json');
+  const workbenchFile = join(dataDir, 'workbench.json');
   await mkdir(dataDir, { recursive: true });
+
+  let workbench = null;
+  try {
+    const saved = JSON.parse(await readFile(workbenchFile, 'utf8'));
+    const url = normalizeWorkbenchUrl(saved?.url);
+    const token = String(saved?.token ?? '').trim();
+    if (token) workbench = { url, token };
+  } catch {
+    workbench = null;
+  }
+
+  async function persistWorkbench() {
+    if (!workbench) {
+      await rm(workbenchFile, { force: true }).catch(() => {});
+      return;
+    }
+    const tmp = workbenchFile + '.tmp';
+    await writeFile(tmp, JSON.stringify(workbench, null, 2),
+      { encoding: 'utf8', mode: 0o600 });
+    await rename(tmp, workbenchFile);
+  }
 
   let project = null;
   let lastVerify = null;
@@ -305,6 +378,82 @@ export async function start(context) {
           return;
         }
         sendText(response, 200, file, CONTENT_TYPES[extname(rel)] || 'application/octet-stream');
+        return;
+      }
+      if (request.method === 'GET' && path === '/api/workbench') {
+        sendJson(response, 200, {
+          ok: true, configured: Boolean(workbench),
+          url: workbench?.url || '', tokenSet: Boolean(workbench?.token),
+        });
+        return;
+      }
+      if (request.method === 'PUT' && path === '/api/workbench') {
+        try {
+          const body = await readBody(request);
+          const url = normalizeWorkbenchUrl(body.url);
+          const token = String(body.token ?? '').trim()
+            || (workbench?.url === url ? workbench.token : '');
+          if (!token) throw new Error('token 不能为空');
+          const capabilities = await probeWorkbench(url, token);
+          workbench = { url, token };
+          await persistWorkbench();
+          sendJson(response, 200, {
+            ok: true, configured: true, url, tokenSet: true,
+            capabilities,
+          });
+        } catch (err) {
+          sendJson(response, 400, {
+            ok: false,
+            error: { code: 'WORKBENCH_CONNECT_FAILED', message: err.message },
+          });
+        }
+        return;
+      }
+      if (request.method === 'DELETE' && path === '/api/workbench') {
+        workbench = null;
+        await persistWorkbench();
+        sendJson(response, 200, { ok: true, configured: false });
+        return;
+      }
+      if (path.startsWith('/api/workbench/')) {
+        if (!workbench) {
+          sendJson(response, 400, {
+            ok: false,
+            error: { code: 'WORKBENCH_NOT_CONFIGURED',
+                     message: '还没有连接本地工作台' },
+          });
+          return;
+        }
+        try {
+          if (request.method === 'GET' && path === '/api/workbench/status') {
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token, '/api/status'));
+            return;
+          }
+          if (request.method === 'GET' && path === '/api/workbench/brief') {
+            const section = new URL(request.url ?? '/', 'http://x').searchParams.get('section');
+            const suffix = section ? '?section=' + encodeURIComponent(section) : '';
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/brief' + suffix));
+            return;
+          }
+          if (request.method === 'POST' && path === '/api/workbench/audit') {
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/audit', 'POST'));
+            return;
+          }
+          sendJson(response, 404, {
+            ok: false,
+            error: { code: 'NOT_FOUND', message: '没有这个接口：' + path },
+          });
+        } catch (err) {
+          sendJson(response, 502, {
+            ok: false,
+            error: { code: 'WORKBENCH_UPSTREAM', message: err.message },
+          });
+        }
         return;
       }
       if (request.method === 'GET' && path === '/api/state') {

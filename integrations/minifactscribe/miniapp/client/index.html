@@ -36,6 +36,7 @@
         <button class="nav-item" data-tab="refs" role="tab" aria-selected="false" aria-controls="panel-refs">引用</button>
         <button class="nav-item" data-tab="protect" role="tab" aria-selected="false" aria-controls="panel-protect">改写保护</button>
         <button class="nav-item" data-tab="audit" role="tab" aria-selected="false" aria-controls="panel-audit">审计</button>
+        <button class="nav-item" data-tab="workbench" role="tab" aria-selected="false" aria-controls="panel-workbench">工作台</button>
         <div class="sidebar-foot">
           <p class="boundary">
             绿只说明三件事：<b>账有据</b>、<b>据未改</b>、<b>文有绑</b>。<br />它不说明结论为真。
@@ -276,6 +277,38 @@
             <span class="lg"><b>未被引用</b>：正文里根本没用这条事实</span>
           </div>
           <div id="matrix-tables" class="matrix-tables"></div>
+        </section>
+
+        <section id="panel-workbench" class="panel" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>本地工作台</h2>
+              <p class="panel-desc">连接本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。这里是工作台项目的结果；左侧正文与事实账仍是本地草稿，两者不是同一个项目。</p>
+            </div>
+            <div class="panel-actions">
+              <span id="workbench-badge" class="muted-note">未连接</span>
+            </div>
+          </div>
+          <div class="workbench-form">
+            <label class="field">
+              <span>工作台 URL</span>
+              <input id="workbench-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:61483" />
+            </label>
+            <label class="field">
+              <span>Token</span>
+              <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
+            </label>
+            <div class="workbench-actions">
+              <button id="btn-workbench-connect" class="btn btn-primary" type="button">连接</button>
+              <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
+            </div>
+          </div>
+          <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
+          <div id="workbench-summary" class="audit-summary"></div>
+          <div class="panel-actions" style="margin: 12px 0">
+            <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>
+          </div>
+          <div id="workbench-audit" class="issues-list"></div>
         </section>
       </main>
     </div>

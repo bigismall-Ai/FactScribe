@@ -158,3 +158,11 @@ test('未知路径回 404 而不是 500：content-type 不能是 undefined', () 
     'sendText 的 content-type 必须有默认值'
   );
 });
+
+test('本地工作台是独立入口，并明确与本地草稿不是同一个项目', () => {
+  assert.match(HTML, /id="panel-workbench"/, '应有独立的工作台面板');
+  assert.match(HTML, /id="btn-workbench-connect"/, '应有连接按钮');
+  assert.match(HTML, /不是同一个项目/, '界面必须说清工作台项目与本地草稿不同');
+  assert.match(JS, /\/api\/workbench/, '客户端应调用工作台代理接口');
+  assert.match(JS, /runWorkbenchAudit/, '应有工作台审计入口');
+});

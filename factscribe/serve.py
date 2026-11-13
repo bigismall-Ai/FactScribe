@@ -23,8 +23,10 @@ from urllib.parse import parse_qs, urlparse
 from .config import ConfigError, load_config
 from .constants import EXIT_OK, VERSION
 from .report import _payload, _severity_of
-from .workbench import (add_fact_data, audit_data, brief_data, project_data,
-                        status_data, write_section_data)
+from .workbench import (add_fact_data, audit_data, brief_data,
+                        evidence_status_data, freeze_evidence_data,
+                        project_data, status_data, unfreeze_evidence_data,
+                        write_section_data)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 
@@ -121,6 +123,10 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/project":
                 self._project_view()
                 return
+            if path == "/api/evidence":
+                data = evidence_status_data(self._project())
+                self._send(200, self._base("evidence", **data))
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
@@ -141,6 +147,21 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/facts":
                 self._add_fact()
+                return
+            if path == "/api/evidence/freeze":
+                body = self._body()
+                data = freeze_evidence_data(
+                    self._project(), str(body.get("reason") or ""),
+                    self.server.allow_write)  # type: ignore[attr-defined]
+                self._send(200, self._base("evidence_freeze", **data))
+                return
+            if path == "/api/evidence/unfreeze":
+                body = self._body()
+                data = unfreeze_evidence_data(
+                    self._project(), str(body.get("reason") or ""),
+                    str(body.get("at") or ""),
+                    self.server.allow_write)  # type: ignore[attr-defined]
+                self._send(200, self._base("evidence_unfreeze", **data))
                 return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:

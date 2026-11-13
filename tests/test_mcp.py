@@ -79,6 +79,7 @@ class McpReadOnlyTest(unittest.TestCase):
         self.assertIn("factscribe_status", names)
         self.assertIn("factscribe_project", names)
         self.assertIn("factscribe_audit", names)
+        self.assertIn("factscribe_evidence_status", names)
         self.assertNotIn("factscribe_write_section", names)
         self.assertNotIn("factscribe_add_fact", names)
 
@@ -128,6 +129,8 @@ class McpWritableTest(unittest.TestCase):
         names = {t["name"] for t in listing["tools"]}
         self.assertIn("factscribe_write_section", names)
         self.assertIn("factscribe_add_fact", names)
+        self.assertIn("factscribe_evidence_freeze", names)
+        self.assertIn("factscribe_evidence_unfreeze", names)
 
         text = "\\section{Intro}\n\n新写的一句 42。\n"
         result = call(self.proc, "factscribe_write_section",
@@ -142,6 +145,16 @@ class McpWritableTest(unittest.TestCase):
         self.assertFalse(result["result"]["isError"])
         body = json.loads(result["result"]["content"][0]["text"])
         self.assertEqual(body["id"], "A9")
+
+        frozen = call(self.proc, "factscribe_evidence_freeze", {})
+        self.assertFalse(frozen["result"]["isError"])
+        frozen_body = json.loads(frozen["result"]["content"][0]["text"])
+        self.assertIn("sha256", frozen_body)
+        unfrozen = call(self.proc, "factscribe_evidence_unfreeze",
+                        {"reason": "测试", "at": "2026-11-13"})
+        self.assertFalse(unfrozen["result"]["isError"])
+        unfrozen_body = json.loads(unfrozen["result"]["content"][0]["text"])
+        self.assertEqual(unfrozen_body["action"], "unfreeze")
 
 
 if __name__ == "__main__":

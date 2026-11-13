@@ -32,7 +32,8 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 - 只绑回环，不做远程服务；
 - 除 `/api/health` 外都要 token：`Authorization: Bearer <token>`、
   `X-FactScribe-Token: <token>` 或 `?token=`（仅本地调试；日志可能记录 URL）；
-- 默认只读；`--allow-write` 只开放两处写：审计闭包内的 `.tex` 章节、追加事实。
+- 默认只读；`--allow-write` 开放三处写：审计闭包内的 `.tex` 章节、追加事实、
+  证据冻结/解冻（解冻必须写理由，仍不代签）。
   章节写入用同目录临时文件 + `os.replace`，路径必须落在项目根内；不接受新文件、
   删除、改名或 `..`；
 - audit / brief / status 仍然不落盘；
@@ -47,8 +48,11 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 | GET | `/api/status` | 事实数、节数、配置形态与告警；不跑审计 |
 | GET | `/api/brief[?section=PREFIX]` | 写作简报；载荷与 `brief --json` 同源 |
 | GET | `/api/project` | 项目投影：节（file/text）、事实、来源、bib；`read_only` 标明能不能写 |
+| GET | `/api/evidence` | 证据冻结状态：声明、lock、mismatch、unfrozen、最后一条日志 |
 | PUT | `/api/sections` | 写一节：`{file,text}`；file 必须在审计闭包内且是 `.tex` |
 | POST | `/api/facts` | 追加一条事实：字段同 `fact add`；工具仍不代签 |
+| POST | `/api/evidence/freeze` | 冻结当前 `[evidence]`；`{reason?}`；需 `--allow-write` |
+| POST | `/api/evidence/unfreeze` | 解冻；`{reason, at?}`；`reason` 必填；需 `--allow-write` |
 | POST | `/api/audit` | 全量审计；载荷与 `audit --json` 同源 |
 
 成功响应统一带：
@@ -84,4 +88,4 @@ HTTP 400 = 配置/项目错；401 = token 缺失或不符；404 = 未知接口�
 
 `tests/test_serve.py`（14 例）：health 免鉴权、401、status/brief/audit 形状、
 红判定的 HTTP 200、未知接口 404、坏项目/非回环拒绝、只读不写项目；
-可写模式的项目投影、章节往返、闭包外拒绝、追加事实。
+可写模式的项目投影、章节往返、闭包外拒绝、追加事实、证据冻结/解冻。

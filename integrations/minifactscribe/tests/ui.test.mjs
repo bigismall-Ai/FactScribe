@@ -189,3 +189,12 @@ test('AI 起草是独立入口：页面发起 agent，输出只进候选区', ()
   assert.match(JS, /permission\.requested/, '应把审批交给用户');
   assert.match(JS, /acceptAi/, '采纳后才写工作台');
 });
+
+
+test('非项目对话打开时能检测并报错：AI 必须 fail-closed', () => {
+  assert.match(MINIAPP, /"hostAccess": \["navigation.read"\]/, '需要 navigation.read 才能判断打开位置');
+  assert.match(HTML, /id="session-banner"/, '应有非对话提示条');
+  assert.match(JS, /host\.navigation\.getState/, '应读取 navigation.getState');
+  assert.match(JS, /hostView === 'conversation'/, '只有 conversation 才允许 AI');
+  assert.match(JS, /AI 起草已禁用/, '未知/非对话时要明说禁用');
+});

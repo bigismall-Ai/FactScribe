@@ -131,6 +131,7 @@ factscribe serve <项目> --allow-write   # 打印 URL 与 token
 
 - 先在「工作台」连接本地 `factscribe serve` 并载入项目；
 - **从论文项目的对话里打开本页**（页面发起的 session 才会绑定项目目录）；
+  如果从插件库/首页打开，页面会检测到并显示提示条，AI 起草禁用；
 - 选一节，点「生成候选」；agent 的输出只进候选区；
 - 工具审批卡出现时，由你点「允许一次 / 拒绝」；
 - 点「采纳并写入本节」后才写工作台项目，并自动重跑审计。
@@ -162,7 +163,7 @@ node --test tests/
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
-五组共 64 例，全部离线（工作台用例起一个假服务，不连真项目）。
+五组共 65 例，全部离线（工作台用例起一个假服务，不连真项目）。
 
 ---
 
@@ -211,7 +212,7 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，19 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，20 例
 │   └── workbench.test.mjs       # 本地工作台连接层，5 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
@@ -239,6 +240,7 @@ integrations/minifactscribe/
 - 默认不联网：审计与演示数据都在本地；只有点「联网核验存在性」会访问 Crossref / arXiv。
 - 项目数据存在宿主分配的私有 `dataDir`，不写工作区。
 - 连接本地工作台时只访问用户填的本机回环地址，token 存在私有 dataDir；不写工作台项目。
+- 声明 `hostAccess: ["navigation.read"]`：只用来判断当前是不是从论文对话打开（`view`），不读对话内容。
 - 声明 `agentAccess: ["session.run"]`：AI 起草会把当前节、事实账与你的要求发给宿主 agent；
   agent 可能读写工作区，所有工具审批由你在页面上决定；不声明 `toolAccess`。
 

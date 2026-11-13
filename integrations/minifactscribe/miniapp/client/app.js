@@ -25,6 +25,8 @@ const state = {
   workbenchAudit: null,
   workbenchProject: null,
   ai: { requestId: null, streaming: false, sessionId: null, text: '', candidate: '', events: [] },
+  hostView: 'unknown',
+  hostKey: '',
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -745,12 +747,43 @@ async function loadDemo() {
 // 页面发起的 agent session 会绑定当前项目目录；Node 发起不会。
 // 输出只进候选区，采纳后写工作台项目，再跑闸门。
 
+function renderSessionBanner() {
+  const banner = $('#session-banner');
+  if (!banner) return;
+  if (state.hostView === 'conversation') {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  banner.textContent = state.hostView === 'unknown'
+    ? '无法确认当前是否从论文对话打开；AI 起草已禁用。请从论文项目的对话里重新打开 MiniFactScribe。'
+    : '当前不是从论文对话打开的（位置：' + state.hostView + '）。AI 起草会失败；请从论文项目的对话里重新打开 MiniFactScribe。';
+}
+
+async function detectHostContext() {
+  const host = globalThis.window?.mcode?.miniapp?.host;
+  try {
+    if (!host?.navigation?.getState) {
+      state.hostView = 'unknown';
+    } else {
+      const info = await host.navigation.getState();
+      state.hostView = String(info?.view || 'unknown');
+      state.hostKey = String(info?.key || '');
+    }
+  } catch {
+    state.hostView = 'unknown';
+    state.hostKey = '';
+  }
+  renderSessionBanner();
+}
+
 function aiAgent() {
   return globalThis.window?.mcode?.miniapp?.agent || null;
 }
 
 function aiReady() {
-  return Boolean(aiAgent()?.run && state.workbenchProject);
+  return Boolean(aiAgent()?.run && state.workbenchProject &&
+    state.hostView === 'conversation');
 }
 
 function aiSectionFile() {
@@ -788,10 +821,21 @@ function aiEvent(kind, text, extra = {}) {
 function renderAi() {
   const ready = aiReady();
   const hostOk = Boolean(aiAgent()?.run);
-  $('#ai-host-status').textContent = hostOk
-    ? '宿主 agent 可用'
-    : '没有宿主 agent';
-  $('#ai-unavailable').hidden = ready;
+  $('#ai-host-status').textContent = !hostOk
+    ? '没有宿主 agent'
+    : (state.hostView === 'conversation'
+      ? '项目对话 · agent 可用'
+      : '不是项目对话 · agent 已禁用');
+  if (!ready) {
+    $('#ai-unavailable').hidden = false;
+    $('#ai-unavailable').textContent = !hostOk
+      ? '当前页面没有宿主 agent。请从论文项目的对话里打开 MiniFactScribe。'
+      : (state.hostView !== 'conversation'
+        ? 'AI 起草要求从论文项目的对话里打开本页（当前位置：' + state.hostView + '）。'
+        : '先在工作台页签连接本地服务并载入项目。');
+  } else {
+    $('#ai-unavailable').hidden = true;
+  }
   $('#ai-controls').hidden = !ready;
   $('#ai-section-name').textContent = state.workbenchProject
     ? (aiSectionFile() || '（未选节）')

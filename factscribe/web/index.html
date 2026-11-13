@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FactScribe Workbench</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><b>FactScribe</b><span>本地工作台</span></div>
+      <div id="project" class="project">加载中…</div>
+      <div id="verdict" class="verdict idle">未审计</div>
+      <div class="actions">
+        <button id="btn-audit" class="btn primary" type="button">运行审计</button>
+      </div>
+    </header>
+
+    <div id="token-panel" class="token-panel" hidden>
+      <b>需要 token</b>
+      <span>启动 `factscribe web` 时打印在终端。</span>
+      <input id="token-input" type="password" placeholder="粘贴 token" />
+      <button id="btn-token" class="btn primary" type="button">连接</button>
+    </div>
+
+    <main class="layout">
+      <aside class="sections">
+        <div class="side-head"><span>章节</span><span id="section-count" class="muted"></span></div>
+        <div id="section-list"></div>
+      </aside>
+
+      <section class="editor">
+        <div class="editor-head">
+          <b id="section-title">选择一个章节</b>
+          <span id="save-state" class="muted"></span>
+        </div>
+        <textarea id="section-text" spellcheck="false" aria-label="章节内容"></textarea>
+        <div class="editor-actions">
+          <button id="btn-save" class="btn primary" type="button">保存本节</button>
+          <span id="readonly-note" class="muted"></span>
+        </div>
+      </section>
+
+      <aside class="side">
+        <div class="side-head"><span>审计</span><span id="audit-meta" class="muted"></span></div>
+        <div id="findings"></div>
+
+        <details class="card" id="facts-card">
+          <summary>事实账 <span id="facts-count" class="muted"></span></summary>
+          <div id="facts-body"></div>
+        </details>
+
+        <div class="card" id="evidence-card">
+          <div class="side-head"><span>证据冻结</span><span id="evidence-meta" class="muted"></span></div>
+          <div id="evidence-body"></div>
+          <div class="editor-actions">
+            <button id="btn-freeze" class="btn" type="button">冻结</button>
+            <button id="btn-unfreeze" class="btn" type="button">解冻</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

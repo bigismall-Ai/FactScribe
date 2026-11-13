@@ -21,7 +21,8 @@ python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-本地工作台（可选）：`python3 -m factscribe serve <项目>`，启动后打印 URL 与一次性 token；
+本地工作台页面：`python3 -m factscribe web <项目>`，启动后打印带 token 的页面地址；
+只想接 API 时用 `python3 -m factscribe serve <项目>`。
 接口见 [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md)。
 
 给 agent 接 MCP：`factscribe mcp <项目>`，客户端用 stdio 启动
@@ -32,9 +33,9 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 第一次跑出一片红，查 [`docs/TRIAGE.md`](docs/TRIAGE.md)（先修什么、什么可以不管）；
 已有论文要接进来，先看 [`docs/ADOPT.md`](docs/ADOPT.md)（实测读数 + 六步迁移，别当成安装）。
 
-## 二十一个命令
+## 二十二个命令
 
-`factscribe` 一共二十一个子命令。上手两条，其余按用途分。
+`factscribe` 一共二十二个子命令。上手两条，其余按用途分。
 
 | 命令 | 干什么 |
 |---|---|
@@ -42,6 +43,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `doctor` | 上手自检：环境（Python/tectonic/poppler/字体/git）与项目（声明/账/签/冻结）逐项检查，给修复命令；不是闸门，不影响判定 |
 | `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；给 MiniFactScribe / 本地页面 / agent 提供 `status` / `brief` / `audit` / `project`；默认只读，`--allow-write` 才开放改章节与追加事实 |
 | `mcp` | MCP stdio 服务器：把 `status` / `project` / `brief` / `audit` 暴露给 Claude Code / Codex / OpenCode；`--allow-write` 才开放写章节与追加事实 |
+| `web` | 本地工作台页面：`serve` 同款后端 + 三栏界面（章节 / 正文 / 证据与审计）；默认只读，`--allow-write` 才可写 |
 | `fact` | 记账：`add` 自动算哈希写一条事实，但**不替你签**清单 |
 | `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
 | `audit` | 核心校验：内联绑定、数字回账、引用落稳定标识、覆盖报告 |

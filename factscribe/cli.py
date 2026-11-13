@@ -164,6 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--allow-write", dest="allow_write", action="store_true",
                     help="打开写接口（PUT /api/sections、POST /api/facts）；"
                          "默认只读")
+    sp.add_argument("--ui", action="store_true",
+                    help="同时在这个端口提供本地工作台页面（GET /）")
     sp.add_argument("--json", action="store_true",
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
@@ -178,6 +180,25 @@ def build_parser() -> argparse.ArgumentParser:
                     help="项目目录（默认当前目录）")
     sp.add_argument("--allow-write", dest="allow_write", action="store_true",
                     help="开放 write_section / add_fact（默认只读）")
+
+    sp = sub.add_parser(
+        "web",
+        help="本地工作台页面：serve + 三栏编辑界面（只绑回环）",
+        description="等同 serve --ui：起本地 HTTP 服务，并在 GET / 提供"
+                    "左章节 / 中正文 / 右证据与审计的页面。默认只读；"
+                    "--allow-write 才开放改章节、追加事实与证据冻结。")
+    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("--host", default="127.0.0.1",
+                    choices=sorted(LOOPBACK_HOSTS),
+                    help="监听地址（只允许回环；默认 127.0.0.1）")
+    sp.add_argument("--port", type=int, default=0,
+                    help="端口（默认 0＝让系统分配）")
+    sp.add_argument("--token", default=None,
+                    help="固定 token（默认每次随机生成）")
+    sp.add_argument("--allow-write", dest="allow_write", action="store_true",
+                    help="打开写接口（章节/事实/证据）")
+    sp.add_argument("--json", action="store_true",
+                    help="启动行只出 JSON（服务仍阻塞）")
 
     for name, help_text in (
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
@@ -459,26 +480,32 @@ def cmd_serve(args) -> int:
     """本地工作台 HTTP API：启动后阻塞，直到 Ctrl+C。"""
     server, token = create_server(
         Path(args.project), host=args.host, port=args.port,
-        token=(args.token or None), allow_write=bool(args.allow_write))
+        token=(args.token or None), allow_write=bool(args.allow_write),
+        serve_ui=bool(getattr(args, "ui", False)))
     host, port = server.server_address[0], server.server_address[1]
     url = "http://%s:%d" % (host, port)
+    ui_url = (url + "/?token=" + token) if getattr(args, "ui", False) else ""
+    command = "web" if getattr(args, "web", False) else "serve"
     if args.json:
         print(json.dumps({
-            "event": "listening", "ok": True, "url": url,
+            "event": "listening", "ok": True, "command": command,
+            "url": url, "ui": ui_url or None,
             "token": token, "project": str(server.project),
             "api": ["/api/health", "/api/capabilities", "/api/status",
                     "/api/brief", "/api/audit", "/api/project"],
             "write": bool(args.allow_write),
         }, ensure_ascii=False), flush=True)
     else:
-        print("== factscribe serve ==")
+        print("== factscribe %s ==" % command)
         print("项目：%s" % server.project)
         print("URL：%s" % url)
+        if ui_url:
+            print("页面：%s" % ui_url)
         print("Token：%s" % token)
         print("模式：%s" % ("可写（--allow-write）" if args.allow_write else "只读"))
         print("接口：/api/health  /api/capabilities  /api/status  "
               "/api/brief  /api/audit  /api/project")
-        print("只绑回环；按 Ctrl+C 停止。")
+        print("只绑回环；按 Ctrl+C 停止。", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -486,6 +513,13 @@ def cmd_serve(args) -> int:
     finally:
         server.server_close()
     return EXIT_OK
+
+
+def cmd_web(args) -> int:
+    """本地工作台页面：serve + UI。"""
+    args.ui = True
+    args.web = True
+    return cmd_serve(args)
 
 
 def cmd_mcp(args) -> int:
@@ -1208,6 +1242,7 @@ def main(argv=None) -> int:
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,
                 "serve": cmd_serve,
+                "web": cmd_web,
                 "mcp": cmd_mcp,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,

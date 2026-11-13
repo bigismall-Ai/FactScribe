@@ -24,5 +24,6 @@
     }
   },
   "mcpEndpoints": [],
-  "agentAccess": ["session.run"]
+  "agentAccess": ["session.run"],
+  "hostAccess": ["navigation.read"]
 }

@@ -11,6 +11,9 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 - 本地 `factscribe serve` 已连接并载入项目；
 - **从论文项目的对话里打开 MiniFactScribe**：页面发起的 session 才绑定当前项目目录；
   Node 发起的 session 用 Mini App 自己的目录。
+- 页面通过 `window.mcode.miniapp.host.navigation.getState()` 判断打开位置：
+  `view === "conversation"` 才允许 AI；否则显示提示条并禁用 AI（fail-closed）。
+  读位置需要清单声明 `hostAccess: ["navigation.read"]`，不读对话内容。
 
 ## 2. 流程
 
@@ -39,6 +42,9 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 | `question.requested` | 提示到聊天侧面板回答 |
 | `turn.finished` | 结束 streaming 状态 |
 
+打开位置不是 `conversation`（或无法确认）时：顶部提示条说明原因，AI 起草禁用；
+工作台的手工读写不受影响。
+
 ## 4. 边界
 
 - 不是自动写作：人必须点「采纳」；不采纳就什么都不写；
@@ -48,6 +54,7 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 
 ## 5. 验收
 
-`integrations/minifactscribe/tests/ui.test.mjs`：manifest 有 `agentAccess`、
-面板/按钮存在、页面调用 `agent.run`、处理 `text.delta` / `permission.requested`、
-采纳后才写工作台。真实 agent 行为需在 mcode 项目对话里手测。
+`integrations/minifactscribe/tests/ui.test.mjs`：manifest 有 `agentAccess` 与
+`hostAccess`、面板/按钮存在、页面调用 `agent.run`、处理 `text.delta` /
+`permission.requested`、非对话位置 fail-closed、采纳后才写工作台。
+真实 agent 行为需在 mcode 项目对话里手测。

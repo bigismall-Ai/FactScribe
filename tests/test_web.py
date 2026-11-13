@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -67,6 +69,19 @@ class WebUITest(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertEqual(json.loads(body)["error"]["code"], "UNAUTHORIZED")
 
+    def test_build_is_disabled_by_default(self):
+        status, body = self._get("/api/build", token=TOKEN)
+        self.assertEqual(status, 404)  # GET 没有 build；POST 见下
+        req = urllib.request.Request(self.base + "/api/build", method="POST")
+        req.add_header("Authorization", "Bearer " + TOKEN)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                status = resp.status
+        except urllib.error.HTTPError as exc:
+            status = exc.code
+            exc.close()
+        self.assertEqual(status, 403)
+
     def test_fact_form_is_present(self):
         status, body = self._get("/")
         self.assertEqual(status, 200)
@@ -83,6 +98,48 @@ class WebUITest(unittest.TestCase):
         data = json.loads(body)
         self.assertTrue(data["ok"])
         self.assertEqual(len(data["sections"]), 2)
+
+
+class WebBuildTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls.tmp.name) / "paper"
+        shutil.copytree(ROOT / "examples" / "minimal", cls.root)
+        conf = cls.root / "paperkit.toml"
+        text = conf.read_text(encoding="utf-8")
+        text = text.replace('build = "tectonic -X compile main.tex"',
+                            'build = "printf \'%%PDF-1.4\' > main.pdf"')
+        conf.write_text(text, encoding="utf-8")
+        cls.server, cls.token = create_server(
+            cls.root, port=0, token=TOKEN, allow_build=True)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(
+            target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        cls.tmp.cleanup()
+
+    def test_build_and_download_pdf(self):
+        req = urllib.request.Request(self.base + "/api/build", method="POST")
+        req.add_header("Authorization", "Bearer " + TOKEN)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["exit"], 0)
+        self.assertGreater(data["pdf_bytes"], 0)
+
+        req = urllib.request.Request(self.base + "/api/pdf")
+        req.add_header("Authorization", "Bearer " + TOKEN)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            body = resp.read()
+        self.assertTrue(body.startswith(b"%PDF"))
 
 
 if __name__ == "__main__":

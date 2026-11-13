@@ -149,6 +149,9 @@ class _Handler(BaseHTTPRequestHandler):
                 data = evidence_status_data(self._project())
                 self._send(200, self._base("evidence", **data))
                 return
+            if path == "/api/pdf":
+                self._pdf()
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
@@ -185,6 +188,9 @@ class _Handler(BaseHTTPRequestHandler):
                     self.server.allow_write)  # type: ignore[attr-defined]
                 self._send(200, self._base("evidence_unfreeze", **data))
                 return
+            if path == "/api/build":
+                self._build()
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
@@ -213,8 +219,45 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------ data
 
+    def _pdf(self) -> None:
+        cfg = load_config(self._project())
+        target = (cfg.root / cfg.output).resolve()
+        try:
+            target.relative_to(cfg.root.resolve())
+        except ValueError:
+            self._error(400, "CONFIG_INVALID", "PDF 越出项目根")
+            return
+        if not target.is_file() or target.suffix.lower() != ".pdf":
+            self._error(404, "PDF_MISSING", "还没有 PDF：%s" % cfg.output)
+            return
+        self._send_bytes(target.read_bytes(), "application/pdf")
+
+    def _build(self) -> None:
+        if not self.server.allow_build:  # type: ignore[attr-defined]
+            self._error(403, "BUILD_DISABLED",
+                        "编译需要启动时加 --allow-build")
+            return
+        from .cli import run_build_step  # 延迟导入，避免 cli↔serve 循环
+        cfg = load_config(self._project())
+        code, out, info = run_build_step(cfg, font_fallback=True)
+        tail = out[-4000:] if out else ""
+        pdf = cfg.root / cfg.output
+        size = int((info or {}).get("pdf_bytes") or 0)
+        if not size and pdf.is_file():
+            size = pdf.stat().st_size
+        data = {
+            "output": cfg.output,
+            "pdf_bytes": size,
+            "output_text": tail,
+        }
+        payload = self._base("build", code, **data)
+        payload["ok"] = code == EXIT_OK
+        # 编译失败也是 200：失败原因在 exit / output_text，不是传输错误。
+        self._send(200, payload)
+
     def _project_view(self) -> None:
-        data = project_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
+        data = project_data(self._project(), self.server.allow_write,  # type: ignore[attr-defined]
+                            self.server.allow_build)  # type: ignore[attr-defined]
         self._send(200, self._base("project", **data))
 
     def _write_section(self) -> None:
@@ -250,17 +293,20 @@ class WorkbenchServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
     def __init__(self, address, project: Path, token: str,
-                 allow_write: bool = False, serve_ui: bool = False):
+                 allow_write: bool = False, serve_ui: bool = False,
+                 allow_build: bool = False):
         self.project = project
         self.token = token
         self.allow_write = allow_write
         self.serve_ui = serve_ui
+        self.allow_build = allow_build
         super().__init__(address, _Handler)
 
 
 def create_server(project: Path | str, *, host: str = "127.0.0.1",
                   port: int = 0, token: str | None = None,
-                  allow_write: bool = False, serve_ui: bool = False
+                  allow_write: bool = False, serve_ui: bool = False,
+                  allow_build: bool = False
                   ) -> tuple[WorkbenchServer, str]:
     """建服务但不启动；返回 (server, token)。项目不合法时抛 ConfigError。"""
     if host not in LOOPBACK_HOSTS:
@@ -274,5 +320,6 @@ def create_server(project: Path | str, *, host: str = "127.0.0.1",
     load_config(root)  # 提前校验；坏配置在启动时就 exit 2
     actual_token = token or secrets.token_urlsafe(24)
     server = WorkbenchServer((host, int(port)), root, actual_token,
-                             allow_write=allow_write, serve_ui=serve_ui)
+                             allow_write=allow_write, serve_ui=serve_ui,
+                             allow_build=allow_build)
     return server, actual_token

@@ -12,8 +12,10 @@ import sys
 from pathlib import Path
 
 from .constants import VERSION
-from .workbench import (add_fact_data, audit_data, brief_data, project_data,
-                        status_data, write_section_data)
+from .workbench import (add_fact_data, audit_data, brief_data,
+                        evidence_status_data, freeze_evidence_data,
+                        project_data, status_data, unfreeze_evidence_data,
+                        write_section_data)
 
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -30,6 +32,28 @@ _WRITE_TOOLS = {
                 "text": {"type": "string", "description": "Full new file content"},
             },
             "required": ["file", "text"],
+            "additionalProperties": False,
+        },
+    },
+    "factscribe_evidence_freeze": {
+        "description": "Freeze the current [evidence] list into audit/evidence.lock "
+                       "with an optional reason. Requires --allow-write.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+            "additionalProperties": False,
+        },
+    },
+    "factscribe_evidence_unfreeze": {
+        "description": "Unfreeze the evidence list; reason is mandatory and is "
+                       "written to audit/evidence-log.ndjson. Requires --allow-write.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "reason": {"type": "string"},
+                "at": {"type": "string", "description": "YYYY-MM-DD (optional)"},
+            },
+            "required": ["reason"],
             "additionalProperties": False,
         },
     },
@@ -70,6 +94,12 @@ _READ_TOOLS = {
         "inputSchema": {"type": "object", "properties": {},
                         "additionalProperties": False},
     },
+    "factscribe_evidence_status": {
+        "description": "Evidence freeze status: declared sections, lock hash/entries, "
+                       "lock mismatch, unfrozen state and the last log record.",
+        "inputSchema": {"type": "object", "properties": {},
+                        "additionalProperties": False},
+    },
     "factscribe_brief": {
         "description": "Drafting brief: section list, usable facts and numbers, terms.",
         "inputSchema": {
@@ -106,6 +136,14 @@ def _dispatch(project: Path, allow_write: bool, name: str,
         return brief_data(project, args.get("section"))
     if name == "factscribe_audit":
         return audit_data(project)
+    if name == "factscribe_evidence_status":
+        return evidence_status_data(project)
+    if name == "factscribe_evidence_freeze":
+        return freeze_evidence_data(project, str(args.get("reason") or ""),
+                                    allow_write)
+    if name == "factscribe_evidence_unfreeze":
+        return unfreeze_evidence_data(project, str(args.get("reason") or ""),
+                                      str(args.get("at") or ""), allow_write)
     if name == "factscribe_write_section":
         return write_section_data(project, str(args.get("file") or ""),
                                   args.get("text"), allow_write)

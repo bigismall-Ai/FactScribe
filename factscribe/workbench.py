@@ -12,6 +12,8 @@ from pathlib import Path
 from .audit import _aggregate_exit, run_audit, source_path
 from .brief import build_brief, payload as brief_payload
 from .config import (ConfigError, load_config, load_facts, load_sections)
+from .evidence import (freeze_evidence, lock_check, log_state, read_lock,
+                       unfreeze_evidence, unfrozen_info)
 from .report import _config_block, _severity_of
 from .scaffold import add_fact
 
@@ -155,3 +157,31 @@ def add_fact_data(project: Path | str, body: dict,
         expr=str(body.get("expr") or ""),
         derived_from=body.get("derived_from") or body.get("derivedFrom"),
         note=str(body.get("note") or ""))
+
+
+def evidence_status_data(project: Path | str) -> dict:
+    cfg = load_config(Path(project))
+    lock = read_lock(cfg.root)
+    return {
+        "defined": bool(getattr(cfg, "evidence_defined", False)),
+        "declared_sections": len(getattr(cfg, "evidence_sections", {}) or {}),
+        "lock": lock,
+        "mismatch": lock_check(cfg),
+        "unfrozen": unfrozen_info(cfg.root),
+        "log": log_state(cfg.root),
+    }
+
+
+def freeze_evidence_data(project: Path | str, reason: str = "",
+                         allow_write: bool = False) -> dict:
+    _require_write(allow_write)
+    cfg = load_config(Path(project))
+    return freeze_evidence(cfg.root, dict(getattr(cfg, "evidence_sections", {}) or {}),
+                           reason)
+
+
+def unfreeze_evidence_data(project: Path | str, reason: str, at: str = "",
+                           allow_write: bool = False) -> dict:
+    _require_write(allow_write)
+    cfg = load_config(Path(project))
+    return unfreeze_evidence(cfg.root, reason, at)

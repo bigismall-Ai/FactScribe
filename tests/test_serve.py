@@ -126,6 +126,10 @@ class ServeTest(unittest.TestCase):
                                      token=self.token)
         self.assertEqual(status, 403)
         self.assertEqual(data["error"]["code"], "READ_ONLY")
+        status, data = self._request("/api/evidence/freeze", method="POST",
+                                     token=self.token)
+        self.assertEqual(status, 403)
+        self.assertEqual(data["error"]["code"], "READ_ONLY")
 
     def test_serve_does_not_write_project(self):
         before = {p: p.read_bytes() for p in
@@ -213,6 +217,33 @@ class WritableServeTest(unittest.TestCase):
             body={"file": "../outside.tex", "text": "x"})
         self.assertEqual(status, 400)
         self.assertEqual(data["error"]["code"], "CONFIG_INVALID")
+
+    def test_evidence_freeze_and_unfreeze(self):
+        status, data = self._request("/api/evidence", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertFalse(data["defined"])
+        self.assertIsNone(data["lock"])
+
+        status, data = self._request(
+            "/api/evidence/freeze", method="POST", token=self.token,
+            body={"reason": "测试冻结"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["endpoint"], "evidence_freeze")
+        self.assertFalse(data["idempotent"])
+
+        status, data = self._request("/api/evidence", token=self.token)
+        self.assertIsNotNone(data["lock"])
+        self.assertIsNone(data["unfrozen"])
+
+        status, data = self._request(
+            "/api/evidence/unfreeze", method="POST", token=self.token,
+            body={"reason": "测试改清单", "at": "2026-11-13"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["action"], "unfreeze")
+
+        status, data = self._request("/api/evidence", token=self.token)
+        self.assertIsNotNone(data["unfrozen"])
+        self.assertEqual(data["log"]["action"], "unfreeze")
 
     def test_add_fact_round_trip(self):
         status, data = self._request(

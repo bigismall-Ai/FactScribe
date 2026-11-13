@@ -57,6 +57,7 @@ factscribe mcp <项目> [--allow-write]
 | `factscribe_project` | 节（file/text）、事实、来源、bib |
 | `factscribe_brief` | 写作简报；可选 `section` 前缀 |
 | `factscribe_audit` | 机械闸门；`exit` 0/1/3，附 `summary` / `findings` |
+| `factscribe_evidence_status` | 证据冻结状态：lock、mismatch、unfrozen、最后日志 |
 
 `--allow-write` 才加入：
 
@@ -64,6 +65,8 @@ factscribe mcp <项目> [--allow-write]
 |---|---|
 | `factscribe_write_section` | 写审计闭包内的 `.tex`；临时文件 + 原子替换 |
 | `factscribe_add_fact` | 追加事实；同 `fact add`，**不代签** |
+| `factscribe_evidence_freeze` | 冻结当前 `[evidence]`；`reason` 可选 |
+| `factscribe_evidence_unfreeze` | 解冻；`reason` 必填，写 append-only 流水账 |
 
 写工具与 `serve --allow-write` 共用同一实现（`factscribe/workbench.py`），
 不会出现“HTTP 能写、MCP 不能写”的第二套规则。
@@ -79,4 +82,4 @@ factscribe mcp <项目> [--allow-write]
 ## 5. 验收
 
 `tests/test_mcp.py`（6 例）：initialize、只读 tools/list、status/audit、
-只读写工具拒绝、未知方法、可写模式写章节 + 追加事实。
+只读写工具拒绝、未知方法、可写模式写章节 + 追加事实 + 证据冻结/解冻。

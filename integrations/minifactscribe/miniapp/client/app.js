@@ -20,6 +20,9 @@ const state = {
   auditSig: null,
   stale: false,
   saveFailed: false,
+  workbench: null,
+  workbenchStatus: null,
+  workbenchAudit: null,
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -105,7 +108,10 @@ async function api(path, opts = {}) {
   } catch {
     data = {};
   }
-  if (!res.ok || data.ok === false) throw new Error(data.error || 'HTTP ' + res.status);
+  if (!res.ok || data.ok === false) {
+    const message = data?.error?.message || data?.error || 'HTTP ' + res.status;
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+  }
   return data;
 }
 
@@ -217,6 +223,7 @@ function renderTab() {
   else if (state.tab === 'refs') renderRefs();
   else if (state.tab === 'protect') renderProtect();
   else if (state.tab === 'audit') renderAudit();
+  else if (state.tab === 'workbench') renderWorkbench();
 }
 
 // ------------------------------------------------------------------ 顶栏
@@ -726,10 +733,139 @@ async function loadDemo() {
   toast('已载入演示数据');
 }
 
+
+// ------------------------------------------------------------------ 本地工作台
+// 只显示工作台项目的结果；左侧正文/事实账仍是本地草稿，不混用。
+
+function renderWorkbench() {
+  const w = state.workbench || { configured: false };
+  const badge = $('#workbench-badge');
+  const summary = $('#workbench-summary');
+  if (!badge) return;
+  badge.textContent = w.configured ? '已配置' : '未连接';
+  $('#workbench-url').value = w.url || '';
+  $('#workbench-token').placeholder = w.tokenSet
+    ? '已保存（留空不改）'
+    : '启动 serve 时打印的 token';
+  $('#btn-workbench-disconnect').disabled = !w.configured;
+  $('#btn-workbench-audit').disabled = !w.configured;
+
+  if (!w.configured) {
+    summary.innerHTML = '<div class="line-empty">未连接。先在本机启动 <code>python3 -m factscribe serve &lt;项目&gt;</code>，把打印的 URL 和 token 填进来。</div>';
+    $('#workbench-audit').innerHTML = '';
+    return;
+  }
+  const s = state.workbenchStatus;
+  if (!s) {
+    summary.innerHTML = '<div class="line-empty">已配置，正在读取工作台状态…</div>';
+  } else {
+    summary.innerHTML =
+      '<div class="verdict-card green">' +
+        '<div><div class="verdict-word">工作台</div><div class="verdict-note">Python 引擎</div></div>' +
+        '<div class="verdict-note" style="flex:1">' + esc(s.project || '（未命名）') +
+          ' · ' + esc(s.facts) + ' 条事实 · ' + esc(s.sections) + ' 个节' +
+          '<br><span class="muted-note">' + esc(s.root || '') + '</span></div>' +
+      '</div>';
+  }
+
+  const a = state.workbenchAudit;
+  if (!a) {
+    $('#workbench-audit').innerHTML = '<div class="line-empty">还没有用工作台审计。上面的结果只来自 Python 原版。</div>';
+    return;
+  }
+  const findings = Array.isArray(a.findings) ? a.findings : [];
+  const red = findings.filter((f) => f.severity === 'red');
+  const yellow = findings.filter((f) => f.severity === 'yellow');
+  const verdict = a.exit === 0 ? 'green' : a.exit === 3 ? 'yellow' : 'red';
+  const word = { green: '绿', yellow: '黄', red: '红' }[verdict];
+  const note = verdict === 'green'
+    ? '账有据、据未改、文有绑。它不说明结论为真。'
+    : verdict === 'yellow'
+      ? '跑完了，但有未核验或未绑定的项——不判死，但必须逐条看过。'
+      : '有事实层矛盾：这些数或引用回不到账，必须改。';
+  const rows = findings.slice(0, 12).map((f) => {
+    const isRed = f.severity === 'red';
+    const sev = isRed ? '红牌' : '黄牌';
+    const cls = isRed ? 'chip-red' : 'chip-yellow';
+    return '<div class="issue">' +
+      '<div class="issue-head"><span class="chip ' + cls + '">' + sev + '</span>' +
+      '<span class="issue-label">' + esc(ISSUE_LABEL[f.code] || f.code) + '</span>' +
+      '<span class="code">' + esc(f.code || '') + '</span>' +
+      '<span class="loc">' + esc(f.location || '') + '</span></div>' +
+      '<div class="issue-msg">' + esc(f.message || '') + '</div>' +
+      '</div>';
+  }).join('');
+  $('#workbench-audit').innerHTML =
+    '<div class="verdict-card ' + verdict + '">' +
+      '<div><div class="verdict-word">' + word + '</div><div class="verdict-note">退出码 ' + esc(a.exit) + '</div></div>' +
+      '<div class="verdict-note" style="flex:1">' + esc(note) + '</div>' +
+    '</div>' +
+    '<div class="kpi-row">' +
+      kpi(red.length, '红牌 · 必须改', 'bad', null) +
+      kpi(yellow.length, '黄牌 · 待人判断', 'warn', null) +
+    '</div>' +
+    (rows || '<div class="line-empty">没有红黄项。</div>') +
+    (findings.length > 12 ? '<div class="muted-note">只显示前 12 条；完整结果看 serve 的 --json 输出。</div>' : '');
+}
+
+async function loadWorkbench() {
+  try {
+    state.workbench = await api('/api/workbench');
+  } catch {
+    state.workbench = { configured: false };
+  }
+  renderWorkbench();
+}
+
+async function loadWorkbenchStatus() {
+  state.workbenchStatus = await api('/api/workbench/status');
+  renderWorkbench();
+}
+
+async function connectWorkbench() {
+  const url = $('#workbench-url').value.trim();
+  const token = $('#workbench-token').value.trim();
+  $('#workbench-status').textContent = '连接中…';
+  const data = await api('/api/workbench', {
+    method: 'PUT',
+    body: JSON.stringify({ url, token }),
+  });
+  state.workbench = { configured: true, url: data.url, tokenSet: true };
+  state.workbenchAudit = null;
+  $('#workbench-status').textContent = '已连接：' + data.url;
+  await loadWorkbenchStatus();
+  toast('已连接本地工作台');
+}
+
+async function disconnectWorkbench() {
+  await api('/api/workbench', { method: 'DELETE' });
+  state.workbench = { configured: false };
+  state.workbenchStatus = null;
+  state.workbenchAudit = null;
+  $('#workbench-status').textContent = '';
+  renderWorkbench();
+}
+
+async function runWorkbenchAudit() {
+  $('#workbench-status').textContent = '工作台审计中…';
+  state.workbenchAudit = await api('/api/workbench/audit', { method: 'POST' });
+  $('#workbench-status').textContent = '工作台审计完成';
+  renderWorkbench();
+}
+
 function wire() {
   for (const btn of $$('.nav-item')) btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   $('#btn-audit').addEventListener('click', () => runAudit());
   $('#btn-rerun').addEventListener('click', () => runAudit());
+  $('#btn-workbench-connect').addEventListener('click', () => {
+    connectWorkbench().catch((e) => { $('#workbench-status').textContent = '连接失败：' + e.message; toast('连接失败：' + e.message); });
+  });
+  $('#btn-workbench-disconnect').addEventListener('click', () => {
+    disconnectWorkbench().catch((e) => toast('断开失败：' + e.message));
+  });
+  $('#btn-workbench-audit').addEventListener('click', () => {
+    runWorkbenchAudit().catch((e) => { $('#workbench-status').textContent = '审计失败：' + e.message; toast('审计失败：' + e.message); });
+  });
 
   $('#save-state').addEventListener('click', () => {
     if (state.saveFailed) saveNow();
@@ -1002,6 +1138,7 @@ async function init() {
   $('#project-name').value = state.project.name;
   setSaveState('无改动', false);
   wire();
+  await loadWorkbench();
   renderVerdict();
   switchTab('manuscript');
   await runAudit({ focus: false });

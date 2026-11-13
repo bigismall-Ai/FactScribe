@@ -38,6 +38,7 @@ from .review import payload as review_payload
 from .review import render_human as render_review
 from .review import run_review
 from .scaffold import add_fact, init_project
+from .serve import LOOPBACK_HOSTS, create_server
 from .style import (DISCLAIMER, STAGE_DRAFT, STAGE_VALUES, analyze,
                     build_prompt, filter_new_findings,
                     load_style_rules_info, project_rule_report, render_human)
@@ -144,6 +145,24 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("project", nargs="?", default=".",
                     help="项目目录（默认当前目录）")
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
+
+    sp = sub.add_parser(
+        "serve",
+        help="本地工作台 HTTP API：只绑回环，默认随机 token；只读不落盘",
+        description="把 config / facts / brief / audit 暴露成本机 HTTP，"
+                    "供 Mini FactScribe、本地页面或外部 agent 调用。"
+                    "只绑 127.0.0.1 / localhost；每次启动生成随机 Bearer token；"
+                    "serve 本身不写项目、不改退出码，audit 的判定仍在 payload.exit。")
+    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("--host", default="127.0.0.1",
+                    choices=sorted(LOOPBACK_HOSTS),
+                    help="监听地址（只允许回环；默认 127.0.0.1）")
+    sp.add_argument("--port", type=int, default=0,
+                    help="端口（默认 0＝让系统分配，启动时打印实际端口）")
+    sp.add_argument("--token", default=None,
+                    help="固定 token（默认每次随机生成；空串视为未给）")
+    sp.add_argument("--json", action="store_true",
+                    help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
     for name, help_text in (
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
@@ -418,6 +437,37 @@ def cmd_doctor(args) -> int:
     info = collect_doctor(Path(args.project))
     payload = _payload("doctor", "ok", EXIT_OK, **info)
     _emit(payload, render_doctor(info), args.json)
+    return EXIT_OK
+
+
+def cmd_serve(args) -> int:
+    """本地工作台 HTTP API：启动后阻塞，直到 Ctrl+C。"""
+    server, token = create_server(
+        Path(args.project), host=args.host, port=args.port,
+        token=(args.token or None))
+    host, port = server.server_address[0], server.server_address[1]
+    url = "http://%s:%d" % (host, port)
+    if args.json:
+        print(json.dumps({
+            "event": "listening", "ok": True, "url": url,
+            "token": token, "project": str(server.project),
+            "api": ["/api/health", "/api/capabilities", "/api/status",
+                    "/api/brief", "/api/audit"],
+        }, ensure_ascii=False), flush=True)
+    else:
+        print("== factscribe serve ==")
+        print("项目：%s" % server.project)
+        print("URL：%s" % url)
+        print("Token：%s" % token)
+        print("接口：/api/health  /api/capabilities  /api/status  "
+              "/api/brief  /api/audit")
+        print("只绑回环；按 Ctrl+C 停止。")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")
+    finally:
+        server.server_close()
     return EXIT_OK
 
 
@@ -1134,6 +1184,7 @@ def main(argv=None) -> int:
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,
+                "serve": cmd_serve,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,

@@ -10,7 +10,7 @@
 ## 1. 命令
 
 ```bash
-factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--json]
+factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--allow-build] [--ui] [--json]
 ```
 
 - `--host` 只接受 `127.0.0.1` / `localhost`；其他地址 exit 2。
@@ -18,6 +18,8 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 - 不给 `--token` 时生成 24 字节随机 token（每次启动都变）。
 - `--json` 只让**启动行**出 JSON；服务仍阻塞，`Ctrl+C` 停止。
 - 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
+- `--allow-build` 才开放 `POST /api/build`；它会执行 `project.build`（shell），
+  默认关闭。`GET /api/pdf` 只读已生成的 PDF。
 - `--ui` 在 `GET /` 提供本地工作台页面；`factscribe web` 是它的别名（见 `SPEC-WEB.md`）。
 
 启动行：
@@ -35,6 +37,7 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
   `X-FactScribe-Token: <token>` 或 `?token=`（仅本地调试；日志可能记录 URL）；
 - 默认只读；`--allow-write` 开放三处写：审计闭包内的 `.tex` 章节、追加事实、
   证据冻结/解冻（解冻必须写理由，仍不代签）。
+- `--allow-build` 单独控制 shell 编译；不要对不可信项目开。
   章节写入用同目录临时文件 + `os.replace`，路径必须落在项目根内；不接受新文件、
   删除、改名或 `..`；
 - audit / brief / status 仍然不落盘；
@@ -54,6 +57,8 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 | POST | `/api/facts` | 追加一条事实：字段同 `fact add`；工具仍不代签 |
 | POST | `/api/evidence/freeze` | 冻结当前 `[evidence]`；`{reason?}`；需 `--allow-write` |
 | POST | `/api/evidence/unfreeze` | 解冻；`{reason, at?}`；`reason` 必填；需 `--allow-write` |
+| POST | `/api/build` | 编译 PDF；需 `--allow-build`；返回 exit / output_text / pdf_bytes |
+| GET | `/api/pdf` | 下载 `project.output` 指向的 PDF（需 token；不要求 `--allow-build`） |
 | POST | `/api/audit` | 全量审计；载荷与 `audit --json` 同源 |
 
 成功响应统一带：

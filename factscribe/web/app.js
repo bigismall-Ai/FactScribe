@@ -66,6 +66,35 @@ async function api(path, options = {}) {
 
 // ------------------------------------------------------------------ 加载
 
+async function runBuild() {
+  $('#build-state').textContent = '编译中…';
+  const data = await api('/api/build', { method: 'POST' });
+  if (data.ok) {
+    $('#build-state').textContent = '编译成功 · ' + data.pdf_bytes + ' 字节';
+    $('#btn-open-pdf').hidden = false;
+    toast('PDF 编译完成');
+  } else {
+    $('#build-state').textContent = '编译失败 · 退出码 ' + data.exit;
+    $('#build-state').title = (data.output_text || '').slice(0, 2000);
+    toast('编译失败，悬停看输出');
+    console.error(data.output_text || '');
+  }
+}
+
+async function openPdf() {
+  const win = window.open('about:blank', '_blank');
+  const res = await fetch('/api/pdf', {
+    headers: state.token ? { Authorization: 'Bearer ' + state.token } : {},
+  });
+  if (!res.ok) {
+    if (win) win.close();
+    throw new Error('PDF 还没生成或不可读（HTTP ' + res.status + '）');
+  }
+  const blob = await res.blob();
+  if (!win) throw new Error('浏览器拦了新窗口');
+  win.location.href = URL.createObjectURL(blob);
+}
+
 async function loadProject() {
   const project = await api('/api/project');
   state.project = project;
@@ -79,6 +108,12 @@ async function loadProject() {
   $('#section-text').readOnly = project.read_only;
   $('#btn-freeze').disabled = project.read_only;
   $('#btn-unfreeze').disabled = project.read_only;
+  $('#btn-build').disabled = !project.build_allowed;
+  $('#btn-build').title = project.build_allowed
+    ? '执行 project.build 或自动编译 main.tex'
+    : '启动时没加 --allow-build';
+  $('#btn-open-pdf').hidden = true;
+  $('#build-state').textContent = '';
   renderSections();
   renderFacts();
   const saved = localStorage.getItem('factscribe.section');
@@ -291,6 +326,12 @@ async function unfreezeEvidence() {
 function wire() {
   $('#btn-audit').addEventListener('click', () => {
     runAudit().catch((e) => toast('审计失败：' + e.message));
+  });
+  $('#btn-build').addEventListener('click', () => {
+    runBuild().catch((e) => { $('#build-state').textContent = '编译失败：' + e.message; });
+  });
+  $('#btn-open-pdf').addEventListener('click', () => {
+    openPdf().catch((e) => toast(e.message));
   });
   $('#btn-save').addEventListener('click', () => {
     saveSection().catch((e) => { $('#save-state').textContent = '保存失败：' + e.message; toast(e.message); });

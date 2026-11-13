@@ -45,7 +45,8 @@ def status_data(project: Path | str, allow_write: bool = False) -> dict:
     }
 
 
-def project_data(project: Path | str, allow_write: bool = False) -> dict:
+def project_data(project: Path | str, allow_write: bool = False,
+                 allow_build: bool = False) -> dict:
     cfg = load_config(Path(project))
     facts = load_facts(cfg)
     sections = load_sections(cfg)
@@ -71,6 +72,7 @@ def project_data(project: Path | str, allow_write: bool = False) -> dict:
         bib = ""
     return {
         "read_only": not allow_write,
+        "build_allowed": bool(allow_build),
         "project": cfg.name or cfg.title,
         "root": str(cfg.root),
         "sections": [{"file": rel, "text": text} for rel, text in sections],

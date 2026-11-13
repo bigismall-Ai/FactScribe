@@ -166,3 +166,12 @@ test('本地工作台是独立入口，并明确与本地草稿不是同一个�
   assert.match(JS, /\/api\/workbench/, '客户端应调用工作台代理接口');
   assert.match(JS, /runWorkbenchAudit/, '应有工作台审计入口');
 });
+
+test('工作台可载入项目并按节保存，且保存前说明写给工作台项目', () => {
+  assert.match(HTML, /id="btn-workbench-load"/, '应有载入项目按钮');
+  assert.match(HTML, /id="workbench-section-select"/, '应有节选择');
+  assert.match(HTML, /id="btn-workbench-save"/, '应有保存按钮');
+  assert.match(HTML, /写给工作台项目，不是本地草稿/, '必须说明写入目标');
+  assert.match(JS, /\/api\/workbench\/project/, '应载入工作台项目');
+  assert.match(JS, /\/api\/workbench\/sections/, '应能保存工作台章节');
+});

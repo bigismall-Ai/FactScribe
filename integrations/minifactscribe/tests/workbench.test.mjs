@@ -16,7 +16,7 @@ let server;
 let base;
 
 before(async () => {
-  server = createServer((request, response) => {
+  server = createServer(async (request, response) => {
     const auth = request.headers.authorization;
     if (auth !== `Bearer ${TOKEN}`) {
       response.writeHead(401, { 'content-type': 'application/json' });
@@ -36,6 +36,13 @@ before(async () => {
     if (request.url === '/api/status') {
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ ok: true, project: 'demo', facts: 2, sections: 1 }));
+      return;
+    }
+    if (request.url === '/api/sections' && request.method === 'PUT') {
+      let body = '';
+      for await (const chunk of request) body += chunk;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ ok: true, echo: JSON.parse(body) }));
       return;
     }
     if (request.url === '/api/audit' && request.method === 'POST') {
@@ -79,6 +86,13 @@ test('token 不对时拒绝，且错误有可读消息', async () => {
     () => probeWorkbench(base, 'wrong'),
     /bad token/,
   );
+});
+
+test('代理写入时把 JSON body 原样送过去', async () => {
+  const result = await workbenchFetch(base, TOKEN, '/api/sections', 'PUT',
+    { file: 'sections/01.tex', text: 'hello' });
+  assert.equal(result.echo.file, 'sections/01.tex');
+  assert.equal(result.echo.text, 'hello');
 });
 
 test('代理 status / audit 使用 POST 并原样返回结构化结果', async () => {

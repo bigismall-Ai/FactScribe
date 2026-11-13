@@ -161,6 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="端口（默认 0＝让系统分配，启动时打印实际端口）")
     sp.add_argument("--token", default=None,
                     help="固定 token（默认每次随机生成；空串视为未给）")
+    sp.add_argument("--allow-write", dest="allow_write", action="store_true",
+                    help="打开写接口（PUT /api/sections、POST /api/facts）；"
+                         "默认只读")
     sp.add_argument("--json", action="store_true",
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
@@ -444,7 +447,7 @@ def cmd_serve(args) -> int:
     """本地工作台 HTTP API：启动后阻塞，直到 Ctrl+C。"""
     server, token = create_server(
         Path(args.project), host=args.host, port=args.port,
-        token=(args.token or None))
+        token=(args.token or None), allow_write=bool(args.allow_write))
     host, port = server.server_address[0], server.server_address[1]
     url = "http://%s:%d" % (host, port)
     if args.json:
@@ -452,15 +455,17 @@ def cmd_serve(args) -> int:
             "event": "listening", "ok": True, "url": url,
             "token": token, "project": str(server.project),
             "api": ["/api/health", "/api/capabilities", "/api/status",
-                    "/api/brief", "/api/audit"],
+                    "/api/brief", "/api/audit", "/api/project"],
+            "write": bool(args.allow_write),
         }, ensure_ascii=False), flush=True)
     else:
         print("== factscribe serve ==")
         print("项目：%s" % server.project)
         print("URL：%s" % url)
         print("Token：%s" % token)
+        print("模式：%s" % ("可写（--allow-write）" if args.allow_write else "只读"))
         print("接口：/api/health  /api/capabilities  /api/status  "
-              "/api/brief  /api/audit")
+              "/api/brief  /api/audit  /api/project")
         print("只绑回环；按 Ctrl+C 停止。")
     try:
         server.serve_forever()

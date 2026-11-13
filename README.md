@@ -36,7 +36,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 |---|---|
 | `init` | 生成最小论文骨架：项目声明、空账、人签清单模板、正文占位 |
 | `doctor` | 上手自检：环境（Python/tectonic/poppler/字体/git）与项目（声明/账/签/冻结）逐项检查，给修复命令；不是闸门，不影响判定 |
-| `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；给 Mini FactScribe / 本地页面 / agent 提供 `status` / `brief` / `audit` 结构化接口，只读不落盘 |
+| `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；给 MiniFactScribe / 本地页面 / agent 提供 `status` / `brief` / `audit` / `project`；默认只读，`--allow-write` 才开放改章节与追加事实 |
 | `fact` | 记账：`add` 自动算哈希写一条事实，但**不替你签**清单 |
 | `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
 | `audit` | 核心校验：内联绑定、数字回账、引用落稳定标识、覆盖报告 |

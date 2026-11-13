@@ -46,10 +46,13 @@ export function normalizeWorkbenchUrl(raw) {
   return url.origin;
 }
 
-export async function workbenchFetch(base, token, path, method = 'GET') {
+export async function workbenchFetch(base, token, path, method = 'GET', body = null) {
+  const headers = { authorization: `Bearer ${token}` };
+  if (body !== null) headers['content-type'] = 'application/json';
   const response = await fetch(base + path, {
     method,
-    headers: { authorization: `Bearer ${token}` },
+    headers,
+    ...(body !== null ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(10000),
   });
   let data;
@@ -436,6 +439,26 @@ export async function start(context) {
             sendJson(response, 200,
               await workbenchFetch(workbench.url, workbench.token,
                 '/api/brief' + suffix));
+            return;
+          }
+          if (request.method === 'GET' && path === '/api/workbench/project') {
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/project'));
+            return;
+          }
+          if (request.method === 'PUT' && path === '/api/workbench/sections') {
+            const body = await readBody(request);
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/sections', 'PUT', body));
+            return;
+          }
+          if (request.method === 'POST' && path === '/api/workbench/facts') {
+            const body = await readBody(request);
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/facts', 'POST', body));
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/audit') {

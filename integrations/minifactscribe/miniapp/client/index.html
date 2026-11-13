@@ -304,6 +304,21 @@
             </div>
           </div>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
+          <div class="panel-actions" style="margin: 10px 0">
+            <button id="btn-workbench-load" class="btn" type="button">载入工作台项目</button>
+            <span id="workbench-save-state" class="muted-note"></span>
+          </div>
+          <div id="workbench-editor" hidden>
+            <label class="field" style="max-width: 520px">
+              <span>选择一节</span>
+              <select id="workbench-section-select"></select>
+            </label>
+            <label class="editor-label" for="workbench-section-text">当前节（写给工作台项目，不是本地草稿）</label>
+            <textarea id="workbench-section-text" class="editor" spellcheck="false" aria-label="工作台章节内容"></textarea>
+            <div class="panel-actions" style="margin: 10px 0">
+              <button id="btn-workbench-save" class="btn btn-primary" type="button">保存本节</button>
+            </div>
+          </div>
           <div id="workbench-summary" class="audit-summary"></div>
           <div class="panel-actions" style="margin: 12px 0">
             <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>

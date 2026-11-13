@@ -1,6 +1,6 @@
 # SPEC-SERVE：本地工作台 HTTP API
 
-日期：2026-11-13　　状态：v1（只读首版）
+日期：2026-11-13　　状态：v1（读 + 受限写）
 
 `factscribe serve` 把已有的 config / facts / brief / audit 暴露成本机 HTTP，
 让 Mini FactScribe、本地页面或外部 agent 读结构化结果，不再解析 CLI 文本。
@@ -10,13 +10,14 @@
 ## 1. 命令
 
 ```bash
-factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--json]
+factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--json]
 ```
 
 - `--host` 只接受 `127.0.0.1` / `localhost`；其他地址 exit 2。
 - `--port 0` 让系统分配；启动行打印实际端口。
 - 不给 `--token` 时生成 24 字节随机 token（每次启动都变）。
 - `--json` 只让**启动行**出 JSON；服务仍阻塞，`Ctrl+C` 停止。
+- 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
 
 启动行：
 
@@ -31,7 +32,10 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--json]
 - 只绑回环，不做远程服务；
 - 除 `/api/health` 外都要 token：`Authorization: Bearer <token>`、
   `X-FactScribe-Token: <token>` 或 `?token=`（仅本地调试；日志可能记录 URL）；
-- 不写项目文件；serve 只读，audit 不落盘；
+- 默认只读；`--allow-write` 只开放两处写：审计闭包内的 `.tex` 章节、追加事实。
+  章节写入用同目录临时文件 + `os.replace`，路径必须落在项目根内；不接受新文件、
+  删除、改名或 `..`；
+- audit / brief / status 仍然不落盘；
 - 不做 CORS；推荐由 Mini FactScribe 的 Node 服务做同机代理，避免浏览器跨源。
 
 ## 3. 接口
@@ -42,6 +46,9 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--json]
 | GET | `/api/capabilities` | `engine:"python"`、`files:true`、`workbench:true`、项目名与根路径 |
 | GET | `/api/status` | 事实数、节数、配置形态与告警；不跑审计 |
 | GET | `/api/brief[?section=PREFIX]` | 写作简报；载荷与 `brief --json` 同源 |
+| GET | `/api/project` | 项目投影：节（file/text）、事实、来源、bib；`read_only` 标明能不能写 |
+| PUT | `/api/sections` | 写一节：`{file,text}`；file 必须在审计闭包内且是 `.tex` |
+| POST | `/api/facts` | 追加一条事实：字段同 `fact add`；工具仍不代签 |
 | POST | `/api/audit` | 全量审计；载荷与 `audit --json` 同源 |
 
 成功响应统一带：
@@ -67,12 +74,14 @@ HTTP 400 = 配置/项目错；401 = token 缺失或不符；404 = 未知接口�
 
 ## 4. 非目标
 
-- 不提供写接口（`write_section`、`add_fact` 等在后续批次）；
+- 不提供删除、改名、移动章节；不写 bib、不动人签清单；
+- 写章节要求目标已在 `load_sections` 闭包里，不能新建文件；
 - 不做 UI；UI 由 Mini FactScribe / 本地页面负责；
 - 不代理模型调用；agent 走 CLI / MCP / 宿主 `context.agent`；
 - 不改退出码与错误码语义。
 
 ## 5. 验收
 
-`tests/test_serve.py`（9 例）：health 免鉴权、401、status/brief/audit 形状、
-红判定的 HTTP 200、未知接口 404、坏项目/非回环拒绝、只读不写项目。
+`tests/test_serve.py`（14 例）：health 免鉴权、401、status/brief/audit 形状、
+红判定的 HTTP 200、未知接口 404、坏项目/非回环拒绝、只读不写项目；
+可写模式的项目投影、章节往返、闭包外拒绝、追加事实。

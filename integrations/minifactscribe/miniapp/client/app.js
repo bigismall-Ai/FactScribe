@@ -23,6 +23,7 @@ const state = {
   workbench: null,
   workbenchStatus: null,
   workbenchAudit: null,
+  workbenchProject: null,
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -768,6 +769,28 @@ function renderWorkbench() {
       '</div>';
   }
 
+  const project = state.workbenchProject;
+  const editor = $('#workbench-editor');
+  const select = $('#workbench-section-select');
+  editor.hidden = !project;
+  if (project) {
+    const current = select.value || (project.sections[0] && project.sections[0].file) || '';
+    select.innerHTML = project.sections.map((s) =>
+      '<option value="' + esc(s.file) + '">' + esc(s.file) + '</option>').join('');
+    select.value = project.sections.some((s) => s.file === current)
+      ? current
+      : (project.sections[0] && project.sections[0].file) || '';
+    const row = project.sections.find((s) => s.file === select.value);
+    $('#workbench-section-text').value = row ? row.text : '';
+    $('#workbench-save-state').textContent = project.read_only
+      ? '工作台是只读模式（启动时没加 --allow-write）'
+      : '可写';
+    $('#btn-workbench-save').disabled = project.read_only;
+    $('#workbench-section-text').readOnly = project.read_only;
+  } else {
+    $('#workbench-save-state').textContent = '';
+  }
+
   const a = state.workbenchAudit;
   if (!a) {
     $('#workbench-audit').innerHTML = '<div class="line-empty">还没有用工作台审计。上面的结果只来自 Python 原版。</div>';
@@ -808,6 +831,26 @@ function renderWorkbench() {
     (findings.length > 12 ? '<div class="muted-note">只显示前 12 条；完整结果看 serve 的 --json 输出。</div>' : '');
 }
 
+async function loadWorkbenchProject() {
+  state.workbenchProject = await api('/api/workbench/project');
+  renderWorkbench();
+}
+
+async function saveWorkbenchSection() {
+  const project = state.workbenchProject;
+  if (!project) throw new Error('先载入工作台项目');
+  const file = $('#workbench-section-select').value;
+  const text = $('#workbench-section-text').value;
+  $('#workbench-save-state').textContent = '保存中…';
+  await api('/api/workbench/sections', {
+    method: 'PUT',
+    body: JSON.stringify({ file, text }),
+  });
+  $('#workbench-save-state').textContent = '已保存 ' + file;
+  await loadWorkbenchProject();
+  toast('工作台章节已保存');
+}
+
 async function loadWorkbench() {
   try {
     state.workbench = await api('/api/workbench');
@@ -834,6 +877,7 @@ async function connectWorkbench() {
   state.workbenchAudit = null;
   $('#workbench-status').textContent = '已连接：' + data.url;
   await loadWorkbenchStatus();
+  await loadWorkbenchProject();
   toast('已连接本地工作台');
 }
 
@@ -842,6 +886,7 @@ async function disconnectWorkbench() {
   state.workbench = { configured: false };
   state.workbenchStatus = null;
   state.workbenchAudit = null;
+  state.workbenchProject = null;
   $('#workbench-status').textContent = '';
   renderWorkbench();
 }
@@ -865,6 +910,17 @@ function wire() {
   });
   $('#btn-workbench-audit').addEventListener('click', () => {
     runWorkbenchAudit().catch((e) => { $('#workbench-status').textContent = '审计失败：' + e.message; toast('审计失败：' + e.message); });
+  });
+  $('#btn-workbench-load').addEventListener('click', () => {
+    loadWorkbenchProject().catch((e) => { $('#workbench-status').textContent = '载入失败：' + e.message; });
+  });
+  $('#btn-workbench-save').addEventListener('click', () => {
+    saveWorkbenchSection().catch((e) => { $('#workbench-save-state').textContent = '保存失败：' + e.message; toast('保存失败：' + e.message); });
+  });
+  $('#workbench-section-select').addEventListener('change', () => {
+    const project = state.workbenchProject;
+    const row = project && project.sections.find((s) => s.file === $('#workbench-section-select').value);
+    $('#workbench-section-text').value = row ? row.text : '';
   });
 
   $('#save-state').addEventListener('click', () => {

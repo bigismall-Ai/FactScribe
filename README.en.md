@@ -35,7 +35,7 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 |---|---|
 | `init` | Scaffolds a minimal paper: project file, empty ledger, manifest template, section stub |
 | `doctor` | Pre-flight check: environment (Python/tectonic/poppler/fonts/git) and project (config/ledger/manifest/freeze), each with a fix command; not a gate, it never changes a verdict |
-| `serve` | Local workbench HTTP API: loopback only, random token by default; structured `status` / `brief` / `audit` for Mini FactScribe, local pages or agents; read-only, writes nothing |
+| `serve` | Local workbench HTTP API: loopback only, random token by default; structured `status` / `brief` / `audit` / `project` for MiniFactScribe, local pages or agents; read-only unless `--allow-write` |
 | `fact` | Bookkeeping: `add` computes the hash and writes one fact; it never signs the manifest for you |
 | `check` | Validates the ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
 | `audit` | Core check: inline binding, number-to-ledger, citation stability, coverage report |

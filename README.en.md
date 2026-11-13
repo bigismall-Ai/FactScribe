@@ -23,19 +23,22 @@ python3 -m factscribe style --doc README.md    # prose check for one file
 
 Local workbench (optional): `python3 -m factscribe serve <project>` prints the URL and a one-time token; contract in [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md).
 
+Agent MCP: run `factscribe mcp <project>` over stdio; add `--allow-write` to expose section writes and fact appends. Contract: [`docs/design/SPEC-MCP.md`](docs/design/SPEC-MCP.md).
+
 First time? Follow [`docs/QUICKSTART.md`](docs/QUICKSTART.md) (zero to a first green in five minutes).
 Staring at a wall of red? Read [`docs/TRIAGE.md`](docs/TRIAGE.md) (what to fix first, what to ignore).
 Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a migration, not an install, and it starts with measured readings.
 
-## Twenty commands
+## Twenty-one commands
 
-`factscribe` ships twenty subcommands. Two get you started; the rest are grouped by purpose.
+`factscribe` ships twenty-one subcommands. Two get you started; the rest are grouped by purpose.
 
 | Command | What it does |
 |---|---|
 | `init` | Scaffolds a minimal paper: project file, empty ledger, manifest template, section stub |
 | `doctor` | Pre-flight check: environment (Python/tectonic/poppler/fonts/git) and project (config/ledger/manifest/freeze), each with a fix command; not a gate, it never changes a verdict |
 | `serve` | Local workbench HTTP API: loopback only, random token by default; structured `status` / `brief` / `audit` / `project` for MiniFactScribe, local pages or agents; read-only unless `--allow-write` |
+| `mcp` | MCP stdio server for `status` / `project` / `brief` / `audit`; Claude Code / Codex / OpenCode launch `python3 -m factscribe mcp <project>`; writes only with `--allow-write` |
 | `fact` | Bookkeeping: `add` computes the hash and writes one fact; it never signs the manifest for you |
 | `check` | Validates the ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
 | `audit` | Core check: inline binding, number-to-ledger, citation stability, coverage report |

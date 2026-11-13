@@ -15,18 +15,16 @@ from __future__ import annotations
 
 import hmac
 import json
-import os
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .audit import _aggregate_exit, run_audit, source_path
-from .brief import build_brief, payload as brief_payload
-from .config import ConfigError, load_config, load_facts, load_sections
+from .config import ConfigError, load_config
 from .constants import EXIT_OK, VERSION
-from .scaffold import add_fact
-from .report import _config_block, _payload, _severity_of
+from .report import _payload, _severity_of
+from .workbench import (add_fact_data, audit_data, brief_data, project_data,
+                        status_data, write_section_data)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 
@@ -173,132 +171,36 @@ class _Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------ data
 
     def _project_view(self) -> None:
-        cfg = load_config(self._project())
-        facts = load_facts(cfg)
-        sections = load_sections(cfg)
-        source_rows = {}
-        for fact in facts:
-            src = fact.source.strip()
-            if not src or src in source_rows:
-                continue
-            text = ""
-            try:
-                base = source_path(cfg, "").resolve()
-                path = source_path(cfg, src).resolve()
-                path.relative_to(base)
-                text = path.read_text(encoding="utf-8")
-            except (OSError, ValueError, UnicodeDecodeError):
-                text = ""
-            source_rows[src] = {"id": src, "name": src,
-                                "text": text,
-                                "sha256": fact.source_sha256}
-        bib_path = cfg.root / cfg.bib
-        try:
-            bib = bib_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            bib = ""
-        payload = self._base(
-            "project", read_only=not self.server.allow_write,  # type: ignore[attr-defined]
-            project=cfg.name or cfg.title, root=str(cfg.root),
-            sections=[{"file": rel, "text": text} for rel, text in sections],
-            facts=[{
-                "id": f.id, "claim": f.claim, "value": f.value,
-                "source": f.source, "sourceSha256": f.source_sha256,
-                "locator": f.locator, "confidence": f.confidence,
-                "derivedFrom": list(f.derived_from), "expr": f.expr,
-                "dupOk": f.dup_ok, "notes": f.note,
-            } for f in facts],
-            sources=list(source_rows.values()), bib=bib)
-        payload["config"] = _config_block(cfg)
-        payload["config_warnings"] = list(cfg.warnings)
-        self._send(200, payload)
+        data = project_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("project", **data))
 
     def _write_section(self) -> None:
-        self._require_write()
-        cfg = load_config(self._project())
         body = self._body()
-        rel = str(body.get("file") or "").strip()
-        text = body.get("text")
-        if not rel:
-            raise ConfigError("file 必填：要写哪一节")
-        if not isinstance(text, str):
-            raise ConfigError("text 必须是字符串")
-        sections = dict(load_sections(cfg))
-        if rel not in sections:
-            raise ConfigError("file 不在审计闭包内：%s" % rel)
-        if not rel.endswith(".tex"):
-            raise ConfigError("只允许写 .tex 章节：%s" % rel)
-        root = cfg.root.resolve()
-        target = (cfg.root / rel).resolve()
-        try:
-            target.relative_to(root)
-        except ValueError:
-            raise ConfigError("章节越出项目根：%s" % rel)
-        tmp = target.with_name(target.name + ".tmp")
-        tmp.write_text(text, encoding="utf-8")
-        os.replace(tmp, target)
-        self._send(200, self._base("write_section", file=rel,
-                                   bytes=len(text.encode("utf-8"))))
+        data = write_section_data(
+            self._project(), str(body.get("file") or ""),
+            body.get("text"), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("write_section", **data))
 
     def _add_fact(self) -> None:
-        self._require_write()
-        cfg = load_config(self._project())
         body = self._body()
-        info = add_fact(
-            cfg.root,
-            fid=str(body.get("id") or ""),
-            claim=str(body.get("claim") or ""),
-            value=str(body.get("value") or ""),
-            source=str(body.get("source") or ""),
-            locator=str(body.get("locator") or ""),
-            confidence=str(body.get("confidence") or "med"),
-            expr=str(body.get("expr") or ""),
-            derived_from=body.get("derived_from") or body.get("derivedFrom"),
-            note=str(body.get("note") or ""))
-        self._send(200, self._base("add_fact", **info))
+        data = add_fact_data(self._project(), body,
+                             self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("add_fact", **data))
 
     def _status(self) -> None:
-        cfg = load_config(self._project())
-        facts = load_facts(cfg)
-        sections = load_sections(cfg)
-        payload = self._base(
-            "status", project=cfg.name or cfg.title, root=str(cfg.root),
-            facts=len(facts), sections=len(sections),
-            facts_glob=cfg.facts_glob, sections_glob=cfg.sections_glob,
-            config=_config_block(cfg), config_warnings=list(cfg.warnings))
-        self._send(200, payload)
+        data = status_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("status", **data))
 
     def _brief(self, section: str | None) -> None:
-        brief = build_brief(self._project(), section)
-        payload = self._base("brief", **brief_payload(brief))
-        cfg = load_config(self._project())
-        payload["config"] = _config_block(cfg)
-        payload["config_warnings"] = list(cfg.warnings)
-        self._send(200, payload)
+        data = brief_data(self._project(), section)
+        self._send(200, self._base("brief", **data))
 
     def _audit(self) -> None:
-        cfg = load_config(self._project())
-        facts = load_facts(cfg)
-        sections = load_sections(cfg)
-        red, yellow, hints, summary, unresolved = run_audit(
-            cfg, facts, sections, resolve=False)
-        code = _aggregate_exit(red, yellow, False,
-                               integrity_first=cfg.is_v3)
-        payload = self._base(
-            "audit", code,
-            summary=summary,
-            findings=[i.as_dict() for i in red] + [w.as_dict() for w in yellow],
-            issues=[i.as_dict() for i in red],
-            warnings=[w.as_dict() for w in yellow],
-            hints=[h.as_dict() for h in hints],
-            coverage=summary.get("coverage", {}),
-            resolved=unresolved,
-            build={"ran": False, "ok": True, "pdf_bytes": 0})
-        payload["config"] = _config_block(cfg)
-        payload["config_warnings"] = list(cfg.warnings)
+        data = audit_data(self._project())
+        code = int(data.pop("exit"))
+        data["build"] = {"ran": False, "ok": True, "pdf_bytes": 0}
         # HTTP 永远是 200：红黄是判定结果，走 payload.exit，不是传输失败。
-        self._send(200, payload)
-
+        self._send(200, self._base("audit", code, **data))
 
 class WorkbenchServer(ThreadingHTTPServer):
     daemon_threads = True

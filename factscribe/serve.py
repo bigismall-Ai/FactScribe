@@ -29,6 +29,13 @@ from .workbench import (add_fact_data, audit_data, brief_data,
                         write_section_data)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
+WEB_DIR = Path(__file__).resolve().parent / "web"
+_STATIC = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/app.css": ("app.css", "text/css; charset=utf-8"),
+}
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -43,6 +50,14 @@ class _Handler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_bytes(self, body: bytes, content_type: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -95,6 +110,13 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib signature
         path = urlparse(self.path).path
+        if self.server.serve_ui and path in _STATIC:  # type: ignore[attr-defined]
+            name, content_type = _STATIC[path]
+            try:
+                self._send_bytes((WEB_DIR / name).read_bytes(), content_type)
+            except OSError:
+                self._error(500, "INTERNAL", "UI 文件缺失：%s" % name)
+            return
         if path == "/api/health":
             self._send(200, {"ok": True, "tool": "factscribe",
                              "version": VERSION, "service": "workbench"})
@@ -228,16 +250,17 @@ class WorkbenchServer(ThreadingHTTPServer):
     allow_reuse_address = True
 
     def __init__(self, address, project: Path, token: str,
-                 allow_write: bool = False):
+                 allow_write: bool = False, serve_ui: bool = False):
         self.project = project
         self.token = token
         self.allow_write = allow_write
+        self.serve_ui = serve_ui
         super().__init__(address, _Handler)
 
 
 def create_server(project: Path | str, *, host: str = "127.0.0.1",
                   port: int = 0, token: str | None = None,
-                  allow_write: bool = False
+                  allow_write: bool = False, serve_ui: bool = False
                   ) -> tuple[WorkbenchServer, str]:
     """建服务但不启动；返回 (server, token)。项目不合法时抛 ConfigError。"""
     if host not in LOOPBACK_HOSTS:
@@ -251,5 +274,5 @@ def create_server(project: Path | str, *, host: str = "127.0.0.1",
     load_config(root)  # 提前校验；坏配置在启动时就 exit 2
     actual_token = token or secrets.token_urlsafe(24)
     server = WorkbenchServer((host, int(port)), root, actual_token,
-                             allow_write=allow_write)
+                             allow_write=allow_write, serve_ui=serve_ui)
     return server, actual_token

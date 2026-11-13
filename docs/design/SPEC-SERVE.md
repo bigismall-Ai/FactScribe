@@ -18,6 +18,7 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 - 不给 `--token` 时生成 24 字节随机 token（每次启动都变）。
 - `--json` 只让**启动行**出 JSON；服务仍阻塞，`Ctrl+C` 停止。
 - 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
+- `--ui` 在 `GET /` 提供本地工作台页面；`factscribe web` 是它的别名（见 `SPEC-WEB.md`）。
 
 启动行：
 

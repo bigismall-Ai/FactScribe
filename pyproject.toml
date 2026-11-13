@@ -43,6 +43,9 @@ factscribe = [
   "patterns/*.toml",
   "patterns/*.md",
   "patterns/*/*.md",
+  "web/*.html",
+  "web/*.css",
+  "web/*.js",
 ]
 
 [tool.setuptools.dynamic]

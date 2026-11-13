@@ -179,7 +179,7 @@ test('工作台可载入项目并按节保存，且保存前说明写给工作�
 
 
 test('AI 起草是独立入口：页面发起 agent，输出只进候选区', () => {
-  assert.match(MINIAPP, /"agentAccess": \["session.run"\]/, '必须声明 agentAccess');
+  assert.match(MINIAPP, /"agentAccess": \["session.run", "session.read"\]/, '必须声明 session.run + session.read');
   assert.match(HTML, /id="panel-ai"/, '应有 AI 起草面板');
   assert.match(HTML, /id="btn-ai-run"/, '应有生成候选按钮');
   assert.match(HTML, /id="ai-candidate"/, '应有候选正文区');
@@ -197,4 +197,13 @@ test('非项目对话打开时能检测并报错：AI 必须 fail-closed', () =>
   assert.match(JS, /host\.navigation\.getState/, '应读取 navigation.getState');
   assert.match(JS, /hostView === 'conversation'/, '只有 conversation 才允许 AI');
   assert.match(JS, /AI 起草已禁用/, '未知/非对话时要明说禁用');
+});
+
+
+test('能从当前对话读项目文件夹（session.read），没有就提示', () => {
+  assert.match(JS, /agent\.session\(\)/, '应读当前对话的 session');
+  assert.match(JS, /workspaceDir/, '应读 workspaceDir');
+  assert.match(JS, /isDefaultWorkspace/, '要区分默认工作区');
+  assert.match(HTML, /id="workbench-host-path"/, '工作台应显示当前对话项目');
+  assert.match(JS, /当前对话没有项目文件夹/, '没有项目文件夹时要提示');
 });

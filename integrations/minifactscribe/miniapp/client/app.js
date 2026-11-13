@@ -27,6 +27,8 @@ const state = {
   ai: { requestId: null, streaming: false, sessionId: null, text: '', candidate: '', events: [] },
   hostView: 'unknown',
   hostKey: '',
+  hostWorkspace: '',
+  hostWorkspaceDefault: false,
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -755,9 +757,15 @@ function renderSessionBanner() {
     return;
   }
   banner.hidden = false;
-  banner.textContent = state.hostView === 'unknown'
-    ? '无法确认当前是否从论文对话打开；AI 起草已禁用。请从论文项目的对话里重新打开 MiniFactScribe。'
-    : '当前不是从论文对话打开的（位置：' + state.hostView + '）。AI 起草会失败；请从论文项目的对话里重新打开 MiniFactScribe。';
+  if (state.hostView === 'unknown') {
+    banner.textContent = '无法确认当前是否从论文对话打开；AI 起草已禁用。请从论文项目的对话里重新打开 MiniFactScribe。';
+  } else if (state.hostView !== 'conversation') {
+    banner.textContent = '当前不是从论文对话打开的（位置：' + state.hostView + '）。AI 起草会失败；请从论文项目的对话里重新打开 MiniFactScribe。';
+  } else if (!state.hostWorkspace) {
+    banner.textContent = '当前对话没有项目文件夹。请在该论文项目的对话里打开 MiniFactScribe；工作台也可以手动填 URL + token。';
+  } else {
+    banner.hidden = true;
+  }
 }
 
 async function detectHostContext() {
@@ -773,6 +781,19 @@ async function detectHostContext() {
   } catch {
     state.hostView = 'unknown';
     state.hostKey = '';
+  }
+  try {
+    const agent = globalThis.window?.mcode?.miniapp?.agent;
+    if (agent?.session && state.hostView === 'conversation') {
+      const info = await agent.session();
+      state.hostWorkspaceDefault = Boolean(info?.isDefaultWorkspace);
+      state.hostWorkspace = state.hostWorkspaceDefault
+        ? ''
+        : String(info?.workspaceDir || '');
+    }
+  } catch {
+    state.hostWorkspace = '';
+    state.hostWorkspaceDefault = false;
   }
   renderSessionBanner();
 }
@@ -948,6 +969,12 @@ async function acceptAi() {
 
 function renderWorkbench() {
   const w = state.workbench || { configured: false };
+  const hostPath = $('#workbench-host-path');
+  if (hostPath) {
+    hostPath.textContent = state.hostWorkspace
+      ? '当前对话项目：' + state.hostWorkspace
+      : '当前对话没有项目文件夹（或尚未读取）；可在下面手动填工作台 URL + token。';
+  }
   const badge = $('#workbench-badge');
   const summary = $('#workbench-summary');
   if (!badge) return;

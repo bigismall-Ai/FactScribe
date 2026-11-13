@@ -24,6 +24,7 @@ const state = {
   workbenchStatus: null,
   workbenchAudit: null,
   workbenchProject: null,
+  ai: { requestId: null, streaming: false, sessionId: null, text: '', candidate: '', events: [] },
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -225,6 +226,7 @@ function renderTab() {
   else if (state.tab === 'protect') renderProtect();
   else if (state.tab === 'audit') renderAudit();
   else if (state.tab === 'workbench') renderWorkbench();
+  else if (state.tab === 'ai') renderAi();
 }
 
 // ------------------------------------------------------------------ 顶栏
@@ -738,6 +740,168 @@ async function loadDemo() {
 // ------------------------------------------------------------------ 本地工作台
 // 只显示工作台项目的结果；左侧正文/事实账仍是本地草稿，不混用。
 
+
+// ------------------------------------------------------------------ AI 起草
+// 页面发起的 agent session 会绑定当前项目目录；Node 发起不会。
+// 输出只进候选区，采纳后写工作台项目，再跑闸门。
+
+function aiAgent() {
+  return globalThis.window?.mcode?.miniapp?.agent || null;
+}
+
+function aiReady() {
+  return Boolean(aiAgent()?.run && state.workbenchProject);
+}
+
+function aiSectionFile() {
+  return $('#workbench-section-select')?.value || '';
+}
+
+function aiPrompt() {
+  const file = aiSectionFile();
+  const row = (state.workbenchProject?.sections || []).find((s) => s.file === file);
+  const facts = (state.workbenchProject?.facts || []).map((f) =>
+    '- ' + f.id + ' | ' + (f.claim || '') + ' | ' + (f.value || '') + ' | ' + (f.source || ''));
+  const instruction = $('#ai-instruction').value.trim();
+  return [
+    '你是论文写作助手，正在帮作者起草或改写一节 LaTeX 正文。',
+    '硬约束：正文里的每个数字都必须来自下面的事实账；不得编造数字、引用或实验；',
+    '不确定的地方写 TODO，不要猜。只输出完整替换本节的 LaTeX，不要解释。',
+    '',
+    '当前节：' + file,
+    '',
+    '用户要求：' + (instruction || '按事实账起草/改写本节。'),
+    '',
+    '当前正文：',
+    row ? row.text : '（空）',
+    '',
+    '事实账（id | 主张 | 值 | 来源）：',
+    facts.length ? facts.join('\n') : '（账里没有事实——不要写任何数字，先提示作者记账）',
+  ].join('\n');
+}
+
+function aiEvent(kind, text, extra = {}) {
+  state.ai.events.push({ kind, text, ...extra });
+  if (state.ai.events.length > 80) state.ai.events.shift();
+}
+
+function renderAi() {
+  const ready = aiReady();
+  const hostOk = Boolean(aiAgent()?.run);
+  $('#ai-host-status').textContent = hostOk
+    ? '宿主 agent 可用'
+    : '没有宿主 agent';
+  $('#ai-unavailable').hidden = ready;
+  $('#ai-controls').hidden = !ready;
+  $('#ai-section-name').textContent = state.workbenchProject
+    ? (aiSectionFile() || '（未选节）')
+    : '（未载入）';
+  $('#btn-ai-run').disabled = !ready || state.ai.streaming;
+  $('#btn-ai-stop').disabled = !state.ai.streaming;
+  $('#btn-ai-accept').disabled = !state.ai.candidate || state.ai.streaming || Boolean(state.workbenchProject?.read_only);
+  $('#ai-state').textContent = state.ai.streaming
+    ? '生成中…'
+    : (state.ai.candidate ? '候选已生成，等人采纳' : '就绪');
+  const box = $('#ai-events');
+  box.innerHTML = state.ai.events.map((e) => {
+    if (e.kind === 'approval') {
+      return '<div class="approval-card"><b>工具等待批准：' + esc(e.toolName || '') + '</b>' +
+        (e.reason ? '<div class="muted-note">' + esc(e.reason) + '</div>' : '') +
+        (e.toolInput ? '<code>' + esc(String(e.toolInput).slice(0, 500)) + '</code>' : '') +
+        '<div class="approval-actions">' +
+        '<button class="btn btn-primary" data-ai-approval="' + esc(e.id) + '" data-decision="allowOnce">允许一次</button>' +
+        '<button class="btn" data-ai-approval="' + esc(e.id) + '" data-decision="deny">拒绝</button>' +
+        '</div></div>';
+    }
+    const cls = e.kind === 'error' ? 'agent-event error' : e.kind === 'tool' ? 'agent-event tool' : 'agent-event';
+    return '<div class="' + cls + '">' + esc(e.text) + '</div>';
+  }).join('');
+  const candidate = $('#ai-candidate');
+  if (candidate.value !== state.ai.candidate) candidate.value = state.ai.candidate;
+}
+
+function handleAiEvent(event) {
+  if (!event || typeof event !== 'object') return;
+  if (event.type === 'text.delta') {
+    state.ai.text += event.text || '';
+    state.ai.candidate = state.ai.text;
+  } else if (event.type === 'message.committed') {
+    if (event.text) state.ai.candidate = event.text;
+  } else if (event.type === 'tool.started') {
+    aiEvent('tool', '调用工具：' + (event.name || ''));
+  } else if (event.type === 'tool.finished') {
+    aiEvent(event.ok === false ? 'error' : 'tool',
+      '工具' + (event.ok === false ? '失败' : '完成') + '：' + (event.name || ''));
+  } else if (event.type === 'permission.requested') {
+    aiEvent('approval', '', { id: event.requestId, sessionId: event.sessionId,
+      toolName: event.toolName, reason: event.reason, toolInput: event.toolInput });
+  } else if (event.type === 'question.requested') {
+    aiEvent('error', 'Agent 在等问卷；当前页面暂不支持问卷，请改用聊天侧面板回答。');
+  } else if (event.type === 'turn.finished') {
+    state.ai.streaming = false;
+  }
+  renderAi();
+}
+
+async function runAi() {
+  const agent = aiAgent();
+  if (!agent?.run) throw new Error('当前页面没有宿主 agent；请从论文项目的对话里打开本页');
+  if (!state.workbenchProject) throw new Error('先在工作台页签载入项目');
+  const requestId = (globalThis.crypto?.randomUUID?.() || ('ai-' + Date.now() + '-' + Math.random()));
+  state.ai = { requestId, streaming: true, sessionId: null, text: '', candidate: '', events: [] };
+  renderAi();
+  try {
+    const result = await agent.run({ text: aiPrompt(), requestId }, { onEvent: handleAiEvent });
+    state.ai.streaming = false;
+    state.ai.sessionId = result?.sessionId || null;
+    if (result?.text) state.ai.candidate = result.text;
+    if (result?.error) aiEvent('error', 'Agent 错误：' + result.error);
+    if (result?.pendingQuestion) aiEvent('error', 'Agent 在等问卷；请到聊天侧面板回答。');
+    renderAi();
+  } catch (err) {
+    state.ai.streaming = false;
+    aiEvent('error', '生成失败：' + (err?.message || err));
+    renderAi();
+    throw err;
+  }
+}
+
+function stopAi() {
+  const agent = aiAgent();
+  if (agent?.cancel && state.ai.requestId) {
+    try { agent.cancel(state.ai.requestId); } catch { /* 已结束 */ }
+  }
+  state.ai.streaming = false;
+  aiEvent('error', '已停止');
+  renderAi();
+}
+
+async function replyAi(event, decision) {
+  const agent = aiAgent();
+  if (!agent?.reply) throw new Error('当前 agent 不支持审批');
+  await agent.reply({ sessionId: event.sessionId, requestId: event.id, decision });
+  state.ai.events = state.ai.events.filter((e) => e !== event);
+  renderAi();
+}
+
+async function acceptAi() {
+  if (!state.ai.candidate) throw new Error('还没有候选正文');
+  const file = aiSectionFile();
+  if (!file) throw new Error('先在工作台页签选一节');
+  await api('/api/workbench/sections', {
+    method: 'PUT',
+    body: JSON.stringify({ file, text: state.ai.candidate }),
+  });
+  $('#ai-accept-state').textContent = '已写入 ' + file + '，正在重跑审计…';
+  toast('已写入 ' + file);
+  await loadWorkbenchProject();
+  await runWorkbenchAudit();
+  $('#ai-accept-state').textContent = '已写入 ' + file + '；审计已重跑';
+  state.ai.candidate = '';
+  state.ai.text = '';
+  renderAi();
+}
+
 function renderWorkbench() {
   const w = state.workbench || { configured: false };
   const badge = $('#workbench-badge');
@@ -917,10 +1081,27 @@ function wire() {
   $('#btn-workbench-save').addEventListener('click', () => {
     saveWorkbenchSection().catch((e) => { $('#workbench-save-state').textContent = '保存失败：' + e.message; toast('保存失败：' + e.message); });
   });
+  $('#btn-ai-run').addEventListener('click', () => {
+    runAi().catch((e) => { $('#ai-state').textContent = '失败：' + e.message; toast('AI 起草失败：' + e.message); });
+  });
+  $('#btn-ai-stop').addEventListener('click', () => stopAi());
+  $('#btn-ai-accept').addEventListener('click', () => {
+    acceptAi().catch((e) => { $('#ai-accept-state').textContent = '失败：' + e.message; toast('写入失败：' + e.message); });
+  });
+  $('#ai-events').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-ai-approval]');
+    if (!btn) return;
+    const id = btn.dataset.aiApproval;
+    const decision = btn.dataset.decision;
+    const event = state.ai.events.find((e) => e.kind === 'approval' && e.id === id);
+    if (!event) return;
+    replyAi(event, decision).catch((e) => toast('审批失败：' + e.message));
+  });
   $('#workbench-section-select').addEventListener('change', () => {
     const project = state.workbenchProject;
     const row = project && project.sections.find((s) => s.file === $('#workbench-section-select').value);
     $('#workbench-section-text').value = row ? row.text : '';
+    renderAi();
   });
 
   $('#save-state').addEventListener('click', () => {

@@ -16,6 +16,7 @@ const JS = readFileSync(new URL('../miniapp/client/app.js', import.meta.url), 'u
 const CSS = readFileSync(new URL('../miniapp/client/styles.css', import.meta.url), 'utf8');
 const AUDIT = readFileSync(new URL('../miniapp/node/audit.mjs', import.meta.url), 'utf8');
 const SERVER = readFileSync(new URL('../miniapp/node/server.mjs', import.meta.url), 'utf8');
+const MINIAPP = readFileSync(new URL('../miniapp/miniapp.json', import.meta.url), 'utf8');
 
 /** 从 app.js 里取出 ISSUE_LABEL 的键。 */
 function issueLabelKeys() {
@@ -174,4 +175,17 @@ test('工作台可载入项目并按节保存，且保存前说明写给工作�
   assert.match(HTML, /写给工作台项目，不是本地草稿/, '必须说明写入目标');
   assert.match(JS, /\/api\/workbench\/project/, '应载入工作台项目');
   assert.match(JS, /\/api\/workbench\/sections/, '应能保存工作台章节');
+});
+
+
+test('AI 起草是独立入口：页面发起 agent，输出只进候选区', () => {
+  assert.match(MINIAPP, /"agentAccess": \["session.run"\]/, '必须声明 agentAccess');
+  assert.match(HTML, /id="panel-ai"/, '应有 AI 起草面板');
+  assert.match(HTML, /id="btn-ai-run"/, '应有生成候选按钮');
+  assert.match(HTML, /id="ai-candidate"/, '应有候选正文区');
+  assert.match(JS, /mcode\?\.miniapp\?\.agent/, '应从页面调用宿主 agent');
+  assert.match(JS, /agent\.run/, '应调用 agent.run');
+  assert.match(JS, /text\.delta/, '应流式接收 text.delta');
+  assert.match(JS, /permission\.requested/, '应把审批交给用户');
+  assert.match(JS, /acceptAi/, '采纳后才写工作台');
 });

@@ -125,6 +125,19 @@ factscribe serve <项目> --allow-write   # 打印 URL 与 token
 - 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
 - 写章节只接受审计闭包内的 `.tex`，不新建、不删除、不改名。
 
+## AI 起草（宿主 agent）
+
+「AI 起草」页签用 mcode 宿主的大模型，不接模型 SDK：
+
+- 先在「工作台」连接本地 `factscribe serve` 并载入项目；
+- **从论文项目的对话里打开本页**（页面发起的 session 才会绑定项目目录）；
+- 选一节，点「生成候选」；agent 的输出只进候选区；
+- 工具审批卡出现时，由你点「允许一次 / 拒绝」；
+- 点「采纳并写入本节」后才写工作台项目，并自动重跑审计。
+
+要求写在提示里：只能使用账里已有的数字，不得编造；输出完整替换本节的 LaTeX。
+这一版不处理问卷；遇到问卷会提示到聊天侧面板回答。
+
 ## 测试
 
 ~~~bash
@@ -145,11 +158,11 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、18 例呈现层可读性不变量
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、19 例呈现层可读性不变量
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
-五组共 63 例，全部离线（工作台用例起一个假服务，不连真项目）。
+五组共 64 例，全部离线（工作台用例起一个假服务，不连真项目）。
 
 ---
 
@@ -198,7 +211,7 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，18 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，19 例
 │   └── workbench.test.mjs       # 本地工作台连接层，5 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
@@ -226,7 +239,8 @@ integrations/minifactscribe/
 - 默认不联网：审计与演示数据都在本地；只有点「联网核验存在性」会访问 Crossref / arXiv。
 - 项目数据存在宿主分配的私有 `dataDir`，不写工作区。
 - 连接本地工作台时只访问用户填的本机回环地址，token 存在私有 dataDir；不写工作台项目。
-- 目前不声明 `agentAccess` / `toolAccess`；以后若声明，会在这里写清 Agent 会读写什么、调用哪些工具。
+- 声明 `agentAccess: ["session.run"]`：AI 起草会把当前节、事实账与你的要求发给宿主 agent；
+  agent 可能读写工作区，所有工具审批由你在页面上决定；不声明 `toolAccess`。
 
 ---
 

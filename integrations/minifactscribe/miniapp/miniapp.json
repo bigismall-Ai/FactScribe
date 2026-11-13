@@ -23,5 +23,6 @@
       "resizable": true
     }
   },
-  "mcpEndpoints": []
+  "mcpEndpoints": [],
+  "agentAccess": ["session.run"]
 }

@@ -112,16 +112,18 @@ console.log(a.verdict, a.exitCode, a.red.map((i) => i.code), a.yellow.map((i) =>
 MiniFactScribe 可以只当“遥控器”：审计仍由本机 Python 原版跑，JS 只显示结果。
 
 ```bash
-# 1) 在本机项目根启动工作台
-factscribe serve <项目>          # 打印 URL 与 token
+# 1) 在本机项目根启动工作台（要改稿就加 --allow-write）
+factscribe serve <项目> --allow-write   # 打印 URL 与 token
 
 # 2) MiniFactScribe → 工作台 → 填 URL + token → 连接
+# 3) 载入工作台项目 → 选一节 → 改 → 保存本节 → 用工作台审计
 ```
 
 - 只接受 `http://127.0.0.1:...` / `http://localhost:...`；
 - token 存在 `dataDir/workbench.json`（0600），不返回给页面；
 - 工作台结果只代表**工作台项目**；左侧正文/事实账仍是本地草稿，两者不是同一个项目；
-- 这一版只接只读的 `status` / `brief` / `audit`，写接口在后续批次。
+- 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
+- 写章节只接受审计闭包内的 `.tex`，不新建、不删除、不改名。
 
 ## 测试
 
@@ -143,11 +145,11 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、17 例呈现层可读性不变量
-（`tests/ui.test.mjs`）与 4 例本地工作台连接层（`tests/workbench.test.mjs`）：
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、18 例呈现层可读性不变量
+（`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
-五组共 61 例，全部离线（工作台用例起一个假服务，不连真项目）。
+五组共 63 例，全部离线（工作台用例起一个假服务，不连真项目）。
 
 ---
 
@@ -196,8 +198,8 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，17 例
-│   └── workbench.test.mjs       # 本地工作台连接层，4 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，18 例
+│   └── workbench.test.mjs       # 本地工作台连接层，5 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css

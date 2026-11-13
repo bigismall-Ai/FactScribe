@@ -161,8 +161,23 @@ def build_parser() -> argparse.ArgumentParser:
                     help="端口（默认 0＝让系统分配，启动时打印实际端口）")
     sp.add_argument("--token", default=None,
                     help="固定 token（默认每次随机生成；空串视为未给）")
+    sp.add_argument("--allow-write", dest="allow_write", action="store_true",
+                    help="打开写接口（PUT /api/sections、POST /api/facts）；"
+                         "默认只读")
     sp.add_argument("--json", action="store_true",
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
+
+    sp = sub.add_parser(
+        "mcp",
+        help="MCP stdio 服务器：把 status/project/brief/audit（可选写）暴露给 agent",
+        description="以 MCP stdio 协议暴露本地工作台：status / project / brief / audit；"
+                    "加 --allow-write 才多出 write_section / add_fact。"
+                    "stdout 只走 JSON-RPC，诊断走 stderr；由 Claude Code / Codex / "
+                    "OpenCode 等作为子进程启动。")
+    sp.add_argument("project", nargs="?", default=".",
+                    help="项目目录（默认当前目录）")
+    sp.add_argument("--allow-write", dest="allow_write", action="store_true",
+                    help="开放 write_section / add_fact（默认只读）")
 
     for name, help_text in (
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
@@ -444,7 +459,7 @@ def cmd_serve(args) -> int:
     """本地工作台 HTTP API：启动后阻塞，直到 Ctrl+C。"""
     server, token = create_server(
         Path(args.project), host=args.host, port=args.port,
-        token=(args.token or None))
+        token=(args.token or None), allow_write=bool(args.allow_write))
     host, port = server.server_address[0], server.server_address[1]
     url = "http://%s:%d" % (host, port)
     if args.json:
@@ -452,15 +467,17 @@ def cmd_serve(args) -> int:
             "event": "listening", "ok": True, "url": url,
             "token": token, "project": str(server.project),
             "api": ["/api/health", "/api/capabilities", "/api/status",
-                    "/api/brief", "/api/audit"],
+                    "/api/brief", "/api/audit", "/api/project"],
+            "write": bool(args.allow_write),
         }, ensure_ascii=False), flush=True)
     else:
         print("== factscribe serve ==")
         print("项目：%s" % server.project)
         print("URL：%s" % url)
         print("Token：%s" % token)
+        print("模式：%s" % ("可写（--allow-write）" if args.allow_write else "只读"))
         print("接口：/api/health  /api/capabilities  /api/status  "
-              "/api/brief  /api/audit")
+              "/api/brief  /api/audit  /api/project")
         print("只绑回环；按 Ctrl+C 停止。")
     try:
         server.serve_forever()
@@ -469,6 +486,12 @@ def cmd_serve(args) -> int:
     finally:
         server.server_close()
     return EXIT_OK
+
+
+def cmd_mcp(args) -> int:
+    """MCP stdio 服务器：阻塞读 stdin，stdout 只出 JSON-RPC。"""
+    from .mcp import run_stdio
+    return run_stdio(Path(args.project), allow_write=bool(args.allow_write))
 
 
 def cmd_fact(args) -> int:
@@ -1185,6 +1208,7 @@ def main(argv=None) -> int:
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,
                 "serve": cmd_serve,
+                "mcp": cmd_mcp,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,

@@ -11,7 +11,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -115,6 +117,16 @@ class ServeTest(unittest.TestCase):
             create_server(ROOT / "examples" / "minimal", host="0.0.0.0",
                           token="x")
 
+    def test_read_only_server_refuses_writes(self):
+        status, data = self._request("/api/sections", method="PUT",
+                                     token=self.token)
+        self.assertEqual(status, 403)
+        self.assertEqual(data["error"]["code"], "READ_ONLY")
+        status, data = self._request("/api/facts", method="POST",
+                                     token=self.token)
+        self.assertEqual(status, 403)
+        self.assertEqual(data["error"]["code"], "READ_ONLY")
+
     def test_serve_does_not_write_project(self):
         before = {p: p.read_bytes() for p in
                   (ROOT / "examples" / "minimal").rglob("*") if p.is_file()}
@@ -124,6 +136,94 @@ class ServeTest(unittest.TestCase):
         after = {p: p.read_bytes() for p in
                  (ROOT / "examples" / "minimal").rglob("*") if p.is_file()}
         self.assertEqual(before, after)
+
+
+class WritableServeTest(unittest.TestCase):
+    """--allow-write：读项目、改一节、加一条事实；越界一律拒绝。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls.tmp.name) / "paper"
+        shutil.copytree(ROOT / "examples" / "minimal", cls.root)
+        cls.server, cls.token = create_server(
+            cls.root, port=0, token=TOKEN, allow_write=True)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(
+            target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        cls.tmp.cleanup()
+
+    def _request(self, path, method="GET", token=None, body=None):
+        headers = {}
+        if token:
+            headers["Authorization"] = "Bearer " + token
+        data = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(self.base + path, method=method,
+                                     headers=headers, data=data)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                raw = exc.read().decode("utf-8")
+            finally:
+                exc.close()
+            return exc.code, json.loads(raw) if raw else {}
+
+    def test_project_view_has_sections_facts_sources(self):
+        status, data = self._request("/api/project", token=self.token)
+        self.assertEqual(status, 200)
+        self.assertFalse(data["read_only"])
+        self.assertEqual(len(data["sections"]), 2)
+        self.assertGreaterEqual(len(data["facts"]), 3)
+        ids = {f["id"] for f in data["facts"]}
+        self.assertTrue({"A1", "A2", "A3"} <= ids)
+        self.assertTrue(data["bib"])
+        self.assertTrue(all("text" in s and "file" in s for s in data["sections"]))
+        self.assertTrue(all("id" in s and "text" in s for s in data["sources"]))
+
+    def test_write_section_round_trip(self):
+        rel = "sections/01-intro.tex"
+        text = "\\section{Intro}\n\n新写的一句。\n"
+        status, data = self._request(
+            "/api/sections", method="PUT", token=self.token,
+            body={"file": rel, "text": text})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["endpoint"], "write_section")
+        self.assertEqual((self.root / rel).read_text(encoding="utf-8"), text)
+        # 审计读到的也是新内容
+        status, project = self._request("/api/project", token=self.token)
+        row = next(s for s in project["sections"] if s["file"] == rel)
+        self.assertEqual(row["text"], text)
+
+    def test_write_section_rejects_outside_closure(self):
+        status, data = self._request(
+            "/api/sections", method="PUT", token=self.token,
+            body={"file": "../outside.tex", "text": "x"})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"]["code"], "CONFIG_INVALID")
+
+    def test_add_fact_round_trip(self):
+        status, data = self._request(
+            "/api/facts", method="POST", token=self.token,
+            body={"id": "A9", "claim": "测试事实", "value": "42",
+                  "source": "results/swb16.md", "locator": "§二"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["endpoint"], "add_fact")
+        self.assertEqual(data["id"], "A9")
+        status, project = self._request("/api/project", token=self.token)
+        self.assertTrue(any(f["id"] == "A9" for f in project["facts"]))
 
 
 if __name__ == "__main__":

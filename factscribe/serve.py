@@ -20,11 +20,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .audit import _aggregate_exit, run_audit
-from .brief import build_brief, payload as brief_payload
-from .config import ConfigError, load_config, load_facts, load_sections
+from .config import ConfigError, load_config
 from .constants import EXIT_OK, VERSION
-from .report import _config_block, _payload, _severity_of
+from .report import _payload, _severity_of
+from .workbench import (add_fact_data, audit_data, brief_data, project_data,
+                        status_data, write_section_data)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 
@@ -64,6 +64,25 @@ class _Handler(BaseHTTPRequestHandler):
     def _project(self) -> Path:
         return self.server.project  # type: ignore[attr-defined]
 
+    def _body(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        if length > 8 * 1024 * 1024:
+            raise ConfigError("请求体超过 8 MiB")
+        raw = self.rfile.read(length) if length else b""
+        try:
+            data = json.loads(raw.decode("utf-8") or "{}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise ConfigError("请求体必须是 UTF-8 JSON")
+        if not isinstance(data, dict):
+            raise ConfigError("请求体必须是 JSON 对象")
+        return data
+
+    def _require_write(self) -> None:
+        if not self.server.allow_write:  # type: ignore[attr-defined]
+            raise ConfigError(
+                "serve 当前是只读模式；写接口需要 --allow-write",
+                code="READ_ONLY")
+
     def _base(self, endpoint: str, code: int = EXIT_OK, **fields) -> dict:
         payload = _payload("serve", _severity_of(code), code,
                            endpoint=endpoint, **fields)
@@ -99,9 +118,13 @@ class _Handler(BaseHTTPRequestHandler):
                 section = (query.get("section") or [None])[0]
                 self._brief(section)
                 return
+            if path == "/api/project":
+                self._project_view()
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
-            self._error(400, getattr(exc, "code", "CONFIG_INVALID"), str(exc))
+            code = getattr(exc, "code", "CONFIG_INVALID")
+            self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
         except Exception as exc:  # noqa: BLE001 - 服务不许把异常变成空响应
             self._error(500, "INTERNAL",
                         "%s: %s" % (type(exc).__name__, exc))
@@ -116,70 +139,84 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/audit":
                 self._audit()
                 return
+            if path == "/api/facts":
+                self._add_fact()
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
-            self._error(400, getattr(exc, "code", "CONFIG_INVALID"), str(exc))
+            code = getattr(exc, "code", "CONFIG_INVALID")
+            self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self._error(500, "INTERNAL",
+                        "%s: %s" % (type(exc).__name__, exc))
+
+    def do_PUT(self) -> None:  # noqa: N802 - stdlib signature
+        path = urlparse(self.path).path
+        if not self._authorized():
+            self._error(401, "UNAUTHORIZED",
+                        "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
+            return
+        try:
+            if path == "/api/sections":
+                self._write_section()
+                return
+            self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
+        except ConfigError as exc:
+            code = getattr(exc, "code", "CONFIG_INVALID")
+            self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
         except Exception as exc:  # noqa: BLE001
             self._error(500, "INTERNAL",
                         "%s: %s" % (type(exc).__name__, exc))
 
     # ------------------------------------------------------------------ data
 
+    def _project_view(self) -> None:
+        data = project_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("project", **data))
+
+    def _write_section(self) -> None:
+        body = self._body()
+        data = write_section_data(
+            self._project(), str(body.get("file") or ""),
+            body.get("text"), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("write_section", **data))
+
+    def _add_fact(self) -> None:
+        body = self._body()
+        data = add_fact_data(self._project(), body,
+                             self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("add_fact", **data))
+
     def _status(self) -> None:
-        cfg = load_config(self._project())
-        facts = load_facts(cfg)
-        sections = load_sections(cfg)
-        payload = self._base(
-            "status", project=cfg.name or cfg.title, root=str(cfg.root),
-            facts=len(facts), sections=len(sections),
-            facts_glob=cfg.facts_glob, sections_glob=cfg.sections_glob,
-            config=_config_block(cfg), config_warnings=list(cfg.warnings))
-        self._send(200, payload)
+        data = status_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("status", **data))
 
     def _brief(self, section: str | None) -> None:
-        brief = build_brief(self._project(), section)
-        payload = self._base("brief", **brief_payload(brief))
-        cfg = load_config(self._project())
-        payload["config"] = _config_block(cfg)
-        payload["config_warnings"] = list(cfg.warnings)
-        self._send(200, payload)
+        data = brief_data(self._project(), section)
+        self._send(200, self._base("brief", **data))
 
     def _audit(self) -> None:
-        cfg = load_config(self._project())
-        facts = load_facts(cfg)
-        sections = load_sections(cfg)
-        red, yellow, hints, summary, unresolved = run_audit(
-            cfg, facts, sections, resolve=False)
-        code = _aggregate_exit(red, yellow, False,
-                               integrity_first=cfg.is_v3)
-        payload = self._base(
-            "audit", code,
-            summary=summary,
-            findings=[i.as_dict() for i in red] + [w.as_dict() for w in yellow],
-            issues=[i.as_dict() for i in red],
-            warnings=[w.as_dict() for w in yellow],
-            hints=[h.as_dict() for h in hints],
-            coverage=summary.get("coverage", {}),
-            resolved=unresolved,
-            build={"ran": False, "ok": True, "pdf_bytes": 0})
-        payload["config"] = _config_block(cfg)
-        payload["config_warnings"] = list(cfg.warnings)
+        data = audit_data(self._project())
+        code = int(data.pop("exit"))
+        data["build"] = {"ran": False, "ok": True, "pdf_bytes": 0}
         # HTTP 永远是 200：红黄是判定结果，走 payload.exit，不是传输失败。
-        self._send(200, payload)
-
+        self._send(200, self._base("audit", code, **data))
 
 class WorkbenchServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, project: Path, token: str):
+    def __init__(self, address, project: Path, token: str,
+                 allow_write: bool = False):
         self.project = project
         self.token = token
+        self.allow_write = allow_write
         super().__init__(address, _Handler)
 
 
 def create_server(project: Path | str, *, host: str = "127.0.0.1",
-                  port: int = 0, token: str | None = None
+                  port: int = 0, token: str | None = None,
+                  allow_write: bool = False
                   ) -> tuple[WorkbenchServer, str]:
     """建服务但不启动；返回 (server, token)。项目不合法时抛 ConfigError。"""
     if host not in LOOPBACK_HOSTS:
@@ -192,5 +229,6 @@ def create_server(project: Path | str, *, host: str = "127.0.0.1",
     root = root.resolve()
     load_config(root)  # 提前校验；坏配置在启动时就 exit 2
     actual_token = token or secrets.token_urlsafe(24)
-    server = WorkbenchServer((host, int(port)), root, actual_token)
+    server = WorkbenchServer((host, int(port)), root, actual_token,
+                             allow_write=allow_write)
     return server, actual_token

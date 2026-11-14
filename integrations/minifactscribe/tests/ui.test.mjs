@@ -473,13 +473,14 @@ test('AI 入口在网页模式禁用并说明原因：需要 MiniApp 宿主', ()
 // 拆页不是为了好看，是为了让「刷新后还在同一页」「后退能退回上一页」
 // 这两件事成立。所以这里钉死的是路由本身：hash 写法、面板、导航项。
 
-test('导航只剩宿主页签 + 工作台事实账 + 实验报告，工作台与项目没有导航项', () => {
+test('导航只剩宿主页签 + 工作台事实账 + 实验报告 + 引用，工作台与项目没有导航项', () => {
   assert.match(HTML, /data-tab="reports"[^>]*aria-controls="panel-reports"/, '应有实验报告导航项');
   assert.match(HTML, /data-tab="facts"[^>]*aria-controls="panel-facts"/, '应有工作台事实账导航项');
+  assert.match(HTML, /data-tab="citations"[^>]*aria-controls="panel-citations"/, '应有引用导航项');
   const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
-  const order = [...nav.matchAll(/data-tab="([a-z]+)"/g)].map((m) => m[1]);
+  const order = [...nav.matchAll(/data-tab="([a-z-]+)"/g)].map((m) => m[1]);
   assert.deepEqual(order, ['manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai',
-    'facts', 'reports'], '导航顺序：宿主页签 → 工作台事实账 → 实验报告');
+    'facts', 'reports', 'citations'], '导航顺序：宿主页签 → 工作台事实账 → 实验报告 → 引用');
 });
 
 test('工作台与项目不再有导航项：章节是工作台的入口，项目靠顶部按钮', () => {
@@ -520,6 +521,65 @@ test('实验报告与项目各有独立面板：报告块搬走了，id 一个�
   const panel = HTML.slice(HTML.indexOf('id="panel-reports"'), HTML.indexOf('id="panel-project"'));
   assert.match(panel, /id="wb-report-select"/, '报告下拉应在实验报告面板里');
   assert.match(panel, /id="wb-report-card"/, '审阅卡应在实验报告面板里');
+});
+
+// ------------------------------------------------- 12. 引用页（多 bib 汇总）
+//
+// 引用页回答三件事：引了哪些、哪些还没引到、哪些标识不可复核。
+// 它只读：不编辑 bib、不联网核对（联网核对仍然走 audit）。
+
+test('引用页有自己的面板：汇总、文件清单、过滤、表格的 id 一个不能少', () => {
+  assert.match(HTML, /id="panel-citations"[^>]*role="tabpanel"/, '要有引用面板');
+  assert.match(HTML, /id="panel-citations" class="panel panel-narrow"/, '引用页是窄面板');
+  for (const id of ['cite-summary', 'cite-files', 'cite-table', 'cite-tbody',
+    'cite-filter-all', 'cite-filter-no-id', 'cite-filter-unused']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '引用页要有 #' + id);
+  }
+  const panel = HTML.slice(HTML.indexOf('id="panel-citations"'),
+    HTML.indexOf('id="panel-project"'));
+  assert.match(panel, /id="cite-summary"/, '汇总行要在引用面板里');
+  assert.match(panel, /id="cite-files"/, '文件清单要在引用面板里');
+  assert.match(panel, /id="cite-table"/, '表格要在引用面板里');
+});
+
+test('引用页按需加载：切到这一页才请求 /api/citations', () => {
+  assert.match(JS, /wb\('\/citations'\)/, '要调引用接口');
+  assert.match(JS, /state\.tab === 'citations'/, '切到引用页才处理');
+  assert.match(JS, /async function loadCitations\(\)/, '要有加载函数');
+  const block = JS.slice(JS.indexOf('function renderTab'),
+    JS.indexOf('function renderTab') + 1200);
+  assert.match(block, /loadCitations\(\)/, '切页时要拉引用数据');
+});
+
+test('三个过滤按钮：当前项要标出来，不能只靠颜色', () => {
+  for (const [id, filter] of [['cite-filter-all', 'all'],
+    ['cite-filter-no-id', 'no-id'], ['cite-filter-unused', 'unused']]) {
+    assert.match(HTML, new RegExp('id="' + id + '"[^>]*data-filter="' + filter + '"'),
+      id + ' 要带自己的过滤值');
+  }
+  assert.match(HTML, /id="cite-filter-all"[^>]*is-active/, '默认选中「全部」');
+  assert.match(JS, /classList\.toggle\('is-active'/, '当前过滤项要标出来');
+});
+
+test('状态短名进字典：中文与英文各有一套', () => {
+  for (const key of ['cite.statusOk', 'cite.statusNoId', 'cite.statusBadId',
+    'cite.statusUnused']) {
+    assert.match(JS, new RegExp("'" + key + "': '[^']+'"), '字典里要有 ' + key);
+  }
+  for (const word of ['有标识', '缺 DOI/arXiv', '标识不合法', '未引用']) {
+    assert.match(JS, new RegExp(word), '要有中文短名：' + word);
+  }
+  assert.match(JS, /没有参考文献文件/, '没有 bib 时要说清');
+  assert.match(JS, /没有参考文献文件（配置 bib 或正文 \\\\bibliography\{\}）/,
+    '空状态要说清 bib 从哪来');
+});
+
+test('引用页的颜色只用现成变量：深浅两套都跟着走', () => {
+  const start = CSS.indexOf('.cite-filters');
+  const block = CSS.slice(start, CSS.indexOf('/* ---------- 工作台两栏'));
+  assert.ok(start >= 0 && block.length > 0, '引用页要有样式');
+  assert.doesNotMatch(block, /#[0-9a-fA-F]{3,6}/, '不许自创颜色值');
+  assert.match(block, /var\(--mcode-accent-soft\)/, '当前过滤项要用语义变量');
 });
 
 test('项目页装的是项目管理：列表、路径、加入/移除、权限、启动/停止、解释器', () => {
@@ -591,8 +651,8 @@ test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目�
 
 test('事实账有自己的路由 #/facts：页表里要写明', () => {
   assert.match(JS, /facts:\s*'nav\.facts'/, '页面名要挂一个 i18n 键（文案在字典里）');
-  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'project'\]/,
-    '网页页表应写明（含事实账）');
+  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'citations', 'project'\]/,
+    '网页页表应写明（含事实账与引用）');
 });
 
 test('applyMode 不再把 facts / reports 藏起来：网页模式这两项都要能进', () => {
@@ -600,8 +660,8 @@ test('applyMode 不再把 facts / reports 藏起来：网页模式这两项都�
   assert.ok(block.length > 0, '应有 applyMode');
   const hostTabs = /const hostTabs = \[([^\]]*)\]/.exec(block);
   assert.ok(hostTabs, '应有宿主专属页签清单');
-  assert.doesNotMatch(hostTabs[1], /facts|reports|project/, '这些页不是宿主专属，不该在隐藏名单里');
-  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'project'\]/, '网页页表应写明');
+  assert.doesNotMatch(hostTabs[1], /facts|reports|project|citations/, '这些页不是宿主专属，不该在隐藏名单里');
+  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'citations', 'project'\]/, '网页页表应写明');
 });
 
 test('点侧栏章节就打开工作台：章节本身就是入口', () => {
@@ -737,8 +797,8 @@ test('导航与页标题带 data-i18n', () => {
   }
   // 页标题（面板 h2）也要能翻
   for (const panel of ['panel-manuscript', 'panel-ledger', 'panel-refs', 'panel-protect',
-    'panel-audit', 'panel-workbench', 'panel-facts', 'panel-reports', 'panel-project',
-    'panel-ai']) {
+    'panel-audit', 'panel-workbench', 'panel-facts', 'panel-reports', 'panel-citations',
+    'panel-project', 'panel-ai']) {
     const block = HTML.slice(HTML.indexOf('id="' + panel + '"'), HTML.indexOf('</section>', HTML.indexOf('id="' + panel + '"')));
     assert.match(block, /<h2[^>]*data-i18n="/, panel + ' 的页标题要带 data-i18n');
   }

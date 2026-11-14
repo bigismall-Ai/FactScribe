@@ -759,6 +759,13 @@ export async function start(context) {
             sendJson(response, upstream.status, upstream.data);
             return;
           }
+          if (request.method === 'GET' && path === '/api/workbench/citations') {
+            // 引用页：多 bib 汇总 + 每条的状态（只读，上游 400 原样带回）。
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/citations');
+            sendJson(response, upstream.status, upstream.data);
+            return;
+          }
           if (request.method === 'POST' && (path === '/api/workbench/reports'
             || path === '/api/workbench/reports/action')) {
             const body = await readBody(request);

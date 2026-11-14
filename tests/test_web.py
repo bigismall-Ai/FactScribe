@@ -376,6 +376,68 @@ class SectionCrudReadOnlyTest(unittest.TestCase):
         self.assertTrue((self.root / "sections" / "01-intro.tex").is_file())
 
 
+class CitationsApiTest(unittest.TestCase):
+    """引用页的只读接口：GET /api/citations。
+
+    只读：不要 --allow-write 也能查（这一页只读不写盘）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.root = Path(cls.tmp.name) / "paper"
+        shutil.copytree(ROOT / "examples" / "minimal", cls.root)
+        cls.server, cls.token = create_server(cls.root, port=0, token=TOKEN)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(
+            target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        cls.tmp.cleanup()
+
+    def _get(self, path, token=None):
+        req = urllib.request.Request(self.base + path)
+        if token:
+            req.add_header("Authorization", "Bearer " + token)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8")
+            exc.close()
+            return exc.code, json.loads(raw) if raw else {}
+
+    def test_citations_ok(self):
+        status, data = self._get("/api/citations", token=self.token)
+        self.assertEqual(status, 200, data)
+        self.assertTrue(data["ok"])
+        self.assertEqual("citations", data["endpoint"])
+        self.assertIn("total", data)
+        self.assertIn("entries", data)
+        self.assertTrue(data["total"] >= 1, "样例项目里应该有 bib 条目")
+        for row in data["entries"]:
+            for field in ("key", "kind", "title", "doi", "arxiv", "url",
+                          "file", "line", "used", "files", "status"):
+                self.assertIn(field, row, "每条都要有 " + field)
+            self.assertIn(row["status"], ("ok", "no_id", "bad_id", "unused"))
+
+    def test_citations_needs_token(self):
+        status, data = self._get("/api/citations")
+        self.assertEqual(status, 401)
+        self.assertEqual("UNAUTHORIZED", data["error"]["code"])
+
+    def test_citations_is_read_only(self):
+        # 只读服务（没加 --allow-write）照样能查引用：这一页不写盘。
+        status, data = self._get("/api/citations", token=self.token)
+        self.assertEqual(status, 200, data)
+
+
 if __name__ == "__main__":
     unittest.main()
 

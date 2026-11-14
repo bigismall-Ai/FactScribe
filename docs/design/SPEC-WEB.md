@@ -81,6 +81,7 @@ URL：http://127.0.0.1:<port>
 | `#/reports` | 实验报告 |
 | `#/project` | 项目设置 |
 | `#/facts` | 工作台事实账 |
+| `#/citations` | 引用：多 bib 汇总（配置 + `\bibliography{}`）、状态与过滤 |
 | `#/manuscript`、`#/ai` 等 | 草稿与 AI，仅 MiniApp / dev 显示 |
 
 - 切页写 `location.hash`，监听 `hashchange`，浏览器前进/后退可用；

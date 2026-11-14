@@ -600,6 +600,33 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   word-break: break-word;
 }
 
+/* ---------- 引用页：过滤 + bib 文件清单 ---------- */
+/* 过滤按钮：当前项要看得出来（底色 + 字重），不能只靠颜色。 */
+.cite-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 8px; }
+.cite-filter {
+  padding: 3px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--mcode-border); background: var(--mcode-surface-muted);
+  color: var(--mcode-text-muted); font-size: 12px; line-height: 16px; font-family: inherit;
+}
+.cite-filter:hover { color: var(--mcode-text); }
+.cite-filter.is-active {
+  background: var(--mcode-accent-soft); color: var(--mcode-accent);
+  border-color: transparent; font-weight: 600;
+}
+.cite-filter:focus-visible { outline: 2px solid var(--mcode-accent); outline-offset: 1px; }
+
+/* bib 文件清单：路径 + 条数，一行一个文件。 */
+.cite-files { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
+.cite-file { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.cite-file-path { font-family: 'JetBrains Mono', ui-monospace, monospace; color: var(--mcode-text); word-break: break-all; }
+.cite-file-count { color: var(--mcode-text-muted); white-space: nowrap; }
+/* 重复 key：标出来，并且说清它出现在哪几个 bib 里。 */
+.cite-dup {
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 11px;
+  background: var(--mcode-danger-soft); color: var(--mcode-danger);
+}
+.cite-row-files { font-size: 11px; color: var(--mcode-text-subtle); word-break: break-all; }
+
 /* ---------- 工作台两栏：源码+预览 / 问题+AI ---------- */
 /* 章节目录搬到左侧栏了；这里只剩两栏，窄于 1100px 就叠成一列。 */
 .wb-columns {

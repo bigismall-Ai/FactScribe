@@ -388,3 +388,111 @@ test('AI 入口在网页模式禁用并说明原因：需要 MiniApp 宿主', ()
     '要求写进 AI 页签的输入框');
   assert.match(JS, /需要 MiniApp 宿主/, '要说明为什么点不了');
 });
+
+// ------------------------------------------------- 11. hash 路由多页
+//
+// 拆页不是为了好看，是为了让「刷新后还在同一页」「后退能退回上一页」
+// 这两件事成立。所以这里钉死的是路由本身：hash 写法、面板、导航项。
+
+test('左侧导航多出「实验报告」和「项目」两项，顺序在工作台之后、AI 之前', () => {
+  assert.match(HTML, /data-tab="reports"[^>]*aria-controls="panel-reports"/, '应有实验报告导航项');
+  assert.match(HTML, /data-tab="project"[^>]*aria-controls="panel-project"/, '应有项目导航项');
+  const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
+  const order = [...nav.matchAll(/data-tab="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['manuscript', 'ledger', 'refs', 'protect', 'audit',
+    'workbench', 'reports', 'project', 'ai'], '导航顺序：宿主页签 → 工作台 → 实验报告 → 项目 → AI');
+});
+
+test('实验报告与项目各有独立面板：报告块搬走了，id 一个没变', () => {
+  assert.match(HTML, /id="panel-reports"[^>]*role="tabpanel"/, '应有实验报告面板');
+  assert.match(HTML, /id="panel-project"[^>]*role="tabpanel"/, '应有项目面板');
+  for (const id of ['wb-reports', 'wb-report-select', 'wb-report-by', 'wb-report-card',
+    'btn-wb-report-check', 'btn-wb-report-lock', 'btn-wb-report-sign',
+    'btn-wb-report-import']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '报告块 id 要留在 DOM 里：' + id);
+  }
+  // 报告块要真的在 panel-reports 里面，不只是还在页面上
+  const panel = HTML.slice(HTML.indexOf('id="panel-reports"'), HTML.indexOf('id="panel-project"'));
+  assert.match(panel, /id="wb-report-select"/, '报告下拉应在实验报告面板里');
+  assert.match(panel, /id="wb-report-card"/, '审阅卡应在实验报告面板里');
+});
+
+test('项目页装的是项目管理：列表、路径、加入/移除、权限、启动/停止、解释器', () => {
+  const panel = HTML.slice(HTML.indexOf('id="panel-project"'), HTML.indexOf('id="panel-ai"'));
+  for (const id of ['project-select', 'project-path', 'btn-project-add', 'btn-project-forget',
+    'workbench-allow-write', 'workbench-allow-build', 'btn-workbench-start',
+    'btn-workbench-stop', 'btn-workbench-connect', 'project-python',
+    'btn-workbench-load', 'workbench-host-path']) {
+    assert.match(panel, new RegExp('id="' + id + '"'), '项目面板里应有 ' + id);
+  }
+  // 工作台页签只留三栏与状态行
+  const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-reports"'));
+  assert.doesNotMatch(wb, /id="project-select"/, '项目列表不该留在工作台页签');
+  assert.doesNotMatch(wb, /id="wb-report-select"/, '报告下拉不该留在工作台页签');
+  assert.match(wb, /id="wb-section-list"/, '章节目录要留在工作台页签');
+  assert.match(wb, /id="workbench-status"/, '动作消息行要留在工作台页签');
+  assert.match(wb, /id="workbench-save-state"/, '保存状态要留在工作台页签');
+});
+
+test('路由靠地址栏 hash：切页写 hash，hashchange 回读，前进/后退因此可用', () => {
+  assert.match(JS, /hashchange/, '应监听 hashchange');
+  assert.match(JS, /'#\/' \+ tab/, 'hash 形式应是 #/<页名>');
+  assert.match(JS, /suppressHash/, '自己写 hash 会触发 hashchange，要有标志防递归');
+  const block = JS.slice(JS.indexOf('function switchTab'), JS.indexOf('function renderTab'));
+  assert.match(block, /writeHash\(tab/, '切页要写地址栏');
+  // 写 hash 而不是 replaceState：replaceState 不留历史，后退键就废了
+  const write = JS.slice(JS.indexOf('function writeHash'), JS.indexOf('function updateTitle'));
+  assert.match(write, /location\.hash = next/, '切页要压历史，后退才回得去');
+  assert.match(write, /location\.hash === next/, '同一页不要重复写 hash');
+  assert.match(write, /history\.replaceState/, '首屏用 replaceState，别塞一条空历史');
+});
+
+test('启动落在哪一页由 hash 说了算；非法 hash 退回默认页', () => {
+  assert.match(JS, /function pageFromHash/, '应有 hash 解析函数');
+  assert.match(JS, /const hashPage = pageFromHash\(\)/, '启动时应读 hash');
+  assert.match(JS, /hashPage \|\| defaultPage\(\)/, '没给 hash 时用默认页');
+  assert.match(JS, /function defaultPage/, '应有默认页函数');
+  assert.match(JS, /MODE\.mini \? 'manuscript' : 'workbench'/, 'MiniApp 默认正文，网页默认工作台');
+  // 非法 hash 不能停在一个空白面板上
+  const on = JS.slice(JS.indexOf('function onHashChange'), JS.indexOf('function renderTab'));
+  assert.match(on, /const fallback = defaultPage\(\)/, '非法 hash 要退回默认页');
+  assert.match(on, /switchTab\(fallback/, '退回后要真的切过去');
+});
+
+test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目', () => {
+  const block = JS.slice(JS.indexOf('function renderTab'), JS.indexOf('// ------------------------------------------------------------------ 顶栏'));
+  assert.match(block, /state\.tab === 'reports'/, '报告页分支要在');
+  assert.match(block, /renderWorkbenchReports\(\)/, '报告页要渲染报告');
+  assert.match(block, /loadWorkbenchReports\(\)/, '报告页才按需拉列表');
+  assert.match(block, /state\.tab === 'project'\) renderProjects\(\)/, '项目页要渲染项目');
+});
+
+test('applyMode 不再把 reports / project 藏起来：网页模式这三页都要能进', () => {
+  const block = JS.slice(JS.indexOf('function applyMode'), JS.indexOf('function renderSessionBanner'));
+  assert.ok(block.length > 0, '应有 applyMode');
+  const hostTabs = /const hostTabs = \[([^\]]*)\]/.exec(block);
+  assert.ok(hostTabs, '应有宿主专属页签清单');
+  assert.doesNotMatch(hostTabs[1], /reports|project/, '新页不是宿主专属，不该在隐藏名单里');
+  assert.match(JS, /const WEB_PAGES = \['workbench', 'reports', 'project'\]/, '网页三页应写明');
+});
+
+test('标题跟着当前页与项目走：工作台 · 论文名', () => {
+  assert.match(JS, /document\.title/, '应更新标题');
+  const block = JS.slice(JS.indexOf('function updateTitle'), JS.indexOf('function switchTab'));
+  assert.match(block, /PAGE_LABEL\[state\.tab\]/, '标题要带页名');
+  assert.match(block, /workbenchProject/, '标题要带项目名');
+});
+
+test('报告列表按需加载：进报告页才请求，工作台启动不预拉', () => {
+  const project = JS.slice(JS.indexOf('async function loadWorkbenchProject'),
+    JS.indexOf('async function saveWorkbenchSection'));
+  // 允许「当前就在报告页」时补拉；不允许无条件预拉
+  assert.match(project, /if \(state\.tab === 'reports'\)[\s\S]*loadWorkbenchReports\(\)/,
+    '只有当前在报告页时才补拉');
+  assert.doesNotMatch(project.replace(/if \(state\.tab === 'reports'\)[\s\S]*?\n  \}/, ''),
+    /loadWorkbenchReports\(\)/, '工作台页不该预拉报告列表');
+  const loader = JS.slice(JS.indexOf('async function loadWorkbenchReports'),
+    JS.indexOf('function reportAction'));
+  assert.match(loader, /wbReportsLoading/, '要有并发/重复请求保护');
+  assert.match(loader, /api\(wb\('\/reports'\)\)/, '列表仍走同一个接口');
+});

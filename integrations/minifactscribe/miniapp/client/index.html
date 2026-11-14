@@ -46,6 +46,8 @@
         <button class="nav-item" data-tab="protect" role="tab" aria-selected="false" aria-controls="panel-protect">改写保护</button>
         <button class="nav-item" data-tab="audit" role="tab" aria-selected="false" aria-controls="panel-audit">审计</button>
         <button class="nav-item" data-tab="workbench" role="tab" aria-selected="false" aria-controls="panel-workbench">工作台</button>
+        <button class="nav-item" data-tab="reports" role="tab" aria-selected="false" aria-controls="panel-reports">实验报告</button>
+        <button class="nav-item" data-tab="project" role="tab" aria-selected="false" aria-controls="panel-project">项目</button>
         <button class="nav-item" data-tab="ai" role="tab" aria-selected="false" aria-controls="panel-ai">AI 起草</button>
         <div class="sidebar-foot">
           <p class="boundary">
@@ -293,7 +295,7 @@
           <div class="panel-head">
             <div>
               <h2>本地工作台</h2>
-              <p class="panel-desc">选一个论文文件夹，一键启动本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。这里是工作台项目的结果；左侧正文与事实账仍是本地草稿，两者不是同一个项目。</p>
+              <p class="panel-desc">这里跑真实论文项目：章节、源码与预览、要处理的问题。左侧正文与事实账仍是本地草稿，两者不是同一个项目；选文件夹与启动服务在「项目」页。</p>
             </div>
             <div class="panel-actions">
               <span id="workbench-badge" class="muted-note">未连接</span>
@@ -302,69 +304,7 @@
               <button id="btn-wb-pdf" class="btn" type="button" hidden>打开 PDF</button>
             </div>
           </div>
-          <details class="project-block" id="wb-project">
-            <summary id="wb-project-summary">论文项目（点开切换）</summary>
-            <div class="project-head">
-              <h3>论文项目</h3>
-              <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
-            </div>
-            <label class="field" style="max-width: 640px">
-              <span>最近项目</span>
-              <select id="project-select"></select>
-            </label>
-            <label class="field" style="max-width: 640px">
-              <span>项目文件夹</span>
-              <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
-            </label>
-            <div class="panel-actions" style="margin: 8px 0">
-              <button id="btn-project-add" class="btn" type="button">加入项目列表</button>
-              <button id="btn-project-host" class="btn" type="button">用当前对话项目</button>
-              <button id="btn-project-forget" class="btn" type="button">从列表移除</button>
-            </div>
-            <div class="checkline">
-              <label><input id="workbench-allow-write" type="checkbox" /> 允许写章节与事实（<code>--allow-write</code>）</label>
-              <label><input id="workbench-allow-build" type="checkbox" /> 允许编译 PDF（<code>--allow-build</code>）</label>
-            </div>
-            <div class="panel-actions" style="margin: 10px 0">
-              <button id="btn-workbench-start" class="btn btn-primary" type="button">启动并连接</button>
-              <button id="btn-workbench-stop" class="btn" type="button">停止工作台</button>
-              <span id="workbench-run-state" class="muted-note"></span>
-            </div>
-            <details class="manual-connect">
-              <summary>高级：手动连接 / Python 解释器</summary>
-              <div class="workbench-form">
-                <label class="field">
-                  <span>工作台 URL</span>
-                  <input id="workbench-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:61483" />
-                </label>
-                <label class="field">
-                  <span>Token</span>
-                  <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
-                </label>
-                <div class="workbench-actions">
-                  <button id="btn-workbench-connect" class="btn" type="button">连接</button>
-                  <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
-                </div>
-                <label class="field">
-                  <span>Python 解释器（一键启动用）</span>
-                  <input id="project-python" type="text" autocomplete="off" placeholder="python3 或 /绝对路径/python3" />
-                </label>
-                <label class="field">
-                  <span>包路径（PYTHONPATH，源码没安装时用）</span>
-                  <input id="project-pythonpath" type="text" autocomplete="off" placeholder="/path/to/factscribe 仓库根（留空＝已安装）" />
-                </label>
-                <div class="workbench-actions">
-                  <button id="btn-project-python" class="btn" type="button">保存解释器设置</button>
-                </div>
-              </div>
-            </details>
-          </details>
-          <p id="workbench-host-path" class="muted-note"></p>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
-          <div class="panel-actions" style="margin: 10px 0">
-            <button id="btn-workbench-load" class="btn" type="button">载入工作台项目</button>
-            <span id="workbench-save-state" class="muted-note"></span>
-          </div>
           <div id="workbench-summary" class="audit-summary"></div>
 
           <!-- 三栏工作区：章节目录 / 源码+预览 / 要处理的问题 + AI 入口 -->
@@ -390,6 +330,7 @@
                 </div>
                 <div class="panel-actions">
                   <span id="wb-current-section" class="muted-note"></span>
+                  <span id="workbench-save-state" class="muted-note"></span>
                   <button id="btn-workbench-save" class="btn btn-primary" type="button">保存本节</button>
                 </div>
               </div>
@@ -478,10 +419,17 @@
             <button id="btn-wb-freeze" class="btn" type="button">冻结</button>
             <button id="btn-wb-unfreeze" class="btn" type="button">解冻</button>
           </div>
+        </section>
 
-          <div class="subhead" style="margin-top: 18px">
-            <h3>实验报告 <span id="wb-reports-meta" class="muted-note"></span></h3>
-            <p class="panel-desc">封存＝把当前文件哈希钉住；签收＝你确认取数位置；导入＝写进事实账。</p>
+        <section id="panel-reports" class="panel panel-narrow" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>实验报告</h2>
+              <p class="panel-desc">封存＝把当前文件哈希钉住；签收＝你确认取数位置；导入＝写进事实账。</p>
+            </div>
+            <div class="panel-actions">
+              <span id="wb-reports-meta" class="muted-note"></span>
+            </div>
           </div>
           <div id="wb-reports" class="wb-reports"></div>
           <label class="field" style="max-width: 520px">
@@ -500,6 +448,77 @@
             <input id="wb-report-by" placeholder="谁签的（签收必填，工具不替你猜）" />
           </label>
           <div id="wb-report-card" class="wb-report-card"></div>
+        </section>
+
+        <section id="panel-project" class="panel panel-narrow" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2>项目</h2>
+              <p class="panel-desc">选一个论文文件夹，一键启动本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。</p>
+            </div>
+            <div class="panel-actions">
+              <span id="workbench-run-state" class="muted-note"></span>
+              <button id="btn-workbench-load" class="btn" type="button">载入工作台项目</button>
+            </div>
+          </div>
+          <p id="project-status" class="muted-note" role="status" aria-live="polite"></p>
+          <details class="project-block" id="wb-project" open>
+            <summary id="wb-project-summary">论文项目（点开切换）</summary>
+            <div class="project-head">
+              <h3>论文项目</h3>
+              <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
+            </div>
+            <label class="field" style="max-width: 640px">
+              <span>最近项目</span>
+              <select id="project-select"></select>
+            </label>
+            <label class="field" style="max-width: 640px">
+              <span>项目文件夹</span>
+              <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
+            </label>
+            <div class="panel-actions" style="margin: 8px 0">
+              <button id="btn-project-add" class="btn" type="button">加入项目列表</button>
+              <button id="btn-project-host" class="btn" type="button">用当前对话项目</button>
+              <button id="btn-project-forget" class="btn" type="button">从列表移除</button>
+            </div>
+            <div class="checkline">
+              <label><input id="workbench-allow-write" type="checkbox" /> 允许写章节与事实（<code>--allow-write</code>）</label>
+              <label><input id="workbench-allow-build" type="checkbox" /> 允许编译 PDF（<code>--allow-build</code>）</label>
+            </div>
+            <div class="panel-actions" style="margin: 10px 0">
+              <button id="btn-workbench-start" class="btn btn-primary" type="button">启动并连接</button>
+              <button id="btn-workbench-stop" class="btn" type="button">停止工作台</button>
+            </div>
+            <details class="manual-connect">
+              <summary>高级：手动连接 / Python 解释器</summary>
+              <div class="workbench-form">
+                <label class="field">
+                  <span>工作台 URL</span>
+                  <input id="workbench-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:61483" />
+                </label>
+                <label class="field">
+                  <span>Token</span>
+                  <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
+                </label>
+                <div class="workbench-actions">
+                  <button id="btn-workbench-connect" class="btn" type="button">连接</button>
+                  <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
+                </div>
+                <label class="field">
+                  <span>Python 解释器（一键启动用）</span>
+                  <input id="project-python" type="text" autocomplete="off" placeholder="python3 或 /绝对路径/python3" />
+                </label>
+                <label class="field">
+                  <span>包路径（PYTHONPATH，源码没安装时用）</span>
+                  <input id="project-pythonpath" type="text" autocomplete="off" placeholder="/path/to/factscribe 仓库根（留空＝已安装）" />
+                </label>
+                <div class="workbench-actions">
+                  <button id="btn-project-python" class="btn" type="button">保存解释器设置</button>
+                </div>
+              </div>
+            </details>
+          </details>
+          <p id="workbench-host-path" class="muted-note"></p>
         </section>
 
         <section id="panel-ai" class="panel" role="tabpanel" hidden>

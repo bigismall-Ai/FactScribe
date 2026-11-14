@@ -267,7 +267,68 @@ async function saveNow() {
   }
 }
 
-function switchTab(tab) {
+// ------------------------------------------------------------------ 页面路由
+// 同一份 HTML 切成多个页面，靠地址栏的 hash 认页（#/workbench、#/reports、#/project）。
+// 前进/后退能用，是因为切页时写的是 location.hash（会压一条历史），不是 replaceState。
+// 递归防护：自己写 hash 会触发 hashchange，用 suppressHash 标一下，别又切回去。
+
+const PAGE_LABEL = {
+  manuscript: '正文',
+  ledger: '事实账',
+  refs: '引用',
+  protect: '改写保护',
+  audit: '审计',
+  workbench: '工作台',
+  reports: '实验报告',
+  project: '项目',
+  ai: 'AI 起草',
+};
+
+const ALL_PAGES = Object.keys(PAGE_LABEL);
+
+// 网页模式（也含 dev）都有的三页：工作台、实验报告、项目
+const WEB_PAGES = ['workbench', 'reports', 'project'];
+
+// 网页模式只有工作台三页；草稿与 AI 是宿主的，不给路由。
+function availablePages() {
+  return MODE.showHostUi ? ALL_PAGES : WEB_PAGES;
+}
+
+function defaultPage() {
+  return MODE.mini ? 'manuscript' : 'workbench';
+}
+
+/** 地址栏里的 hash → 页名；不认识（或本模式没有）就是空。 */
+function pageFromHash() {
+  const raw = String(location.hash || '').replace(/^#\/?/, '');
+  return availablePages().includes(raw) ? raw : '';
+}
+
+let suppressHash = false;
+
+/** 切页后同步地址栏：写 hash 而不是 replaceState，这样浏览器前进/后退才有得退。 */
+function writeHash(tab, replace) {
+  const next = '#/' + tab;
+  if (location.hash === next) return;
+  if (replace) {
+    history.replaceState(null, '', next);
+    return;
+  }
+  suppressHash = true;
+  location.hash = next;
+}
+
+/** 标题跟着当前页与项目走：工作台 · 论文名 */
+function updateTitle() {
+  const label = PAGE_LABEL[state.tab] || 'FactScribe';
+  const wbName = String(state.workbenchProject?.project || state.workbenchStatus?.project || '').trim();
+  const localName = String(state.project?.name || '').trim();
+  const wbTab = state.tab === 'workbench' || state.tab === 'reports' || state.tab === 'project';
+  const name = wbTab ? (wbName || localName) : (localName || wbName);
+  document.title = name ? label + ' · ' + name : label;
+}
+
+function switchTab(tab, opts = {}) {
   state.tab = tab;
   for (const btn of $$('.nav-item')) {
     const on = btn.dataset.tab === tab;
@@ -280,6 +341,26 @@ function switchTab(tab) {
     panel.hidden = !on;
   }
   renderTab();
+  updateTitle();
+  if (!opts.fromHash) writeHash(tab, opts.replace);
+}
+
+/** 地址栏变了：回到那一页（前进/后退就是走这里）。 */
+function onHashChange() {
+  if (suppressHash) {
+    suppressHash = false;
+    return;
+  }
+  const tab = pageFromHash();
+  if (!tab) {
+    // 不认识的 hash（或本模式没有的页）：回默认页，地址也改回合法值
+    const fallback = defaultPage();
+    switchTab(fallback, { fromHash: true });
+    history.replaceState(null, '', '#/' + fallback);
+    return;
+  }
+  if (tab === state.tab) return;
+  switchTab(tab, { fromHash: true });
 }
 
 function renderTab() {
@@ -289,6 +370,12 @@ function renderTab() {
   else if (state.tab === 'protect') renderProtect();
   else if (state.tab === 'audit') renderAudit();
   else if (state.tab === 'workbench') renderWorkbench();
+  else if (state.tab === 'reports') {
+    // 按需加载：只有真的切到「实验报告」页才请求；其他视图不预拉
+    renderWorkbenchReports();
+    if (state.workbenchProject) loadWorkbenchReports().catch(() => {});
+  }
+  else if (state.tab === 'project') renderProjects();
   else if (state.tab === 'ai') renderAi();
 }
 
@@ -826,6 +913,11 @@ function applyMode() {
     const btn = document.querySelector('.nav-item[data-tab="' + tab + '"]');
     if (btn) btn.hidden = !MODE.showHostUi;
   }
+  // 工作台三页两种模式都在：不藏。
+  for (const tab of WEB_PAGES) {
+    const btn = document.querySelector('.nav-item[data-tab="' + tab + '"]');
+    if (btn) btn.hidden = false;
+  }
   for (const sel of ['#project-name', '#btn-demo', '#save-state', '#verdict', '#btn-audit']) {
     const el = $(sel);
     if (el) el.hidden = !MODE.showHostUi;
@@ -1121,6 +1213,41 @@ function projectBusy(flag) {
 function renderProjects() {
   const select = $('#project-select');
   if (!select) return;
+  const w = state.workbench || { configured: false };
+  // 项目页自己的几处状态：当前对话路径、当前项目、运行状态、手动连接。
+  const hostPath = $('#workbench-host-path');
+  if (hostPath) {
+    hostPath.textContent = state.hostWorkspace
+      ? '当前对话项目：' + state.hostWorkspace
+      : '当前对话没有项目文件夹（或尚未读取）；可以直接填论文项目文件夹。';
+  }
+  const projectSummary = $('#wb-project-summary');
+  if (projectSummary) {
+    projectSummary.textContent = state.workbenchProject
+      ? '论文项目：' + (state.workbenchProject.project || state.workbenchProject.root || '已载入') + '（点开切换）'
+      : '论文项目（点开选择）';
+  }
+  const runState = $('#workbench-run-state');
+  if (runState) {
+    if (state.run) {
+      const mode = state.run.mode
+        ? (state.run.mode.write ? '可写' : '只读') + (state.run.mode.build ? ' · 可编译' : '')
+        : '';
+      runState.textContent = '运行中 · PID ' + state.run.pid + ' · ' + mode + ' · ' + state.run.project;
+    } else {
+      runState.textContent = '';
+    }
+  }
+  const url = $('#workbench-url');
+  if (url) url.value = w.url || '';
+  const token = $('#workbench-token');
+  if (token) {
+    token.placeholder = w.tokenSet
+      ? '已保存（留空不改）'
+      : '启动 serve 时打印的 token';
+  }
+  const disconnect = $('#btn-workbench-disconnect');
+  if (disconnect) disconnect.disabled = MODE.mini ? !w.configured : true;
   const options = ['<option value="">（选择论文项目文件夹）</option>'];
   for (const project of state.projects) {
     const label = (project.name ? project.name + ' — ' : '') + project.path;
@@ -1279,19 +1406,6 @@ async function stopWorkbench() {
 
 function renderWorkbench() {
   const w = state.workbench || { configured: false };
-  const hostPath = $('#workbench-host-path');
-  if (hostPath) {
-    hostPath.textContent = state.hostWorkspace
-      ? '当前对话项目：' + state.hostWorkspace
-      : '当前对话没有项目文件夹（或尚未读取）；可以直接填论文项目文件夹。';
-  }
-  // 项目块默认收起：三栏编辑区要一进来就能看见
-  const projectSummary = $('#wb-project-summary');
-  if (projectSummary) {
-    projectSummary.textContent = state.workbenchProject
-      ? '论文项目：' + (state.workbenchProject.project || state.workbenchProject.root || '已载入') + '（点开切换）'
-      : '论文项目（点开选择）';
-  }
   const badge = $('#workbench-badge');
   const summary = $('#workbench-summary');
   if (!badge) return;
@@ -1299,22 +1413,6 @@ function renderWorkbench() {
     ? (state.run ? '运行中' : (w.configured ? '已配置' : '未连接'))
     : '本机服务';
   renderProjects();
-  const runState = $('#workbench-run-state');
-  if (runState) {
-    if (state.run) {
-      const mode = state.run.mode
-        ? (state.run.mode.write ? '可写' : '只读') + (state.run.mode.build ? ' · 可编译' : '')
-        : '';
-      runState.textContent = '运行中 · PID ' + state.run.pid + ' · ' + mode + ' · ' + state.run.project;
-    } else {
-      runState.textContent = '';
-    }
-  }
-  $('#workbench-url').value = w.url || '';
-  $('#workbench-token').placeholder = w.tokenSet
-    ? '已保存（留空不改）'
-    : '启动 serve 时打印的 token';
-  $('#btn-workbench-disconnect').disabled = MODE.mini ? !w.configured : true;
   $('#btn-workbench-audit').disabled = !w.configured;
 
   if (!w.configured) {
@@ -1844,11 +1942,14 @@ function renderReportCard(item, count) {
 }
 
 async function loadWorkbenchReports() {
-  if (!state.workbenchProject) return;
+  if (!state.workbenchProject || state.wbReportsLoading) return;
+  state.wbReportsLoading = true;
   try {
     state.wbReports = await api(wb('/reports'));
   } catch (err) {
     state.wbReports = { workspace: '', reports: [], error: err.message };
+  } finally {
+    state.wbReportsLoading = false;
   }
   renderWorkbenchReports();
 }
@@ -1980,7 +2081,11 @@ async function loadWorkbenchProject() {
     btn.title = project?.read_only ? '启动时没加 --allow-write' : '';
   }
   await loadWorkbenchEvidence();
-  await loadWorkbenchReports();
+  // 当前就在报告页：项目刚载入完，补一次渲染与按需拉取
+  if (state.tab === 'reports') {
+    renderWorkbenchReports();
+    loadWorkbenchReports().catch(() => {});
+  }
 }
 
 async function saveWorkbenchSection() {
@@ -2070,6 +2175,14 @@ async function runWorkbenchAudit() {
 
 function wire() {
   for (const btn of $$('.nav-item')) btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  window.addEventListener('hashchange', onHashChange);
+  // 动作消息只有一份（#workbench-status），项目页也要看得见：抄一份过去。
+  const status = $('#workbench-status');
+  const mirror = $('#project-status');
+  if (status && mirror && typeof MutationObserver !== 'undefined') {
+    const copy = () => { mirror.textContent = status.textContent; };
+    new MutationObserver(copy).observe(status, { childList: true, characterData: true, subtree: true });
+  }
   $('#btn-audit').addEventListener('click', () => runAudit());
   $('#btn-rerun').addEventListener('click', () => runAudit());
   $('#project-select').addEventListener('change', () => {
@@ -2513,6 +2626,8 @@ async function loadPreviewDraft() {
 
 async function init() {
   applyMode();
+  // 地址栏说了算：有合法 hash 就去那一页，没有就按模式取默认页。
+  const hashPage = pageFromHash();
   if (MODE.mini) {
     // 先问宿主：这是不是从论文对话打开的（fail-closed 的前提）
     await detectHostContext();
@@ -2521,6 +2636,7 @@ async function init() {
     if (!state.token) showTokenPanel();
   }
   wire();
+  // 首屏用 replaceState 写 hash：不该给浏览器塞一条空的历史。
 
   if (MODE.mini) {
     try {
@@ -2547,13 +2663,13 @@ async function init() {
     }
     await loadWorkbench();
     renderVerdict();
-    switchTab('manuscript');
+    switchTab(hashPage || defaultPage(), { replace: true });
     await runAudit({ focus: false });
   } else {
     // 网页：服务已经由命令行启动，页面只操作真实论文项目
     if (MODE.dev) await loadPreviewDraft();
     await loadWorkbench();
-    switchTab('workbench');
+    switchTab(hashPage || defaultPage(), { replace: true });
     try {
       await loadProjects();
     } catch (err) {
@@ -2598,12 +2714,11 @@ async function init() {
     try {
       const saved = localStorage.getItem('minifactscribe.tab')
         ?? localStorage.getItem('factgate.tab');
-      if (saved) switchTab(saved);
+      // 地址栏优先：只有没给 hash 时才回退到上次停留的页签。
+      if (saved && !hashPage) switchTab(saved, { replace: true });
     } catch {
       /* 忽略 */
     }
-  } else {
-    switchTab('workbench');
   }
 }
 

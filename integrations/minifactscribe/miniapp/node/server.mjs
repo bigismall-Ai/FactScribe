@@ -74,6 +74,38 @@ export async function workbenchFetch(base, token, path, method = 'GET', body = n
   return data;
 }
 
+/**
+ * 代理转发，但把上游的 400/403 原样带回。
+ *
+ * 只读（READ_ONLY）、路径越界（PATH_ESCAPE）是「用户或项目自己的问题」，不该
+ * 一律变成 502；连不上上游才算传输失败。
+ */
+export async function workbenchProxy(base, token, path, method = 'GET', body = null) {
+  const headers = { authorization: `Bearer ${token}` };
+  if (body !== null) headers['content-type'] = 'application/json';
+  let response;
+  try {
+    response = await fetch(base + path, {
+      method,
+      headers,
+      ...(body !== null ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (err) {
+    throw new Error('连不上本地工作台：' + err.message);
+  }
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('工作台返回的不是 JSON');
+  }
+  if (!response.ok || data?.ok === false) {
+    return { status: response.status >= 400 ? response.status : 400, data };
+  }
+  return { status: 200, data };
+}
+
 export async function probeWorkbench(base, token) {
   const health = await workbenchFetch(base, token, '/api/health');
   if (!health?.ok) throw new Error('工作台 health 未通过');
@@ -666,6 +698,20 @@ export async function start(context) {
             sendJson(response, 200,
               await workbenchFetch(workbench.url, workbench.token,
                 '/api/evidence/unfreeze', 'POST', body));
+            return;
+          }
+          if (request.method === 'GET' && path === '/api/workbench/reports') {
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/reports');
+            sendJson(response, upstream.status, upstream.data);
+            return;
+          }
+          if (request.method === 'POST' && (path === '/api/workbench/reports'
+            || path === '/api/workbench/reports/action')) {
+            const body = await readBody(request);
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/reports/action', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/build') {

@@ -64,6 +64,7 @@ const state = {
   hostWorkspaceDefault: false,
   token: '',
   wbEvidence: null,
+  wbReports: null,
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -1463,6 +1464,140 @@ async function loadWorkbenchEvidence() {
   renderWorkbenchEvidence();
 }
 
+// --------------------------------------------------------- 实验报告（工作台）
+
+/** 下拉里的一项：实验 / 报告文件 · 状态。 */
+function reportOptionLabel(r) {
+  const exp = r.experiment || '（未标实验）';
+  const name = String(r.path || '').split('/').pop();
+  return exp + ' / ' + name + ' · ' + (r.status || '状态未知');
+}
+
+function selectedReport() {
+  const list = (state.wbReports?.reports) || [];
+  const path = $('#wb-report-select')?.value || '';
+  return list.find((r) => r.path === path) || null;
+}
+
+function renderWorkbenchReports() {
+  const data = state.wbReports || {};
+  const list = data.reports || [];
+  const meta = $('#wb-reports-meta');
+  if (meta) {
+    meta.textContent = list.length ? list.length + ' 份报告' : '';
+  }
+  const select = $('#wb-report-select');
+  if (select) {
+    const previous = select.value;
+    select.innerHTML = list.length
+      ? list.map((r) => '<option value="' + esc(r.path) + '">' +
+          esc(reportOptionLabel(r)) + '</option>').join('')
+      : '<option value="">（没有报告）</option>';
+    if (previous && list.some((r) => r.path === previous)) select.value = previous;
+  }
+  const box = $('#wb-reports');
+  if (box) {
+    const notes = [];
+    if (!state.workbenchProject) {
+      notes.push('先载入工作台项目，再看实验报告。');
+    }
+    if (state.workbenchProject?.read_only) {
+      notes.push('只读工作台：启动时没加 --allow-write，封存/签收/导入用不了。');
+    }
+    if (data.error) notes.push('报告列表读不出来：' + data.error);
+    if (!list.length && !notes.length) {
+      notes.push('没有找到实验报告（experiments/*/reports/*.report.toml）');
+    }
+    box.innerHTML = notes
+      .map((n) => '<div class="muted-note">' + esc(n) + '</div>').join('');
+  }
+  renderReportState(selectedReport());
+  renderReportCard(selectedReport(), list.length);
+}
+
+/** 状态行：状态 · 封存 · 签收（不行就说原因）。 */
+function renderReportState(item) {
+  const el = $('#wb-report-state');
+  if (!el) return;
+  if (!item) {
+    el.textContent = '';
+    return;
+  }
+  const bits = [item.status || '状态未知'];
+  bits.push(item.lock_ok ? '已封存' : (item.locked ? '封存已失效' : '未封存'));
+  bits.push(item.signed ? '已签收' : '未签收');
+  let text = bits.join(' · ');
+  if (item.reason) text += '（' + item.reason + '）';
+  el.textContent = text;
+}
+
+/** 审阅卡：逐行显示，不截断——截掉的那行等于人没看见却签了字。 */
+function renderReportCard(item, count) {
+  const box = $('#wb-report-card');
+  if (!box) return;
+  if (!state.workbenchProject) {
+    box.innerHTML = '<div class="line-empty">先载入工作台项目，再看审阅卡。</div>';
+    return;
+  }
+  if (!item) {
+    box.innerHTML = count
+      ? '<div class="line-empty">先选一份报告。</div>'
+      : '<div class="line-empty">没有找到实验报告（experiments/*/reports/*.report.toml）</div>';
+    return;
+  }
+  const lines = item.card || [];
+  if (!lines.length) {
+    box.innerHTML = '<div class="line-empty">还没有审阅卡：先检查并封存（把哈希钉住）才出卡。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="wb-report-card-title">审阅卡</div>' +
+    lines.map((line) => '<div class="wb-report-line">' + esc(line) + '</div>').join('');
+}
+
+async function loadWorkbenchReports() {
+  if (!state.workbenchProject) return;
+  try {
+    state.wbReports = await api(wb('/reports'));
+  } catch (err) {
+    state.wbReports = { workspace: '', reports: [], error: err.message };
+  }
+  renderWorkbenchReports();
+}
+
+const REPORT_ACTION_LABEL = {
+  check: '检查', lock: '封存', sign: '签收', import: '导入',
+};
+
+/** 四个动作走同一个接口：检查 / 封存 / 签收 / 导入。 */
+async function reportAction(action) {
+  const select = $('#wb-report-select');
+  const path = select?.value || '';
+  if (!path) throw new Error('先选一份报告');
+  const by = ($('#wb-report-by')?.value || '').trim();
+  if (action === 'sign' && !by) {
+    const el = $('#wb-report-state');
+    if (el) el.textContent = '签收要写签收人：工具不替你签字。';
+    toast('签收必须填签收人');
+    return;
+  }
+  const data = await api(wb('/reports'), {
+    method: 'POST',
+    body: JSON.stringify({ action, report: path, by }),
+  });
+  await loadWorkbenchReports();
+  const result = data.result || {};
+  if (action === 'check' && result.ok === false) {
+    const first = (result.errors || [])[0];
+    throw new Error(first ? first.message : '检查没过');
+  }
+  if (action === 'import') {
+    toast(result.written ? '已写进事实账：' + (result.facts_file || '')
+      : (result.unchanged ? '账上已是最新，没改动' : '演练：没有写盘'));
+    return;
+  }
+  toast((REPORT_ACTION_LABEL[action] || action) + '完成');
+}
+
 async function freezeWorkbenchEvidence() {
   const reason = prompt('冻结理由（可留空）', '') ?? null;
   if (reason === null) return;
@@ -1518,6 +1653,7 @@ async function loadWorkbenchProject() {
     if (!MODE.mini && /还没有选论文项目/.test(err.message)) {
       state.workbenchProject = null;
       state.wbEvidence = null;
+      state.wbReports = null;
       renderWorkbench();
       return;
     }
@@ -1537,7 +1673,16 @@ async function loadWorkbenchProject() {
   const unfreeze = $('#btn-wb-unfreeze');
   if (freeze) freeze.disabled = Boolean(project?.read_only);
   if (unfreeze) unfreeze.disabled = Boolean(project?.read_only);
+  // 只读工作台：封存/签收/导入写不了盘，按钮灰掉并说清原因。
+  for (const sel of ['#btn-wb-report-lock', '#btn-wb-report-sign',
+    '#btn-wb-report-import']) {
+    const btn = $(sel);
+    if (!btn) continue;
+    btn.disabled = Boolean(project?.read_only);
+    btn.title = project?.read_only ? '启动时没加 --allow-write' : '';
+  }
   await loadWorkbenchEvidence();
+  await loadWorkbenchReports();
 }
 
 async function saveWorkbenchSection() {
@@ -1978,6 +2123,19 @@ function wire() {
   });
   $('#btn-wb-unfreeze').addEventListener('click', () => {
     unfreezeWorkbenchEvidence().catch((e) => toast('解冻失败：' + e.message));
+  });
+  // 实验报告：四个动作走同一个接口，动作完刷新列表与审阅卡。
+  for (const [id, action] of [['#btn-wb-report-check', 'check'],
+    ['#btn-wb-report-lock', 'lock'],
+    ['#btn-wb-report-sign', 'sign'],
+    ['#btn-wb-report-import', 'import']]) {
+    $(id).addEventListener('click', () => {
+      reportAction(action).catch((e) => toast('报告操作失败：' + e.message));
+    });
+  }
+  $('#wb-report-select').addEventListener('change', () => {
+    renderReportState(selectedReport());
+    renderReportCard(selectedReport(), (state.wbReports?.reports || []).length);
   });
   $('#btn-wb-build').addEventListener('click', () => {
     buildWorkbenchPdf().catch((e) => { $('#wb-build-state').textContent = '编译失败：' + e.message; });

@@ -483,3 +483,16 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 .facts-table th { color: var(--mcode-text-muted); font-weight: 600; }
 .wb-facts, .wb-evidence { margin: 6px 0 10px; }
 #token-panel input { margin: 0 8px; }
+
+/* 实验报告块：审阅卡逐行显示，不截断 */
+.wb-reports { margin: 6px 0 10px; }
+.wb-report-card { margin: 8px 0 4px; }
+.wb-report-card-title { font-size: 12px; color: var(--mcode-text-muted); margin-bottom: 4px; }
+.wb-report-line {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--mcode-border);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

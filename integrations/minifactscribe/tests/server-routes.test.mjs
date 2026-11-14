@@ -3,7 +3,8 @@
 
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { createServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -20,7 +21,7 @@ let savedHome;
 
 function freePort() {
   return new Promise((resolve, reject) => {
-    const probe = createServer();
+    const probe = createNetServer();
     probe.once('error', reject);
     probe.listen(0, '127.0.0.1', () => {
       const port = probe.address().port;
@@ -158,4 +159,76 @@ test('统一界面的静态资源：/app.js 与 /app.css 由 Node 供', async ()
   const page = await call('/minifactscribe');
   assert.equal(page.status, 200);
   assert.match(page.body, /\/app\.js/, '页面引用绝对路径，两种服务器都能供');
+});
+
+test('报告代理：列表与动作都转发，上游的 403 原样带回', async () => {
+  const upstream = createServer((request, response) => {
+    const reply = (code, body) => {
+      response.writeHead(code, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    if (request.url === '/api/health') {
+      return reply(200, { ok: true, service: 'workbench' });
+    }
+    if (request.url === '/api/capabilities') {
+      return reply(200, { ok: true, engine: 'python' });
+    }
+    if (request.url === '/api/reports') {
+      return reply(200, {
+        ok: true,
+        workspace: '/tmp/ws',
+        reports: [{
+          path: 'experiments/e/reports/r.report.toml', id: 'r',
+          experiment: 'e', status: 'final', metrics: 1, locked: true,
+          signed: false, reason: '', lock_ok: true, card: [],
+        }],
+      });
+    }
+    if (request.url === '/api/reports/action' && request.method === 'POST') {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        const parsed = JSON.parse(body || '{}');
+        if (parsed.action === 'lock') {
+          return reply(403, {
+            ok: false,
+            error: { code: 'READ_ONLY', message: 'serve 当前是只读模式' },
+          });
+        }
+        return reply(200, { ok: true, action: parsed.action, result: { by: parsed.by } });
+      });
+      return;
+    }
+    return reply(404, { ok: false, error: { code: 'NOT_FOUND', message: 'no' } });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = 'http://127.0.0.1:' + upstream.address().port;
+  try {
+    const connect = await call('/api/workbench', {
+      method: 'PUT',
+      body: JSON.stringify({ url: upstreamUrl, token: 'upstream-token' }),
+    });
+    assert.equal(connect.status, 200, JSON.stringify(connect.body));
+
+    const list = await call('/api/workbench/reports');
+    assert.equal(list.status, 200);
+    assert.equal(list.body.reports.length, 1);
+    assert.equal(list.body.reports[0].id, 'r');
+
+    const signed = await call('/api/workbench/reports', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'sign', report: 'x', by: '张三' }),
+    });
+    assert.equal(signed.status, 200);
+    assert.equal(signed.body.result.by, '张三');
+
+    const denied = await call('/api/workbench/reports', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'lock', report: 'x' }),
+    });
+    assert.equal(denied.status, 403, '上游的 403 要原样带回，不能变成 502');
+    assert.equal(denied.body.error.code, 'READ_ONLY');
+  } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
 });

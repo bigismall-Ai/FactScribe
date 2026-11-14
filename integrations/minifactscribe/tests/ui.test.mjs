@@ -282,3 +282,40 @@ test('网页也能管项目：不带路径启动，页面里选文件夹', () =>
   assert.match(HTML, /id="btn-project-add"/, '加入项目列表两种模式都该在');
   assert.doesNotMatch(JS, /'#btn-project-add', '#btn-project-host',/, '网页里不能禁用加入按钮');
 });
+
+// ------------------------------------------------------------ 9. 实验报告
+
+test('工作台有实验报告块：下拉、四个动作、签收人、审阅卡', () => {
+  assert.match(HTML, /id="wb-reports"/, '应有报告区');
+  assert.match(HTML, /id="wb-report-select"/, '应有报告下拉');
+  assert.match(HTML, /id="wb-report-by"/, '应有签收人输入');
+  assert.match(HTML, /id="wb-report-card"/, '应有审阅卡区');
+  for (const id of ['btn-wb-report-check', 'btn-wb-report-lock',
+    'btn-wb-report-sign', 'btn-wb-report-import']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '应有按钮 ' + id);
+  }
+});
+
+test('报告动作要说人话：封存钉哈希、签收认取数位置、导入写进事实账', () => {
+  assert.match(HTML, /封存＝把当前文件哈希钉住/, '要说明封存是什么');
+  assert.match(HTML, /签收＝你确认取数位置/, '要说明签收是什么');
+  assert.match(HTML, /导入＝写进事实账/, '要说明导入是什么');
+  assert.match(JS, /没有找到实验报告/, '没有报告时要说明去哪儿找');
+  assert.match(JS, /启动时没加 --allow-write/, '只读时要说明为什么不能写');
+});
+
+test('报告走工作台接口（经 wb 适配），MiniApp 走 Node 代理', () => {
+  assert.match(JS, /wb\('\/reports'\)/, '报告列表与动作走工作台接口');
+  assert.match(JS, /MODE\.mini \? '\/api\/workbench' : '\/api'/, '接口按模式分流');
+  assert.match(JS, /function reportAction/, '应有报告动作函数');
+  assert.match(SERVER, /'\/api\/workbench\/reports'/, 'Node 侧要有报告代理');
+  assert.match(SERVER, /'\/api\/reports\/action'/, 'Node 侧要转到报告动作接口');
+});
+
+test('审阅卡逐行显示、不截断：截掉的行等于人没看见却签了字', () => {
+  const card = JS.slice(JS.indexOf('function renderReportCard'),
+    JS.indexOf('async function loadWorkbenchReports'));
+  assert.ok(card.length > 0, '应有审阅卡渲染函数');
+  assert.doesNotMatch(card, /\.slice\(|substring\(/, '审阅卡不许截断');
+  assert.match(card, /wb-report-line/, '卡片要一行一条');
+});

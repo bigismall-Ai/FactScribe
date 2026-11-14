@@ -423,6 +423,28 @@
             <button id="btn-wb-freeze" class="btn" type="button">冻结</button>
             <button id="btn-wb-unfreeze" class="btn" type="button">解冻</button>
           </div>
+
+          <div class="subhead" style="margin-top: 18px">
+            <h3>实验报告 <span id="wb-reports-meta" class="muted-note"></span></h3>
+            <p class="panel-desc">封存＝把当前文件哈希钉住；签收＝你确认取数位置；导入＝写进事实账。</p>
+          </div>
+          <div id="wb-reports" class="wb-reports"></div>
+          <label class="field" style="max-width: 520px">
+            <span>报告</span>
+            <select id="wb-report-select"></select>
+          </label>
+          <div class="panel-actions" style="margin: 8px 0">
+            <button id="btn-wb-report-check" class="btn" type="button">检查</button>
+            <button id="btn-wb-report-lock" class="btn" type="button">封存</button>
+            <button id="btn-wb-report-sign" class="btn" type="button">签收</button>
+            <button id="btn-wb-report-import" class="btn" type="button">导入</button>
+          </div>
+          <p id="wb-report-state" class="muted-note" role="status" aria-live="polite"></p>
+          <label class="field" style="max-width: 520px">
+            <span>签收人</span>
+            <input id="wb-report-by" placeholder="谁签的（签收必填，工具不替你猜）" />
+          </label>
+          <div id="wb-report-card" class="wb-report-card"></div>
         </section>
 
         <section id="panel-ai" class="panel" role="tabpanel" hidden>

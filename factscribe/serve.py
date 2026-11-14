@@ -26,7 +26,8 @@ from .projects import (factscribe_dir, project_name, read_registry,
                        remove_project, resolve_project, upsert_project,
                        write_registry)
 from .constants import EXIT_OK, VERSION
-from .report import _payload, _severity_of
+from .report import ReportError, _payload, _severity_of
+from .reportapi import report_action_data, reports_data
 from .workbench import (add_fact_data, audit_data, brief_data,
                         evidence_status_data, freeze_evidence_data,
                         project_data, status_data, unfreeze_evidence_data,
@@ -146,7 +147,7 @@ class _Handler(BaseHTTPRequestHandler):
                     root=str(cfg.root) if cfg else None,
                     project=(cfg.name or cfg.title) if cfg else None,
                     api=["health", "capabilities", "status", "brief", "audit",
-                         "projects"]))
+                         "projects", "reports"]))
                 return
             if path == "/api/projects":
                 self._projects_view()
@@ -166,6 +167,10 @@ class _Handler(BaseHTTPRequestHandler):
                 data = evidence_status_data(self._project())
                 self._send(200, self._base("evidence", **data))
                 return
+            if path == "/api/reports":
+                data = reports_data(self._project())
+                self._send(200, self._base("reports", **data))
+                return
             if path == "/api/pdf":
                 self._pdf()
                 return
@@ -173,6 +178,9 @@ class _Handler(BaseHTTPRequestHandler):
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
             self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except ReportError as exc:
+            # 报告层的失败（路径越界、没过 check、锁对不上……）：400 + 机器码。
+            self._error(400, exc.code, exc.message)
         except Exception as exc:  # noqa: BLE001 - 服务不许把异常变成空响应
             self._error(500, "INTERNAL",
                         "%s: %s" % (type(exc).__name__, exc))
@@ -208,6 +216,15 @@ class _Handler(BaseHTTPRequestHandler):
                     self.server.allow_write)  # type: ignore[attr-defined]
                 self._send(200, self._base("evidence_unfreeze", **data))
                 return
+            if path in ("/api/reports/action", "/api/reports"):
+                # 两个路径同一件事：/api/reports/action 是正路，/api/reports
+                # 是别名——同一份界面在网页与 MiniApp 里用同一个 URL 调它。
+                body = self._body()
+                data = report_action_data(
+                    self._project(), body,
+                    self.server.allow_write)  # type: ignore[attr-defined]
+                self._send(200, self._base("reports_action", **data))
+                return
             if path == "/api/build":
                 self._build()
                 return
@@ -215,6 +232,9 @@ class _Handler(BaseHTTPRequestHandler):
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
             self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except ReportError as exc:
+            # 报告层的失败（路径越界、没过 check、锁对不上……）：400 + 机器码。
+            self._error(400, exc.code, exc.message)
         except Exception as exc:  # noqa: BLE001
             self._error(500, "INTERNAL",
                         "%s: %s" % (type(exc).__name__, exc))
@@ -233,6 +253,9 @@ class _Handler(BaseHTTPRequestHandler):
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
             self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except ReportError as exc:
+            # 报告层的失败（路径越界、没过 check、锁对不上……）：400 + 机器码。
+            self._error(400, exc.code, exc.message)
         except Exception as exc:  # noqa: BLE001
             self._error(500, "INTERNAL",
                         "%s: %s" % (type(exc).__name__, exc))
@@ -360,6 +383,9 @@ class _Handler(BaseHTTPRequestHandler):
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
             self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except ReportError as exc:
+            # 报告层的失败（路径越界、没过 check、锁对不上……）：400 + 机器码。
+            self._error(400, exc.code, exc.message)
         except Exception as exc:  # noqa: BLE001
             self._error(500, "INTERNAL", "%s: %s" % (type(exc).__name__, exc))
 

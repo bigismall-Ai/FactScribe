@@ -498,7 +498,7 @@
           <div class="panel-head">
             <div>
               <h2 data-i18n="page.project">项目</h2>
-              <p class="panel-desc">选一个论文文件夹，一键启动本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。</p>
+              <p class="panel-desc">一个文件夹就是一个论文项目。左边选，右边新建。</p>
             </div>
             <div class="panel-actions">
               <span id="workbench-run-state" class="muted-note"></span>
@@ -507,34 +507,51 @@
           </div>
           <p id="project-status" class="muted-note" role="status" aria-live="polite"></p>
 
-          <!-- 新手引导：一份示例论文，走一遍「看问题 → 改一个数 → 变绿」。 -->
-          <section class="guide-card" id="guide-card" aria-labelledby="guide-card-title">
-            <div class="guide-card-head">
-              <h3 id="guide-card-title" data-i18n="guide.title">新手引导</h3>
-              <button id="btn-guide-open" class="btn btn-primary" type="button">打开示例论文</button>
-            </div>
-            <p class="panel-desc" data-i18n="guide.desc">用一份示例论文走一遍：看问题 → 改一个数 → 变绿。不会动你的论文。</p>
-            <p id="guide-card-note" class="muted-note" role="status" aria-live="polite"></p>
-          </section>
+          <div class="project-layout">
+            <!-- 左栏：项目列表（不是下拉框）。点一项就切到那个文件夹。 -->
+            <section class="project-list-block" aria-labelledby="project-list-title">
+              <div class="project-head">
+                <h3 id="project-list-title">论文项目</h3>
+                <p class="panel-desc">点一下就切到那个文件夹；标着「当前」的是正在用的那个。</p>
+              </div>
+              <ul id="project-list" class="project-list"></ul>
+              <p id="project-list-empty" class="line-empty" hidden>还没有论文项目。</p>
+              <div class="project-add-row">
+                <label class="field" for="project-path">
+                  <span>加入已有文件夹</span>
+                  <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
+                </label>
+                <button id="btn-project-add" class="btn" type="button" data-i18n="btn.addProject">加入</button>
+              </div>
+              <div class="panel-actions" style="margin: 8px 0">
+                <button id="btn-project-host" class="btn" type="button" data-i18n="btn.useHostProject">用当前对话项目</button>
+                <button id="btn-project-forget" class="btn" type="button" data-i18n="btn.removeProject">从列表移除</button>
+              </div>
+            </section>
+
+            <!-- 右栏：新建入口 + 新手引导。 -->
+            <aside class="project-side">
+              <button id="btn-new-project" class="btn btn-primary btn-big" type="button"
+                data-i18n="btn.newProject">新建论文项目</button>
+              <section class="guide-card" id="guide-card" aria-labelledby="guide-card-title">
+                <div class="guide-card-head">
+                  <h3 id="guide-card-title" data-i18n="guide.title">新手引导</h3>
+                </div>
+                <p class="panel-desc" data-i18n="guide.desc">用一份示例论文走一遍：看问题 → 改一个数 → 变绿。不会动你的论文。</p>
+                <div class="panel-actions">
+                  <button id="btn-guide-open" class="btn btn-primary" type="button">打开示例论文</button>
+                  <button id="btn-guide-reset-card" class="btn" type="button" data-i18n="btn.guideReset">重置示例</button>
+                </div>
+                <p id="guide-card-note" class="muted-note" role="status" aria-live="polite"></p>
+              </section>
+            </aside>
+          </div>
 
           <details class="project-block" id="wb-project" open>
             <summary id="wb-project-summary">论文项目（点开切换）</summary>
             <div class="project-head">
-              <h3>论文项目</h3>
-              <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
-            </div>
-            <label class="field" style="max-width: 640px">
-              <span data-i18n="field.recentProjects">最近项目</span>
-              <select id="project-select"></select>
-            </label>
-            <label class="field" style="max-width: 640px">
-              <span data-i18n="field.projectFolder">项目文件夹</span>
-              <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
-            </label>
-            <div class="panel-actions" style="margin: 8px 0">
-              <button id="btn-project-add" class="btn" type="button" data-i18n="btn.addProject">加入项目列表</button>
-              <button id="btn-project-host" class="btn" type="button" data-i18n="btn.useHostProject">用当前对话项目</button>
-              <button id="btn-project-forget" class="btn" type="button" data-i18n="btn.removeProject">从列表移除</button>
+              <h3>工作台</h3>
+              <p class="panel-desc">启动后工作台的读写只对当前那个文件夹生效。</p>
             </div>
             <div class="checkline">
               <label><input id="workbench-allow-write" type="checkbox" /> 允许写章节与事实（<code>--allow-write</code>）</label>
@@ -574,6 +591,84 @@
             </details>
           </details>
           <p id="workbench-host-path" class="muted-note"></p>
+        </section>
+
+        <section id="panel-project-new" class="panel panel-narrow" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="page.projectNew">新建论文项目</h2>
+              <p class="panel-desc">填几项就生成一个骨架：项目声明、章节、事实账、参考文献。只生成，不编译。</p>
+            </div>
+          </div>
+          <p id="np-error" class="np-error" role="alert" hidden></p>
+          <form id="new-project-form" novalidate>
+            <div class="np-grid">
+              <label class="field" for="np-title">
+                <span>名称 *</span>
+                <input id="np-title" name="title" type="text" autocomplete="off" aria-required="true" />
+              </label>
+              <label class="field" for="np-parent">
+                <span>路径（父目录）*</span>
+                <input id="np-parent" name="parent" type="text" autocomplete="off" aria-required="true" />
+              </label>
+              <label class="field" for="np-slug">
+                <span>文件夹名 *</span>
+                <input id="np-slug" name="slug" type="text" autocomplete="off" aria-required="true" />
+              </label>
+              <label class="field" for="np-authors">
+                <span>作者（逗号分隔）</span>
+                <input id="np-authors" name="authors" type="text" autocomplete="off" />
+              </label>
+              <label class="field np-wide" for="np-description">
+                <span>详情（一句话简介）</span>
+                <input id="np-description" name="description" type="text" autocomplete="off" />
+              </label>
+              <label class="field" for="np-lang">
+                <span>语言 *</span>
+                <select id="np-lang" name="lang">
+                  <option value="zh">中文</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+            </div>
+            <details class="np-advanced">
+              <summary>高级</summary>
+              <div class="np-grid">
+                <label class="field" for="np-sections">
+                  <span>章节 glob</span>
+                  <input id="np-sections" name="sections" type="text" autocomplete="off" />
+                </label>
+                <label class="field" for="np-facts">
+                  <span>事实账 glob</span>
+                  <input id="np-facts" name="facts" type="text" autocomplete="off" />
+                </label>
+                <label class="field" for="np-bib">
+                  <span>参考文献</span>
+                  <input id="np-bib" name="bib" type="text" autocomplete="off" />
+                </label>
+                <label class="field" for="np-root-tex">
+                  <span>主文件</span>
+                  <input id="np-root-tex" name="root_tex" type="text" autocomplete="off" />
+                </label>
+                <label class="field np-wide" for="np-build">
+                  <span>编译命令</span>
+                  <input id="np-build" name="build" type="text" autocomplete="off" />
+                </label>
+                <label class="field" for="np-source-root">
+                  <span>来源根</span>
+                  <input id="np-source-root" name="source_root" type="text" autocomplete="off" />
+                </label>
+                <label class="field" for="np-output">
+                  <span>输出 PDF</span>
+                  <input id="np-output" name="output" type="text" autocomplete="off" />
+                </label>
+              </div>
+            </details>
+            <div class="panel-actions" style="margin: 12px 0">
+              <button id="btn-np-create" class="btn btn-primary" type="submit" data-i18n="btn.npCreate">创建</button>
+              <button id="btn-np-cancel" class="btn" type="button" data-i18n="btn.cancel">取消</button>
+            </div>
+          </form>
         </section>
 
         <section id="panel-ai" class="panel" role="tabpanel" hidden>

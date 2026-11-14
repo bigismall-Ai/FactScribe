@@ -10,8 +10,8 @@ import { auditProject, mergeVerifyIssues, parseBib, protectDiff, stableIdOf } fr
 import { buildDemoProject } from './demo.mjs';
 import { pythonFrom, installSample, serveArgs, startServe, stopServe } from './launcher.mjs';
 import {
-  factscribeDir, readRegistry, removeProject, resolveProjectDir, upsertProject,
-  writeRegistry,
+  factscribeDir, isGuidePath, readProjectDescription, readRegistry, removeProject,
+  resolveProjectDir, upsertProject, writeRegistry,
 } from './projects.mjs';
 
 
@@ -489,7 +489,12 @@ export async function start(context) {
         sendJson(response, 200, {
           ok: true, dir: factscribeDir(), python: registry.python || pythonFrom(),
           pythonpath: registry.pythonpath,
-          projects: registry.projects, lastPath: registry.lastPath,
+          projects: registry.projects.map((p) => ({
+            ...p,
+            description: readProjectDescription(p.path),
+            guide: isGuidePath(p.path),
+          })),
+          lastPath: registry.lastPath,
         });
         return;
       }
@@ -706,6 +711,15 @@ export async function start(context) {
               sendJson(response, upstream.status, upstream.data);
               return;
             }
+          }
+          if (request.method === 'POST' && path === '/api/workbench/projects/create') {
+            // 新建论文项目：只有 Python 工作台会写盘（要 --allow-write），
+            // 上游的 400/403/409 原样带回。
+            const body = await readBody(request);
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/projects/create', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
+            return;
           }
           if (request.method === 'POST' && path === '/api/workbench/facts') {
             const body = await readBody(request);

@@ -22,13 +22,14 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .config import ConfigError, load_config
-from .projects import (factscribe_dir, project_name, read_registry,
+from .projects import (ProjectCreateError, create_project, factscribe_dir,
+                       project_description, project_name, read_registry,
                        remove_project, resolve_project, upsert_project,
                        write_registry)
 from .constants import EXIT_OK, VERSION
 from .report import ReportError, _payload, _severity_of
 from .reportapi import report_action_data, reports_data
-from .samples import SampleError, install_guide_sample
+from .samples import SampleError, install_guide_sample, is_guide_path
 from .workbench import (SectionError, add_fact_data, audit_data, brief_data,
                         create_section_data, delete_section_data,
                         evidence_status_data, freeze_evidence_data,
@@ -198,6 +199,9 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/projects":
                 self._projects_add()
                 return
+            if path == "/api/projects/create":
+                self._projects_create()
+                return
             if path == "/api/audit":
                 self._audit()
                 return
@@ -242,6 +246,9 @@ class _Handler(BaseHTTPRequestHandler):
         except SectionError as exc:
             # 章节增删改：409 = 冲突（已存在 / 还被正文引用），403 = 只读。
             self._error(exc.status, exc.code, str(exc), **exc.extra)
+        except ProjectCreateError as exc:
+            # 新建项目：409 = 目标目录不空；400 = 参数不对（slug/父目录…）。
+            self._error(exc.status, exc.code, str(exc))
         except SampleError as exc:
             # 示例安装：500 = 包里没有示例 / 复制失败。
             self._error(exc.status, exc.code, str(exc))
@@ -365,13 +372,68 @@ class _Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------ 项目管理
 
+    @staticmethod
+    def _project_rows(registry: dict) -> list:
+        """登记册的每一项补上 `description` 与 `guide`。
+
+        `description` 读项目自己的声明（改了 paperkit.toml 立刻见效）；
+        `guide` 标出内置示例论文——列表里要把它挑出去。
+        """
+        rows = []
+        for item in registry.get("projects") or []:
+            row = dict(item)
+            row["description"] = project_description(item.get("path") or "")
+            row["guide"] = is_guide_path(item.get("path") or "")
+            rows.append(row)
+        return rows
+
     def _projects_view(self) -> None:
         registry = read_registry()
         current = self.server.project  # type: ignore[attr-defined]
         self._send(200, self._base(
             "projects", dir=str(factscribe_dir()),
             current=str(current) if current else None,
-            projects=registry["projects"], lastPath=registry["lastPath"],
+            projects=self._project_rows(registry),
+            lastPath=registry["lastPath"],
+            python=registry["python"], pythonpath=registry["pythonpath"]))
+
+    def _projects_create(self) -> None:
+        """新建论文项目：落骨架 → 补声明 → 登记册置顶。
+
+        会写盘，所以要 `--allow-write`；只生成骨架，不编译。
+        """
+        self._require_write()
+        body = self._body()
+        authors = body.get("authors")
+        if isinstance(authors, str):
+            authors = [a for a in (x.strip() for x in authors.split(",")) if a]
+        elif not isinstance(authors, list):
+            authors = []
+        data = create_project(
+            title=str(body.get("title") or ""),
+            parent=str(body.get("parent") or ""),
+            slug=str(body.get("slug") or ""),
+            authors=authors,
+            description=str(body.get("description") or ""),
+            lang=str(body.get("lang") or "zh"),
+            sections=str(body.get("sections") or ""),
+            facts=str(body.get("facts") or ""),
+            bib=str(body.get("bib") or ""),
+            root_tex=str(body.get("root_tex") or ""),
+            build=str(body.get("build") or ""),
+            source_root=str(body.get("source_root") or ""),
+            output=str(body.get("output") or ""),
+        )
+        root = Path(data["path"])
+        self.server.project = root  # type: ignore[attr-defined]
+        registry = read_registry()
+        self._send(200, self._base(
+            "projects_create",
+            project={"path": data["path"], "name": data["name"],
+                     "description": data["description"]},
+            created=True, files=data["files"],
+            projects=self._project_rows(registry),
+            lastPath=registry["lastPath"],
             python=registry["python"], pythonpath=registry["pythonpath"]))
 
     def _projects_add(self) -> None:
@@ -399,12 +461,13 @@ class _Handler(BaseHTTPRequestHandler):
             write_registry(registry)
             self._send(200, self._base(
                 "project_add", project={"path": str(root), "name": name},
-                projects=registry["projects"], lastPath=registry["lastPath"],
+                projects=self._project_rows(registry),
+                lastPath=registry["lastPath"],
                 python=registry["python"], pythonpath=registry["pythonpath"]))
             return
         write_registry(registry)
         self._send(200, self._base(
-            "projects", projects=registry["projects"],
+            "projects", projects=self._project_rows(registry),
             lastPath=registry["lastPath"], python=registry["python"],
             pythonpath=registry["pythonpath"]))
 
@@ -423,7 +486,7 @@ class _Handler(BaseHTTPRequestHandler):
                 if current is not None and str(current) == str(target):
                     self.server.project = None  # type: ignore[attr-defined]
                 self._send(200, self._base(
-                    "project_remove", projects=registry["projects"],
+                    "project_remove", projects=self._project_rows(registry),
                     lastPath=registry["lastPath"]))
                 return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)

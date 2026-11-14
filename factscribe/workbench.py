@@ -217,7 +217,7 @@ def _section_path(cfg, rel: str) -> Path:
 
 
 def _scan_project_tex(cfg) -> list[tuple[str, str]]:
-    """谁在正文里提到了这个文件名：闭包里的节 + root_tex + 项目根下的 .tex。
+    r"""谁在正文里提到了这个文件名：闭包里的节 + root_tex + 项目根下的 .tex。
 
     主文件（main.tex 之类）常常不在闭包里（glob 形态的闭包只含 sections/），
     可 \input 引用恰恰写在那里——不扫它就会漏掉真正的引用。

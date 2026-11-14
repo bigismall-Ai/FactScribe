@@ -12,12 +12,27 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
 REGISTRY_VERSION = 1
 MAX_PROJECTS = 30
 CONFIG_NAME = "paperkit.toml"
+
+# 文件夹名只允许这些字符：不做拼音转换（中文名自己写），也不许路径分隔符。
+SLUG_RE = re.compile(r"[A-Za-z0-9._-]+")
+
+
+class ProjectCreateError(Exception):
+    """新建项目失败：`code` 给机器看（HTTP 状态跟着 `status`）。"""
+
+    def __init__(self, message: str, code: str = "PROJECT_CREATE_FAILED",
+                 status: int = 400):
+        super().__init__(message)
+        self.code = code
+        self.status = status
+
 
 
 def home_dir() -> Path:
@@ -140,3 +155,145 @@ def remove_project(registry: dict, path: str) -> dict:
     if reg["lastPath"] == path:
         reg["lastPath"] = ""
     return reg
+
+
+def project_description(path: str | os.PathLike[str]) -> str:
+    """项目的一句话简介（`[project] description`；读不到就是空串）。
+
+    简介写在项目自己的声明里，不进登记册——改了 `paperkit.toml` 立刻见效，
+    登记册的格式也就不用跟着变（MiniApp 侧读同一个文件）。
+    """
+    from .config import ConfigError, load_config
+
+    try:
+        return load_config(Path(path)).description
+    except (ConfigError, OSError):
+        return ""
+
+
+# ---------------------------------------------------------------- 建项目
+
+def _toml_value(text: str) -> str:
+    """TOML 基本字符串（与 config 的迷你解析器兼容的最小转义集）。"""
+    out = (str(text or "")
+           .replace("\\", "\\\\")
+           .replace('"', '\\"')
+           .replace("\n", "\\n")
+           .replace("\r", "\\r")
+           .replace("\t", "\\t"))
+    return '"%s"' % out
+
+
+def _rewrite_project_table(path: Path, values: dict) -> None:
+    """改写 `paperkit.toml` 的 `[project]` 表：只替换/追加给定的键，别的原样保留。
+
+    骨架模板里已经有的键就地替换；没有的追加到 `[project]` 段末尾。
+    其它段（`[budget]`/`[evidence]` 之类）一个字都不动。
+    `values` 的值是**已经排版好的 TOML 字面量**（字符串带引号、数组带方括号）。
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+    end = len(lines)
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("["):
+            continue
+        if start is None:
+            if stripped == "[project]":
+                start = index + 1
+            continue
+        end = index
+        break
+    if start is None:
+        lines.append("")
+        lines.append("[project]")
+        for key, value in values.items():
+            lines.append("%s = %s" % (key, value))
+    else:
+        pending = dict(values)
+        section = []
+        for line in lines[start:end]:
+            match = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", line)
+            key = match.group(1) if match else ""
+            if key in pending:
+                section.append("%s = %s" % (key, pending.pop(key)))
+            else:
+                section.append(line)
+        for key, value in pending.items():
+            section.append("%s = %s" % (key, value))
+        lines[start:end] = section
+    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+
+
+def create_project(*, title: str, parent: str, slug: str,
+                   authors: list | None = None, description: str = "",
+                   lang: str = "zh", sections: str = "", facts: str = "",
+                   bib: str = "", root_tex: str = "", build: str = "",
+                   source_root: str = "", output: str = "") -> dict:
+    """新建一个论文项目：落骨架 → 补声明 → 登记册置顶。
+
+    只生成骨架，不编译、不写事实。返回
+    `{"path", "name", "description", "created", "files"}`。
+    """
+    from .scaffold import init_project
+
+    clean_title = str(title or "").strip()
+    if not clean_title:
+        raise ProjectCreateError("请填项目名称", code="PROJECT_TITLE_MISSING")
+    raw_parent = str(parent or "").strip()
+    if not raw_parent:
+        raw_parent = str(home_dir())
+    base = Path(raw_parent).expanduser()
+    if not base.is_absolute():
+        raise ProjectCreateError(
+            "父目录要填绝对路径（以 / 开头）：%s" % raw_parent,
+            code="PROJECT_PARENT_INVALID")
+    if not base.exists():
+        raise ProjectCreateError("父目录不存在：%s" % base,
+                                 code="PROJECT_PARENT_MISSING")
+    if not base.is_dir():
+        raise ProjectCreateError("父目录不是文件夹：%s" % base,
+                                 code="PROJECT_PARENT_INVALID")
+    clean_slug = str(slug or "").strip()
+    if not clean_slug or clean_slug in (".", "..") or not SLUG_RE.fullmatch(clean_slug):
+        raise ProjectCreateError(
+            "文件夹名只允许字母、数字、点、下划线和连字符（不许 . 或 ..）：%r"
+            % clean_slug, code="PROJECT_SLUG_INVALID")
+    target = (base / clean_slug).resolve()
+    if target.exists():
+        if not target.is_dir():
+            raise ProjectCreateError("目标已存在且不是文件夹：%s" % target,
+                                     code="PROJECT_DIR_NOT_EMPTY", status=409)
+        if any(target.iterdir()):
+            raise ProjectCreateError(
+                "目标目录不空（里面已经有东西）：%s" % target,
+                code="PROJECT_DIR_NOT_EMPTY", status=409)
+
+    author_list = [str(a).strip() for a in (authors or []) if str(a).strip()]
+    created = init_project(target, title=clean_title,
+                           author=author_list[0] if author_list else "",
+                           lang=lang)
+    values = {
+        "description": _toml_value(str(description or "").strip()),
+        "build": _toml_value(str(build or "").strip()),
+        "source_root": _toml_value(str(source_root or "").strip() or str(base)),
+        "sections": _toml_value(str(sections or "").strip() or "sections/*.tex"),
+        "facts": _toml_value(str(facts or "").strip() or "facts/*.toml"),
+        "bib": _toml_value(str(bib or "").strip() or "refs.bib"),
+        "root_tex": _toml_value(str(root_tex or "").strip() or "main.tex"),
+        "output": _toml_value(str(output or "").strip() or "main.pdf"),
+    }
+    if author_list:
+        values["authors"] = "[%s]" % ", ".join(_toml_value(a) for a in author_list)
+    _rewrite_project_table(target / CONFIG_NAME, values)
+
+    registry = upsert_project(read_registry(), target, clean_title)
+    write_registry(registry)
+    return {
+        "path": str(target),
+        "name": clean_title,
+        "description": str(description or "").strip(),
+        "created": True,
+        "files": list(created.get("files") or []),
+    }
+

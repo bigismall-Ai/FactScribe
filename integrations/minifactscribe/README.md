@@ -180,7 +180,7 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、82 例呈现层可读性不变量
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、86 例呈现层可读性不变量
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。

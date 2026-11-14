@@ -54,6 +54,10 @@ const state = {
   workbenchProject: null,
   projects: [],
   projectPath: '',
+  // 项目页有两级：'list'（列表）与 'new'（新建表单）。地址栏是 #/project 与 #/project/new。
+  projectView: 'list',
+  // 新建项目页顶部的错误（失败时留在表单里，不跳走）。
+  npError: '',
   projectPython: '',
   projectPythonPath: '',
   run: null,
@@ -102,6 +106,7 @@ const I18N = {
     'page.audit': '审计',
     'page.workbench': '本地工作台',
     'page.project': '项目',
+    'page.projectNew': '新建论文项目',
     'page.ai': 'AI 起草',
     'page.reports': '实验报告',
     'btn.check': '检查',
@@ -234,6 +239,12 @@ const I18N = {
     'btn.guideOpenExists': '打开示例论文（已存在）',
     'btn.guideReset': '重置示例',
     'btn.guideClose': '关闭引导',
+    'btn.newProject': '新建论文项目',
+    'btn.npCreate': '创建',
+    'project.current': '当前',
+    'project.listEmpty': '还没有论文项目。',
+    'np.creating': '创建中…',
+    'np.created': '已创建：{name}',
   },
   en: {
     'nav.sections': 'Sections',
@@ -246,6 +257,7 @@ const I18N = {
     'page.audit': 'Audit',
     'page.workbench': 'Local workbench',
     'page.project': 'Project',
+    'page.projectNew': 'New project',
     'page.ai': 'AI draft',
     'page.reports': 'Experiment reports',
     'btn.check': 'Check',
@@ -378,6 +390,12 @@ const I18N = {
     'btn.guideOpenExists': 'Open the sample paper (already there)',
     'btn.guideReset': 'Reset the sample',
     'btn.guideClose': 'Close the guide',
+    'btn.newProject': 'New project',
+    'btn.npCreate': 'Create',
+    'project.current': 'Current',
+    'project.listEmpty': 'No project yet.',
+    'np.creating': 'Creating…',
+    'np.created': 'Created: {name}',
   },
 };
 
@@ -785,7 +803,19 @@ function defaultPage() {
 /** 地址栏里的 hash → 页名；不认识（或本模式没有）就是空。 */
 function pageFromHash() {
   const raw = String(location.hash || '').replace(/^#\/?/, '');
+  if (raw === 'project/new') {
+    return availablePages().includes('project') ? 'project/new' : '';
+  }
+  // 项目的其它子路由不认：回项目列表页（非法子路由不许停在空白面板上）。
+  if (raw.startsWith('project/')) {
+    return availablePages().includes('project') ? 'project' : '';
+  }
   return availablePages().includes(raw) ? raw : '';
+}
+
+/** 面板 id：项目页有两级（列表 / 新建）。 */
+function panelIdFor(tab) {
+  return tab === 'project/new' ? 'panel-project-new' : 'panel-' + tab;
 }
 
 let suppressHash = false;
@@ -804,7 +834,10 @@ function writeHash(tab, replace) {
 
 /** 标题跟着当前页与项目走：工作台 · 论文名 */
 function updateTitle() {
-  const label = PAGE_LABEL[state.tab] ? t(PAGE_LABEL[state.tab], 'FactScribe') : 'FactScribe';
+  const pageKey = state.tab === 'project' && state.projectView === 'new'
+    ? 'page.projectNew'
+    : PAGE_LABEL[state.tab];
+  const label = pageKey ? t(pageKey, 'FactScribe') : 'FactScribe';
   const wbName = String(state.workbenchProject?.project || state.workbenchStatus?.project || '').trim();
   const localName = String(state.project?.name || '').trim();
   const wbTab = state.tab === 'workbench' || state.tab === 'facts'
@@ -814,17 +847,21 @@ function updateTitle() {
 }
 
 function switchTab(tab, opts = {}) {
-  state.tab = tab;
+  // 项目页有两级：'project'（列表）与 'project/new'（新建表单）。
+  const [base, sub] = String(tab || '').split('/');
+  state.tab = base;
+  state.projectView = base === 'project' ? (sub || 'list') : 'list';
   for (const btn of $$('.nav-item')) {
-    const on = btn.dataset.tab === tab;
+    const on = btn.dataset.tab === base;
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-selected', String(on));
   }
   for (const panel of $$('.panel')) {
-    const on = panel.id === 'panel-' + tab;
+    const on = panel.id === panelIdFor(tab);
     panel.classList.toggle('is-active', on);
     panel.hidden = !on;
   }
+  if (tab === 'project/new') openNewProjectForm();
   renderTab();
   updateTitle();
   if (!opts.fromHash) writeHash(tab, opts.replace);
@@ -836,6 +873,7 @@ function onHashChange() {
     suppressHash = false;
     return;
   }
+  const raw = String(location.hash || '').replace(/^#\/?/, '');
   const tab = pageFromHash();
   if (!tab) {
     // 不认识的 hash（或本模式没有的页）：回默认页，地址也改回合法值
@@ -844,8 +882,15 @@ function onHashChange() {
     history.replaceState(null, '', '#/' + fallback);
     return;
   }
-  if (tab === state.tab) return;
-  switchTab(tab, { fromHash: true });
+  const view = tab === 'project/new' ? 'new' : 'list';
+  const same = state.tab === (tab === 'project/new' ? 'project' : tab)
+    && state.projectView === view;
+  if (!same) {
+    switchTab(tab, { fromHash: true });
+  } else if (raw !== tab) {
+    // 非法子路由（例如 #/project/xxx）：地址改回合法值，人停在项目列表。
+    history.replaceState(null, '', '#/' + tab);
+  }
 }
 
 function renderTab() {
@@ -1707,8 +1752,10 @@ function projectBusy(flag) {
 }
 
 function renderProjects() {
-  const select = $('#project-select');
-  if (!select) return;
+  if (state.projectView === 'new') {
+    renderNewProject();
+    return;
+  }
   renderSidebarProject();
   const w = state.workbench || { configured: false };
   // 项目页自己的几处状态：当前对话路径、当前项目、运行状态、手动连接。
@@ -1745,16 +1792,7 @@ function renderProjects() {
   }
   const disconnect = $('#btn-workbench-disconnect');
   if (disconnect) disconnect.disabled = MODE.mini ? !w.configured : true;
-  const options = ['<option value="">（选择论文项目文件夹）</option>'];
-  for (const project of state.projects) {
-    const label = (project.name ? project.name + ' — ' : '') + project.path;
-    options.push('<option value="' + esc(project.path) + '">' + esc(label) + '</option>');
-  }
-  if (state.projectPath && !state.projects.some((p) => p.path === state.projectPath)) {
-    options.push('<option value="' + esc(state.projectPath) + '">（未加入列表）' + esc(state.projectPath) + '</option>');
-  }
-  select.innerHTML = options.join('');
-  select.value = state.projectPath || '';
+  renderProjectList();
   const input = $('#project-path');
   if (input && document.activeElement !== input && input.value !== state.projectPath) {
     input.value = state.projectPath;
@@ -1769,6 +1807,171 @@ function renderProjects() {
   }
   projectBusy();
   renderGuide();
+}
+
+/** 当前正在用的项目文件夹（列表里给它加「当前」徽标）。 */
+function currentProjectPath() {
+  return String(state.workbenchProject?.root || state.projectPath || '');
+}
+
+/** 路径太长时只留尾巴：…/家目录/论文。 */
+function shortPath(path, keep = 3) {
+  const text = String(path || '');
+  const parts = text.split('/').filter(Boolean);
+  if (parts.length <= keep) return text;
+  return '…/' + parts.slice(-keep).join('/');
+}
+
+/** 左栏的项目列表：名称 + 路径 + 详情一行；当前项目带「当前」徽标。
+
+    新手引导的示例论文不在列表里（服务端标了 guide:true）——它是示例，
+    不是人自己的论文。
+*/
+function renderProjectList() {
+  const list = $('#project-list');
+  if (!list) return;
+  const rows = state.projects.filter((p) => !p.guide);
+  const empty = $('#project-list-empty');
+  if (!rows.length) {
+    list.innerHTML = '';
+    if (empty) {
+      empty.hidden = false;
+      empty.textContent = t('project.listEmpty');
+    }
+    return;
+  }
+  if (empty) empty.hidden = true;
+  const current = currentProjectPath();
+  list.innerHTML = rows.map((p) => {
+    const path = String(p.path || '');
+    const isCurrent = path === current;
+    const name = p.name || path.split('/').filter(Boolean).pop() || path;
+    const desc = String(p.description || '').trim();
+    return '<li class="project-item' + (isCurrent ? ' is-current' : '') + '">' +
+      '<button class="project-item-main" type="button" data-path="' + esc(path) + '">' +
+      '<span class="project-item-name">' + esc(name) +
+      (isCurrent ? '<span class="project-badge">' + esc(t('project.current')) + '</span>' : '') +
+      '</span>' +
+      '<span class="project-item-path" title="' + esc(path) + '">' + esc(shortPath(path)) + '</span>' +
+      (desc ? '<span class="project-item-desc">' + esc(desc) + '</span>' : '') +
+      '</button></li>';
+  }).join('');
+}
+
+// ------------------------------------------------------------ 新建项目页
+// #/project/new：填几项 → 生成骨架 → 切到工作台。失败留在表单里，不跳走。
+
+/** 表单默认值。文件夹名不转拼音：中文名自己写，默认给 paper-YYYYMMDD。 */
+function newProjectDefaults() {
+  const now = new Date();
+  const stamp = now.getFullYear()
+    + String(now.getMonth() + 1).padStart(2, '0')
+    + String(now.getDate()).padStart(2, '0');
+  return {
+    parent: '~',
+    slug: 'paper-' + stamp,
+    lang: 'zh',
+    sections: 'sections/*.tex',
+    facts: 'facts/*.toml',
+    bib: 'refs.bib',
+    root_tex: 'main.tex',
+    build: 'tectonic -X compile main.tex',
+    output: 'main.pdf',
+  };
+}
+
+/** 进新建页：把默认值填进去（只在这里填，别把人填一半的表单冲掉）。 */
+function openNewProjectForm() {
+  const d = newProjectDefaults();
+  const set = (sel, value) => { const el = $(sel); if (el) el.value = value; };
+  set('#np-title', '');
+  set('#np-parent', d.parent);
+  set('#np-slug', d.slug);
+  set('#np-authors', '');
+  set('#np-description', '');
+  set('#np-lang', d.lang);
+  set('#np-sections', d.sections);
+  set('#np-facts', d.facts);
+  set('#np-bib', d.bib);
+  set('#np-root-tex', d.root_tex);
+  set('#np-build', d.build);
+  set('#np-source-root', '');
+  set('#np-output', d.output);
+  state.npError = '';
+  renderNewProject();
+}
+
+/** 新建页只管错误提示；字段值由 openNewProjectForm 填、人自己改。 */
+function renderNewProject() {
+  const err = $('#np-error');
+  if (!err) return;
+  err.textContent = state.npError || '';
+  err.hidden = !state.npError;
+}
+
+function showNpError(message) {
+  state.npError = String(message || '');
+  renderNewProject();
+}
+
+/** 创建项目：调 POST /api/projects/create，成功后切到工作台并载入新项目。 */
+async function createProjectFromForm() {
+  const btn = $('#btn-np-create');
+  const value = (sel) => String($(sel)?.value ?? '').trim();
+  const title = value('#np-title');
+  const parent = value('#np-parent');
+  const slug = value('#np-slug');
+  if (!title) { showNpError('请填项目名称'); return; }
+  if (!parent) { showNpError('请填父目录（放新文件夹的地方）'); return; }
+  if (!slug) { showNpError('请填文件夹名'); return; }
+  const authors = value('#np-authors').split(/[,，]/)
+    .map((s) => s.trim()).filter(Boolean);
+  const body = {
+    title,
+    parent,
+    slug,
+    authors,
+    description: value('#np-description'),
+    lang: value('#np-lang') || 'zh',
+    sections: value('#np-sections'),
+    facts: value('#np-facts'),
+    bib: value('#np-bib'),
+    root_tex: value('#np-root-tex'),
+    build: value('#np-build'),
+    source_root: value('#np-source-root'),
+    output: value('#np-output'),
+  };
+  if (btn) btn.disabled = true;
+  const label = btn ? btn.textContent : '';
+  if (btn) btn.textContent = t('np.creating');
+  try {
+    const data = await api(wb('/projects/create'), {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const path = String(data?.project?.path || '');
+    if (path) {
+      state.projectPath = path;
+      const input = $('#project-path');
+      if (input) input.value = path;
+    }
+    state.npError = '';
+    try { await loadProjects(); } catch { /* 列表刷新失败不挡新建 */ }
+    switchTab('workbench');
+    if (!MODE.mini) {
+      await loadWorkbenchStatus().catch(() => {});
+      await loadWorkbenchProject().catch(() => {});
+    }
+    toast(tf('np.created', { name: String(data?.project?.name || slug) }));
+  } catch (err) {
+    showNpError(err.message);
+    toast('创建失败：' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = label || t('btn.npCreate');
+    }
+  }
 }
 
 async function loadProjects() {
@@ -3056,8 +3259,11 @@ function wire() {
   }
   $('#btn-audit').addEventListener('click', () => runAudit());
   $('#btn-rerun').addEventListener('click', () => runAudit());
-  $('#project-select').addEventListener('change', () => {
-    const path = $('#project-select').value || '';
+  // 项目列表：点一项就切到那个文件夹（网页让服务切过去，MiniApp 填路径）。
+  $('#project-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-path]');
+    if (!btn) return;
+    const path = btn.dataset.path || '';
     if (!path) return;
     if (MODE.mini) {
       state.projectPath = path;
@@ -3069,6 +3275,17 @@ function wire() {
       $('#workbench-status').textContent = '切换项目失败：' + e.message;
       toast('切换项目失败：' + e.message);
     });
+  });
+  // 新建项目：右栏那个大按钮 → #/project/new
+  $('#btn-new-project').addEventListener('click', () => {
+    switchTab('project/new');
+  });
+  $('#new-project-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    createProjectFromForm();
+  });
+  $('#btn-np-cancel').addEventListener('click', () => {
+    switchTab('project');
   });
   $('#project-path').addEventListener('input', () => {
     state.projectPath = $('#project-path').value.trim();
@@ -3115,6 +3332,10 @@ function wire() {
     openGuideSample();
   });
   $('#btn-guide-reset').addEventListener('click', () => {
+    resetGuideSample();
+  });
+  // 项目页引导卡片里的「重置示例」：同一个动作，另一个入口。
+  $('#btn-guide-reset-card').addEventListener('click', () => {
     resetGuideSample();
   });
   $('#btn-guide-close').addEventListener('click', () => {

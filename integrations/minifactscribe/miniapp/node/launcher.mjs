@@ -172,6 +172,78 @@ export function childPythonPath(pythonPath, base = process.env.PYTHONPATH) {
   return { PYTHONPATH: [parts.join(delimiter), base].filter(Boolean).join(delimiter) };
 }
 
+/**
+ * 让 Python 把内置示例论文装到 `~/.factscribe/samples/guide`。
+ *
+ * 固定命令：`<python> -m factscribe.samples [--reset]`，不经过 shell；
+ * stdout 第一行是 JSON（{ok, path, created, reset}）。
+ * 这是「还没连上工作台」时的兜底：示例得先落地，才谈得上拿它当项目打开。
+ */
+export async function installSample(options) {
+  const {
+    reset = false,
+    python = pythonFrom(),
+    pythonPath = '',
+    timeoutMs = START_TIMEOUT_MS,
+  } = options || {};
+  const args = ['-m', 'factscribe.samples'];
+  if (reset) args.push('--reset');
+  return new Promise((resolvePromise, rejectPromise) => {
+    let child;
+    try {
+      child = spawn(python, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false,
+        env: { ...process.env, ...childPythonPath(pythonPath) },
+      });
+    } catch (err) {
+      rejectPromise(new Error('装示例失败：' + err.message));
+      return;
+    }
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const timer = setTimeout(() => {
+      finish(new Error('装示例超时（' + Math.round(timeoutMs / 1000) + ' 秒）'));
+    }, timeoutMs);
+
+    function finish(err, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) {
+        try { child.kill('SIGKILL'); } catch { /* 已经退出 */ }
+        rejectPromise(err);
+      } else {
+        resolvePromise(value);
+      }
+    }
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-4000); });
+    child.once('error', (err) => {
+      finish(new Error('装示例失败：' + err.message));
+    });
+    child.once('exit', (code) => {
+      const line = stdout.split('\n').map((s) => s.trim()).find((s) => s.startsWith('{'));
+      let payload = null;
+      if (line) {
+        try { payload = JSON.parse(line); } catch { payload = null; }
+      }
+      if (payload && payload.ok) {
+        finish(null, payload);
+        return;
+      }
+      const reason = payload?.error?.message
+        || stderr.trim().split('\n').slice(-3).join('\n')
+        || ('退出码 ' + code);
+      finish(new Error('装示例失败：' + reason));
+    });
+  });
+}
+
 function markRetryable(err) {
   const code = err && err.code;
   err.retryable = code === 'ENOENT' || /No module named|ModuleNotFoundError/.test(String(err.message));

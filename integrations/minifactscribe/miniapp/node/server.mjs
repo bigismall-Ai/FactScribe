@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { auditProject, mergeVerifyIssues, parseBib, protectDiff, stableIdOf } from './audit.mjs';
 import { buildDemoProject } from './demo.mjs';
-import { pythonFrom, serveArgs, startServe, stopServe } from './launcher.mjs';
+import { pythonFrom, installSample, serveArgs, startServe, stopServe } from './launcher.mjs';
 import {
   factscribeDir, readRegistry, removeProject, resolveProjectDir, upsertProject,
   writeRegistry,
@@ -632,6 +632,34 @@ export async function start(context) {
         sendJson(response, 200, { ok: true, running: false, stopped });
         return;
       }
+      if (request.method === 'POST' && path === '/api/workbench/samples/guide') {
+        // 内置示例论文：优先代理给已连上的 Python 工作台（同一个接口）；
+        // 还没连上工作台就让 Python 直接装一份——示例得先落地,
+        // 才谈得上拿它当项目打开。
+        try {
+          const body = await readBody(request);
+          const reset = Boolean(body?.reset);
+          if (workbench) {
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/samples/guide', 'POST', { reset });
+            sendJson(response, upstream.status, upstream.data);
+            return;
+          }
+          const registry = await readRegistry();
+          const data = await installSample({
+            reset,
+            python: registry.python || pythonFrom(),
+            pythonPath: registry.pythonpath,
+          });
+          sendJson(response, 200, { ok: true, ...data });
+        } catch (err) {
+          sendJson(response, 500, {
+            ok: false,
+            error: { code: 'SAMPLE_INSTALL_FAILED', message: err.message },
+          });
+        }
+        return;
+      }
       if (path.startsWith('/api/workbench/')) {
         if (!workbench) {
           sendJson(response, 400, {
@@ -667,6 +695,17 @@ export async function start(context) {
               await workbenchFetch(workbench.url, workbench.token,
                 '/api/sections', 'PUT', body));
             return;
+          }
+          // 章节增删改：上游的 400/403/409 原样带回（409 = 还被正文引用）。
+          for (const action of ['create', 'rename', 'delete']) {
+            if (request.method === 'POST'
+              && path === '/api/workbench/sections/' + action) {
+              const body = await readBody(request);
+              const upstream = await workbenchProxy(workbench.url, workbench.token,
+                '/api/sections/' + action, 'POST', body);
+              sendJson(response, upstream.status, upstream.data);
+              return;
+            }
           }
           if (request.method === 'POST' && path === '/api/workbench/facts') {
             const body = await readBody(request);

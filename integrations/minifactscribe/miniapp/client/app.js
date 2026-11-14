@@ -67,6 +67,13 @@ const state = {
   wbReports: null,
   wbMode: 'source',
   wbPdfUrl: '',
+  // 当前选中的章节（空＝还没选过）。引导条的第 ① 步就看它。
+  currentSection: '',
+  // 新手引导：示例论文的路径 + 本次打开后的两个进度标志。
+  // edited = 保存过正文或追加过事实；auditedAfterEdit = 之后又重跑过审计。
+  guide: { path: '', edited: false, auditedAfterEdit: false },
+  // ~/.factscribe 目录（从项目列表接口拿）；示例论文就在它下面。
+  factscribeDir: '',
   // 界面偏好：语言与主题。跟项目数据无关，存 localStorage，刷新还在。
   lang: 'zh',
   theme: '',
@@ -201,12 +208,32 @@ const I18N = {
     'prefs.langEn': 'English',
     'prefs.groupLang': '语言',
     'prefs.groupTheme': '主题',
+    'wb.sectionAdd': '新建章节',
+    'wb.sectionRename': '改名（不动正文里的引用）',
+    'wb.sectionDelete': '删除这一节',
+    'wb.readOnly': '只读工作台：写操作需要 --allow-write',
     'ph.claim': '一句话说清这条事实在讲什么',
     'ph.claimShort': '一句话说清这条事实',
     'ph.signer': '谁签的（签收必填，工具不替你猜）',
     'token.paste': '粘贴 token',
     'token.need': '需要 token',
     'sidebar.noProject': '未选择',
+    'guide.title': '新手引导',
+    'guide.desc': '用一份示例论文走一遍：看问题 → 改一个数 → 变绿。不会动你的论文。',
+    'guide.bar': '新手引导',
+    'guide.step1': '选一节',
+    'guide.step2': '看红牌',
+    'guide.step3': '改一处',
+    'guide.step4': '重跑审计',
+    'guide.step5': '变绿',
+    'guide.hint': '把正文里的 47.3 改成账里有的数，或在事实账里补一条',
+    'guide.readyMini': '示例已准备好：点「启动并连接」，然后回工作台看红牌。',
+    'guide.opened': '已打开示例论文',
+    'guide.resetDone': '示例已重置',
+    'btn.guideOpen': '打开示例论文',
+    'btn.guideOpenExists': '打开示例论文（已存在）',
+    'btn.guideReset': '重置示例',
+    'btn.guideClose': '关闭引导',
   },
   en: {
     'nav.sections': 'Sections',
@@ -325,12 +352,32 @@ const I18N = {
     'prefs.langEn': 'English',
     'prefs.groupLang': 'Language',
     'prefs.groupTheme': 'Theme',
+    'wb.sectionAdd': 'New section',
+    'wb.sectionRename': 'Rename (leaves \\input references alone)',
+    'wb.sectionDelete': 'Delete this section',
+    'wb.readOnly': 'Read-only workbench: writes need --allow-write',
     'ph.claim': 'Say in one line what this fact claims',
     'ph.claimShort': 'Say in one line what this fact claims',
     'ph.signer': 'Who signed it (required for sign-off)',
     'token.paste': 'Paste token',
     'token.need': 'Token required',
     'sidebar.noProject': 'No project',
+    'guide.title': 'Getting started',
+    'guide.desc': 'Walk one sample paper end to end: see the issues → change one number → go green. Your own paper is untouched.',
+    'guide.bar': 'Getting started',
+    'guide.step1': 'Pick a section',
+    'guide.step2': 'See the red flags',
+    'guide.step3': 'Change one thing',
+    'guide.step4': 'Re-run the audit',
+    'guide.step5': 'Go green',
+    'guide.hint': 'Change 47.3 in the text to a number the ledger knows, or add a fact for it',
+    'guide.readyMini': 'Sample is ready: click “Start and connect”, then open the workbench.',
+    'guide.opened': 'Sample paper opened',
+    'guide.resetDone': 'Sample reset',
+    'btn.guideOpen': 'Open the sample paper',
+    'btn.guideOpenExists': 'Open the sample paper (already there)',
+    'btn.guideReset': 'Reset the sample',
+    'btn.guideClose': 'Close the guide',
   },
 };
 
@@ -1634,6 +1681,8 @@ async function acceptAi() {
   });
   $('#ai-accept-state').textContent = '已写入 ' + file + '，正在重跑审计…';
   toast('已写入 ' + file);
+  // 采纳 AI 候选＝改了正文：引导条第 ③ 步也算数。
+  state.guide.edited = true;
   await loadWorkbenchProject();
   await runWorkbenchAudit();
   $('#ai-accept-state').textContent = '已写入 ' + file + '；审计已重跑';
@@ -1719,6 +1768,7 @@ function renderProjects() {
     pythonPath.value = state.projectPythonPath;
   }
   projectBusy();
+  renderGuide();
 }
 
 async function loadProjects() {
@@ -1726,6 +1776,7 @@ async function loadProjects() {
   state.projects = Array.isArray(data.projects) ? data.projects : [];
   state.projectPython = data.python || '';
   state.projectPythonPath = data.pythonpath || '';
+  state.factscribeDir = data.dir || '';
   // 没选过项目：优先上次用的，其次当前对话的项目，最后列表里的第一个
   if (!state.projectPath) {
     state.projectPath = data.lastPath
@@ -1867,10 +1918,178 @@ function renderSidebarProject() {
   }
 }
 
+// ------------------------------------------------------------ 新手引导（示例论文）
+// 一份随包发布的示例论文：看问题 → 改一个数 → 变绿。示例只装到
+// ~/.factscribe/samples/guide，用户的论文一个字都不动。
+// 引导条上的五个勾全部由当前状态推导——不许假勾：没做的事就是没勾。
+
+const GUIDE_KEY = 'factscribe.guide';
+const GUIDE_STEP_KEYS = ['guide.step1', 'guide.step2', 'guide.step3', 'guide.step4', 'guide.step5'];
+const GUIDE_MARKS = ['①', '②', '③', '④', '⑤'];
+
+/** localStorage 里记的示例路径（空＝没开过或已关闭）。 */
+function guideStoredPath() {
+  try {
+    return localStorage.getItem(GUIDE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+/** 记住引导开着（路径）还是关了（空串）。 */
+function guideStorePath(path) {
+  try {
+    localStorage.setItem(GUIDE_KEY, String(path || ''));
+  } catch {
+    /* 写不进去就算了：这一轮仍然能用 */
+  }
+}
+
+/** 这个路径是不是那份示例：尾段固定，比全路径稳（HOME 可能有软链）。 */
+function isGuideSample(path) {
+  const text = String(path || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  return text.endsWith('/samples/guide');
+}
+
+/** 示例论文该在哪：~/.factscribe/samples/guide。 */
+function guideSamplePath() {
+  const dir = String(state.factscribeDir || '').replace(/\/+$/, '');
+  return dir ? dir + '/samples/guide' : '';
+}
+
+/** 这台机器上是不是已经有示例了（开过、或者当前正开着它）。 */
+function guideSampleExists() {
+  if (state.guide.path && isGuideSample(state.guide.path)) return true;
+  const root = String(state.workbenchProject?.root || '');
+  if (root && isGuideSample(root)) return true;
+  return state.projects.some((p) => isGuideSample(p.path));
+}
+
+/** 引导条该不该出现：开了引导，且当前工作台项目就是那份示例。 */
+function guideActive() {
+  const path = state.guide.path || guideStoredPath();
+  if (!path || !isGuideSample(path)) return false;
+  const root = String(state.workbenchProject?.root || '');
+  return Boolean(root) && isGuideSample(root);
+}
+
+/** 五步的进度：每一条都从当前状态推出来。 */
+function guideProgress() {
+  const audit = state.workbenchAudit;
+  const findings = Array.isArray(audit?.findings) ? audit.findings : [];
+  return [
+    Boolean(state.currentSection),           // ① 选过任意一节
+    findings.length > 0,                    // ② 审计结果里至少有一条红/黄
+    Boolean(state.guide.edited),             // ③ 保存过正文或追加过事实
+    Boolean(state.guide.auditedAfterEdit),   // ④ 之后重跑过审计
+    Number(audit?.exit) === 0,               // ⑤ 审计退出码 0
+  ];
+}
+
+/** 画引导条：项目页的按钮文案 + 工作台页的引导条。 */
+function renderGuide() {
+  const openBtn = $('#btn-guide-open');
+  if (openBtn) {
+    openBtn.textContent = guideSampleExists() ? t('btn.guideOpenExists') : t('btn.guideOpen');
+  }
+  const bar = $('#guide-bar');
+  if (!bar) return;
+  const active = guideActive();
+  bar.hidden = !active;
+  bar.setAttribute('aria-label', t('guide.bar'));
+  if (!active) return;
+  const done = guideProgress();
+  const host = $('#guide-steps');
+  if (host) {
+    host.innerHTML = done.map((ok, i) =>
+      '<span class="guide-step' + (ok ? ' is-done' : '') + '" data-step="' + (i + 1) + '">' +
+      '<span class="guide-step-mark">' + (ok ? '✓' : '○') + '</span> ' +
+      GUIDE_MARKS[i] + ' ' + esc(t(GUIDE_STEP_KEYS[i])) + '</span>').join('');
+  }
+  const hint = $('#guide-hint');
+  if (hint) {
+    const show = !done[2];
+    hint.hidden = !show;
+    hint.textContent = show ? t('guide.hint') : '';
+  }
+}
+
+/** 打开示例论文：装一份，再把服务切到它（网页）/ 把路径填进输入框（MiniApp）。 */
+async function openGuideSample() {
+  const btn = $('#btn-guide-open');
+  const note = $('#guide-card-note');
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api(wb('/samples/guide'), {
+      method: 'POST',
+      body: JSON.stringify({ reset: false }),
+    });
+    const path = String(data?.path || guideSamplePath());
+    if (!path) throw new Error('服务端没给出示例路径');
+    state.guide.path = path;
+    guideStorePath(path);
+    if (MODE.mini) {
+      // MiniApp：路径填进项目输入框，等人点「启动并连接」。
+      await addProject(path);
+      const input = $('#project-path');
+      if (input) input.value = path;
+      state.projectPath = path;
+      renderProjects();
+      if (note) note.textContent = t('guide.readyMini');
+      toast(t('guide.readyMini'));
+      return;
+    }
+    // 网页：本机服务直接切到示例，再载入并审计。
+    await chooseProject(path);
+    switchTab('workbench');
+    if (note) note.textContent = t('guide.opened');
+    toast(t('guide.opened'));
+  } catch (err) {
+    if (note) note.textContent = '打开示例失败：' + err.message;
+    toast('打开示例失败：' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** 重置示例：删掉重装一份，再刷新项目与审计。 */
+async function resetGuideSample() {
+  const btn = $('#btn-guide-reset');
+  if (btn) btn.disabled = true;
+  try {
+    const data = await api(wb('/samples/guide'), {
+      method: 'POST',
+      body: JSON.stringify({ reset: true }),
+    });
+    const path = String(data?.path || state.guide.path || guideSamplePath());
+    if (path) {
+      state.guide.path = path;
+      guideStorePath(path);
+    }
+    state.guide.edited = false;
+    state.guide.auditedAfterEdit = false;
+    state.workbenchAudit = null;
+    await loadWorkbenchProject();
+    await runWorkbenchAudit();
+    toast(t('guide.resetDone'));
+  } catch (err) {
+    toast('重置示例失败：' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** 关闭引导：藏起来，并把这个决定记进 localStorage（刷新后不再冒出来）。 */
+function closeGuide() {
+  state.guide.path = '';
+  guideStorePath('');
+  renderGuide();
+  toast(t('btn.guideClose'));
+}
+
 function renderWorkbench() {
   const w = state.workbench || { configured: false };
   const badge = $('#workbench-badge');
-  const summary = $('#workbench-summary');
   if (!badge) return;
   renderSidebarProject();
   renderWorkbenchSections();
@@ -1879,31 +2098,14 @@ function renderWorkbench() {
     : '本机服务';
   renderProjects();
   $('#btn-workbench-audit').disabled = !w.configured;
+  renderWbMeta();
 
   if (!w.configured) {
-    summary.innerHTML = '<div class="line-empty">未连接。选好论文项目文件夹后点「启动并连接」，或展开「高级」手动填 URL + token。</div>';
     $('#workbench-audit').innerHTML = '';
     $('#btn-workbench-save').disabled = true;
     renderWorkbenchSections();
     renderWbMode();
     return;
-  }
-  const s = state.workbenchStatus;
-  if (!s) {
-    const message = !MODE.mini && !state.token
-      ? '需要 token：把启动 <code>factscribe web</code> 时打印的 token 贴上。'
-      : (!MODE.mini
-        ? '还没有选论文项目：在上面选一个文件夹（或填绝对路径后点「加入项目列表」）。'
-        : '已配置，正在读取工作台状态…');
-    summary.innerHTML = '<div class="line-empty">' + message + '</div>';
-  } else {
-    summary.innerHTML =
-      '<div class="verdict-card green">' +
-        '<div><div class="verdict-word">工作台</div><div class="verdict-note">Python 引擎</div></div>' +
-        '<div class="verdict-note" style="flex:1">' + esc(s.project || '（未命名）') +
-          ' · ' + esc(s.facts) + ' 条事实 · ' + esc(s.sections) + ' 个节' +
-          '<br><span class="muted-note">' + esc(s.root || '') + '</span></div>' +
-      '</div>';
   }
 
   const project = state.workbenchProject;
@@ -1917,6 +2119,8 @@ function renderWorkbench() {
     select.value = project.sections.some((s) => s.file === current)
       ? current
       : (project.sections[0] && project.sections[0].file) || '';
+    // 当前选中的是哪一节：引导条第 ① 步就看它。
+    state.currentSection = select.value || '';
     const row = project.sections.find((s) => s.file === select.value);
     $('#workbench-section-text').value = row ? row.text : '';
     $('#workbench-save-state').textContent = project.read_only
@@ -2022,6 +2226,12 @@ function renderWorkbenchSections() {
   const sections = project?.sections || [];
   const current = $('#workbench-section-select')?.value || '';
   if (count) count.textContent = sections.length ? sections.length + ' 节' : '';
+  const locked = workbenchReadOnly();
+  const addBtn = $('#btn-wb-section-add');
+  if (addBtn) {
+    addBtn.disabled = locked;
+    addBtn.title = locked ? t('wb.readOnly') : t('wb.sectionAdd');
+  }
   if (!list) return;
   if (!sections.length) {
     list.innerHTML = '<div class="line-empty">还没有章节：先载入工作台项目。</div>';
@@ -2037,12 +2247,166 @@ function renderWorkbenchSections() {
         : c.yellow
           ? '<span class="wb-badge wb-badge-yellow" title="这一节有 ' + c.yellow + ' 条黄牌问题">! ' + c.yellow + '</span>'
           : '<span class="wb-badge wb-badge-ok" title="这一节没有红黄项">✓</span>';
-    return '<button type="button" class="wb-section-item' + (active ? ' is-active' : '') +
+    const lockTitle = locked ? t('wb.readOnly') : '';
+    // 一行三个键：主按钮切节，右侧两个小按钮改名 / 删除。
+    // id 按约定固定（脚本要认这三个 id），具体是哪一节靠 data-file。
+    return '<div class="wb-section-row' + (active ? ' is-active' : '') + '">' +
+      '<button type="button" class="wb-section-item' + (active ? ' is-active' : '') +
       '" data-section="' + esc(s.file) + '" aria-current="' + (active ? 'true' : 'false') +
       '" title="' + esc(s.file) + '">' +
       '<span class="wb-section-name">' + esc(sectionTitle(s)) + '</span>' + badge +
-      '</button>';
+      '</button>' +
+      '<button type="button" class="wb-section-act" id="wb-section-rename" data-action="rename"' +
+      ' data-file="' + esc(s.file) + '" title="' + esc(lockTitle || t('wb.sectionRename')) + '"' +
+      (locked ? ' disabled' : '') + ' aria-label="' + esc(t('wb.sectionRename')) + '">✎</button>' +
+      '<button type="button" class="wb-section-act" id="wb-section-delete" data-action="delete"' +
+      ' data-file="' + esc(s.file) + '" title="' + esc(lockTitle || t('wb.sectionDelete')) + '"' +
+      (locked ? ' disabled' : '') + ' aria-label="' + esc(t('wb.sectionDelete')) + '">🗑</button>' +
+      '</div>';
   }).join('');
+}
+
+/** 工作台是不是只读：没连上、或者服务端没开 --allow-write，都写不了。 */
+function workbenchReadOnly() {
+  const project = state.workbenchProject;
+  if (project) return Boolean(project.read_only);
+  const status = state.workbenchStatus;
+  if (status) return Boolean(status.read_only);
+  return true;
+}
+
+/** 右栏那行紧凑信息：项目名 · N 条事实 · M 节 · 可写/只读（根路径进 title，不占屏）。 */
+function renderWbMeta() {
+  const el = $('#wb-meta');
+  if (!el) return;
+  const s = state.workbenchStatus;
+  const p = state.workbenchProject;
+  if (!s && !p) {
+    el.textContent = '';
+    el.title = el.dataset.note || '';
+    return;
+  }
+  const count = (v) => (Array.isArray(v) ? v.length : Number(v || 0));
+  const name = (s && s.project) || (p && p.project) || '（未命名项目）';
+  const facts = count(s && s.facts !== undefined ? s.facts : (p && p.facts));
+  const sections = count(s && s.sections !== undefined ? s.sections : (p && p.sections));
+  const readOnly = s ? Boolean(s.read_only) : Boolean(p && p.read_only);
+  el.textContent = name + ' · ' + facts + ' 条事实 · ' + sections + ' 节 · '
+    + (readOnly ? '只读' : '可写');
+  // 根路径与那句提醒都进 title：不占屏，但鼠标悬停能看到。
+  const root = (s && s.root) || (p && p.root) || '';
+  const note = el.dataset.note || '';
+  el.title = root ? root + '｜' + note : note;
+}
+
+// ------------------------------------------------------- 章节增删改（目录级）
+
+/** 章节写操作：走工作台接口（MiniApp 经 Node 代理，网页直连 Python）。 */
+async function wbSectionRequest(url, body) {
+  const headers = { 'content-type': 'application/json' };
+  if (!MODE.mini && state.token) headers.Authorization = 'Bearer ' + state.token;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body || {}),
+  });
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
+  if (res.status === 401) {
+    showTokenPanel();
+    throw new Error('token 不对或缺失');
+  }
+  return { status: res.status, data };
+}
+
+/** 失败信息：先给人话，再退回机器码。 */
+function wbErrorText(data, status) {
+  const err = (data && data.error) || null;
+  if (err) return err.message || err.code || ('HTTP ' + status);
+  return 'HTTP ' + status;
+}
+
+async function createWorkbenchSection() {
+  if (workbenchReadOnly()) {
+    toast(t('wb.readOnly'));
+    return;
+  }
+  const name = (prompt('新章节文件名（例 sections/07-method.tex）', 'sections/') || '').trim();
+  if (!name) return;
+  try {
+    const { status, data } = await wbSectionRequest(wb('/sections/create'), { file: name });
+    if (status !== 200) {
+      toast('新建失败：' + wbErrorText(data, status));
+      return;
+    }
+    await loadWorkbenchProject();
+    selectWorkbenchSection(data.file || name);
+    renderWorkbenchSections();
+    toast('已新建 ' + (data.file || name));
+  } catch (err) {
+    toast('新建失败：' + err.message);
+  }
+}
+
+async function renameWorkbenchSection(file) {
+  if (workbenchReadOnly()) {
+    toast(t('wb.readOnly'));
+    return;
+  }
+  const next = (prompt('新文件名', file) || '').trim();
+  if (!next || next === file) return;
+  try {
+    const { status, data } = await wbSectionRequest(wb('/sections/rename'), { from: file, to: next });
+    if (status !== 200) {
+      toast('改名失败：' + wbErrorText(data, status));
+      return;
+    }
+    await loadWorkbenchProject();
+    selectWorkbenchSection(data.file || next);
+    renderWorkbenchSections();
+    toast('已改名：只改文件名，正文里的引用没动');
+  } catch (err) {
+    toast('改名失败：' + err.message);
+  }
+}
+
+async function deleteWorkbenchSection(file) {
+  if (workbenchReadOnly()) {
+    toast(t('wb.readOnly'));
+    return;
+  }
+  if (!confirm('删除 ' + file + '？正文里的引用不会自动改。')) return;
+  try {
+    let { status, data } = await wbSectionRequest(wb('/sections/delete'), { file });
+    if (status === 409) {
+      // 还被引用着：先说清楚在哪儿被引用，人确认了才 force 删。
+      const refs = (data && data.error && data.error.references) || [];
+      const where = refs.map((r) => r.file + ':' + r.line).join('、');
+      const again = confirm('正文还在引用它：' + (where || '（位置未知）') + '\n仍然删除？');
+      if (!again) return;
+      ({ status, data } = await wbSectionRequest(wb('/sections/delete'), { file, force: true }));
+    }
+    if (status !== 200) {
+      toast('删除失败：' + wbErrorText(data, status));
+      return;
+    }
+    await loadWorkbenchProject();
+    renderWorkbenchSections();
+    toast('已删除 ' + file);
+  } catch (err) {
+    toast('删除失败：' + err.message);
+  }
+}
+
+/** 目录里的操作按钮：改名 / 删除。 */
+function handleSectionAction(action, file) {
+  if (!file) return;
+  if (action === 'rename') renameWorkbenchSection(file);
+  else if (action === 'delete') deleteWorkbenchSection(file);
 }
 
 /** 切到某一节：隐藏下拉是唯一事实来源，目录与源码都跟着它走。 */
@@ -2286,6 +2650,8 @@ async function addWorkbenchFact(event) {
     (data.manifest_line || '（看服务输出）');
   $('#wb-fact-form').reset();
   toast('已追加 ' + data.id);
+  // 引导条第 ③ 步：往事实账里补过一条也算「改了一处」。
+  state.guide.edited = true;
   await loadWorkbenchProject();
   await runWorkbenchAudit();
 }
@@ -2592,6 +2958,8 @@ async function saveWorkbenchSection() {
     body: JSON.stringify({ file, text }),
   });
   $('#workbench-save-state').textContent = '已保存 ' + file;
+  // 引导条第 ③ 步：这次打开之后动过正文。
+  state.guide.edited = true;
   await loadWorkbenchProject();
   toast('工作台章节已保存');
 }
@@ -2662,8 +3030,11 @@ async function disconnectWorkbench() {
 async function runWorkbenchAudit() {
   $('#workbench-status').textContent = '工作台审计中…';
   state.workbenchAudit = await api(wb('/audit'), { method: 'POST' });
+  // 引导条第 ④ 步：改过之后又重跑了审计。
+  if (state.guide.edited) state.guide.auditedAfterEdit = true;
   $('#workbench-status').textContent = '工作台审计完成';
   renderWorkbench();
+  renderGuide();
 }
 
 function wire() {
@@ -2739,6 +3110,16 @@ function wire() {
   $('#btn-workbench-load').addEventListener('click', () => {
     loadWorkbenchProject().catch((e) => { $('#workbench-status').textContent = '载入失败：' + e.message; });
   });
+  // 新手引导：装示例、切过去、跟着五步走。
+  $('#btn-guide-open').addEventListener('click', () => {
+    openGuideSample();
+  });
+  $('#btn-guide-reset').addEventListener('click', () => {
+    resetGuideSample();
+  });
+  $('#btn-guide-close').addEventListener('click', () => {
+    closeGuide();
+  });
   $('#btn-workbench-save').addEventListener('click', () => {
     saveWorkbenchSection().catch((e) => { $('#workbench-save-state').textContent = '保存失败：' + e.message; toast('保存失败：' + e.message); });
   });
@@ -2762,19 +3143,32 @@ function wire() {
     const project = state.workbenchProject;
     const row = project && project.sections.find((s) => s.file === $('#workbench-section-select').value);
     $('#workbench-section-text').value = row ? row.text : '';
+    state.currentSection = $('#workbench-section-select').value || '';
     renderWorkbenchSections();
     const label = $('#wb-current-section');
     if (label) label.textContent = $('#workbench-section-select').value;
     renderAi();
+    renderGuide();
   });
 
   // 侧栏目录：点一下就切到那一节，并把工作台打开（章节本身就是入口）
   $('#wb-section-list').addEventListener('click', (e) => {
+    const act = e.target.closest('[data-action]');
+    if (act) {
+      e.stopPropagation();
+      handleSectionAction(act.dataset.action, act.dataset.file);
+      return;
+    }
     const btn = e.target.closest('[data-section]');
     if (!btn) return;
     selectWorkbenchSection(btn.dataset.section);
     renderWorkbenchSections();
     if (state.tab !== 'workbench') switchTab('workbench');
+  });
+
+  // 侧栏目录：新建一节
+  $('#btn-wb-section-add').addEventListener('click', () => {
+    createWorkbenchSection();
   });
 
   // 侧栏顶部：项目按钮进项目页（导航里没有「项目」项了）
@@ -3131,6 +3525,8 @@ async function loadPreviewDraft() {
 async function init() {
   // 界面偏好先读回来：语言与主题要在第一屏就生效，别等用户点一下。
   initPrefs();
+  // 引导开着没：路径记在 localStorage，空＝上次被关掉了。
+  state.guide.path = guideStoredPath();
   applyMode();
   // 地址栏说了算：有合法 hash 就去那一页，没有就按模式取默认页。
   const hashPage = pageFromHash();

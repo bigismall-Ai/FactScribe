@@ -28,10 +28,12 @@ from .projects import (factscribe_dir, project_name, read_registry,
 from .constants import EXIT_OK, VERSION
 from .report import ReportError, _payload, _severity_of
 from .reportapi import report_action_data, reports_data
-from .workbench import (add_fact_data, audit_data, brief_data,
+from .samples import SampleError, install_guide_sample
+from .workbench import (SectionError, add_fact_data, audit_data, brief_data,
+                        create_section_data, delete_section_data,
                         evidence_status_data, freeze_evidence_data,
-                        project_data, status_data, unfreeze_evidence_data,
-                        write_section_data)
+                        project_data, rename_section_data, status_data,
+                        unfreeze_evidence_data, write_section_data)
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -70,10 +72,11 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _error(self, code: int, error_code: str, message: str) -> None:
-        self._send(code, {"ok": False,
-                          "error": {"code": error_code,
-                                    "message": message}})
+    def _error(self, code: int, error_code: str, message: str,
+               **extra) -> None:
+        err = {"code": error_code, "message": message}
+        err.update(extra)
+        self._send(code, {"ok": False, "error": err})
 
     def _authorized(self) -> bool:
         token = self.server.token  # type: ignore[attr-defined]
@@ -201,6 +204,13 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/facts":
                 self._add_fact()
                 return
+            if path == "/api/samples/guide":
+                self._sample_guide()
+                return
+            if path in ("/api/sections/create", "/api/sections/rename",
+                        "/api/sections/delete"):
+                self._sections_crud(path)
+                return
             if path == "/api/evidence/freeze":
                 body = self._body()
                 data = freeze_evidence_data(
@@ -229,6 +239,12 @@ class _Handler(BaseHTTPRequestHandler):
                 self._build()
                 return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
+        except SectionError as exc:
+            # 章节增删改：409 = 冲突（已存在 / 还被正文引用），403 = 只读。
+            self._error(exc.status, exc.code, str(exc), **exc.extra)
+        except SampleError as exc:
+            # 示例安装：500 = 包里没有示例 / 复制失败。
+            self._error(exc.status, exc.code, str(exc))
         except ConfigError as exc:
             code = getattr(exc, "code", "CONFIG_INVALID")
             self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
@@ -315,6 +331,37 @@ class _Handler(BaseHTTPRequestHandler):
         data = add_fact_data(self._project(), body,
                              self.server.allow_write)  # type: ignore[attr-defined]
         self._send(200, self._base("add_fact", **data))
+
+    def _sample_guide(self) -> None:
+        """装内置示例论文到 `~/.factscribe/samples/guide`。
+
+        不需要 `--allow-write`：它只写自己的示例目录，一个字也不碰用户的论文。
+        目标目录固定；不存在就整份复制，已存在且 reset=true 就先删再复制。
+        """
+        body = self._body()
+        data = install_guide_sample(reset=bool(body.get("reset")))
+        self._send(200, self._base("samples_guide", **data))
+
+    def _sections_crud(self, path: str) -> None:
+        """章节增删改：create / rename / delete。"""
+        body = self._body()
+        write = self.server.allow_write  # type: ignore[attr-defined]
+        project = self._project()
+        if path.endswith("/create"):
+            data = create_section_data(
+                project, str(body.get("file") or ""), body.get("text"), write)
+            self._send(200, self._base("sections_create", **data))
+            return
+        if path.endswith("/rename"):
+            data = rename_section_data(
+                project, str(body.get("from") or ""),
+                str(body.get("to") or ""), write)
+            self._send(200, self._base("sections_rename", **data))
+            return
+        data = delete_section_data(
+            project, str(body.get("file") or ""),
+            bool(body.get("force")), write)
+        self._send(200, self._base("sections_delete", **data))
 
     # ------------------------------------------------------------ 项目管理
 

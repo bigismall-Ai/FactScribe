@@ -17,6 +17,8 @@ const CSS = readFileSync(new URL('../miniapp/client/styles.css', import.meta.url
 const AUDIT = readFileSync(new URL('../miniapp/node/audit.mjs', import.meta.url), 'utf8');
 const SERVER = readFileSync(new URL('../miniapp/node/server.mjs', import.meta.url), 'utf8');
 const MINIAPP = readFileSync(new URL('../miniapp/miniapp.json', import.meta.url), 'utf8');
+const LAUNCHER = readFileSync(new URL('../miniapp/node/launcher.mjs', import.meta.url), 'utf8');
+const PROJECTS = readFileSync(new URL('../miniapp/node/projects.mjs', import.meta.url), 'utf8');
 
 /** 从 app.js 里取出 ISSUE_LABEL 的键。 */
 function issueLabelKeys() {
@@ -179,7 +181,7 @@ test('工作台可载入项目并按节保存，且保存前说明写给工作�
 
 
 test('AI 起草是独立入口：页面发起 agent，输出只进候选区', () => {
-  assert.match(MINIAPP, /"agentAccess": \["session.run"\]/, '必须声明 agentAccess');
+  assert.match(MINIAPP, /"agentAccess": \["session.run", "session.read"\]/, '必须声明 session.run + session.read');
   assert.match(HTML, /id="panel-ai"/, '应有 AI 起草面板');
   assert.match(HTML, /id="btn-ai-run"/, '应有生成候选按钮');
   assert.match(HTML, /id="ai-candidate"/, '应有候选正文区');
@@ -197,4 +199,44 @@ test('非项目对话打开时能检测并报错：AI 必须 fail-closed', () =>
   assert.match(JS, /host\.navigation\.getState/, '应读取 navigation.getState');
   assert.match(JS, /hostView === 'conversation'/, '只有 conversation 才允许 AI');
   assert.match(JS, /AI 起草已禁用/, '未知/非对话时要明说禁用');
+});
+
+
+test('能从当前对话读项目文件夹（session.read），没有就提示', () => {
+  assert.match(JS, /agent\.session\(\)/, '应读当前对话的 session');
+  assert.match(JS, /workspaceDir/, '应读 workspaceDir');
+  assert.match(JS, /isDefaultWorkspace/, '要区分默认工作区');
+  assert.match(HTML, /id="workbench-host-path"/, '工作台应显示当前对话项目');
+  assert.match(JS, /当前对话没有项目文件夹/, '没有项目文件夹时要提示');
+});
+
+
+test('论文项目＝文件夹：列表、路径校验、切换即换文件夹', () => {
+  assert.match(HTML, /id="project-select"/, '应有最近项目下拉');
+  assert.match(HTML, /id="project-path"/, '应有项目文件夹输入');
+  assert.match(HTML, /id="btn-project-add"/, '应能把文件夹加入列表');
+  assert.match(HTML, /id="btn-project-forget"/, '应能从列表移除（不动文件夹）');
+  assert.match(HTML, /id="btn-workbench-start"/, '应有一键启动');
+  assert.match(HTML, /id="btn-workbench-stop"/, '应能停止');
+  assert.match(HTML, /id="workbench-allow-write"/, '写权限必须是显式开关');
+  assert.match(JS, /\/api\/projects/, '项目列表走 Node 接口');
+  assert.match(JS, /\/api\/workbench\/start/, '启动走 Node 接口');
+  assert.match(JS, /用当前对话项目/, '应能用当前对话的文件夹');
+  assert.match(PROJECTS, /paperkit\.toml/, '校验项目必须含 paperkit.toml');
+  assert.match(PROJECTS, /MAX_PROJECTS/, '登记册必须有上限，不能无限长');
+});
+
+test('一键启动只跑固定命令：不过 shell、不收任意命令', () => {
+  assert.match(LAUNCHER, /shell: false/, '子进程不能过 shell');
+  assert.match(LAUNCHER, /'serve', project, '--port', '0', '--json'/, '参数顺序固定');
+  assert.match(LAUNCHER, /--allow-write/, '写权限要显式传');
+  assert.doesNotMatch(LAUNCHER, /execSync|shell: true|spawn\(\s*['"]sh/, '不许拼 shell 命令');
+  assert.match(SERVER, /\/api\/workbench\/start/, 'Node 侧要有启动路由');
+  assert.match(SERVER, /stopServe/, '断开/退出要收子进程');
+  assert.match(SERVER, /resolveProjectDir/, '启动前必须重新校验文件夹');
+});
+
+test('宿主上下文检测真的在启动时跑，不是只定义', () => {
+  assert.match(JS, /await detectHostContext\(\)/, 'init 必须先问宿主打开位置');
+  assert.match(JS, /session-banner/, '非对话要能看见提示条');
 });

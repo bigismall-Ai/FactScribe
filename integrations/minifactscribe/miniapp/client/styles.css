@@ -465,3 +465,13 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   font-size: 12px;
   line-height: 18px;
 }
+
+/* 论文项目：一个文件夹就是一个项目 */
+.project-block { border: 1px solid var(--mcode-border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+.project-head h3 { margin: 0 0 4px; font-size: 14px; }
+.project-head .panel-desc { margin: 0 0 10px; }
+.checkline { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; margin: 6px 0; }
+.checkline label { display: inline-flex; align-items: center; gap: 6px; }
+.manual-connect { margin-top: 10px; }
+.manual-connect summary { cursor: pointer; font-size: 12px; color: var(--mcode-text-muted); }
+.manual-connect .workbench-form { margin-top: 8px; }

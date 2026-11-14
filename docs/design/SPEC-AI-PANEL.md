@@ -14,6 +14,8 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 - 页面通过 `window.mcode.miniapp.host.navigation.getState()` 判断打开位置：
   `view === "conversation"` 才允许 AI；否则显示提示条并禁用 AI（fail-closed）。
   读位置需要清单声明 `hostAccess: ["navigation.read"]`，不读对话内容。
+- 页面用 `agent.session()`（不带 id）读当前对话的 `workspaceDir` 与 `isDefaultWorkspace`，
+  显示在「工作台」；没有项目文件夹时提示。`session.read` 只用于当前对话，不列其他对话。
 
 ## 2. 流程
 
@@ -56,5 +58,6 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 
 `integrations/minifactscribe/tests/ui.test.mjs`：manifest 有 `agentAccess` 与
 `hostAccess`、面板/按钮存在、页面调用 `agent.run`、处理 `text.delta` /
-`permission.requested`、非对话位置 fail-closed、采纳后才写工作台。
+`permission.requested`、非对话位置 fail-closed、读取当前对话项目文件夹、
+采纳后才写工作台。
 真实 agent 行为需在 mcode 项目对话里手测。

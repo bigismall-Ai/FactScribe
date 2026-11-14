@@ -188,6 +188,8 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 .main { flex: 1; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
 .panel { display: none; flex-direction: column; gap: 16px; }
 .panel.is-active { display: flex; }
+/* 实验报告页与项目页：单列、最宽 960px、居中——一栏一件事，读得慢也不挤 */
+.panel-narrow { max-width: 960px; margin: 0 auto; width: 100%; }
 .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .panel-desc { font-size: 12px; color: var(--mcode-text-muted); max-width: 76ch; line-height: 18px; }
 .panel-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -430,6 +432,15 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   .topbar { flex-wrap: wrap; }
   .project-field { order: 3; flex-basis: 100%; }
   .stale-banner, .confirm-banner { flex-wrap: wrap; }
+}
+
+/* 手机：导航横着滚，页面一律单列——窄屏下挤三栏等于什么都看不见 */
+@media (max-width: 720px) {
+  .sidebar { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; }
+  .nav-item { white-space: nowrap; flex: none; }
+  .sidebar-foot { display: block; flex: none; flex-basis: 100%; }
+  .panel-narrow { max-width: 100%; }
+  .wb-columns { grid-template-columns: 1fr; }
 }
 
 /* 本地工作台：只连本机 serve，不把 token 写进页面 */

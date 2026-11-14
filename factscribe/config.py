@@ -944,6 +944,9 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
         pointer=obs_pointer,
         assertions=[dict(a) for a in (raw.get("assertions") or [])
                     if isinstance(a, dict)],
+        # P0：报告来源（可选）。缺省空串＝旧账，行为不变。
+        report=str(raw.get("report") or "").strip(),
+        report_metric=str(raw.get("report_metric") or "").strip(),
     )
     if not f.id:
         raise ConfigError(

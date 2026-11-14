@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 from . import mdscan
-from .audit import _aggregate_exit, run_audit, run_check
+from .audit import _aggregate_exit, run_audit, run_check, source_base
 from .brief import build_brief
 from .brief import payload as brief_payload
 from .brief import render as render_brief
@@ -32,8 +34,13 @@ from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
                         priority_payload, render_bundle, resolve_conflicts)
 from .protect import compare as compare_protect
 from .protect import render_human as render_protect
-from .report import (PREAMBLE_TEXT, _config_block, _emit, _human_audit,
-                     _human_check, _payload, _severity_of, render_matrix)
+from .report import (PREAMBLE_TEXT, ReportError, _artifact_path, _config_block,
+                     _emit, _human_audit, _human_check, _payload,
+                     _rel_posix, _resolve_in_ws, _severity_of, _sha256_of,
+                     _toml_str, _ws_root, _write_atomic, check_report,
+                     evidence_digest, load_report, lock_report, report_card,
+                     semantic_digest, sign_report, verify_signoff,
+                     render_matrix)
 from .review import payload as review_payload
 from .review import render_human as render_review
 from .review import run_review
@@ -268,6 +275,41 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--note", default=None, metavar="TEXT", help="备注（可选）")
     fa.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
+
+    fi = fp.add_parser("import", help="把已签收的报告导进事实账（带签收门）")
+    fi.add_argument("ws", help="工作区根（报告与原始产物所在处）")
+    fi.add_argument("--report", required=True, metavar="PATH",
+                    help="报告路径（相对工作区或绝对）")
+    fi.add_argument("--paper", default=None, metavar="DIR",
+                    help="论文项目目录（缺省 <ws>/paper）")
+    fi.add_argument("--dry-run", dest="dry_run", action="store_true",
+                    help="只检查与生成，不写盘")
+    fi.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 末行是单行 JSON）")
+
+    sp = sub.add_parser(
+        "report", help="报告域：check / lock / sign（归一化实验报告 factscribe/report@1）",
+        description="报告域命令组。report check 只读地跑一遍探针并比对；"
+                    "report lock 写锁文件（0600，原子写）；report sign 出审阅卡并"
+                    "写签收文件与哈希链流水。退出码只用 0/1/2。")
+    rp = sp.add_subparsers(dest="report_action", required=True)
+    for action, help_text in (
+        ("check", "校验报告：探针取数与报告写的对不对得上"),
+        ("lock", "check 过关后写锁文件（<report_id>.lock.json）"),
+        ("sign", "出审阅卡并签收（<report_id>.signoff.toml + 流水）"),
+    ):
+        rq = rp.add_parser(action, help=help_text)
+        rq.add_argument("ws", help="工作区根（报告与原始产物所在处）")
+        rq.add_argument("--report", required=True, metavar="PATH",
+                        help="报告路径（相对工作区或绝对）")
+        rq.add_argument("--json", action="store_true",
+                        help="机器可读输出（stdout 末行是单行 JSON）")
+        if action == "sign":
+            rq.add_argument("--by", default="", metavar="NAME",
+                            help="签收人（必填，空串当用法错）")
+            rq.add_argument("--card-out", dest="card_out", default=None,
+                            metavar="PATH",
+                            help="把审阅卡另存到工作区内的这个路径（不许越界）")
 
     sp = sub.add_parser("verify-pdf", help="PDF 回检：文本层/栅格/双向多重集/stamp（V3.0）")
     sp.add_argument("pdf", help="最终 PDF 路径")
@@ -551,8 +593,11 @@ def cmd_mcp(args) -> int:
 
 
 def cmd_fact(args) -> int:
-    if getattr(args, "fact_action", None) != "add":  # argparse 已保证，防御一手
-        raise ConfigError("fact 目前只有 add 子命令")
+    action = getattr(args, "fact_action", None)
+    if action == "import":
+        return cmd_fact_import(args)
+    if action != "add":  # argparse 已保证，防御一手
+        raise ConfigError("fact 目前只有 add / import 子命令")
     info = add_fact(
         Path(args.project), fid=args.id, claim=args.claim, value=args.value,
         source=args.source, locator=args.locator,
@@ -567,6 +612,364 @@ def cmd_fact(args) -> int:
     print("别忘了把这一行加进 %s 并签上你的名字：%s"
           % (info["manifest"], info["manifest_line"]))
     return EXIT_OK
+
+
+class _Usage(Exception):
+    """用法错：退出码 2（不是「有违例」的 1）。"""
+
+
+# --------------------------------------------------------------------------
+# report / fact import（P0 第二步）
+#
+# 这一层只做编排：真正的读报告、跑探针、上锁、出卡、签收都在 report.py 里，
+# 这里不重复实现它的语义。退出码只用 0/1/2。
+# --------------------------------------------------------------------------
+
+def _report_json_line(payload: dict) -> None:
+    """stdout 末行必须是单行 JSON（`tail -1` 就能解析）。"""
+    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def _report_fail(args, command: str, exit_code: int, report: str,
+                 code: str, message: str, details=None, **kw) -> int:
+    """失败出口：JSON 模式只出单行 JSON；人读模式出错到 stderr。"""
+    if getattr(args, "json", False):
+        payload = _payload(command, "error", exit_code, ok=False, report=report,
+                           error={"code": code, "message": message}, **kw)
+        _report_json_line(payload)
+    else:
+        print("factscribe: %s 失败（%s）：%s" % (command, code, message),
+              file=sys.stderr)
+        for item in details or []:
+            print("  - %s: %s" % (item.get("code", ""), item.get("message", "")),
+                  file=sys.stderr)
+    return exit_code
+
+
+def _report_ok(args, command: str, report: str, **kw) -> int:
+    if getattr(args, "json", False):
+        payload = _payload(command, "ok", EXIT_OK, ok=True, report=report, **kw)
+        _report_json_line(payload)
+    return EXIT_OK
+
+
+def _ws_arg(args) -> Path:
+    """工作区根：必须是存在的目录，否则是用法错（2）。"""
+    raw = str(getattr(args, "ws", "") or "").strip()
+    if not raw:
+        raise _Usage("工作区根不能为空")
+    path = Path(raw).expanduser()
+    if not path.is_dir():
+        raise _Usage("工作区 %s 不存在或不是目录" % path)
+    return path.resolve()
+
+
+def _lock_state(ws: Path, report: dict) -> tuple:
+    """锁的状态：("ok"|"missing"|"stale", 人话)。"""
+    lock_path = _artifact_path(ws, report, ".lock.json")
+    if not lock_path.exists():
+        return "missing", "还没有锁文件 %s（先 lock 再入账）" % lock_path.name
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return "stale", "锁文件 %s 读不了：%s" % (lock_path.name, exc)
+    if not isinstance(lock, dict):
+        return "stale", "锁文件 %s 不是 JSON 对象" % lock_path.name
+    try:
+        report_file = _resolve_in_ws(ws, report.get("path", ""))
+        current = {
+            "report_sha256": _sha256_of(report_file),
+            "semantic_digest": semantic_digest(report),
+            "evidence_digest": evidence_digest(ws, report),
+        }
+    except ReportError as exc:
+        return "stale", exc.message
+    for key, value in current.items():
+        if lock.get(key) != value:
+            return "stale", ("锁里的 %s 与现在对不上（锁里 %s，现在 %s）"
+                             % (key, str(lock.get(key))[:12], value[:12]))
+    return "ok", "锁与现在一致"
+
+
+def cmd_report_check(args) -> int:
+    command = "report check"
+    ref = str(getattr(args, "report", "") or "")
+    try:
+        ws = _ws_arg(args)
+    except _Usage as exc:
+        return _report_fail(args, command, EXIT_CONFIG, ref, "USAGE", str(exc))
+    try:
+        result = check_report(ws, ref)
+    except ReportError as exc:
+        return _report_fail(args, command, EXIT_RED, ref, exc.code, exc.message)
+    if not result["ok"]:
+        first = result["errors"][0]
+        return _report_fail(args, command, EXIT_RED, ref,
+                            first.get("code", "REPORT_ERROR"),
+                            first.get("message", ""),
+                            details=result["errors"], errors=result["errors"])
+    if not getattr(args, "json", False):
+        print("报告检查通过：%s（%d 个指标）" % (ref, len(result["metrics"])))
+    return _report_ok(args, command, ref, metrics=result["metrics"])
+
+
+def cmd_report_lock(args) -> int:
+    command = "report lock"
+    ref = str(getattr(args, "report", "") or "")
+    try:
+        ws = _ws_arg(args)
+    except _Usage as exc:
+        return _report_fail(args, command, EXIT_CONFIG, ref, "USAGE", str(exc))
+    try:
+        lock = lock_report(ws, ref)
+    except ReportError as exc:
+        return _report_fail(args, command, EXIT_RED, ref, exc.code, exc.message)
+    try:
+        report = load_report(ws, ref)
+    except ReportError as exc:
+        return _report_fail(args, command, EXIT_RED, ref, exc.code, exc.message)
+    lock_path = _artifact_path(ws, report, ".lock.json")
+    if not getattr(args, "json", False):
+        print("已上锁：%s" % lock_path)
+        print("语义摘要 %s；证据摘要 %s"
+              % (str(lock.get("semantic_digest", ""))[:12],
+                 str(lock.get("evidence_digest", ""))[:12]))
+    return _report_ok(args, command, report.get("path", ref),
+                      lock=str(lock_path), lock_path=_rel_posix(ws, lock_path))
+
+
+def cmd_report_sign(args) -> int:
+    command = "report sign"
+    ref = str(getattr(args, "report", "") or "")
+    by = str(getattr(args, "by", "") or "")
+    if not by.strip():
+        return _report_fail(args, command, EXIT_CONFIG, ref, "USAGE",
+                            "--by 不能为空（要写清楚是谁签的）")
+    try:
+        ws = _ws_arg(args)
+    except _Usage as exc:
+        return _report_fail(args, command, EXIT_CONFIG, ref, "USAGE", str(exc))
+    card_out = getattr(args, "card_out", None)
+    try:
+        signoff = sign_report(ws, ref, by, card_out=card_out)
+    except ReportError as exc:
+        return _report_fail(args, command, EXIT_RED, ref, exc.code, exc.message)
+    report = load_report(ws, ref)
+    signoff_path = _artifact_path(ws, report, ".signoff.toml")
+    log_path = _artifact_path(ws, report, ".signoff.log")
+    lines = list(signoff.get("card_lines") or [])
+    if not getattr(args, "json", False):
+        print("== 审阅卡 ==")
+        for line in lines:
+            print(line)
+        print("")
+        print("签收位置：%s" % signoff_path)
+        print("签收流水：%s" % log_path)
+        print("签收人：%s" % by)
+        if card_out:
+            print("审阅卡另存：%s" % _resolve_in_ws(ws, card_out))
+    return _report_ok(args, command, report.get("path", ref), card=lines,
+                      signed_by=by, signoff=str(signoff_path),
+                      signoff_path=_rel_posix(ws, signoff_path),
+                      card_out=str(card_out) if card_out else "")
+
+
+# ---- fact import --------------------------------------------------------
+
+def _locator_for(source: dict) -> str:
+    """探针定位的人话（例：jsonl.count_where resolved=true）。"""
+    probe = str(source.get("probe", ""))
+    if probe == "jsonl.count_where":
+        return "jsonl.count_where %s" % str(source.get("where", ""))
+    if probe == "jsonl.count":
+        return "jsonl.count"
+    if probe == "csv.cell":
+        return ("csv.cell %s=%s column=%s"
+                % (source.get("row_column", ""), source.get("row_key", ""),
+                   source.get("column", "")))
+    if probe == "json.pointer":
+        return "json.pointer %s" % str(source.get("pointer", ""))
+    return probe
+
+
+def _fact_id(experiment: str, report_id: str, metric_id: str) -> str:
+    """<experiment>.<report_id>.<metric_id>：只许 [A-Za-z0-9._-]，最长 100 字符。"""
+    raw = "%s.%s.%s" % (experiment, report_id, metric_id)
+    clean = re.sub(r"[^A-Za-z0-9._-]", "_", raw)
+    if len(clean) > 100:
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+        clean = clean[:91] + "-" + digest
+    return clean
+
+
+def _facts_dir(cfg: Config) -> Path:
+    """事实账目录（只写一级，不许子目录）。"""
+    glob = (cfg.facts_glob or "facts/*.toml").strip()
+    rel = Path(glob).parent if any(ch in glob for ch in "*?[") else Path(glob)
+    return cfg.root / rel
+
+
+def cmd_fact_import(args) -> int:
+    command = "fact import"
+    ref = str(getattr(args, "report", "") or "")
+    try:
+        ws = _ws_arg(args)
+    except _Usage as exc:
+        return _report_fail(args, command, EXIT_CONFIG, ref, "USAGE", str(exc))
+    try:
+        report = load_report(ws, ref)
+    except ReportError as exc:
+        return _report_fail(args, command, EXIT_RED, ref, exc.code, exc.message)
+    rel_report = report.get("path", ref)
+
+    # 1. 只有 final 的报告能入账
+    if report.get("status") != "final":
+        return _report_fail(args, command, EXIT_RED, rel_report, "REPORT_NOT_FINAL",
+                            "报告状态是 %r，只有 final 的报告能入账"
+                            % report.get("status", ""))
+
+    # 2a. 锁必须在且与现在一致
+    state, reason = _lock_state(ws, report)
+    if state != "ok":
+        return _report_fail(args, command, EXIT_RED, rel_report,
+                            "REPORT_LOCK_MISMATCH", reason)
+
+    # 2b. 签收必须在且核得过
+    verified = verify_signoff(ws, ref)
+    if not verified.get("ok"):
+        return _report_fail(args, command, EXIT_RED, rel_report,
+                            "REPORT_NOT_SIGNED",
+                            verified.get("reason", "没有签收"))
+
+    # 3. 论文项目目录
+    paper_raw = getattr(args, "paper", None)
+    paper = Path(str(paper_raw)).expanduser() if paper_raw else (ws / "paper")
+    if not paper.is_dir():
+        return _report_fail(args, command, EXIT_CONFIG, rel_report, "PAPER_MISSING",
+                            "论文项目目录 %s 不存在（--paper 给对了吗）" % paper)
+    paper = paper.resolve()
+    try:
+        cfg = load_config(paper)
+    except ConfigError as exc:
+        return _report_fail(args, command, EXIT_CONFIG, rel_report,
+                            "PAPER_CONFIG_INVALID", str(exc))
+
+    # 4. 每条 metric 生成一条 fact
+    base = source_base(cfg)
+    experiment = str(report.get("experiment") or "").strip() or str(report.get("id", ""))
+    report_id = str(report.get("id", "")).strip()
+    facts_out: list = []
+    for metric in report.get("metrics", []):
+        sources = metric.get("sources") or []
+        primary = next((s for s in sources if s.get("role") == "value"), None)
+        if primary is None and sources:
+            primary = sources[0]
+        if primary is None:
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                "REPORT_NO_SOURCE",
+                                "指标 %s 没有来源，导不进账" % metric.get("id", ""))
+        try:
+            abs_src = _resolve_in_ws(ws, primary.get("path", ""))
+        except ReportError as exc:
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                exc.code, exc.message)
+        try:
+            rel_src = abs_src.resolve().relative_to(base.resolve()).as_posix()
+        except ValueError:
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                "SOURCE_OUTSIDE_PROJECT",
+                                "来源 %s 不在 source_root（%s）里——它必须能按项目的"
+                                "source_root 解析出来" % (primary.get("path", ""), base))
+        if not rel_src or rel_src.startswith(".."):
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                "SOURCE_OUTSIDE_PROJECT",
+                                "来源 %s 跑出了论文项目/source_root 之外"
+                                % primary.get("path", ""))
+        try:
+            digest = _sha256_of(abs_src)
+        except OSError as exc:
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                "SOURCE_UNREADABLE",
+                                "来源 %s 读不了：%s" % (primary.get("path", ""), exc))
+        facts_out.append({
+            "id": _fact_id(experiment, report_id, str(metric.get("id", ""))),
+            "claim": str(metric.get("claim", "")),
+            "value": str(metric.get("display", "")),
+            "source": rel_src,
+            "source_sha256": digest,
+            "locator": _locator_for(primary),
+            "confidence": "high",
+            "kind": "claim",
+            "report": rel_report,
+            "report_metric": str(metric.get("id", "")),
+        })
+
+    # 5. 写 facts/<experiment>.<report_id>.toml
+    stem = re.sub(r"[^A-Za-z0-9._-]", "_", "%s.%s" % (experiment, report_id))
+    facts_dir = _facts_dir(cfg)
+    target = facts_dir / ("%s.toml" % stem)
+    if target.parent.resolve() != facts_dir.resolve():
+        return _report_fail(args, command, EXIT_CONFIG, rel_report, "FACTS_PATH_INVALID",
+                            "只许写 facts/ 一级，不许写子目录")
+    header = ("# managed by factscribe fact import; report=%s digest=%s"
+              % (rel_report, semantic_digest(report)))
+    body = [header, ""]
+    for item in facts_out:
+        body.append("[[fact]]")
+        for key in ("id", "claim", "value", "source", "source_sha256",
+                    "locator", "confidence", "kind", "report", "report_metric"):
+            body.append("%s = %s" % (key, _toml_str(item[key])))
+        body.append("")
+    text = "\n".join(body)
+    data = text.encode("utf-8")
+
+    rel_target = _rel_posix(paper, target)
+    if getattr(args, "dry_run", False):
+        if not getattr(args, "json", False):
+            print("演练（不写盘）：将写 %s（%d 条 fact）" % (rel_target, len(facts_out)))
+        return _report_ok(args, command, rel_report, facts_file=rel_target,
+                          facts=facts_out, unchanged=False, dry_run=True,
+                          written=False)
+
+    if target.exists():
+        try:
+            current = target.read_bytes()
+        except OSError as exc:
+            return _report_fail(args, command, EXIT_RED, rel_report,
+                                "FACTS_FILE_UNREADABLE",
+                                "%s 读不了：%s" % (rel_target, exc))
+        if current == data:
+            if not getattr(args, "json", False):
+                print("账上已是最新，未改动：%s（%d 条 fact）"
+                      % (rel_target, len(facts_out)))
+            return _report_ok(args, command, rel_report, facts_file=rel_target,
+                              facts=facts_out, unchanged=True, dry_run=False,
+                              written=False)
+        return _report_fail(args, command, EXIT_RED, rel_report, "FACTS_FILE_DIRTY",
+                            "%s 已经存在但内容不一致（人改过，或报告变了）——"
+                            "删掉它再重新导入" % rel_target)
+
+    try:
+        facts_dir.mkdir(parents=True, exist_ok=True)
+        _write_atomic(target, data)
+    except OSError as exc:
+        return _report_fail(args, command, EXIT_RED, rel_report, "FACTS_WRITE_FAILED",
+                            "%s 写不了：%s" % (rel_target, exc))
+    if not getattr(args, "json", False):
+        print("已导入 %d 条 fact：%s" % (len(facts_out), rel_target))
+    return _report_ok(args, command, rel_report, facts_file=rel_target,
+                      facts=facts_out, unchanged=False, dry_run=False, written=True)
+
+
+def cmd_report(args) -> int:
+    action = getattr(args, "report_action", None)
+    if action == "check":
+        return cmd_report_check(args)
+    if action == "lock":
+        return cmd_report_lock(args)
+    if action == "sign":
+        return cmd_report_sign(args)
+    raise ConfigError("report 目前只有 check / lock / sign 子命令")
 
 
 def cmd_check(args) -> int:
@@ -1258,7 +1661,12 @@ def cmd_evidence(args) -> int:
 
 
 def main(argv=None) -> int:
-    args = build_parser().parse_args(argv)
+    try:
+        args = build_parser().parse_args(argv)
+    except SystemExit as exc:
+        # argparse 的用法错自带退出码 2；这里转成返回值，别把异常抛给调用方。
+        code = exc.code if isinstance(exc.code, int) else EXIT_CONFIG
+        return code
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,
@@ -1266,6 +1674,7 @@ def main(argv=None) -> int:
                 "serve": cmd_serve,
                 "web": cmd_web,
                 "mcp": cmd_mcp,
+                "report": cmd_report,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,
                 "protect": cmd_protect, "tide": cmd_tide,
                 "review": cmd_review,

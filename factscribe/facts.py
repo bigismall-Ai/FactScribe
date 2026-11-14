@@ -199,6 +199,9 @@ class Fact:
     pointer: str = ""
     assertions: list = field(default_factory=list)  # [{claim_id,value_canon,...}]
     approvals: list = field(default_factory=list)   # 预留：报告里的签名账
+    # ---- P0：报告来源（P0 第二步；旧账缺省空串，行为不变）----
+    report: str = ""           # 报告相对工作区的路径（空＝不是从报告导入的）
+    report_metric: str = ""    # 报告里的 metric id（空＝没指定）
 
     @property
     def id_key(self) -> str:

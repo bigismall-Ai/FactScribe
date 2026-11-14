@@ -475,3 +475,11 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 .manual-connect { margin-top: 10px; }
 .manual-connect summary { cursor: pointer; font-size: 12px; color: var(--mcode-text-muted); }
 .manual-connect .workbench-form { margin-top: 8px; }
+
+
+/* 统一界面新增：事实表、证据块、token 面板 */
+.facts-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.facts-table th, .facts-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--mcode-border); }
+.facts-table th { color: var(--mcode-text-muted); font-weight: 600; }
+.wb-facts, .wb-evidence { margin: 6px 0 10px; }
+#token-panel input { margin: 0 8px; }

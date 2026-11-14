@@ -46,6 +46,7 @@ factscribe = [
   "web/*.html",
   "web/*.css",
   "web/*.js",
+  "web/*.json",
 ]
 
 [tool.setuptools.dynamic]

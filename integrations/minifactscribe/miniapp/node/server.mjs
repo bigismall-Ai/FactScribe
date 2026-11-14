@@ -385,6 +385,15 @@ export async function start(context) {
         sendText(response, 200, html, CONTENT_TYPES['.html']);
         return;
       }
+      if (request.method === 'GET' && (path === '/app.js' || path === '/app.css')) {
+        try {
+          const file = await readFile(join(context.pluginRoot, CLIENT_DIR, path.slice(1)));
+          sendText(response, 200, file, CONTENT_TYPES[extname(path)] || 'application/octet-stream');
+        } catch {
+          sendText(response, 404, 'not_found');
+        }
+        return;
+      }
       if (request.method === 'GET' && path.startsWith('/minifactscribe/')) {
         const rel = normalize(path.slice('/minifactscribe/'.length)).replace(/^(\.\.(\/|\\))+/, '');
         if (rel.includes('..')) {
@@ -638,6 +647,49 @@ export async function start(context) {
             sendJson(response, 200,
               await workbenchFetch(workbench.url, workbench.token,
                 '/api/audit', 'POST'));
+            return;
+          }
+          if (request.method === 'GET' && path === '/api/workbench/evidence') {
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token, '/api/evidence'));
+            return;
+          }
+          if (request.method === 'POST' && path === '/api/workbench/evidence/freeze') {
+            const body = await readBody(request);
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/evidence/freeze', 'POST', body));
+            return;
+          }
+          if (request.method === 'POST' && path === '/api/workbench/evidence/unfreeze') {
+            const body = await readBody(request);
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/evidence/unfreeze', 'POST', body));
+            return;
+          }
+          if (request.method === 'POST' && path === '/api/workbench/build') {
+            const body = await readBody(request);
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/build', 'POST', body));
+            return;
+          }
+          if (request.method === 'GET' && path === '/api/workbench/pdf') {
+            const upstream = await fetch(workbench.url + '/api/pdf', {
+              headers: { authorization: `Bearer ${workbench.token}` },
+              signal: AbortSignal.timeout(30000),
+            });
+            if (!upstream.ok) {
+              throw new Error('PDF 还没生成或不可读（HTTP ' + upstream.status + '）');
+            }
+            const buffer = Buffer.from(await upstream.arrayBuffer());
+            response.writeHead(200, {
+              'content-type': 'application/pdf',
+              'content-length': buffer.length,
+              'cache-control': 'no-store',
+            });
+            response.end(buffer);
             return;
           }
           sendJson(response, 404, {

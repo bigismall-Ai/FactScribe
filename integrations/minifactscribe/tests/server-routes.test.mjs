@@ -146,3 +146,16 @@ test('工作台状态：未启动时 running=false；停止是幂等的', async 
   assert.equal(stop.body.running, false);
   assert.equal(stop.body.stopped, false);
 });
+
+
+test('统一界面的静态资源：/app.js 与 /app.css 由 Node 供', async () => {
+  const js = await call('/app.js');
+  assert.equal(js.status, 200);
+  assert.match(js.body, /wb\('\/project'\)/, '应返回统一界面脚本');
+  const css = await call('/app.css');
+  assert.equal(css.status, 200);
+  assert.match(css.body, /\.layout/);
+  const page = await call('/minifactscribe');
+  assert.equal(page.status, 200);
+  assert.match(page.body, /\/app\.js/, '页面引用绝对路径，两种服务器都能供');
+});

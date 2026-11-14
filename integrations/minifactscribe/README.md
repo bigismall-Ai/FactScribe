@@ -107,6 +107,16 @@ console.log(a.verdict, a.exitCode, a.red.map((i) => i.code), a.yellow.map((i) =>
 
 ---
 
+## 界面是共用的一份
+
+这个页签式的界面同时是 `factscribe web` 的页面：源在 `factscribe/web/`，插件里是拷贝
+（`scripts/sync-miniapp-ui.sh` 同步，测试钉住逐字节一致）。页面自己判断在哪运行：
+
+- 在 MiniApp 里：显示全部页签（草稿、工作台、AI 起草、一键启动）；
+- 在浏览器里：只显示「工作台」，向你要 token，操作真实论文项目；
+- 网页加 `?dev=1`（或 `factscribe web --dev`）：把宿主专属区也显示出来，方便对照调试；
+  草稿页用内置演示数据填充，只读、不写盘，草稿侧的 Node 专属按钮会禁用并说明。
+
 ## 论文项目与一键启动工作台
 
 **一个文件夹就是一个论文项目**（里面有 `paperkit.toml`）。切换项目＝换文件夹；
@@ -170,13 +180,13 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、24 例呈现层可读性不变量
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、28 例呈现层可读性不变量
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
-再加上 6 例项目登记册与启动握手（`tests/projects.test.mjs`）、4 例 Node 路由
-（`tests/server-routes.test.mjs`）：七组共 79 例，全部离线（握手用假解释器，
-不 spawn 真 Python；路由用临时 HOME，不碰真登记册）。
+再加上 6 例项目登记册与启动握手（`tests/projects.test.mjs`）、5 例 Node 路由
+（`tests/server-routes.test.mjs`）与 4 例界面同步（`tests/sync.test.mjs`）：
+八组共 88 例，全部离线（握手用假解释器，不 spawn 真 Python；路由用临时 HOME）。
 
 ---
 
@@ -225,10 +235,11 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，24 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，28 例
 │   ├── workbench.test.mjs       # 本地工作台连接层，5 例
 │   ├── projects.test.mjs        # 论文项目登记册 + 启动握手，6 例
-│   └── server-routes.test.mjs   # 项目/启动路由，4 例
+│   ├── sync.test.mjs            # 网页与 MiniApp 界面逐字节一致，4 例
+│   └── server-routes.test.mjs   # 项目/启动/静态资源路由，5 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css

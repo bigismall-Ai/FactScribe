@@ -22,6 +22,8 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
 本地工作台页面：`python3 -m factscribe web <项目>`，启动后打印带 token 的页面地址；
+界面与 MiniFactScribe 是同一份（源在 `factscribe/web/`），网页里自动隐藏宿主专属区；
+`--dev` 让网页也显示 MiniApp 的画面，方便开发对照。
 只想接 API 时用 `python3 -m factscribe serve <项目>`。
 接口见 [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md)。
 
@@ -43,7 +45,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `doctor` | 上手自检：环境（Python/tectonic/poppler/字体/git）与项目（声明/账/签/冻结）逐项检查，给修复命令；不是闸门，不影响判定 |
 | `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；给 MiniFactScribe / 本地页面 / agent 提供 `status` / `brief` / `audit` / `project`；默认只读；`--allow-write` 才开放改章节与追加事实，`--allow-build` 才允许编译 PDF |
 | `mcp` | MCP stdio 服务器：把 `status` / `project` / `brief` / `audit` 暴露给 Claude Code / Codex / OpenCode；`--allow-write` 才开放写章节与追加事实 |
-| `web` | 本地工作台页面：`serve` 同款后端 + 三栏界面（章节 / 正文 / 证据与审计）；默认只读；`--allow-write` 才可写，`--allow-build` 才可编译 PDF |
+| `web` | 本地工作台页面：`serve` 同款后端 + 工作台界面（章节 / 审计 / 事实 / 证据 / 编译），与 MiniFactScribe 共用一份界面；网页模式隐藏宿主专属区；`--dev` 显示全部；默认只读，`--allow-write` 才可写，`--allow-build` 才可编译 PDF |
 | `fact` | 记账：`add` 自动算哈希写一条事实，但**不替你签**清单 |
 | `check` | 查事实账本身：id 唯一、sha256 现算、人签清单、表达式算术、同值冲突 |
 | `audit` | 核心校验：内联绑定、数字回账、引用落稳定标识、覆盖报告 |
@@ -111,7 +113,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1109 例，全离线
+python3 -m unittest discover -s tests     # 1162 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

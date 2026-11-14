@@ -168,6 +168,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="允许 POST /api/build 编译 PDF；会执行 project.build")
     sp.add_argument("--ui", action="store_true",
                     help="同时在这个端口提供本地工作台页面（GET /）")
+    sp.add_argument("--dev", action="store_true",
+                    help="开发模式：页面把 MiniApp 专属区（AI、启动、本地草稿）也显示出来，只做界面预览")
     sp.add_argument("--json", action="store_true",
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
@@ -201,6 +203,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="打开写接口（章节/事实/证据）")
     sp.add_argument("--allow-build", dest="allow_build", action="store_true",
                     help="允许编译 PDF（会执行 project.build）")
+    sp.add_argument("--dev", action="store_true",
+                    help="开发模式：页面把 MiniApp 专属区（AI、启动、本地草稿）也显示出来")
     sp.add_argument("--json", action="store_true",
                     help="启动行只出 JSON（服务仍阻塞）")
 
@@ -489,7 +493,10 @@ def cmd_serve(args) -> int:
         allow_build=bool(args.allow_build))
     host, port = server.server_address[0], server.server_address[1]
     url = "http://%s:%d" % (host, port)
-    ui_url = (url + "/?token=" + token) if getattr(args, "ui", False) else ""
+    dev = bool(getattr(args, "dev", False))
+    ui_url = ""
+    if getattr(args, "ui", False):
+        ui_url = url + "/?token=" + token + ("&dev=1" if dev else "")
     command = "web" if getattr(args, "web", False) else "serve"
     if args.json:
         print(json.dumps({
@@ -511,6 +518,8 @@ def cmd_serve(args) -> int:
         mode = "可写（--allow-write）" if args.allow_write else "只读"
         if args.allow_build:
             mode += " · 可编译（--allow-build）"
+        if dev:
+            mode += " · 开发模式（显示 MiniApp 专属区）"
         print("模式：%s" % mode)
         print("接口：/api/health  /api/capabilities  /api/status  "
               "/api/brief  /api/audit  /api/project")

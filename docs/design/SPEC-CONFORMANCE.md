@@ -7,6 +7,13 @@
 一句话：**同一份固定项目，Python 版和 JS 版判出的核心错误码多重集必须完全
 相等；谁先漂了，锁就响。**
 
+> **后续状态（JS 移植件已删除）**：JS 移植件（`miniapp/node/audit.mjs` +
+> `demo.mjs`）与 JS 侧的一致性锁（`integrations/minifactscribe/tests/conformance.test.mjs`）
+> 已随「本地草稿整套」一并删除——一份判据两处实现本身就是漂移的来源。
+> 现在运行时只剩 Python 引擎，这把锁只剩 Python 一侧：
+> `tests/test_conformance.py` 仍钉着核心码多重集与投影的逐字节一致性。
+> 本规范以下内容保留为**历史记录**，描述的是当时的门禁设计。
+
 ---
 
 ## 1. 为什么锁（问题面）

@@ -180,7 +180,7 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、72 例呈现层可读性不变量
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、82 例呈现层可读性不变量
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
@@ -239,7 +239,7 @@ integrations/minifactscribe/
 │   ├── workbench.test.mjs       # 本地工作台连接层，5 例
 │   ├── projects.test.mjs        # 论文项目登记册 + 启动握手，6 例
 │   ├── sync.test.mjs            # 网页与 MiniApp 界面逐字节一致，4 例
-│   └── server-routes.test.mjs   # 项目/启动/静态资源路由，6 例
+│   └── server-routes.test.mjs   # 项目/启动/静态资源路由，9 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css

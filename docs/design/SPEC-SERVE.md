@@ -40,7 +40,13 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 - `--allow-build` 单独控制 shell 编译；不要对不可信项目开。
   章节写入用同目录临时文件 + `os.replace`，路径必须落在项目根内；不接受新文件、
   删除、改名或 `..`；
+  （章节目录级的新建 / 改名 / 删除是另一组接口，见下表：路径只许项目内的普通
+  `.tex` 文件，`..`、绝对路径、软链、非 `.tex` 一律拒；改名只改文件名，
+  不动正文里的 `\input` 引用；删除前先扫引用，被引用则 409 拦下，`force` 才删。）
 - audit / brief / status 仍然不落盘；
+- `POST /api/samples/guide` 是唯一的例外：**它会写盘，但只写
+  `~/.factscribe/samples/guide`**（内置示例论文的落地目录），用户的论文一个字不动，
+  因此不需要 `--allow-write`，也不需要先选项目；
 - 不做 CORS；推荐由 Mini FactScribe 的 Node 服务做同机代理，避免浏览器跨源。
 
 ## 3. 接口
@@ -54,7 +60,11 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 | GET | `/api/project` | 项目投影：节（file/text）、事实、来源、bib；`read_only` 标明能不能写 |
 | GET | `/api/evidence` | 证据冻结状态：声明、lock、mismatch、unfrozen、最后一条日志 |
 | PUT | `/api/sections` | 写一节：`{file,text}`；file 必须在审计闭包内且是 `.tex` |
+| POST | `/api/sections/create` | 新建一节：`{file,text?}`；file 不得已存在，父目录须已在项目内；默认正文 `\section{新章节}\n`；需 `--allow-write` |
+| POST | `/api/sections/rename` | 改名：`{from,to}`；to 不得已存在；**只改文件名，不改正文里的 `\input` 引用**；需 `--allow-write` |
+| POST | `/api/sections/delete` | 删一节：`{file,force?}`；正文还引用它就 409 `SECTION_REFERENCED`（附引用位置），`force:true` 才删；需 `--allow-write` |
 | POST | `/api/facts` | 追加一条事实：字段同 `fact add`；工具仍不代签 |
+| POST | `/api/samples/guide` | 装内置示例论文到 `~/.factscribe/samples/guide`：`{reset?}`；**不需要** `--allow-write`（它只写自己的示例目录）；不需要已选项目 |
 | POST | `/api/evidence/freeze` | 冻结当前 `[evidence]`；`{reason?}`；需 `--allow-write` |
 | POST | `/api/evidence/unfreeze` | 解冻；`{reason, at?}`；`reason` 必填；需 `--allow-write` |
 | POST | `/api/build` | 编译 PDF；需 `--allow-build`；返回 exit / output_text / pdf_bytes |
@@ -95,3 +105,7 @@ HTTP 400 = 配置/项目错；401 = token 缺失或不符；404 = 未知接口�
 `tests/test_serve.py`（14 例）：health 免鉴权、401、status/brief/audit 形状、
 红判定的 HTTP 200、未知接口 404、坏项目/非回环拒绝、只读不写项目；
 可写模式的项目投影、章节往返、闭包外拒绝、追加事实、证据冻结/解冻。
+
+`tests/test_sample_guide.py`（7 例，临时 HOME）：首次装出目录与章节、
+第二次不覆盖用户改动、`reset:true` 恢复、无 token 401、只读服务也能装、
+示例本身审计仍是 2 红（`UNMATCHED_NUMBER` 的 47.3 与 `MISSING_CITE` 的 ghost2024）。

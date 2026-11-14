@@ -2,7 +2,8 @@
 // 不 spawn 真 Python——启动失败路径用「不是论文项目」验证，避免测试依赖本机装了 factscribe。
 
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -12,12 +13,34 @@ import { after, before, test } from 'node:test';
 import { start } from '../miniapp/node/server.mjs';
 
 const PLUGIN_ROOT = new URL('..', import.meta.url).pathname;
+// 仓库根：包路径指过去，python3 -m factscribe.samples 才 import 得到。
+const REPO_ROOT = new URL('../../..', import.meta.url).pathname;
+
+/** 这台机器能不能 import factscribe（装示例要靠它）。 */
+function pythonCanImportSamples() {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn('python3', ['-c', 'import factscribe.samples'], {
+        stdio: 'ignore',
+        shell: false,
+        env: { ...process.env, PYTHONPATH: [REPO_ROOT, process.env.PYTHONPATH].filter(Boolean).join(':') },
+      });
+    } catch {
+      resolve(false);
+      return;
+    }
+    child.once('error', () => resolve(false));
+    child.once('exit', (code) => resolve(code === 0));
+  });
+}
 
 let home;
 let dataDir;
 let base;
 let dispose;
 let savedHome;
+let savedPythonPath;
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -51,6 +74,10 @@ before(async () => {
   mkdirSync(dataDir, { recursive: true });
   savedHome = process.env.HOME;
   process.env.HOME = home;
+  // 装示例靠 `python3 -m factscribe.samples`：把仓库根放进包路径，
+  // 这台机器没装 factscribe 也能 import 到源码。
+  savedPythonPath = process.env.PYTHONPATH;
+  process.env.PYTHONPATH = [REPO_ROOT, savedPythonPath].filter(Boolean).join(':');
   const port = await freePort();
   const controller = new AbortController();
   ({ dispose } = await start({
@@ -66,6 +93,8 @@ before(async () => {
 after(async () => {
   if (dispose) await dispose();
   process.env.HOME = savedHome;
+  if (savedPythonPath === undefined) delete process.env.PYTHONPATH;
+  else process.env.PYTHONPATH = savedPythonPath;
   rmSync(home, { recursive: true, force: true });
 });
 
@@ -231,4 +260,169 @@ test('报告代理：列表与动作都转发，上游的 403 原样带回', asy
   } finally {
     await new Promise((resolve) => upstream.close(resolve));
   }
+});
+
+test('章节增删改代理：create / rename / delete 三条都转发，409 原样带回', async () => {
+  const seen = [];
+  const upstream = createServer((request, response) => {
+    const reply = (code, body) => {
+      response.writeHead(code, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    if (request.url === '/api/health') {
+      return reply(200, { ok: true, service: 'workbench' });
+    }
+    if (request.url === '/api/capabilities') {
+      return reply(200, { ok: true, engine: 'python' });
+    }
+    if (request.url.startsWith('/api/sections/')) {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        const parsed = JSON.parse(body || '{}');
+        seen.push({ path: request.url, body: parsed });
+        if (request.url === '/api/sections/delete') {
+          return reply(409, {
+            ok: false,
+            error: {
+              code: 'SECTION_REFERENCED',
+              message: '正文还在引用它',
+              references: [{ file: 'main.tex', line: 7 }],
+            },
+          });
+        }
+        return reply(200, { ok: true, file: parsed.file || parsed.to || '' });
+      });
+      return;
+    }
+    return reply(404, { ok: false, error: { code: 'NOT_FOUND', message: 'no' } });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = 'http://127.0.0.1:' + upstream.address().port;
+  try {
+    const connect = await call('/api/workbench', {
+      method: 'PUT',
+      body: JSON.stringify({ url: upstreamUrl, token: 'upstream-token' }),
+    });
+    assert.equal(connect.status, 200, JSON.stringify(connect.body));
+
+    const created = await call('/api/workbench/sections/create', {
+      method: 'POST',
+      body: JSON.stringify({ file: 'sections/99-new.tex' }),
+    });
+    assert.equal(created.status, 200);
+    assert.equal(created.body.file, 'sections/99-new.tex');
+
+    const renamed = await call('/api/workbench/sections/rename', {
+      method: 'POST',
+      body: JSON.stringify({ from: 'sections/99-new.tex', to: 'sections/99-b.tex' }),
+    });
+    assert.equal(renamed.status, 200);
+    assert.equal(renamed.body.file, 'sections/99-b.tex');
+
+    const deleted = await call('/api/workbench/sections/delete', {
+      method: 'POST',
+      body: JSON.stringify({ file: 'sections/99-b.tex' }),
+    });
+    assert.equal(deleted.status, 409, '上游的 409（还被引用）要原样带回');
+    assert.equal(deleted.body.error.code, 'SECTION_REFERENCED');
+    assert.equal(deleted.body.error.references[0].file, 'main.tex');
+
+    assert.deepEqual(seen.map((s) => s.path), [
+      '/api/sections/create',
+      '/api/sections/rename',
+      '/api/sections/delete',
+    ], '三条代理路径都要打到上游');
+    assert.equal(seen[1].body.from, 'sections/99-new.tex');
+    assert.equal(seen[1].body.to, 'sections/99-b.tex');
+  } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('示例论文代理：转发到工作台的 /api/samples/guide，上游的 400 原样带回', async () => {
+  const seen = [];
+  const upstream = createServer((request, response) => {
+    const reply = (code, body) => {
+      response.writeHead(code, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    if (request.url === '/api/health') {
+      return reply(200, { ok: true, service: 'workbench' });
+    }
+    if (request.url === '/api/capabilities') {
+      return reply(200, { ok: true, engine: 'python' });
+    }
+    if (request.url === '/api/samples/guide' && request.method === 'POST') {
+      let body = '';
+      request.on('data', (chunk) => { body += chunk; });
+      request.on('end', () => {
+        const parsed = JSON.parse(body || '{}');
+        seen.push(parsed);
+        if (parsed.reset) {
+          return reply(400, {
+            ok: false,
+            error: { code: 'SAMPLE_COPY_FAILED', message: '复制示例失败' },
+          });
+        }
+        return reply(200, { ok: true, path: '/tmp/guide', created: true, reset: false });
+      });
+      return;
+    }
+    return reply(404, { ok: false, error: { code: 'NOT_FOUND', message: 'no' } });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = 'http://127.0.0.1:' + upstream.address().port;
+  try {
+    const connect = await call('/api/workbench', {
+      method: 'PUT',
+      body: JSON.stringify({ url: upstreamUrl, token: 'upstream-token' }),
+    });
+    assert.equal(connect.status, 200, JSON.stringify(connect.body));
+
+    const res = await call('/api/workbench/samples/guide', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.path, '/tmp/guide');
+    assert.deepEqual(seen, [{ reset: false }], '要 POST 到上游的 /api/samples/guide');
+
+    const bad = await call('/api/workbench/samples/guide', {
+      method: 'POST',
+      body: JSON.stringify({ reset: true }),
+    });
+    assert.equal(bad.status, 400, '上游的 400 要原样带回');
+    assert.equal(bad.body.error.code, 'SAMPLE_COPY_FAILED');
+    assert.deepEqual(seen[1], { reset: true }, 'reset 要传给上游');
+  } finally {
+    await call('/api/workbench', { method: 'DELETE' });
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('示例论文：还没连工作台时也让 Python 装一份（兜底）', async (t) => {
+  const usable = await pythonCanImportSamples();
+  if (!usable) {
+    t.skip('这台机器没有能 import factscribe 的 python3');
+    return;
+  }
+  await call('/api/workbench', { method: 'DELETE' });  // 确保没有工作台在连
+  const res = await call('/api/workbench/samples/guide', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.ok, true);
+  assert.match(res.body.path, /[/\\]samples[/\\]guide$/);
+  assert.equal(res.body.created, true);
+  assert.ok(existsSync(join(res.body.path, 'paperkit.toml')), '示例要真的落地');
+  assert.ok(existsSync(join(res.body.path, 'sections')), '示例要带着章节');
+
+  const again = await call('/api/workbench/samples/guide', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.created, false, '已存在且没要求重置 → 不重写');
 });

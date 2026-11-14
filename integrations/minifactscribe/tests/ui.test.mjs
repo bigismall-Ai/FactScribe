@@ -358,6 +358,75 @@ test('章节目录来自项目章节，当前节高亮，点一下切到那一�
   assert.match(jump, /workbench-section-select/, '目录点击要同步隐藏的下拉');
 });
 
+// --------------------------------------------- 10b. 章节增删改（目录级）
+
+test('章节目录能新建 / 改名 / 删除：三个按钮 id 与三条接口都要在', () => {
+  assert.match(HTML, /id="btn-wb-section-add"/, '目录标题右侧要有新建按钮');
+  assert.match(JS, /id="wb-section-rename"/, '每节要有改名按钮');
+  assert.match(JS, /id="wb-section-delete"/, '每节要有删除按钮');
+  assert.match(JS, /data-file=/, '两个小按钮要用 data-file 指明是哪一节');
+  for (const action of ['create', 'rename', 'delete']) {
+    assert.match(JS, new RegExp("wb\\('/sections/" + action + "'\\)"),
+      '增删改要走工作台接口：/sections/' + action);
+  }
+});
+
+test('目录一项一行：主按钮切节，右侧两个小按钮', () => {
+  const block = JS.slice(JS.indexOf('function renderWorkbenchSections'),
+    JS.indexOf('/** 工作台是不是只读'));
+  assert.ok(block.length > 0, '应有目录渲染函数');
+  assert.match(block, /wb-section-row/, '一行要有个行容器');
+  assert.match(block, /data-section=/, '主按钮负责切节');
+  assert.match(block, /data-action="rename"/, '要有改名动作');
+  assert.match(block, /data-action="delete"/, '要有删除动作');
+  assert.match(CSS, /\.wb-section-row\s*\{[^}]*display:\s*flex/, '行容器要横排');
+  assert.match(CSS, /\.wb-section-act\s*\{/, '小按钮要有样式');
+});
+
+test('新建 / 改名 / 删除都要先问人，删除被引用时要拦一次', () => {
+  assert.match(JS, /prompt\(/, '新建与改名要用 prompt 问文件名');
+  assert.match(JS, /confirm\(/, '删除要先确认');
+  const del = JS.slice(JS.indexOf('async function deleteWorkbenchSection'),
+    JS.indexOf('/** 目录里的操作按钮'));
+  assert.ok(del.length > 0, '应有删除函数');
+  assert.match(del, /409/, '被引用（409）要先拦一次');
+  assert.match(del, /force/, '确认之后才带 force 重试');
+  assert.match(del, /references/, '要把引用位置说清楚');
+  const rename = JS.slice(JS.indexOf('async function renameWorkbenchSection'),
+    JS.indexOf('async function deleteWorkbenchSection'));
+  assert.match(rename, /引用/, '改名要说清「只改文件名，不动正文引用」');
+});
+
+test('只读工作台：增删改三个按钮都灰掉并说明原因', () => {
+  assert.match(JS, /function workbenchReadOnly/, '应有只读判定');
+  assert.match(JS, /read_only/, '只读来自服务端的 read_only');
+  const block = JS.slice(JS.indexOf('function renderWorkbenchSections'),
+    JS.indexOf('/** 工作台是不是只读'));
+  assert.match(block, /disabled/, '只读时要禁用按钮');
+  assert.match(JS, /wb\.readOnly/, '要说明为什么灰掉');
+});
+
+test('顶部冗余信息压缩到右栏 #wb-meta：大卡片与 panel-head 都不要了', () => {
+  assert.match(HTML, /id="wb-meta"/, '右栏要有紧凑信息行');
+  assert.doesNotMatch(HTML, /id="workbench-summary"/, '顶部大卡片要去掉');
+  const panel = HTML.slice(HTML.indexOf('id="panel-workbench"'),
+    HTML.indexOf('id="panel-facts"'));
+  assert.ok(panel.length > 0, '应能找到工作台面板');
+  assert.doesNotMatch(panel, /class="panel-head"/, '工作台页签的大标题要去掉');
+  // 顺序：问题 → 紧凑信息 → AI 入口
+  const metaAt = panel.indexOf('id="wb-meta"');
+  const issuesAt = panel.indexOf('id="workbench-audit"');
+  const aiAt = panel.indexOf('id="wb-ai-input"');
+  assert.ok(issuesAt > 0 && metaAt > issuesAt && aiAt > metaAt,
+    '右栏顺序要是：问题 → 紧凑信息 → AI 入口');
+  const meta = JS.slice(JS.indexOf('function renderWbMeta'),
+    JS.indexOf('// ------------------------------------------------------- 章节增删改'));
+  assert.match(meta, /条事实/, '紧凑行要写事实条数');
+  assert.match(meta, /节/, '紧凑行要写节数');
+  assert.match(meta, /只读|可写/, '紧凑行要写可写/只读');
+  assert.match(meta, /title/, '根路径放 title 属性，不占屏');
+});
+
 test('预览走工作台接口：先编译再取 PDF，失败要把输出摊开', () => {
   const build = JS.slice(JS.indexOf('async function buildWbPreview'),
     JS.indexOf('/** 取 PDF 并塞进'));
@@ -748,4 +817,47 @@ test('显式主题压得住系统偏好：系统是暗色时点「浅」也要�
   const mediaAt = CSS.indexOf('@media (prefers-color-scheme: dark)');
   assert.ok(lightAt > mediaAt && darkAt > lightAt,
     '两套显式主题都要排在系统媒体查询之后');
+});
+
+// ------------------------------------------------------ 新手引导（示例论文）
+
+test('新手引导的四个入口都要在：打开 / 引导条 / 重置 / 关闭', () => {
+  for (const id of ['btn-guide-open', 'guide-bar', 'btn-guide-reset', 'btn-guide-close']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '页面要有 #' + id);
+  }
+  assert.match(HTML, /id="guide-card"/, '项目页要有引导卡片');
+  assert.match(HTML, /用一份示例论文走一遍/, '卡片要说明这是示例，不动用户的论文');
+});
+
+test('装示例走工作台接口：网页直连 Python，MiniApp 走 Node 代理', () => {
+  assert.match(JS, /wb\('\/samples\/guide'\)/, "JS 要调 wb('/samples/guide')");
+  assert.match(JS, /method:\s*'POST'[\s\S]{0,160}reset/, '装示例是 POST，带 reset');
+});
+
+test('引导条的五个勾由状态推导：不许假勾', () => {
+  const block = JS.slice(JS.indexOf('function guideProgress'), JS.indexOf('function renderGuide'));
+  assert.ok(block.length > 0, '要有 guideProgress 这个推导函数');
+  assert.match(block, /state\.currentSection/, '第 ① 步看当前选中的节');
+  assert.match(block, /findings\.length > 0/, '第 ② 步看有没有红/黄');
+  assert.match(block, /state\.guide\.edited/, '第 ③ 步看有没有改过');
+  assert.match(block, /state\.guide\.auditedAfterEdit/, '第 ④ 步看改后有没有重跑审计');
+  assert.match(block, /audit\?\.exit\) === 0/, '第 ⑤ 步看退出码是不是 0');
+  // 勾由状态算出来：渲染里不许写死一个「已完成」。
+  const render = JS.slice(JS.indexOf('function renderGuide'), JS.indexOf('async function openGuideSample'));
+  assert.match(render, /guideProgress\(\)/, '渲染要问 guideProgress 要进度');
+  assert.match(render, /ok \? '✓' : '○'/, '做完是 ✓，没做是 ○（不靠颜色单独承载）');
+});
+
+test('引导状态记在 localStorage 的 factscribe.guide 里（值＝项目路径）', () => {
+  assert.match(JS, /factscribe\.guide/, '要用 factscribe.guide 这个键');
+  assert.match(JS, /localStorage\.setItem\(GUIDE_KEY/, '要把路径写回去');
+  assert.match(JS, /localStorage\.getItem\(GUIDE_KEY/, '刷新后要读得回来');
+});
+
+test('引导文案进字典：中英各一套', () => {
+  for (const key of ['guide.title', 'guide.desc', 'guide.bar', 'guide.step1', 'guide.step2',
+    'guide.step3', 'guide.step4', 'guide.step5', 'guide.hint', 'guide.readyMini',
+    'btn.guideOpen', 'btn.guideOpenExists', 'btn.guideReset', 'btn.guideClose']) {
+    assert.match(JS, new RegExp("'" + key + "'"), '字典里要有 ' + key);
+  }
 });

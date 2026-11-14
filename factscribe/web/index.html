@@ -51,6 +51,8 @@
           <div class="sidebar-block-head">
             <h2 class="sidebar-block-title" data-i18n="nav.sections">章节目录</h2>
             <span id="wb-section-count" class="muted-note"></span>
+            <button id="btn-wb-section-add" class="sidebar-block-add" type="button"
+              title="新建章节" aria-label="新建章节" data-i18n-title="wb.sectionAdd">＋</button>
           </div>
           <div id="wb-section-list" class="wb-section-list"></div>
           <!-- 隐藏的下拉：现有逻辑与测试都认它，目录按钮改动时同步它 -->
@@ -327,20 +329,31 @@
         </section>
 
         <section id="panel-workbench" class="panel" role="tabpanel" hidden>
-          <div class="panel-head">
-            <div>
-              <h2 data-i18n="page.workbench">本地工作台</h2>
-              <p class="panel-desc">这里跑真实论文项目：章节、源码与预览、要处理的问题。左侧正文与事实账仍是本地草稿，两者不是同一个项目；选文件夹与启动服务在「项目」页。</p>
+          <!-- 大标题从屏上撤了，但面板仍要有个能翻的页标题（读屏要靠它定位）。 -->
+          <h2 class="sr-only" data-i18n="page.workbench">本地工作台</h2>
+          <!-- 新手引导条：只在打开示例论文后出现；五个勾由当前状态推导。 -->
+          <div id="guide-bar" class="guide-bar" role="region" aria-label="新手引导" hidden>
+            <div class="guide-bar-head">
+              <span class="guide-bar-title" data-i18n="guide.bar">新手引导</span>
+              <span id="guide-steps" class="guide-steps"></span>
+              <div class="panel-actions">
+                <button id="btn-guide-reset" class="btn" type="button" data-i18n="btn.guideReset">重置示例</button>
+                <button id="btn-guide-close" class="btn" type="button" data-i18n="btn.guideClose">关闭引导</button>
+              </div>
             </div>
+            <p id="guide-hint" class="guide-hint" hidden></p>
+          </div>
+
+          <!-- 顶部只留一行操作条：大标题与说明移到右栏的紧凑信息行（#wb-meta）。 -->
+          <div class="wb-toolbar">
+            <span id="workbench-badge" class="muted-note">未连接</span>
+            <span id="wb-build-state" class="muted-note"></span>
             <div class="panel-actions">
-              <span id="workbench-badge" class="muted-note">未连接</span>
-              <span id="wb-build-state" class="muted-note"></span>
               <button id="btn-wb-build" class="btn" type="button" data-i18n="btn.buildPdf">编译 PDF</button>
               <button id="btn-wb-pdf" class="btn" type="button" hidden data-i18n="btn.openPdf">打开 PDF</button>
             </div>
           </div>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
-          <div id="workbench-summary" class="audit-summary"></div>
 
           <!-- 两栏工作区：源码+预览 / 要处理的问题+AI。章节入口在左侧栏。 -->
           <div id="wb-columns" class="wb-columns">
@@ -383,6 +396,8 @@
                 </div>
               </div>
               <div id="workbench-audit" class="issues-list"></div>
+              <p id="wb-meta" class="wb-meta" title="左侧正文与事实账是本地草稿，与工作台项目不是同一个项目"
+                data-note="左侧正文与事实账是本地草稿，与工作台项目不是同一个项目"></p>
 
               <div class="wb-col-head wb-ai-head">
                 <h3>和 AI 说</h3>
@@ -491,6 +506,17 @@
             </div>
           </div>
           <p id="project-status" class="muted-note" role="status" aria-live="polite"></p>
+
+          <!-- 新手引导：一份示例论文，走一遍「看问题 → 改一个数 → 变绿」。 -->
+          <section class="guide-card" id="guide-card" aria-labelledby="guide-card-title">
+            <div class="guide-card-head">
+              <h3 id="guide-card-title" data-i18n="guide.title">新手引导</h3>
+              <button id="btn-guide-open" class="btn btn-primary" type="button">打开示例论文</button>
+            </div>
+            <p class="panel-desc" data-i18n="guide.desc">用一份示例论文走一遍：看问题 → 改一个数 → 变绿。不会动你的论文。</p>
+            <p id="guide-card-note" class="muted-note" role="status" aria-live="polite"></p>
+          </section>
+
           <details class="project-block" id="wb-project" open>
             <summary id="wb-project-summary">论文项目（点开切换）</summary>
             <div class="project-head">

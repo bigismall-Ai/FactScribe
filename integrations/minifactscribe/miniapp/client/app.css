@@ -49,6 +49,57 @@
   }
 }
 
+/* ---------- 显式主题（用户手动选过浅/深） ----------
+   默认不写 data-theme，跟随系统；一旦用户点了「浅」或「深」，就写死。
+   html[attr] 的特异性 (0,1,1) 高过媒体查询里的 :root (0,1,0)，
+   所以系统是暗色时点「浅」也真的能切回浅色，不会被媒体查询顶回去。
+   色板照抄上面两套，一个颜色都没自创。 */
+html[data-theme='light'] {
+  color-scheme: light;
+  --mcode-bg: #ffffff;
+  --mcode-bg-secondary: #f5f5f5;
+  --mcode-surface: #ffffff;
+  --mcode-surface-muted: #fafafa;
+  --mcode-text: #171717;
+  --mcode-text-muted: #666666;
+  --mcode-text-subtle: #adadad;
+  --mcode-border: #0a0a0a14;
+  --mcode-border-strong: #0a0a0af2;
+  --mcode-accent: #0094fc;
+  --mcode-success: #04b54b;
+  --mcode-warning: #f56811;
+  --mcode-danger: #f73646;
+  --mcode-primary-action-bg: #171717;
+  --mcode-primary-action-text: #ffffff;
+  --mcode-danger-soft: #f7364614;
+  --mcode-warning-soft: #f5681114;
+  --mcode-success-soft: #04b54b14;
+  --mcode-accent-soft: #0094fc14;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --mcode-bg: #171717;
+  --mcode-bg-secondary: #1c1c1c;
+  --mcode-surface: #262626;
+  --mcode-surface-muted: #262626;
+  --mcode-text: #ededed;
+  --mcode-text-muted: #949494;
+  --mcode-text-subtle: #666666;
+  --mcode-border: #ffffff14;
+  --mcode-border-strong: #fffffff2;
+  --mcode-accent: #0077d9;
+  --mcode-success: #009c3d;
+  --mcode-warning: #e25507;
+  --mcode-danger: #e31937;
+  --mcode-primary-action-bg: #ffffff;
+  --mcode-primary-action-text: #171717;
+  --mcode-danger-soft: #e3193722;
+  --mcode-warning-soft: #e2550722;
+  --mcode-success-soft: #009c3d22;
+  --mcode-accent-soft: #0077d922;
+}
+
 * { box-sizing: border-box; }
 
 /* [hidden] 是显示开关，必须压过组件自己声明的 display:flex。
@@ -181,9 +232,58 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 }
 .nav-item:hover { background: var(--mcode-surface-muted); color: var(--mcode-text); }
 .nav-item.is-active { background: var(--mcode-surface-muted); color: var(--mcode-text); font-weight: 500; box-shadow: inset 2px 0 0 var(--mcode-accent); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
 .sidebar-foot { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
-.boundary { font-size: 12px; line-height: 18px; color: var(--mcode-text-muted); }
-.boundary b { color: var(--mcode-text); font-weight: 600; }
+
+/* ---------- 侧栏底部偏好：语言 / 主题 ---------- */
+/* 这是设置，不是入口：字小、颜色安静、排在导航下面，不抢主导航的注意力。 */
+.prefs { display: flex; flex-direction: column; gap: 8px; }
+.prefs-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.prefs-group {
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--mcode-border); border-radius: 8px; overflow: hidden;
+  background: var(--mcode-surface-muted);
+}
+.prefs-btn {
+  padding: 3px 9px; border: none; background: transparent; cursor: pointer;
+  color: var(--mcode-text-muted); font-size: 12px; line-height: 16px; font-family: inherit;
+}
+.prefs-btn + .prefs-btn { border-left: 1px solid var(--mcode-border); }
+.prefs-btn:hover { color: var(--mcode-text); }
+.prefs-btn.is-active {
+  background: var(--mcode-surface); color: var(--mcode-text); font-weight: 600;
+}
+.prefs-btn:focus-visible { outline: 2px solid var(--mcode-accent); outline-offset: -1px; }
+
+/* 顶部的项目切换按钮：换的是整个项目，不是翻一页——所以是按钮样，不是导航项 */
+.project-switch {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; margin-bottom: 14px;
+  border: 1px solid var(--mcode-border); border-radius: 10px;
+  background: var(--mcode-surface-muted); color: var(--mcode-text);
+  font-family: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.project-switch:hover { border-color: var(--mcode-accent); }
+.project-switch:focus-visible { outline: 2px solid var(--mcode-accent); outline-offset: 1px; }
+.project-switch-label { flex: none; color: var(--mcode-text-muted); font-size: 12px; }
+.project-switch-name {
+  flex: 1; min-width: 0; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.project-switch-caret { flex: none; color: var(--mcode-text-muted); font-size: 11px; }
+
+/* 侧栏里的分组：章节目录 */
+.sidebar-block { display: flex; flex-direction: column; gap: 6px; min-height: 0; margin-bottom: 16px; }
+.sidebar-block-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 0 4px;
+}
+.sidebar-block-title {
+  margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  color: var(--mcode-text-muted);
+}
+/* 章节多的时候目录自己滚，别把下面的导航顶走 */
+.sidebar .wb-section-list { max-height: calc(100vh - 320px); overflow-y: auto; }
 
 .main { flex: 1; min-width: 0; padding: 24px; display: flex; flex-direction: column; gap: 24px; }
 .panel { display: none; flex-direction: column; gap: 16px; }
@@ -407,38 +507,21 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 @media (max-width: 900px) {
   .ledger-layout { grid-template-columns: 1fr; }
   .protect-grid { grid-template-columns: 1fr; }
-  .layout { flex-direction: column; }
-  .sidebar {
-    width: 100%; height: auto;
-    position: sticky; top: 55px; z-index: 10;
-    flex-direction: row; gap: 4px; overflow-x: auto;
-    border-right: none; border-bottom: 1px solid var(--mcode-border);
-    padding: 8px 12px;
-  }
-  .nav-item { white-space: nowrap; flex: none; }
-  .nav-item.is-active { box-shadow: inset 0 -2px 0 var(--mcode-accent); }
-  /* 窄屏：边界声明保留（它是这个工具的核心边界，不能藏），单独占一行 */
-  .sidebar {
-    flex-wrap: wrap;
-  }
-  .sidebar-foot {
-    display: block; flex: none; flex-basis: 100%;
-    margin-top: 0; padding-top: 2px;
-  }
-  .sidebar-foot .boundary { font-size: 11px; line-height: 16px; }
-  .sidebar-foot .boundary br { display: none; }
-  .sidebar-foot .boundary b { font-weight: 600; }
+  /* 窄屏：侧栏不转横排（章节树要纵向空间），只缩窄，仍然看得见 */
+  .layout { flex-direction: row; }
+  .sidebar { width: 180px; padding: 12px 8px; }
+  .project-switch { padding: 8px 10px; font-size: 12px; gap: 6px; }
+  .nav-item { padding: 7px 8px; font-size: 12px; }
+  .sidebar .wb-section-list { max-height: calc(100vh - 280px); }
   .main { padding: 16px; }
   .topbar { flex-wrap: wrap; }
   .project-field { order: 3; flex-basis: 100%; }
   .stale-banner, .confirm-banner { flex-wrap: wrap; }
 }
 
-/* 手机：导航横着滚，页面一律单列——窄屏下挤三栏等于什么都看不见 */
+/* 手机：页面一律单列——窄屏下挤两栏等于什么都看不见 */
 @media (max-width: 720px) {
-  .sidebar { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; }
-  .nav-item { white-space: nowrap; flex: none; }
-  .sidebar-foot { display: block; flex: none; flex-basis: 100%; }
+  .sidebar { width: 180px; }
   .panel-narrow { max-width: 100%; }
   .wb-columns { grid-template-columns: 1fr; }
 }
@@ -508,11 +591,11 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   word-break: break-word;
 }
 
-/* ---------- 工作台三栏：章节目录 / 源码+预览 / 问题+AI ---------- */
-/* 左中右各司其职；窄于 1100px 就叠成一列，目录改成横向滚动。 */
+/* ---------- 工作台两栏：源码+预览 / 问题+AI ---------- */
+/* 章节目录搬到左侧栏了；这里只剩两栏，窄于 1100px 就叠成一列。 */
 .wb-columns {
   display: grid;
-  grid-template-columns: 220px minmax(0,1fr) 360px;
+  grid-template-columns: minmax(0,1fr) 360px;
   gap: 16px;
   align-items: start;
 }
@@ -573,9 +656,6 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
 
 @media (max-width: 1100px) {
   .wb-columns { grid-template-columns: 1fr; }
-  /* 单列时目录横着滚：章节多的时候不用上下找 */
-  .wb-section-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
-  .wb-section-item { width: auto; min-width: 150px; flex: none; }
   .wb-pane .editor { min-height: 300px; }
   #wb-preview-pdf { height: 480px; }
 }

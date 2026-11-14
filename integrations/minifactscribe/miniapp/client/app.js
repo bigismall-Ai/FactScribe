@@ -67,7 +67,441 @@ const state = {
   wbReports: null,
   wbMode: 'source',
   wbPdfUrl: '',
+  // 界面偏好：语言与主题。跟项目数据无关，存 localStorage，刷新还在。
+  lang: 'zh',
+  theme: '',
 };
+
+// ------------------------------------------------------------------ 界面语言与主题
+// 语言与主题是「这台机器的偏好」，不是项目的一部分：存 localStorage。
+// 默认语言中文；默认主题跟随系统（不写 data-theme，用户点过才写死）。
+//
+// 本步覆盖：导航与页标题、主要按钮、字段标签、表格表头、空状态提示、
+// 报告页的状态词、侧栏项目按钮、两个切换按钮本身。
+// 不翻译：Python 引擎产出的审计消息与违规码说明、论文正文与项目名；
+// 长段说明文字保留中文（那是解释，不是标签）。
+//
+// 键名用短名（nav.* / page.* / btn.* / field.* / th.* / empty.* / report.* / state.* / prefs.*）。
+
+const I18N = {
+  zh: {
+    'nav.sections': '章节目录',
+    'nav.facts': '工作台事实账',
+    'nav.reports': '实验报告',
+    'page.manuscript': '正文',
+    'page.ledger': '事实账',
+    'page.refs': '引用',
+    'page.protect': '改写保护',
+    'page.audit': '审计',
+    'page.workbench': '本地工作台',
+    'page.project': '项目',
+    'page.ai': 'AI 起草',
+    'page.reports': '实验报告',
+    'btn.check': '检查',
+    'btn.lock': '封存',
+    'btn.sign': '签收',
+    'btn.import': '导入',
+    'btn.saveSection': '保存本节',
+    'btn.buildPdf': '编译 PDF',
+    'btn.openPdf': '打开 PDF',
+    'btn.loadProject': '载入工作台项目',
+    'btn.addProject': '加入项目列表',
+    'btn.removeProject': '从列表移除',
+    'btn.useHostProject': '用当前对话项目',
+    'btn.startConnect': '启动并连接',
+    'btn.stopWorkbench': '停止工作台',
+    'btn.genCandidate': '生成候选',
+    'btn.stop': '停止',
+    'btn.acceptWrite': '采纳并写入本节',
+    'btn.runAudit': '运行审计',
+    'btn.loadDemo': '载入演示数据',
+    'btn.addFact': '新增事实',
+    'btn.appendFact': '追加事实',
+    'btn.verifyOnline': '联网核验存在性',
+    'btn.compareProtect': '比对保护面',
+    'btn.exportReport': '报告 Markdown',
+    'btn.exportMatrix': '追溯矩阵',
+    'btn.exportManifest': '可复现清单',
+    'btn.close': '关闭',
+    'btn.source': '源码',
+    'btn.preview': '预览',
+    'btn.buildPreview': '编译预览',
+    'btn.wbAudit': '用工作台审计',
+    'btn.sendToAi': '发给 AI 起草',
+    'btn.goToAi': '去 AI 起草',
+    'btn.freeze': '冻结',
+    'btn.unfreeze': '解冻',
+    'btn.connect': '连接',
+    'btn.disconnect': '断开',
+    'btn.savePython': '保存解释器设置',
+    'btn.rerunAudit': '重新审计',
+    'btn.confirmOverwrite': '确认覆盖',
+    'btn.confirmDelete': '确认删除',
+    'btn.cancel': '取消',
+    'field.recentProjects': '最近项目',
+    'field.projectFolder': '项目文件夹',
+    'field.signer': '签收人',
+    'field.pickSection': '选择一节',
+    'field.report': '报告',
+    'field.id': 'ID',
+    'field.claim': '主张',
+    'field.value': '值',
+    'field.source': '来源',
+    'field.locator': '定位',
+    'field.confidence': '置信度',
+    'field.expr': '算式（可选，派生事实）',
+    'field.notes': '备注',
+    'th.id': 'ID',
+    'th.claim': '主张',
+    'th.value': '值',
+    'th.source': '来源',
+    'th.status': '状态',
+    'th.actions': '操作',
+    'empty.noReports': '没有找到实验报告（experiments/*/reports/*.report.toml）',
+    'empty.noFacts': '账里还没有事实。',
+    'empty.noRedYellow': '没有红黄项。',
+    'empty.noReportSelected': '先选一份报告。',
+    'empty.noReviewCard': '还没有审阅卡：先检查并封存（把哈希钉住）才出卡。',
+    'empty.needWorkbenchReports': '先载入工作台项目，再看实验报告。',
+    'empty.needWorkbenchCard': '先载入工作台项目，再看审阅卡。',
+    'report.final': 'final',
+    'report.partial': 'partial',
+    'report.superseded': 'superseded',
+    'report.unknownStatus': '状态未知',
+    'report.locked': '已封存',
+    'report.lockStale': '封存已失效',
+    'report.unlocked': '未封存',
+    'report.signed': '已签收',
+    'report.unsigned': '未签收',
+    'report.readOnly': '只读',
+    'state.noChange': '无改动',
+    'state.unsaved': '未保存',
+    'state.saving': '保存中…',
+    'state.saved': '已保存',
+    'state.saveFailed': '保存失败 · 点此重试',
+    'state.devPreview': '开发预览：草稿不写盘',
+    'state.unaudited': '未审计',
+    'state.stale': '结果已过期',
+    'state.verdictGreen': '绿牌',
+    'state.verdictRed': '红牌',
+    'state.verdictYellow': '黄牌',
+    'state.count': '{n} 处',
+    'state.sentenceGreen': '绿牌：账有据、据未改、文有绑。',
+    'state.sentenceRed': '红牌 {n} 处，必须改。',
+    'state.sentenceYellow': '黄牌 {n} 处，待人判断。',
+    'state.exitCode': '（退出码 {n}）',
+    'state.unauditedTitle': '还没跑过审计——点右上角「运行审计」',
+    'state.staleHint': '内容改过但没重跑审计。上次结论：',
+    'state.actionDone': '{what}完成',
+    'state.sameAsSaved': '当前内容与上次保存一致',
+    'state.autosaveHint': '改动会自动保存到本地数据目录',
+    'prefs.themeLight': '浅',
+    'prefs.themeDark': '深',
+    'prefs.langZh': '中文',
+    'prefs.langEn': 'English',
+    'prefs.groupLang': '语言',
+    'prefs.groupTheme': '主题',
+    'ph.claim': '一句话说清这条事实在讲什么',
+    'ph.claimShort': '一句话说清这条事实',
+    'ph.signer': '谁签的（签收必填，工具不替你猜）',
+    'token.paste': '粘贴 token',
+    'token.need': '需要 token',
+    'sidebar.noProject': '未选择',
+  },
+  en: {
+    'nav.sections': 'Sections',
+    'nav.facts': 'Workbench ledger',
+    'nav.reports': 'Experiment reports',
+    'page.manuscript': 'Manuscript',
+    'page.ledger': 'Ledger',
+    'page.refs': 'References',
+    'page.protect': 'Rewrite guard',
+    'page.audit': 'Audit',
+    'page.workbench': 'Local workbench',
+    'page.project': 'Project',
+    'page.ai': 'AI draft',
+    'page.reports': 'Experiment reports',
+    'btn.check': 'Check',
+    'btn.lock': 'Lock',
+    'btn.sign': 'Sign',
+    'btn.import': 'Import',
+    'btn.saveSection': 'Save section',
+    'btn.buildPdf': 'Build PDF',
+    'btn.openPdf': 'Open PDF',
+    'btn.loadProject': 'Load workbench project',
+    'btn.addProject': 'Add to project list',
+    'btn.removeProject': 'Remove from list',
+    'btn.useHostProject': 'Use current chat project',
+    'btn.startConnect': 'Start and connect',
+    'btn.stopWorkbench': 'Stop workbench',
+    'btn.genCandidate': 'Generate draft',
+    'btn.stop': 'Stop',
+    'btn.acceptWrite': 'Accept and write to section',
+    'btn.runAudit': 'Run audit',
+    'btn.loadDemo': 'Load demo data',
+    'btn.addFact': 'Add fact',
+    'btn.appendFact': 'Append fact',
+    'btn.verifyOnline': 'Verify online',
+    'btn.compareProtect': 'Compare guard',
+    'btn.exportReport': 'Report Markdown',
+    'btn.exportMatrix': 'Trace matrix',
+    'btn.exportManifest': 'Reproducible manifest',
+    'btn.close': 'Close',
+    'btn.source': 'Source',
+    'btn.preview': 'Preview',
+    'btn.buildPreview': 'Build preview',
+    'btn.wbAudit': 'Audit with workbench',
+    'btn.sendToAi': 'Send to AI draft',
+    'btn.goToAi': 'Go to AI draft',
+    'btn.freeze': 'Freeze',
+    'btn.unfreeze': 'Unfreeze',
+    'btn.connect': 'Connect',
+    'btn.disconnect': 'Disconnect',
+    'btn.savePython': 'Save interpreter settings',
+    'btn.rerunAudit': 'Re-run audit',
+    'btn.confirmOverwrite': 'Confirm overwrite',
+    'btn.confirmDelete': 'Confirm delete',
+    'btn.cancel': 'Cancel',
+    'field.recentProjects': 'Recent projects',
+    'field.projectFolder': 'Project folder',
+    'field.signer': 'Signed by',
+    'field.pickSection': 'Pick a section',
+    'field.report': 'Report',
+    'field.id': 'ID',
+    'field.claim': 'Claim',
+    'field.value': 'Value',
+    'field.source': 'Source',
+    'field.locator': 'Locator',
+    'field.confidence': 'Confidence',
+    'field.expr': 'Formula (optional, derived fact)',
+    'field.notes': 'Notes',
+    'th.id': 'ID',
+    'th.claim': 'Claim',
+    'th.value': 'Value',
+    'th.source': 'Source',
+    'th.status': 'Status',
+    'th.actions': 'Actions',
+    'empty.noReports': 'No experiment reports found (experiments/*/reports/*.report.toml)',
+    'empty.noFacts': 'No facts in the ledger yet.',
+    'empty.noRedYellow': 'No red or yellow items.',
+    'empty.noReportSelected': 'Pick a report first.',
+    'empty.noReviewCard': 'No review card yet: run Check and Lock first.',
+    'empty.needWorkbenchReports': 'Load a workbench project first, then open reports.',
+    'empty.needWorkbenchCard': 'Load a workbench project first, then open the review card.',
+    'report.final': 'Final',
+    'report.partial': 'Partial',
+    'report.superseded': 'Superseded',
+    'report.unknownStatus': 'Unknown status',
+    'report.locked': 'Locked',
+    'report.lockStale': 'Lock expired',
+    'report.unlocked': 'Not locked',
+    'report.signed': 'Signed',
+    'report.unsigned': 'Not signed',
+    'report.readOnly': 'Read-only',
+    'state.noChange': 'No changes',
+    'state.unsaved': 'Unsaved',
+    'state.saving': 'Saving…',
+    'state.saved': 'Saved',
+    'state.saveFailed': 'Save failed · click to retry',
+    'state.devPreview': 'Dev preview: drafts are not written',
+    'state.unaudited': 'Not audited',
+    'state.stale': 'Result is outdated',
+    'state.verdictGreen': 'Green',
+    'state.verdictRed': 'Red',
+    'state.verdictYellow': 'Yellow',
+    'state.count': '{n} issues',
+    'state.sentenceGreen': 'Green: every number has a source, sources unchanged, claims bound.',
+    'state.sentenceRed': 'Red: {n} must be fixed.',
+    'state.sentenceYellow': 'Yellow: {n} need a human decision.',
+    'state.exitCode': '(exit code {n})',
+    'state.unauditedTitle': 'No audit yet — click “Run audit” at the top right',
+    'state.staleHint': 'Content changed but no re-run. Last result: ',
+    'state.actionDone': '{what} done',
+    'state.sameAsSaved': 'Same as the last save',
+    'state.autosaveHint': 'Changes are saved to the local data directory',
+    'prefs.themeLight': 'Light',
+    'prefs.themeDark': 'Dark',
+    'prefs.langZh': 'Chinese',
+    'prefs.langEn': 'English',
+    'prefs.groupLang': 'Language',
+    'prefs.groupTheme': 'Theme',
+    'ph.claim': 'Say in one line what this fact claims',
+    'ph.claimShort': 'Say in one line what this fact claims',
+    'ph.signer': 'Who signed it (required for sign-off)',
+    'token.paste': 'Paste token',
+    'token.need': 'Token required',
+    'sidebar.noProject': 'No project',
+  },
+};
+
+/** 中文原文 → 字典键。JS 生成的文案按中文原文查表，两套语言都对得上。 */
+const I18N_KEYS = {
+  '无改动': 'state.noChange',
+  '未保存': 'state.unsaved',
+  '保存中…': 'state.saving',
+  '已保存': 'state.saved',
+  '保存失败 · 点此重试': 'state.saveFailed',
+  '开发预览：草稿不写盘': 'state.devPreview',
+  '未审计': 'state.unaudited',
+  '结果已过期': 'state.stale',
+  '绿牌': 'state.verdictGreen',
+  '红牌': 'state.verdictRed',
+  '黄牌': 'state.verdictYellow',
+  '状态未知': 'report.unknownStatus',
+  '已封存': 'report.locked',
+  '封存已失效': 'report.lockStale',
+  '未封存': 'report.unlocked',
+  '已签收': 'report.signed',
+  '未签收': 'report.unsigned',
+  '只读': 'report.readOnly',
+  '没有找到实验报告（experiments/*/reports/*.report.toml）': 'empty.noReports',
+  '账里还没有事实。': 'empty.noFacts',
+  '没有红黄项。': 'empty.noRedYellow',
+  '先选一份报告。': 'empty.noReportSelected',
+  '还没有审阅卡：先检查并封存（把哈希钉住）才出卡。': 'empty.noReviewCard',
+  '先载入工作台项目，再看实验报告。': 'empty.needWorkbenchReports',
+  '先载入工作台项目，再看审阅卡。': 'empty.needWorkbenchCard',
+  '检查': 'btn.check',
+  '封存': 'btn.lock',
+  '签收': 'btn.sign',
+  '导入': 'btn.import',
+  '未选择': 'sidebar.noProject',
+};
+
+const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+/** 取当前语言的文案：字典没有就退回中文，再没有就用调用方给的兜底。 */
+function t(key, fallback) {
+  if (!key) return fallback ?? '';
+  const dict = I18N[state.lang] || I18N.zh;
+  if (has(dict, key)) return dict[key];
+  if (has(I18N.zh, key)) return I18N.zh[key];
+  return fallback ?? key;
+}
+
+/** 按中文原文取文案：查不到映射就原样返回中文（总比空白强）。 */
+function tz(zh) {
+  const key = I18N_KEYS[zh];
+  return key ? t(key, zh) : zh;
+}
+
+/** 带占位符的文案：{n} 这类换成实数。 */
+function tf(key, vars) {
+  return t(key).replace(/\{(\w+)\}/g, (m, k) => (vars && has(vars, k) ? String(vars[k]) : m));
+}
+
+// ------------------------------------------------- 语言 / 主题的开关（侧栏底部）
+
+/** 扫一遍 DOM 里的静态标记：data-i18n / data-i18n-title / data-i18n-placeholder。 */
+function applyLangDom() {
+  for (const el of $$('[data-i18n]')) {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key, el.textContent);
+  }
+  for (const el of $$('[data-i18n-title]')) {
+    const key = el.getAttribute('data-i18n-title');
+    if (key) el.title = t(key, el.title);
+  }
+  for (const el of $$('[data-i18n-placeholder]')) {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (key) el.placeholder = t(key, el.getAttribute('placeholder') || '');
+  }
+  syncLangButtons();
+}
+
+/** 切语言：静态文案扫一遍，JS 生成的文案靠重渲染当前页跟上。 */
+function applyLang() {
+  document.documentElement.lang = state.lang === 'en' ? 'en' : 'zh-CN';
+  applyLangDom();
+  renderVerdict();
+  renderTab();
+  updateTitle();
+}
+
+/** 换语言并记住：刷新后还在。 */
+function setLang(lang) {
+  const next = lang === 'en' ? 'en' : 'zh';
+  if (state.lang === next) return;
+  state.lang = next;
+  try {
+    localStorage.setItem('factscribe.lang', next);
+  } catch {
+    /* 隐私模式下写不进去就算了，界面照常用 */
+  }
+  applyLang();
+}
+
+/** 主题：写了 data-theme 就写死；不写就跟随系统（默认状态）。 */
+function applyTheme(theme) {
+  const next = theme === 'light' || theme === 'dark' ? theme : '';
+  state.theme = next;
+  if (next) document.documentElement.dataset.theme = next;
+  else delete document.documentElement.dataset.theme;
+  try {
+    if (next) localStorage.setItem('factscribe.theme', next);
+    else localStorage.removeItem('factscribe.theme');
+  } catch {
+    /* 写不进去就算了，主题仍然生效，只是刷新后不记得 */
+  }
+  syncThemeButtons();
+}
+
+/** 当前实际生效的主题：用户选过就用用户的，没选就跟系统。 */
+function effectiveTheme() {
+  if (state.theme) return state.theme;
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function syncThemeButtons() {
+  const eff = effectiveTheme();
+  for (const [id, theme] of [['#btn-theme-light', 'light'], ['#btn-theme-dark', 'dark']]) {
+    const btn = $(id);
+    if (!btn) continue;
+    const on = eff === theme;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+}
+
+function syncLangButtons() {
+  for (const [id, lang] of [['#btn-lang-zh', 'zh'], ['#btn-lang-en', 'en']]) {
+    const btn = $(id);
+    if (!btn) continue;
+    const on = state.lang === lang;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+}
+
+/** 读回上次的语言与主题：刷新后还在。 */
+function initPrefs() {
+  let lang = '';
+  let theme = '';
+  try {
+    lang = localStorage.getItem('factscribe.lang') || '';
+    theme = localStorage.getItem('factscribe.theme') || '';
+  } catch {
+    /* 读不到就用默认值 */
+  }
+  state.lang = lang === 'en' ? 'en' : 'zh';
+  applyTheme(theme === 'light' || theme === 'dark' ? theme : '');
+  document.documentElement.lang = state.lang === 'en' ? 'en' : 'zh-CN';
+  applyLangDom();
+  // 跟随系统时，系统配色变了高亮的那一格也要跟着换。
+  try {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => { if (!state.theme) syncThemeButtons(); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  } catch {
+    /* 老浏览器没有 matchMedia：不影响使用 */
+  }
+}
+
 
 // ------------------------------------------------------------------ 词汇表
 // 内部违规码是给机器看的；给人看的必须是中文短名。
@@ -239,14 +673,14 @@ function scheduleSave() {
 
 function setSaveState(text, failed) {
   const el = $('#save-state');
-  el.textContent = text;
+  el.textContent = tz(text);
   state.saveFailed = Boolean(failed);
   el.classList.toggle('is-failed', Boolean(failed));
   el.title = failed
-    ? '保存失败，点这里重试'
+    ? t('state.saveFailed')
     : text === '无改动'
-      ? '当前内容与上次保存一致'
-      : '改动会自动保存到本地数据目录';
+      ? t('state.sameAsSaved')
+      : t('state.autosaveHint');
 }
 
 async function saveNow() {
@@ -272,22 +706,25 @@ async function saveNow() {
 // 前进/后退能用，是因为切页时写的是 location.hash（会压一条历史），不是 replaceState。
 // 递归防护：自己写 hash 会触发 hashchange，用 suppressHash 标一下，别又切回去。
 
+// 页名 → 字典键（文案在 I18N 里，中英各一套）。
 const PAGE_LABEL = {
-  manuscript: '正文',
-  ledger: '事实账',
-  refs: '引用',
-  protect: '改写保护',
-  audit: '审计',
-  workbench: '工作台',
-  reports: '实验报告',
-  project: '项目',
-  ai: 'AI 起草',
+  manuscript: 'page.manuscript',
+  ledger: 'page.ledger',
+  refs: 'page.refs',
+  protect: 'page.protect',
+  audit: 'page.audit',
+  workbench: 'page.workbench',
+  facts: 'nav.facts',
+  reports: 'page.reports',
+  project: 'page.project',
+  ai: 'page.ai',
 };
 
 const ALL_PAGES = Object.keys(PAGE_LABEL);
 
-// 网页模式（也含 dev）都有的三页：工作台、实验报告、项目
-const WEB_PAGES = ['workbench', 'reports', 'project'];
+// 网页模式（也含 dev）都有的页：工作台、工作台事实账、实验报告、项目
+// 工作台本身没有导航项——章节才是入口；项目视图只由侧栏顶部按钮进入。
+const WEB_PAGES = ['workbench', 'facts', 'reports', 'project'];
 
 // 网页模式只有工作台三页；草稿与 AI 是宿主的，不给路由。
 function availablePages() {
@@ -320,10 +757,11 @@ function writeHash(tab, replace) {
 
 /** 标题跟着当前页与项目走：工作台 · 论文名 */
 function updateTitle() {
-  const label = PAGE_LABEL[state.tab] || 'FactScribe';
+  const label = PAGE_LABEL[state.tab] ? t(PAGE_LABEL[state.tab], 'FactScribe') : 'FactScribe';
   const wbName = String(state.workbenchProject?.project || state.workbenchStatus?.project || '').trim();
   const localName = String(state.project?.name || '').trim();
-  const wbTab = state.tab === 'workbench' || state.tab === 'reports' || state.tab === 'project';
+  const wbTab = state.tab === 'workbench' || state.tab === 'facts'
+    || state.tab === 'reports' || state.tab === 'project';
   const name = wbTab ? (wbName || localName) : (localName || wbName);
   document.title = name ? label + ' · ' + name : label;
 }
@@ -370,6 +808,7 @@ function renderTab() {
   else if (state.tab === 'protect') renderProtect();
   else if (state.tab === 'audit') renderAudit();
   else if (state.tab === 'workbench') renderWorkbench();
+  else if (state.tab === 'facts') renderWorkbenchFacts();
   else if (state.tab === 'reports') {
     // 按需加载：只有真的切到「实验报告」页才请求；其他视图不预拉
     renderWorkbenchReports();
@@ -383,33 +822,40 @@ function renderTab() {
 
 function verdictSentence(a) {
   const shown = a.verdict === 'red' ? (a.redShown || a.red).length : a.verdict === 'yellow' ? (a.yellowShown || a.yellow).length : 0;
-  const base = {
-    green: '绿牌：账有据、据未改、文有绑。',
-    red: '红牌 ' + shown + ' 处，必须改。',
-    yellow: '黄牌 ' + shown + ' 处，待人判断。',
-  }[a.verdict];
-  return base + '（退出码 ' + a.exitCode + '）';
+  const base = a.verdict === 'green'
+    ? t('state.sentenceGreen')
+    : a.verdict === 'red'
+      ? tf('state.sentenceRed', { n: shown })
+      : tf('state.sentenceYellow', { n: shown });
+  return base + tf('state.exitCode', { n: a.exitCode });
 }
+
+// 绿 / 红 / 黄三种结论各有一句人话。
+const VERDICT_WORD = {
+  green: 'state.verdictGreen',
+  red: 'state.verdictRed',
+  yellow: 'state.verdictYellow',
+};
 
 function renderVerdict() {
   const el = $('#verdict');
   if (!state.audit) {
     el.className = 'verdict verdict-idle';
-    el.textContent = '未审计';
-    el.title = '还没跑过审计——点右上角「运行审计」';
+    el.textContent = t('state.unaudited');
+    el.title = t('state.unauditedTitle');
     return;
   }
   if (state.stale) {
     el.className = 'verdict verdict-stale';
-    el.textContent = '结果已过期';
-    el.title = '内容改过但没重跑审计。上次结论：' + verdictSentence(state.audit);
+    el.textContent = t('state.stale');
+    el.title = t('state.staleHint') + verdictSentence(state.audit);
     return;
   }
   const a = state.audit;
-  const word = { green: '绿牌', red: '红牌', yellow: '黄牌' }[a.verdict];
+  const word = VERDICT_WORD[a.verdict] ? t(VERDICT_WORD[a.verdict]) : String(a.verdict || '');
   const n = a.verdict === 'red' ? (a.redShown || a.red).length : a.verdict === 'yellow' ? (a.yellowShown || a.yellow).length : 0;
   el.className = 'verdict verdict-' + a.verdict;
-  el.textContent = word + (n ? ' ' + n + ' 处' : '');
+  el.textContent = n ? word + ' ' + tf('state.count', { n }) : word;
   el.title = verdictSentence(a);
 }
 
@@ -913,7 +1359,8 @@ function applyMode() {
     const btn = document.querySelector('.nav-item[data-tab="' + tab + '"]');
     if (btn) btn.hidden = !MODE.showHostUi;
   }
-  // 工作台三页两种模式都在：不藏。
+  // 导航里只剩「工作台事实账」和「实验报告」两种模式都在。
+  // 工作台没有导航项——章节才是入口；项目视图只由侧栏顶部的按钮进入。
   for (const tab of WEB_PAGES) {
     const btn = document.querySelector('.nav-item[data-tab="' + tab + '"]');
     if (btn) btn.hidden = false;
@@ -1213,6 +1660,7 @@ function projectBusy(flag) {
 function renderProjects() {
   const select = $('#project-select');
   if (!select) return;
+  renderSidebarProject();
   const w = state.workbench || { configured: false };
   // 项目页自己的几处状态：当前对话路径、当前项目、运行状态、手动连接。
   const hostPath = $('#workbench-host-path');
@@ -1231,7 +1679,7 @@ function renderProjects() {
   if (runState) {
     if (state.run) {
       const mode = state.run.mode
-        ? (state.run.mode.write ? '可写' : '只读') + (state.run.mode.build ? ' · 可编译' : '')
+        ? (state.run.mode.write ? '可写' : t('report.readOnly')) + (state.run.mode.build ? ' · 可编译' : '')
         : '';
       runState.textContent = '运行中 · PID ' + state.run.pid + ' · ' + mode + ' · ' + state.run.project;
     } else {
@@ -1374,7 +1822,7 @@ async function startWorkbench() {
     state.workbenchAudit = null;
     $('#workbench-status').textContent =
       (data.reused ? '已在运行：' : '已启动：') + data.url + '（PID ' + data.pid + '，' +
-      (data.allowWrite ? '可写' : '只读') + (data.allowBuild ? ' · 可编译' : '') + '）';
+      (data.allowWrite ? '可写' : t('report.readOnly')) + (data.allowBuild ? ' · 可编译' : '') + '）';
     state.projectPython = state.projectPython || '';
     await loadProjects();
     await loadWorkbenchStatus();
@@ -1404,11 +1852,28 @@ async function stopWorkbench() {
   }
 }
 
+/** 侧栏顶部的项目按钮：显示当前论文项目名；没有就写「未选择」。 */
+function renderSidebarProject() {
+  const el = $('#sidebar-project-name');
+  if (!el) return;
+  const project = state.workbenchProject;
+  const name = String(project?.project || project?.root || '').trim();
+  el.textContent = name || t('sidebar.noProject');
+  const btn = $('#btn-sidebar-project');
+  if (btn) {
+    btn.title = name
+      ? '当前项目：' + name + '（点它去项目页换项目）'
+      : '还没选论文项目（点它去项目页选一个）';
+  }
+}
+
 function renderWorkbench() {
   const w = state.workbench || { configured: false };
   const badge = $('#workbench-badge');
   const summary = $('#workbench-summary');
   if (!badge) return;
+  renderSidebarProject();
+  renderWorkbenchSections();
   badge.textContent = MODE.mini
     ? (state.run ? '运行中' : (w.configured ? '已配置' : '未连接'))
     : '本机服务';
@@ -1517,13 +1982,13 @@ function renderWorkbench() {
       kpi(red.length, '红牌 · 必须改', 'bad', null) +
       kpi(yellow.length, '黄牌 · 待人判断', 'warn', null) +
     '</div>' +
-    (rows || '<div class="line-empty">没有红黄项。</div>') +
+    (rows || '<div class="line-empty">' + t('empty.noRedYellow') + '</div>') +
     (findings.length > 12 ? '<div class="muted-note">只显示前 12 条；完整结果看 serve 的 --json 输出。</div>' : '');
 }
 
-// ------------------------------------------------------ 工作台三栏
-// 左：章节目录；中：源码 / 预览；右：要处理的问题 + AI 入口。
-// 三栏只管「看和改」，事实账、证据、报告仍各自成块放在下面。
+// ------------------------------------------------------ 工作台两栏
+// 左：源码 / 预览；右：要处理的问题 + AI 入口。章节目录在左侧栏里。
+// 这里只管「看和改」，事实账、证据、报告各自成块放在别处。
 
 /** 章节标题：正文里的 \\section{...} 优先，没有就用文件名。 */
 function sectionTitle(section) {
@@ -1791,7 +2256,7 @@ function renderWorkbenchFacts() {
   const box = $('#wb-facts');
   if (!box) return;
   if (!facts.length) {
-    box.innerHTML = '<div class="line-empty">账里还没有事实。</div>';
+    box.innerHTML = '<div class="line-empty">' + t('empty.noFacts') + '</div>';
     return;
   }
   box.innerHTML = '<table class="facts-table"><thead><tr><th>ID</th><th>主张</th><th>值</th><th>来源</th></tr></thead><tbody>' +
@@ -1857,7 +2322,19 @@ async function loadWorkbenchEvidence() {
 function reportOptionLabel(r) {
   const exp = r.experiment || '（未标实验）';
   const name = String(r.path || '').split('/').pop();
-  return exp + ' / ' + name + ' · ' + (r.status || '状态未知');
+  return exp + ' / ' + name + ' · ' + reportStatusWord(r.status);
+}
+
+// 报告状态词：引擎给的是 final / partial / superseded，翻译成人话。
+const REPORT_STATUS_WORD = {
+  final: 'report.final',
+  partial: 'report.partial',
+  superseded: 'report.superseded',
+};
+
+function reportStatusWord(status) {
+  const key = REPORT_STATUS_WORD[status];
+  return key ? t(key) : (status || t('report.unknownStatus'));
 }
 
 function selectedReport() {
@@ -1886,17 +2363,29 @@ function renderWorkbenchReports() {
   if (box) {
     const notes = [];
     if (!state.workbenchProject) {
-      notes.push('先载入工作台项目，再看实验报告。');
+      notes.push(t('empty.needWorkbenchReports'));
     }
     if (state.workbenchProject?.read_only) {
       notes.push('只读工作台：启动时没加 --allow-write，封存/签收/导入用不了。');
     }
     if (data.error) notes.push('报告列表读不出来：' + data.error);
     if (!list.length && !notes.length) {
-      notes.push('没有找到实验报告（experiments/*/reports/*.report.toml）');
+      notes.push(t('empty.noReports'));
     }
     box.innerHTML = notes
       .map((n) => '<div class="muted-note">' + esc(n) + '</div>').join('');
+  }
+  // 没有报告时按钮必须禁用：让用户点了再报错是最差的选择
+  const hasReport = Boolean(selectedReport());
+  const readOnly = Boolean(state.workbenchProject?.read_only);
+  for (const [id, needsWrite] of [['check', false], ['lock', true],
+    ['sign', true], ['import', true]]) {
+    const btn = $('#btn-wb-report-' + id);
+    if (!btn) continue;
+    const blocked = !hasReport || (needsWrite && readOnly);
+    btn.disabled = blocked;
+    btn.title = !hasReport ? '先让实验产出一份 report.toml（experiments/*/reports/）'
+      : (needsWrite && readOnly ? '启动时没加 --allow-write' : '');
   }
   renderReportState(selectedReport());
   renderReportCard(selectedReport(), list.length);
@@ -1910,9 +2399,9 @@ function renderReportState(item) {
     el.textContent = '';
     return;
   }
-  const bits = [item.status || '状态未知'];
-  bits.push(item.lock_ok ? '已封存' : (item.locked ? '封存已失效' : '未封存'));
-  bits.push(item.signed ? '已签收' : '未签收');
+  const bits = [reportStatusWord(item.status)];
+  bits.push(item.lock_ok ? t('report.locked') : (item.locked ? t('report.lockStale') : t('report.unlocked')));
+  bits.push(item.signed ? t('report.signed') : t('report.unsigned'));
   let text = bits.join(' · ');
   if (item.reason) text += '（' + item.reason + '）';
   el.textContent = text;
@@ -1923,18 +2412,18 @@ function renderReportCard(item, count) {
   const box = $('#wb-report-card');
   if (!box) return;
   if (!state.workbenchProject) {
-    box.innerHTML = '<div class="line-empty">先载入工作台项目，再看审阅卡。</div>';
+    box.innerHTML = '<div class="line-empty">' + t('empty.needWorkbenchCard') + '</div>';
     return;
   }
   if (!item) {
     box.innerHTML = count
-      ? '<div class="line-empty">先选一份报告。</div>'
-      : '<div class="line-empty">没有找到实验报告（experiments/*/reports/*.report.toml）</div>';
+      ? '<div class="line-empty">' + t('empty.noReportSelected') + '</div>'
+      : '<div class="line-empty">' + t('empty.noReports') + '</div>';
     return;
   }
   const lines = item.card || [];
   if (!lines.length) {
-    box.innerHTML = '<div class="line-empty">还没有审阅卡：先检查并封存（把哈希钉住）才出卡。</div>';
+    box.innerHTML = '<div class="line-empty">' + t('empty.noReviewCard') + '</div>';
     return;
   }
   box.innerHTML = '<div class="wb-report-card-title">审阅卡</div>' +
@@ -1962,7 +2451,7 @@ const REPORT_ACTION_LABEL = {
 async function reportAction(action) {
   const select = $('#wb-report-select');
   const path = select?.value || '';
-  if (!path) throw new Error('先选一份报告');
+  if (!path) throw new Error(t('empty.noReportSelected'));
   const by = ($('#wb-report-by')?.value || '').trim();
   if (action === 'sign' && !by) {
     const el = $('#wb-report-state');
@@ -1985,7 +2474,7 @@ async function reportAction(action) {
       : (result.unchanged ? '账上已是最新，没改动' : '演练：没有写盘'));
     return;
   }
-  toast((REPORT_ACTION_LABEL[action] || action) + '完成');
+  toast(tf('state.actionDone', { what: tz(REPORT_ACTION_LABEL[action] || action) }));
 }
 
 async function freezeWorkbenchEvidence() {
@@ -2073,12 +2562,16 @@ async function loadWorkbenchProject() {
   if (freeze) freeze.disabled = Boolean(project?.read_only);
   if (unfreeze) unfreeze.disabled = Boolean(project?.read_only);
   // 只读工作台：封存/签收/导入写不了盘，按钮灰掉并说清原因。
-  for (const sel of ['#btn-wb-report-lock', '#btn-wb-report-sign',
-    '#btn-wb-report-import']) {
+  for (const [sel, needsWrite] of [['#btn-wb-report-check', false],
+    ['#btn-wb-report-lock', true], ['#btn-wb-report-sign', true],
+    ['#btn-wb-report-import', true]]) {
     const btn = $(sel);
     if (!btn) continue;
-    btn.disabled = Boolean(project?.read_only);
-    btn.title = project?.read_only ? '启动时没加 --allow-write' : '';
+    const blocked = !selectedReport() || (needsWrite && Boolean(project?.read_only));
+    btn.disabled = blocked;
+    btn.title = !selectedReport()
+      ? '先让实验产出一份 report.toml'
+      : (needsWrite && project?.read_only ? '启动时没加 --allow-write' : '');
   }
   await loadWorkbenchEvidence();
   // 当前就在报告页：项目刚载入完，补一次渲染与按需拉取
@@ -2175,6 +2668,13 @@ async function runWorkbenchAudit() {
 
 function wire() {
   for (const btn of $$('.nav-item')) btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+
+  // 侧栏底部：语言 / 主题。点一下就换，并且记住（刷新后还在）。
+  $('#btn-lang-zh').addEventListener('click', () => setLang('zh'));
+  $('#btn-lang-en').addEventListener('click', () => setLang('en'));
+  $('#btn-theme-light').addEventListener('click', () => applyTheme('light'));
+  $('#btn-theme-dark').addEventListener('click', () => applyTheme('dark'));
+
   window.addEventListener('hashchange', onHashChange);
   // 动作消息只有一份（#workbench-status），项目页也要看得见：抄一份过去。
   const status = $('#workbench-status');
@@ -2268,15 +2768,19 @@ function wire() {
     renderAi();
   });
 
-  // 三栏：章节目录点一下就切到那一节
+  // 侧栏目录：点一下就切到那一节，并把工作台打开（章节本身就是入口）
   $('#wb-section-list').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-section]');
     if (!btn) return;
     selectWorkbenchSection(btn.dataset.section);
     renderWorkbenchSections();
+    if (state.tab !== 'workbench') switchTab('workbench');
   });
 
-  // 三栏：源码 / 预览
+  // 侧栏顶部：项目按钮进项目页（导航里没有「项目」项了）
+  $('#btn-sidebar-project').addEventListener('click', () => switchTab('project'));
+
+  // 工作台：源码 / 预览
   $('#btn-wb-mode-source').addEventListener('click', () => {
     setWbMode('source').catch((e) => toast('切换失败：' + e.message));
   });
@@ -2290,14 +2794,14 @@ function wire() {
     });
   });
 
-  // 三栏：问题列表里「跳到那一行」
+  // 工作台：问题列表里「跳到那一行」
   $('#workbench-audit').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-jump-line]');
     if (!btn) return;
     jumpToLine(btn.dataset.jumpFile, Number(btn.dataset.jumpLine));
   });
 
-  // 三栏：和 AI 说（只做入口，AI 面板不在这里重做一遍）
+  // 工作台：和 AI 说（只做入口，AI 面板不在这里重做一遍）
   $('#btn-wb-ai-send').addEventListener('click', () => {
     sendWbToAi();
   });
@@ -2625,6 +3129,8 @@ async function loadPreviewDraft() {
 }
 
 async function init() {
+  // 界面偏好先读回来：语言与主题要在第一屏就生效，别等用户点一下。
+  initPrefs();
   applyMode();
   // 地址栏说了算：有合法 hash 就去那一页，没有就按模式取默认页。
   const hashPage = pageFromHash();

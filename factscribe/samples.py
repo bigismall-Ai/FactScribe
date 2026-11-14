@@ -49,6 +49,18 @@ def guide_target() -> Path:
     return factscribe_dir() / "samples" / SAMPLE_NAME
 
 
+def is_guide_path(path) -> bool:
+    """这个路径是不是内置示例论文？
+
+    登记册里认得它，是为了在项目列表里把它挑出去（列表只放人自己的论文）。
+    """
+    target = guide_target()
+    try:
+        return Path(path).resolve() == target.resolve()
+    except OSError:
+        return str(path) == str(target)
+
+
 def install_guide_sample(reset: bool = False) -> dict:
     """把示例装到 `~/.factscribe/samples/guide`。
 

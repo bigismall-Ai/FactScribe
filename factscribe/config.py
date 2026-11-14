@@ -187,6 +187,7 @@ def load_toml(path: Path) -> dict:
 class Config:
     root: Path
     title: str = ""
+    description: str = ""      # 一句话简介（`[project] description`；缺省空串）
     authors: list = field(default_factory=list)
     sections_glob: str = "sections/*.tex"
     facts_glob: str = "facts/*.toml"
@@ -473,6 +474,7 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     cfg = Config(
         root=root,
         title=str(proj.get("title") or ""),
+        description=str(proj.get("description") or ""),
         authors=[str(a) for a in authors],
         sections_glob=_v1_rel_path(proj["sections"], "sections", path),
         facts_glob=_v1_rel_path(proj["facts"], "facts", path),
@@ -480,6 +482,7 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
         build=str(proj.get("build") or ""),
         manifest=str(proj.get("manifest") or "results/MANIFEST.toml"),
         source_root=str(proj.get("source_root") or ""),
+        output=str(proj.get("output") or "main.pdf"),
         numeric_macro_allow=macro_allow,
         bib_allow_unused=_v3_str_list(
             {"bib_allow_unused": proj.get("bib_allow_unused")},
@@ -554,11 +557,11 @@ def _v3_macro_rules(data: dict, path: Path) -> tuple[list[str], list[dict]]:
 # 形态 A（扁平 schema）/ B（[project] + root_tex）/ C（[project] + sections）
 # 共用同一张字段表；这里列的是「认识的键」，其余键忽略但记一条告警。
 V3_KNOWN_FIELDS = {
-    "schema", "name", "title", "root_tex", "sections", "facts", "bib", "refs",
-    "output", "level", "number_locale", "signing_mode", "approver_keys_file",
-    "release_keys_file", "image_budget_extra", "frac_allow", "inline_images_allow",
-    "numeric_macro_allow", "authors", "build", "manifest", "source_root",
-    "bib_allow_unused", "budget", "evidence",
+    "schema", "name", "title", "description", "root_tex", "sections", "facts",
+    "bib", "refs", "output", "level", "number_locale", "signing_mode",
+    "approver_keys_file", "release_keys_file", "image_budget_extra",
+    "frac_allow", "inline_images_allow", "numeric_macro_allow", "authors",
+    "build", "manifest", "source_root", "bib_allow_unused", "budget", "evidence",
 }
 
 # `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
@@ -570,10 +573,12 @@ V3_MARKER_FIELDS = {
 }
 
 # v1 认识的键（行为不变；root_tex 是 V3 键，v1 里出现按「忽略」处理但不告警，
-# 因为 v1 的判据从来不看它）。
+# 因为 v1 的判据从来不看它）。output 在 v1 里是「最终 PDF 的文件名」——
+# 以前恒为 main.pdf，现在允许显式写。
 V1_KNOWN_FIELDS = {
     "title", "authors", "sections", "facts", "bib", "build", "manifest",
     "source_root", "numeric_macro_allow", "root_tex", "bib_allow_unused",
+    "description", "output",
 }
 
 LEVELS = ("l0", "l1", "l2")
@@ -709,6 +714,7 @@ def _load_v3_config(root: Path, path: Path, data: dict,
     cfg = Config(
         root=root,
         title=name,
+        description=str(_v3_get(data, "description") or ""),
         authors=[str(a) for a in (proj.get("authors") or [])],
         sections_glob=root_tex,
         facts_glob=_v3_facts_glob(_v3_get(data, "facts", "facts"), path),

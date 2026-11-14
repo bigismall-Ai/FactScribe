@@ -214,7 +214,7 @@ test('能从当前对话读项目文件夹（session.read），没有就提示',
 
 
 test('论文项目＝文件夹：列表、路径校验、切换即换文件夹', () => {
-  assert.match(HTML, /id="project-select"/, '应有最近项目下拉');
+  assert.match(HTML, /id="project-list"/, '应有项目列表（不是下拉框）');
   assert.match(HTML, /id="project-path"/, '应有项目文件夹输入');
   assert.match(HTML, /id="btn-project-add"/, '应能把文件夹加入列表');
   assert.match(HTML, /id="btn-project-forget"/, '应能从列表移除（不动文件夹）');
@@ -279,7 +279,7 @@ test('网页也能管项目：不带路径启动，页面里选文件夹', () =>
   assert.match(JS, /chooseProject/, '网页里选项目要让服务切过去');
   assert.match(JS, /还没有选论文项目/, '未选项目要说清下一步');
   assert.match(JS, /\/api\/projects/, '项目列表与加入走同一接口');
-  assert.match(HTML, /id="project-select"/, '最近项目下拉两种模式都该在');
+  assert.match(HTML, /id="project-list"/, '项目列表两种模式都该在');
   assert.match(HTML, /id="btn-project-add"/, '加入项目列表两种模式都该在');
   assert.doesNotMatch(JS, /'#btn-project-add', '#btn-project-host',/, '网页里不能禁用加入按钮');
 });
@@ -524,15 +524,17 @@ test('实验报告与项目各有独立面板：报告块搬走了，id 一个�
 
 test('项目页装的是项目管理：列表、路径、加入/移除、权限、启动/停止、解释器', () => {
   const panel = HTML.slice(HTML.indexOf('id="panel-project"'), HTML.indexOf('id="panel-ai"'));
-  for (const id of ['project-select', 'project-path', 'btn-project-add', 'btn-project-forget',
+  for (const id of ['project-list', 'project-path', 'btn-project-add', 'btn-project-forget',
     'workbench-allow-write', 'workbench-allow-build', 'btn-workbench-start',
     'btn-workbench-stop', 'btn-workbench-connect', 'project-python',
-    'btn-workbench-load', 'workbench-host-path']) {
+    'btn-workbench-load', 'workbench-host-path', 'btn-new-project']) {
     assert.match(panel, new RegExp('id="' + id + '"'), '项目面板里应有 ' + id);
   }
+  // 「最近项目」下拉已经换成列表：下拉不许再回来。
+  assert.doesNotMatch(panel, /id="project-select"/, '项目列表不再用下拉框');
   // 工作台页签只留两栏与状态行
   const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-facts"'));
-  assert.doesNotMatch(wb, /id="project-select"/, '项目列表不该留在工作台页签');
+  assert.doesNotMatch(wb, /id="project-list"/, '项目列表不该留在工作台页签');
   assert.doesNotMatch(wb, /id="wb-report-select"/, '报告下拉不该留在工作台页签');
   assert.doesNotMatch(wb, /id="wb-section-list"/, '章节目录搬去左侧栏了，不该留在工作台页签');
   assert.match(wb, /id="workbench-status"/, '动作消息行要留在工作台页签');
@@ -860,4 +862,56 @@ test('引导文案进字典：中英各一套', () => {
     'btn.guideOpen', 'btn.guideOpenExists', 'btn.guideReset', 'btn.guideClose']) {
     assert.match(JS, new RegExp("'" + key + "'"), '字典里要有 ' + key);
   }
+});
+
+// ------------------------------------------- 新建项目页（#/project/new）
+//
+// 布局从「下拉框 + 大块路径输入」改成「左边列表、右边新建」，
+// 新建另开一页 #/project/new。这一组盯住那条路不许断。
+
+test('新建项目页在：面板、表单、按钮、字段 id 一个不缺', () => {
+  assert.match(HTML, /id="panel-project-new"[^>]*role="tabpanel"/, '应有新建项目面板');
+  assert.match(HTML, /id="new-project-form"/, '应有新建表单');
+  assert.match(HTML, /id="btn-np-create"/, '应有创建按钮');
+  assert.match(HTML, /id="btn-np-cancel"/, '应有取消按钮');
+  assert.match(HTML, /id="btn-new-project"/, '项目页要有「新建论文项目」按钮');
+  for (const id of ['np-title', 'np-parent', 'np-slug', 'np-authors', 'np-description',
+    'np-lang', 'np-sections', 'np-facts', 'np-bib', 'np-root-tex', 'np-build',
+    'np-source-root', 'np-output', 'np-error']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '新建表单里应有 ' + id);
+  }
+  // 引导卡片：打开示例 + 重置示例，两个入口都要在
+  assert.match(HTML, /id="btn-guide-open"/, '引导卡片要有「打开示例论文」');
+  assert.match(HTML, /id="btn-guide-reset-card"/, '引导卡片要有「重置示例」');
+});
+
+test('路由认得 project/new：非法子路由回项目列表', () => {
+  assert.match(JS, /'project\/new'/, 'JS 要认得 #/project/new');
+  const block = JS.slice(JS.indexOf('function pageFromHash'), JS.indexOf('function panelIdFor'));
+  assert.ok(block.length > 0, '应有 hash 解析函数');
+  assert.match(block, /project\/new/, 'hash 解析要处理 project/new');
+  assert.match(block, /raw\.startsWith\('project\/'\)/, '非法子路由要回项目列表');
+  assert.match(JS, /function panelIdFor/, '面板 id 要按子路由分');
+  assert.match(JS, /panel-project-new/, '新建页有自己的面板');
+});
+
+test('新建走 POST /api/projects/create：失败留在表单里，不跳走', () => {
+  const block = JS.slice(JS.indexOf('async function createProjectFromForm'),
+    JS.indexOf('async function loadProjects'));
+  assert.ok(block.length > 0, '应有创建函数');
+  assert.match(block, /wb\('\/projects\/create'\)/, "要调 wb('/projects/create')");
+  assert.match(block, /method:\s*'POST'/, '创建是 POST');
+  assert.match(block, /showNpError/, '失败要有错误位');
+  assert.match(block, /btn\.disabled = true/, '创建中要禁用按钮');
+  assert.match(HTML, /id="np-error"/, '表单顶部要有错误位');
+});
+
+test('项目列表：排除示例论文、当前项带「当前」徽标、每项有详情', () => {
+  const block = JS.slice(JS.indexOf('function renderProjectList'),
+    JS.indexOf('async function loadProjects'));
+  assert.ok(block.length > 0, '应有列表渲染函数');
+  assert.match(block, /!p\.guide/, '示例论文（guide）不进列表');
+  assert.match(block, /project-badge/, '当前项目要有徽标');
+  assert.match(block, /description/, '每项要显示详情');
+  assert.match(JS, /'project\.current':/, '「当前」文案要进字典');
 });

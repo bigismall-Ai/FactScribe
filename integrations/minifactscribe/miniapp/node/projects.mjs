@@ -114,6 +114,38 @@ export function readProjectName(dir) {
   return name || fallback;
 }
 
+/** 项目的一句话简介（`[project] description`；读不到就是空串）。 */
+export function readProjectDescription(dir) {
+  let text = '';
+  try {
+    text = readTextSync(join(dir, CONFIG_NAME));
+  } catch {
+    return '';
+  }
+  if (!text) return '';
+  const projectBlock = /\[project\]([\s\S]*?)(?:\n\s*\[|\s*$)/.exec(text);
+  const scoped = projectBlock ? projectBlock[1] : text;
+  const match = /^\s*description\s*=\s*"([^"]*)"/m.exec(scoped)
+    || /^\s*description\s*=\s*'([^']*)'/m.exec(scoped);
+  return match ? match[1].trim() : '';
+}
+
+/** 内置示例论文的位置（`~/.factscribe/samples/guide`）。 */
+export function guideProjectPath(home) {
+  return join(factscribeDir(home), 'samples', 'guide');
+}
+
+/** 这个路径是不是内置示例论文？（列表里要把它挑出去） */
+export function isGuidePath(path, home) {
+  const target = guideProjectPath(home);
+  const text = String(path ?? '');
+  try {
+    return resolve(text) === resolve(target);
+  } catch {
+    return text === target;
+  }
+}
+
 function readTextSync(file) {
   // 只读一个小配置；调用方是同步路径校验，这里不为它改成异步
   try {

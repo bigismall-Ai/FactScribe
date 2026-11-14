@@ -286,25 +286,67 @@
           <div class="panel-head">
             <div>
               <h2>本地工作台</h2>
-              <p class="panel-desc">连接本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。这里是工作台项目的结果；左侧正文与事实账仍是本地草稿，两者不是同一个项目。</p>
+              <p class="panel-desc">选一个论文文件夹，一键启动本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。这里是工作台项目的结果；左侧正文与事实账仍是本地草稿，两者不是同一个项目。</p>
             </div>
             <div class="panel-actions">
               <span id="workbench-badge" class="muted-note">未连接</span>
             </div>
           </div>
-          <div class="workbench-form">
-            <label class="field">
-              <span>工作台 URL</span>
-              <input id="workbench-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:61483" />
-            </label>
-            <label class="field">
-              <span>Token</span>
-              <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
-            </label>
-            <div class="workbench-actions">
-              <button id="btn-workbench-connect" class="btn btn-primary" type="button">连接</button>
-              <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
+          <div class="project-block">
+            <div class="project-head">
+              <h3>论文项目</h3>
+              <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
             </div>
+            <label class="field" style="max-width: 640px">
+              <span>最近项目</span>
+              <select id="project-select"></select>
+            </label>
+            <label class="field" style="max-width: 640px">
+              <span>项目文件夹</span>
+              <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
+            </label>
+            <div class="panel-actions" style="margin: 8px 0">
+              <button id="btn-project-add" class="btn" type="button">加入项目列表</button>
+              <button id="btn-project-host" class="btn" type="button">用当前对话项目</button>
+              <button id="btn-project-forget" class="btn" type="button">从列表移除</button>
+            </div>
+            <div class="checkline">
+              <label><input id="workbench-allow-write" type="checkbox" /> 允许写章节与事实（<code>--allow-write</code>）</label>
+              <label><input id="workbench-allow-build" type="checkbox" /> 允许编译 PDF（<code>--allow-build</code>）</label>
+            </div>
+            <div class="panel-actions" style="margin: 10px 0">
+              <button id="btn-workbench-start" class="btn btn-primary" type="button">启动并连接</button>
+              <button id="btn-workbench-stop" class="btn" type="button">停止工作台</button>
+              <span id="workbench-run-state" class="muted-note"></span>
+            </div>
+            <details class="manual-connect">
+              <summary>高级：手动连接 / Python 解释器</summary>
+              <div class="workbench-form">
+                <label class="field">
+                  <span>工作台 URL</span>
+                  <input id="workbench-url" type="text" autocomplete="off" placeholder="http://127.0.0.1:61483" />
+                </label>
+                <label class="field">
+                  <span>Token</span>
+                  <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
+                </label>
+                <div class="workbench-actions">
+                  <button id="btn-workbench-connect" class="btn" type="button">连接</button>
+                  <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
+                </div>
+                <label class="field">
+                  <span>Python 解释器（一键启动用）</span>
+                  <input id="project-python" type="text" autocomplete="off" placeholder="python3 或 /绝对路径/python3" />
+                </label>
+                <label class="field">
+                  <span>包路径（PYTHONPATH，源码没安装时用）</span>
+                  <input id="project-pythonpath" type="text" autocomplete="off" placeholder="/path/to/factscribe 仓库根（留空＝已安装）" />
+                </label>
+                <div class="workbench-actions">
+                  <button id="btn-project-python" class="btn" type="button">保存解释器设置</button>
+                </div>
+              </div>
+            </details>
           </div>
           <p id="workbench-host-path" class="muted-note"></p>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>

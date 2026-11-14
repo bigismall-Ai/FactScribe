@@ -8,6 +8,12 @@ import { createServer } from 'node:http';
 import { dirname, extname, join, normalize } from 'node:path';
 import { auditProject, mergeVerifyIssues, parseBib, protectDiff, stableIdOf } from './audit.mjs';
 import { buildDemoProject } from './demo.mjs';
+import { pythonFrom, serveArgs, startServe, stopServe } from './launcher.mjs';
+import {
+  factscribeDir, readRegistry, removeProject, resolveProjectDir, upsertProject,
+  writeRegistry,
+} from './projects.mjs';
+
 
 const CLIENT_DIR = 'miniapp/client';
 const CONTENT_TYPES = {
@@ -88,9 +94,22 @@ export async function start(context) {
     const saved = JSON.parse(await readFile(workbenchFile, 'utf8'));
     const url = normalizeWorkbenchUrl(saved?.url);
     const token = String(saved?.token ?? '').trim();
-    if (token) workbench = { url, token };
+    // 一键启动的工作台跟着本进程活；宿主重启后旧地址已经死了，不要伪装成还连着
+    if (token && !saved?.managed) workbench = { url, token };
   } catch {
     workbench = null;
+  }
+
+  // 一键启动的子进程：只有本进程能停；dispose 时一并收掉
+  let run = null;
+  let starting = null;
+
+  async function stopRun() {
+    if (!run) return false;
+    const current = run;
+    run = null;
+    await stopServe(current.child);
+    return true;
   }
 
   async function persistWorkbench() {
@@ -387,6 +406,9 @@ export async function start(context) {
         sendJson(response, 200, {
           ok: true, configured: Boolean(workbench),
           url: workbench?.url || '', tokenSet: Boolean(workbench?.token),
+          running: Boolean(run), project: run?.project || '',
+          pid: run?.pid || 0,
+          mode: run ? { write: Boolean(run.allowWrite), build: Boolean(run.allowBuild) } : null,
         });
         return;
       }
@@ -398,6 +420,8 @@ export async function start(context) {
             || (workbench?.url === url ? workbench.token : '');
           if (!token) throw new Error('token 不能为空');
           const capabilities = await probeWorkbench(url, token);
+          // 手动连到别的工作台：先停掉我们自己拉起的那个，别留孤儿进程
+          if (run) await stopRun();
           workbench = { url, token };
           await persistWorkbench();
           sendJson(response, 200, {
@@ -413,9 +437,158 @@ export async function start(context) {
         return;
       }
       if (request.method === 'DELETE' && path === '/api/workbench') {
+        await stopRun();
         workbench = null;
         await persistWorkbench();
-        sendJson(response, 200, { ok: true, configured: false });
+        sendJson(response, 200, { ok: true, configured: false, running: false });
+        return;
+      }
+      if (request.method === 'GET' && path === '/api/projects') {
+        const registry = await readRegistry();
+        sendJson(response, 200, {
+          ok: true, dir: factscribeDir(), python: registry.python || pythonFrom(),
+          pythonpath: registry.pythonpath,
+          projects: registry.projects, lastPath: registry.lastPath,
+        });
+        return;
+      }
+      if (request.method === 'POST' && path === '/api/projects') {
+        try {
+          const body = await readBody(request);
+          let registry = await readRegistry();
+          if (body?.python !== undefined) {
+            const python = String(body.python ?? '').trim();
+            if (python && !/^[\w./-]+$/.test(python)) {
+              throw new Error('Python 解释器只填命令名或绝对路径，不能带空格或参数');
+            }
+            registry = { ...registry, python };
+            await writeRegistry(undefined, registry);
+          }
+          if (body?.pythonpath !== undefined) {
+            const pythonpath = String(body.pythonpath ?? '').trim();
+            if (pythonpath && !/^[\w./:~-]+$/.test(pythonpath)) {
+              throw new Error('包路径只填绝对路径（多个用 : 分隔），不能带空格或参数');
+            }
+            registry = { ...registry, pythonpath };
+            await writeRegistry(undefined, registry);
+          }
+          if (body?.path !== undefined) {
+            const resolved = resolveProjectDir(body.path);
+            registry = upsertProject(registry, resolved);
+            await writeRegistry(undefined, registry);
+            sendJson(response, 200, {
+              ok: true, project: resolved, projects: registry.projects,
+              lastPath: registry.lastPath, python: registry.python,
+              pythonpath: registry.pythonpath,
+            });
+            return;
+          }
+          sendJson(response, 200, {
+            ok: true, projects: registry.projects,
+            lastPath: registry.lastPath, python: registry.python,
+            pythonpath: registry.pythonpath,
+          });
+        } catch (err) {
+          sendJson(response, 400, {
+            ok: false, error: { code: 'PROJECT_INVALID', message: err.message },
+          });
+        }
+        return;
+      }
+      if (request.method === 'DELETE' && path === '/api/projects') {
+        const target = url.searchParams.get('path') || '';
+        let registry = await readRegistry();
+        registry = removeProject(registry, String(target));
+        await writeRegistry(undefined, registry);
+        sendJson(response, 200, {
+          ok: true, projects: registry.projects, lastPath: registry.lastPath,
+        });
+        return;
+      }
+      if (request.method === 'POST' && path === '/api/workbench/start') {
+        if (starting) {
+          sendJson(response, 409, {
+            ok: false,
+            error: { code: 'WORKBENCH_STARTING', message: '上一次启动还没结束，稍等一下' },
+          });
+          return;
+        }
+        let body = {};
+        try {
+          body = await readBody(request);
+        } catch (err) {
+          sendJson(response, 400, { ok: false, error: { code: 'BAD_BODY', message: err.message } });
+          return;
+        }
+        let target;
+        try {
+          target = resolveProjectDir(body.path);
+        } catch (err) {
+          sendJson(response, 400, {
+            ok: false, error: { code: 'PROJECT_INVALID', message: err.message },
+          });
+          return;
+        }
+        starting = (async () => {
+          if (run && run.project !== target.path) await stopRun();
+          if (run && run.project === target.path) return { ...run, reused: true };
+          const registry = await readRegistry();
+          const python = registry.python || pythonFrom();
+          const started = await startServe({
+            project: target.path,
+            allowWrite: Boolean(body.allowWrite),
+            allowBuild: Boolean(body.allowBuild),
+            python,
+            pythonPath: registry.pythonpath,
+          });
+          run = {
+            ...started,
+            allowWrite: Boolean(body.allowWrite),
+            allowBuild: Boolean(body.allowBuild),
+            startedAt: new Date().toISOString(),
+          };
+          // 服务自己挂了（崩溃/被外部杀）：界面不能继续显示「运行中」
+          started.child.once('exit', () => {
+            if (run?.child !== started.child) return;
+            run = null;
+            if (workbench?.managed) {
+              workbench = null;
+              void persistWorkbench().catch(() => undefined);
+            }
+          });
+          // 一键启动的服务只归本进程管；地址和 token 不落盘给别人用
+          workbench = { url: started.url, token: started.token, managed: true };
+          await persistWorkbench();
+          await writeRegistry(undefined, upsertProject(registry, target));
+          return { ...run, reused: false };
+        })();
+        try {
+          const started = await starting;
+          sendJson(response, 200, {
+            ok: true, running: true, reused: Boolean(started.reused),
+            url: started.url, project: started.project, pid: started.pid,
+            command: started.command,
+            allowWrite: Boolean(started.allowWrite),
+            allowBuild: Boolean(started.allowBuild),
+            tokenSet: true,
+          });
+        } catch (err) {
+          sendJson(response, 502, {
+            ok: false,
+            error: { code: 'WORKBENCH_START_FAILED', message: err.message },
+          });
+        } finally {
+          starting = null;
+        }
+        return;
+      }
+      if (request.method === 'POST' && path === '/api/workbench/stop') {
+        const stopped = await stopRun();
+        if (workbench?.managed) {
+          workbench = null;
+          await persistWorkbench();
+        }
+        sendJson(response, 200, { ok: true, running: false, stopped });
         return;
       }
       if (path.startsWith('/api/workbench/')) {
@@ -560,9 +733,14 @@ export async function start(context) {
   const dispose = () => {
     if (disposal) return disposal;
     context.signal.removeEventListener('abort', onAbort);
-    disposal = new Promise((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
-    });
+    // 子进程由我们自己收；宿主只停入口进程，不会替你发现孤儿
+    const stopChild = stopRun().catch(() => false);
+    disposal = Promise.all([
+      new Promise((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+      stopChild,
+    ]).then(() => undefined);
     return disposal;
   };
   const onAbort = () => {

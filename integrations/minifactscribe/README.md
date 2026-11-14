@@ -107,23 +107,33 @@ console.log(a.verdict, a.exitCode, a.red.map((i) => i.code), a.yellow.map((i) =>
 
 ---
 
-## 连接本地工作台（可选）
+## 论文项目与一键启动工作台
 
-MiniFactScribe 可以只当“遥控器”：审计仍由本机 Python 原版跑，JS 只显示结果。
+**一个文件夹就是一个论文项目**（里面有 `paperkit.toml`）。切换项目＝换文件夹；
+工作台的读写、审计只对当前文件夹生效。
 
-```bash
-# 1) 在本机项目根启动工作台（要改稿就加 --allow-write）
-factscribe serve <项目> --allow-write   # 打印 URL 与 token
-
-# 2) MiniFactScribe → 工作台 → 填 URL + token → 连接
-# 3) 载入工作台项目 → 选一节 → 改 → 保存本节 → 用工作台审计
+```text
+工作台页签
+  最近项目 [下拉]        ← 来自 ~/.factscribe/projects.json
+  项目文件夹 [/path/...] ← 手填、或用当前对话项目
+  [加入项目列表] [用当前对话项目] [从列表移除]
+  ☐ 允许写章节与事实（--allow-write）   ☐ 允许编译 PDF（--allow-build）
+  [启动并连接] [停止工作台]
 ```
 
-- 只接受 `http://127.0.0.1:...` / `http://localhost:...`；
-- token 存在 `dataDir/workbench.json`（0600），不返回给页面；
-- 工作台结果只代表**工作台项目**；左侧正文/事实账仍是本地草稿，两者不是同一个项目；
-- 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
-- 写章节只接受审计闭包内的 `.tex`，不新建、不删除、不改名。
+- 启动只跑固定命令，不经过 shell：
+  `<python> -m factscribe serve <文件夹> --port 0 --json [--allow-write] [--allow-build]`；
+  读首行 JSON 拿到 URL/token 后自动连接；「停止工作台」或插件退出时杀掉子进程；
+- 启动前重新校验文件夹：必须存在、是目录、含 `paperkit.toml`；
+- 登记册在 `~/.factscribe/projects.json`（0600），不在 dataDir——重装插件还认得；
+  `dataDir/workbench.json` 只存手动连接的 URL/token；
+- 一键启动的服务跟着本进程活：宿主重启后不会假装还连着；
+- **前提**：能 `import factscribe` 的 Python。没装包时在「高级」里填解释器
+  （如某个 venv 的 `bin/python3`）和包路径（源码仓库根，走 `PYTHONPATH`），
+  或设 `FACTSCRIBE_PYTHON`；
+- 手动连接仍然保留在「高级」里：只接受 `http://127.0.0.1:...` / `http://localhost:...`，
+  token 不进页面；
+- 默认只读；写章节只接受审计闭包内的 `.tex`，不新建、不删除、不改名。
 
 ## AI 起草（宿主 agent）
 
@@ -160,11 +170,13 @@ node --test tests/
 上游的 Python 测试矩阵（`python3 -m unittest discover -s tests`）与本移植件的判据各自独立；
 两侧唯一的交汇点就是这把一致性锁——它不要求两边逐字相同，只要求对同一份夹具报出同一组码。
 
-另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、19 例呈现层可读性不变量
+另有 7 例暗色主题不变量（`tests/styles.test.mjs`）、24 例呈现层可读性不变量
 （`tests/ui.test.mjs`）与 5 例本地工作台连接层（`tests/workbench.test.mjs`）：
 违规码必须有中文短名、内容改过但没重跑审计必须声明结果过期、判定不能只靠颜色承载、
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
-五组共 66 例，全部离线（工作台用例起一个假服务，不连真项目）。
+再加上 6 例项目登记册与启动握手（`tests/projects.test.mjs`）、4 例 Node 路由
+（`tests/server-routes.test.mjs`）：七组共 79 例，全部离线（握手用假解释器，
+不 spawn 真 Python；路由用临时 HOME，不碰真登记册）。
 
 ---
 
@@ -213,8 +225,10 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，21 例
-│   └── workbench.test.mjs       # 本地工作台连接层，5 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，24 例
+│   ├── workbench.test.mjs       # 本地工作台连接层，5 例
+│   ├── projects.test.mjs        # 论文项目登记册 + 启动握手，6 例
+│   └── server-routes.test.mjs   # 项目/启动路由，4 例
 └── miniapp/
     ├── miniapp.json             # surface / runtime 配置
     ├── client/                  # 浏览器端：index.html / app.js / styles.css
@@ -240,7 +254,10 @@ integrations/minifactscribe/
 
 - 默认不联网：审计与演示数据都在本地；只有点「联网核验存在性」会访问 Crossref / arXiv。
 - 项目数据存在宿主分配的私有 `dataDir`，不写工作区。
-- 连接本地工作台时只访问用户填的本机回环地址，token 存在私有 dataDir；不写工作台项目。
+- 只连本机回环地址；token 不返回页面。一键启动只跑固定命令，项目文件夹由你指定并校验
+  （必须含 `paperkit.toml`），不写项目文件夹除非你点保存/采纳。
+- 项目登记册在 `~/.factscribe/projects.json`：只存文件夹路径、显示名、上次使用时间，
+  不存正文；你可以随时删。
 - 声明 `hostAccess: ["navigation.read"]`：只用来判断当前是不是从论文对话打开（`view`），不读对话内容。
 - 声明 `agentAccess` 含 `session.read`：只调用 `agent.session()`（不带 id）读**当前对话**的
   项目文件夹；不列、不读其他对话。

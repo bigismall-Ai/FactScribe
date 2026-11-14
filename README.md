@@ -21,7 +21,8 @@ python3 -m factscribe audit <项目> --build     # 先编 PDF 再审计
 python3 -m factscribe style --doc README.md    # 单篇文风体检
 ```
 
-本地工作台页面：`python3 -m factscribe web <项目>`，启动后打印带 token 的页面地址；
+本地工作台页面：`python3 -m factscribe web [项目]`，启动后打印带 token 的页面地址；
+不给项目也能启动：页面里从最近项目列表选文件夹（登记册 `~/.factscribe/projects.json`）；
 界面与 MiniFactScribe 是同一份（源在 `factscribe/web/`），网页里自动隐藏宿主专属区；
 `--dev` 让网页也显示 MiniApp 的画面，方便开发对照。
 只想接 API 时用 `python3 -m factscribe serve <项目>`。
@@ -113,7 +114,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1162 例，全离线
+python3 -m unittest discover -s tests     # 1164 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

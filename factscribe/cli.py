@@ -153,7 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
                     "供 Mini FactScribe、本地页面或外部 agent 调用。"
                     "只绑 127.0.0.1 / localhost；每次启动生成随机 Bearer token；"
                     "serve 本身不写项目、不改退出码，audit 的判定仍在 payload.exit。")
-    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("project", nargs="?", default=None,
+                    help="项目目录（省略＝只起服务，在页面里从项目列表选）")
     sp.add_argument("--host", default="127.0.0.1",
                     choices=sorted(LOOPBACK_HOSTS),
                     help="监听地址（只允许回环；默认 127.0.0.1）")
@@ -191,7 +192,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="等同 serve --ui：起本地 HTTP 服务，并在 GET / 提供"
                     "左章节 / 中正文 / 右证据与审计的页面。默认只读；"
                     "--allow-write 才开放改章节、追加事实与证据冻结。")
-    sp.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    sp.add_argument("project", nargs="?", default=None,
+                    help="项目目录（省略＝只起服务，在页面里选论文项目）")
     sp.add_argument("--host", default="127.0.0.1",
                     choices=sorted(LOOPBACK_HOSTS),
                     help="监听地址（只允许回环；默认 127.0.0.1）")
@@ -486,8 +488,9 @@ def cmd_doctor(args) -> int:
 
 def cmd_serve(args) -> int:
     """本地工作台 HTTP API：启动后阻塞，直到 Ctrl+C。"""
+    project = Path(args.project) if args.project else None
     server, token = create_server(
-        Path(args.project), host=args.host, port=args.port,
+        project, host=args.host, port=args.port,
         token=(args.token or None), allow_write=bool(args.allow_write),
         serve_ui=bool(getattr(args, "ui", False)),
         allow_build=bool(args.allow_build))
@@ -502,7 +505,8 @@ def cmd_serve(args) -> int:
         print(json.dumps({
             "event": "listening", "ok": True, "command": command,
             "url": url, "ui": ui_url or None,
-            "token": token, "project": str(server.project),
+            "token": token,
+            "project": str(server.project) if server.project else None,
             "api": ["/api/health", "/api/capabilities", "/api/status",
                     "/api/brief", "/api/audit", "/api/project"],
             "write": bool(args.allow_write),
@@ -510,7 +514,7 @@ def cmd_serve(args) -> int:
         }, ensure_ascii=False), flush=True)
     else:
         print("== factscribe %s ==" % command)
-        print("项目：%s" % server.project)
+        print("项目：%s" % (server.project or "未选择（在页面里选）"))
         print("URL：%s" % url)
         if ui_url:
             print("页面：%s" % ui_url)

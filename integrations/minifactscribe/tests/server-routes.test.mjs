@@ -426,3 +426,37 @@ test('示例论文：还没连工作台时也让 Python 装一份（兜底）', 
   assert.equal(again.status, 200);
   assert.equal(again.body.created, false, '已存在且没要求重置 → 不重写');
 });
+
+
+test('节页码代理：file 查询串原样送到 Python', async () => {
+  const seen = [];
+  const upstream = createServer((request, response) => {
+    const reply = (code, body) => {
+      response.writeHead(code, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(body));
+    };
+    if (request.url === '/api/health') return reply(200, { ok: true, service: 'workbench' });
+    if (request.url === '/api/capabilities') return reply(200, { ok: true, engine: 'python' });
+    if (request.url.startsWith('/api/section-page')) {
+      seen.push(request.url);
+      return reply(200, { ok: true, page: 3, pages: 9, found: true, title: 'Intro', file: 'sections/01.tex' });
+    }
+    return reply(404, { ok: false, error: { code: 'NOT_FOUND', message: 'no' } });
+  });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = 'http://127.0.0.1:' + upstream.address().port;
+  try {
+    const connect = await call('/api/workbench', {
+      method: 'PUT',
+      body: JSON.stringify({ url: upstreamUrl, token: 'upstream-token' }),
+    });
+    assert.equal(connect.status, 200, JSON.stringify(connect.body));
+    const res = await call('/api/workbench/section-page?file=' + encodeURIComponent('sections/01.tex'));
+    assert.equal(res.status, 200);
+    assert.equal(res.body.page, 3);
+    assert.equal(seen.length, 1);
+    assert.match(seen[0], /file=sections%2F01\.tex/);
+  } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});

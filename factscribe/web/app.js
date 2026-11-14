@@ -1912,7 +1912,7 @@ async function setWbMode(mode) {
   renderWbMode();
   if (state.wbMode !== 'preview') return;
   if (state.wbPdfUrl) {
-    setWbPreviewState('已显示上次编译的 PDF');
+    await locateWbSectionPage();
     return;
   }
   await buildWbPreview();
@@ -1972,6 +1972,7 @@ async function buildWbPreview() {
   try {
     await loadWbPdfBlob();
     setWbPreviewState('PDF 已就绪；这里不显示就点「在新标签打开 PDF」');
+    await locateWbSectionPage();
   } catch (err) {
     setWbPreviewState('PDF 读不出来：' + err.message);
     setWbPreviewError(String(err.message || ''));
@@ -1997,6 +1998,26 @@ async function loadWbPdfBlob() {
   if (open) {
     open.setAttribute('href', state.wbPdfUrl);
     open.hidden = false;
+  }
+}
+
+/** 整篇 PDF 里，当前节在第几页；预览直接翻到那一页。 */
+async function locateWbSectionPage() {
+  if (state.wbMode !== 'preview' || !state.wbPdfUrl) return;
+  const file = $('#workbench-section-select')?.value || '';
+  const embed = $('#wb-preview-pdf');
+  if (!file || !embed) return;
+  try {
+    const data = await api(wb('/section-page?file=' + encodeURIComponent(file)));
+    const page = Math.max(1, Number(data.page) || 1);
+    state.wbPdfPage = page;
+    embed.setAttribute('src', state.wbPdfUrl + '#page=' + page +
+      '&zoom=page-width&toolbar=0');
+    setWbPreviewState(data.found
+      ? '本节在第 ' + page + ' 页 · 共 ' + data.pages + ' 页'
+      : 'PDF 已就绪；没找到本节标题，从第 1 页开始');
+  } catch (err) {
+    setWbPreviewState('PDF 已就绪；页码定位失败：' + err.message);
   }
 }
 
@@ -2762,6 +2783,9 @@ function wire() {
     if (label) label.textContent = $('#workbench-section-select').value;
     renderAi();
     renderGuide();
+    if (state.wbMode === 'preview' && state.wbPdfUrl) {
+      locateWbSectionPage().catch(() => {});
+    }
   });
 
   // 侧栏目录：点一下就切到那一节，并把工作台打开（章节本身就是入口）

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const CSS = readFileSync(new URL('../miniapp/client/styles.css', import.meta.url), 'utf8');
+const CSS = readFileSync(new URL('../miniapp/client/app.css', import.meta.url), 'utf8');
 
 /** 取某个 @media 块的内容（花括号配平）。 */
 function mediaBlock(query) {

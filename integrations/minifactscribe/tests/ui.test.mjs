@@ -13,7 +13,7 @@ import { test } from 'node:test';
 
 const HTML = readFileSync(new URL('../miniapp/client/index.html', import.meta.url), 'utf8');
 const JS = readFileSync(new URL('../miniapp/client/app.js', import.meta.url), 'utf8');
-const CSS = readFileSync(new URL('../miniapp/client/styles.css', import.meta.url), 'utf8');
+const CSS = readFileSync(new URL('../miniapp/client/app.css', import.meta.url), 'utf8');
 const AUDIT = readFileSync(new URL('../miniapp/node/audit.mjs', import.meta.url), 'utf8');
 const SERVER = readFileSync(new URL('../miniapp/node/server.mjs', import.meta.url), 'utf8');
 const MINIAPP = readFileSync(new URL('../miniapp/miniapp.json', import.meta.url), 'utf8');
@@ -175,8 +175,9 @@ test('工作台可载入项目并按节保存，且保存前说明写给工作�
   assert.match(HTML, /id="workbench-section-select"/, '应有节选择');
   assert.match(HTML, /id="btn-workbench-save"/, '应有保存按钮');
   assert.match(HTML, /写给工作台项目，不是本地草稿/, '必须说明写入目标');
-  assert.match(JS, /\/api\/workbench\/project/, '应载入工作台项目');
-  assert.match(JS, /\/api\/workbench\/sections/, '应能保存工作台章节');
+  assert.match(JS, /wb\('\/project'\)/, '应载入工作台项目（经 wb 适配）');
+  assert.match(JS, /wb\('\/sections'\)/, '应能保存工作台章节（经 wb 适配）');
+  assert.match(JS, /MODE\.mini \? '\/api\/workbench' : '\/api'/, 'MiniApp 走 Node 代理，网页直连 Python');
 });
 
 
@@ -239,4 +240,35 @@ test('一键启动只跑固定命令：不过 shell、不收任意命令', () =>
 test('宿主上下文检测真的在启动时跑，不是只定义', () => {
   assert.match(JS, /await detectHostContext\(\)/, 'init 必须先问宿主打开位置');
   assert.match(JS, /session-banner/, '非对话要能看见提示条');
+});
+
+
+test('一套界面两种启动：宿主检测决定显示哪一区', () => {
+  assert.match(JS, /mcode\?\.miniapp/, '靠宿主对象判断是不是 MiniApp');
+  assert.match(JS, /showHostUi/, '宿主专属区由一个开关控制');
+  assert.match(JS, /applyMode/, '启动时要应用模式');
+  assert.match(JS, /data-tab="' \+ tab \+ '"/, '按页签逐个显隐');
+  assert.match(JS, /'manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai'/, '草稿与 AI 页签算宿主专属');
+});
+
+test('网页模式：直连 Python、要 token、藏掉宿主专属按钮', () => {
+  assert.match(JS, /MODE\.mini \? '\/api\/workbench' : '\/api'/, '接口按模式分流');
+  assert.match(JS, /Authorization = 'Bearer ' \+ state\.token/, '网页模式带 token');
+  assert.match(JS, /showTokenPanel/, '缺 token 要提示粘贴');
+  assert.match(HTML, /id="token-panel"/, '需要 token 面板');
+  assert.match(JS, /这是 MiniApp 专属按钮/, '网页里启动按钮要说明为什么不能点');
+});
+
+test('开发模式 --dev：网页也显示宿主专属区，并说明只是预览', () => {
+  assert.match(JS, /get\('dev'\) === '1'/, '页面认 ?dev=1');
+  assert.match(JS, /开发模式：宿主专属的按钮和输入都显示出来了/, '要说清只是界面预览');
+});
+
+test('编译、事实、证据在统一界面里都有入口', () => {
+  assert.match(HTML, /id="btn-wb-build"/, '应有编译 PDF');
+  assert.match(HTML, /id="wb-fact-form"/, '应有工作台事实表单');
+  assert.match(HTML, /id="btn-wb-freeze"/, '应有证据冻结');
+  assert.match(JS, /wb\('\/build'\)/, '编译走工作台接口');
+  assert.match(JS, /wb\('\/evidence'\)/, '证据走工作台接口');
+  assert.match(JS, /wb\('\/pdf'\)/, 'PDF 走工作台接口');
 });

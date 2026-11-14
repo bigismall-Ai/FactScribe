@@ -1,14 +1,28 @@
 # SPEC-WEB：本地工作台页面
 
-日期：2026-11-13　　状态：v1（只读默认，可写需显式开启）
+日期：2026-11-14　　状态：v2（与 MiniApp 共用同一份界面；只读默认，可写需显式开启）
 
 `factscribe web <项目>` 等于 `serve --ui`：同一个本地 HTTP 服务，既提供 API，
-也在 `GET /` 提供三栏页面。页面只依赖本仓静态文件，不引入前端框架。
+也在 `GET /` 提供工作台页面。这个页面与 MiniFactScribe 的页面是**同一份文件**
+（源在 `factscribe/web/`，插件里用 `scripts/sync-miniapp-ui.sh` 同步）；页面自己判断
+是在宿主里打开还是在浏览器里打开，据此显示不同的区。
+
+## 0. 一套界面，两种模式
+
+| 模式 | 判定 | 显示 |
+|---|---|---|
+| MiniApp | `window.mcode.miniapp` 存在 | 全部：正文/事实账/引用/保护/审计草稿、工作台、AI 起草、项目启动 |
+| 网页 | 浏览器直接打开 | 只留「工作台」：真实论文项目、事实、证据、编译 PDF、审计 |
+| 开发预览 | 网址带 `?dev=1`（`web --dev` 会打出来） | 网页也显示宿主专属区，但启动/草稿/AI 只做界面预览，按钮禁用并说明 |
+
+接口分流：`wb('/project')` 在 MiniApp 走 Node 代理 `/api/workbench/project`，
+在网页直连 Python `/api/project`；网页模式的 token 放 `Authorization` 头，
+MiniApp 的 token 由 Node 保管、不进页面。
 
 ## 1. 命令
 
 ```bash
-factscribe web <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--allow-build]
+factscribe web <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--allow-build] [--dev]
 ```
 
 启动打印：
@@ -23,23 +37,27 @@ URL：http://127.0.0.1:<port>
 
 ## 2. 页面
 
-三栏布局：
+「工作台」页签（两种模式都有）：
 
-| 区域 | 内容 |
+| 区块 | 内容 |
 |---|---|
-| 左 | 章节列表（项目闭包内 `.tex`），点选加载 |
-| 中 | 当前章节编辑器；保存按钮；只读时禁用 |
-| 右 | 审计结论与 findings、事实账表 + 追加事实表单、证据冻结状态与按钮 |
+| 项目 | MiniApp 模式显示最近项目、一键启动与权限开关；网页模式显示「本机服务」 |
+| 章节 | 下拉选节 + 编辑器 + 保存（只读时禁用） |
+| 审计 | 结论、红黄 findings、退出码 |
+| 事实账 | 表格 + 追加事实表单（ID/主张/值/来源必填） |
+| 证据 | 冻结状态、lock 哈希、mismatch/unfrozen，冻结/解冻按钮 |
+| 编译 | 编译 PDF、打开 PDF；需 `--allow-build` |
 
-- 启动后自动载入 `/api/project` 并跑一次 `/api/audit`；
+- 启动后自动载入工作台项目并跑一次审计；
 - 保存走 `PUT /api/sections`，保存后不自动重审，由「运行审计」按钮触发；
 - 审计红黄显示代码、中文短名、位置与消息；只显示前 40 条；
-- 事实表单走 `POST /api/facts`；ID/主张/值/来源必填，来源可从项目 sources 选；
+- 事实表单走工作台事实接口（网页 `/api/facts`，MiniApp `/api/workbench/facts`）；ID/主张/值/来源必填，来源可从项目 sources 选；
   追加后刷新事实表并重跑审计；工具只打印该抄进清单的那一行，**不代签**；
-- 顶部「编译 PDF」调 `POST /api/build`；成功后可「打开 PDF」（`GET /api/pdf`）；
+- 「编译 PDF」调工作台 build 接口；成功后可「打开 PDF」（`GET /api/pdf`）；
   需要启动时加 `--allow-build`，否则按钮禁用并说明；
 - 证据区显示 lock 哈希/条数、mismatch、unfrozen 与最后动作；
-- 冻结/解冻走 `POST /api/evidence/*`；解冻必须填理由。
+- 冻结/解冻走工作台 evidence 接口；解冻必须填理由；
+- 网页模式下宿主专属区（草稿、AI、启动）隐藏；`?dev=1` 才显示，且只做界面预览。
 
 ## 3. 安全
 
@@ -51,7 +69,7 @@ URL：http://127.0.0.1:<port>
 ## 4. 非目标
 
 - 不做富文本/Markdown 预览；正文就是 LaTeX 源码；
-- 不做 bib 编辑、PDF 编译（仍走 CLI / MiniFactScribe）；
+- 不做 bib 编辑；PDF 编译只在 `--allow-build` 下开放；
 - 事实表单只追加，不编辑/删除已有事实；
 - 不引入前端构建链或第三方依赖。
 
@@ -59,4 +77,6 @@ URL：http://127.0.0.1:<port>
 
 `tests/test_web.py`（7 例）：首页免 token、静态资源、事实表单、编译默认拒绝、
 API 仍要 token、带 token 读项目、`--allow-build` 下编译并下载 PDF；
-`tests/test_packaging.py` 覆盖 `web/*` 是否随 wheel 发布。
+`integrations/minifactscribe/tests/sync.test.mjs`（4 例）钉住两边界面逐字节一致；
+`integrations/minifactscribe/tests/ui.test.mjs` 覆盖模式判定、网页 token、
+`--dev` 提示、编译/事实/证据入口。

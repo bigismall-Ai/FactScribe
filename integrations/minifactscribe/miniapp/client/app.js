@@ -1,5 +1,6 @@
-// 事实闸 · Client
-// 呈现与交互；所有写操作走 Node 领域服务，页面不直接落盘。
+// 事实闸 · Client（网页与 MiniApp 共用）
+// 呈现与交互；写操作按当前模式走后端（MiniApp 经 Node，网页直连 Python），
+// 页面自己不落盘。判定一律来自 Python 原版，这里只显示。
 //
 // 呈现层的三条自律（2026-11 改版）：
 //   1. 过期就说过期——内容改了、审计没重跑，旧结论不许继续冒充现状。
@@ -10,6 +11,33 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// 同一份界面，两种启动方式：
+//   宿主里打开（window.mcode.miniapp 存在）＝ MiniApp 面，带 AI 起草、项目启动、本地草稿；
+//   浏览器直接打开（factscribe web）＝ 只操作真实论文项目。
+// ?dev=1 或 --dev 启动时，网页也把宿主专属的按钮显示出来，方便对照调试。
+const MODE = detectMode();
+
+function detectMode() {
+  const mini = Boolean(globalThis.window?.mcode?.miniapp);
+  const dev = new URLSearchParams(location.search).get('dev') === '1';
+  return { mini, dev, showHostUi: mini || dev };
+}
+
+/** 工作台接口：MiniApp 走 Node 代理，网页直连 Python。 */
+function wb(suffix) {
+  return (MODE.mini ? '/api/workbench' : '/api') + suffix;
+}
+
+function tokenFromUrl() {
+  const url = new URL(location.href);
+  const token = url.searchParams.get('token') || '';
+  if (token) {
+    url.searchParams.delete('token');
+    history.replaceState(null, '', url.toString());
+  }
+  return token || sessionStorage.getItem('factscribe.token') || '';
+}
 
 const state = {
   project: null,
@@ -34,6 +62,8 @@ const state = {
   hostKey: '',
   hostWorkspace: '',
   hostWorkspaceDefault: false,
+  token: '',
+  wbEvidence: null,
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -112,18 +142,29 @@ function formatLocation(loc) {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { 'content-type': 'application/json' }, ...opts });
+  const headers = { 'content-type': 'application/json', ...(opts.headers || {}) };
+  if (!MODE.mini && state.token) headers.Authorization = 'Bearer ' + state.token;
+  const res = await fetch(path, { ...opts, headers });
   let data = {};
   try {
     data = await res.json();
   } catch {
     data = {};
   }
+  if (res.status === 401) {
+    showTokenPanel();
+    throw new Error('token 不对或缺失');
+  }
   if (!res.ok || data.ok === false) {
     const message = data?.error?.message || data?.error || 'HTTP ' + res.status;
     throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
   }
   return data;
+}
+
+function showTokenPanel() {
+  const panel = $('#token-panel');
+  if (panel) panel.hidden = false;
 }
 
 async function sha256Hex(text) {
@@ -201,6 +242,11 @@ function setSaveState(text, failed) {
 }
 
 async function saveNow() {
+  if (!MODE.mini) {
+    // 本地草稿存在 MiniApp 的私有目录；网页里只做界面预览，不写任何地方
+    setSaveState('开发预览：草稿不写盘', false);
+    return true;
+  }
   setSaveState('保存中…', false);
   try {
     await api('/api/project', { method: 'PUT', body: JSON.stringify({ project: state.project }) });
@@ -701,6 +747,10 @@ function showFormErrors(errs) {
 // ------------------------------------------------------------------ 动作
 
 async function runAudit(opts = {}) {
+  if (!MODE.mini) {
+    toast('本地草稿审计需要 MiniApp 宿主；开发预览里不跑');
+    return;
+  }
   const btn = $('#btn-audit');
   btn.disabled = true;
   btn.textContent = '审计中…';
@@ -753,6 +803,57 @@ async function loadDemo() {
 // ------------------------------------------------------------------ AI 起草
 // 页面发起的 agent session 会绑定当前项目目录；Node 发起不会。
 // 输出只进候选区，采纳后写工作台项目，再跑闸门。
+
+function applyMode() {
+  const name = $('#app-name');
+  if (name) name.textContent = MODE.mini ? 'MiniFactScribe' : 'FactScribe';
+  const sub = $('#app-sub');
+  if (sub) {
+    sub.textContent = MODE.mini
+      ? 'FactScribe · 数字与引用的机械闸门'
+      : '本地工作台 · 真实论文项目';
+  }
+  const hostTabs = ['manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai'];
+  for (const tab of hostTabs) {
+    const btn = document.querySelector('.nav-item[data-tab="' + tab + '"]');
+    if (btn) btn.hidden = !MODE.showHostUi;
+  }
+  for (const sel of ['#project-name', '#btn-demo', '#save-state', '#verdict', '#btn-audit']) {
+    const el = $(sel);
+    if (el) el.hidden = !MODE.showHostUi;
+  }
+  for (const sel of ['.project-block', '#workbench-host-path', '.manual-connect']) {
+    const el = $(sel);
+    if (el) el.hidden = !MODE.showHostUi;
+  }
+  if (!MODE.mini) {
+    // 网页里没有 Node：启动/项目登记只做界面预览，不给误点
+    for (const sel of ['#btn-workbench-start', '#btn-workbench-stop', '#btn-workbench-connect',
+      '#btn-workbench-disconnect', '#btn-project-add', '#btn-project-host',
+      '#btn-project-forget', '#btn-project-python']) {
+      const el = $(sel);
+      if (!el) continue;
+      el.disabled = true;
+      el.title = '这是 MiniApp 专属按钮；网页里由你启动的服务已经就绪';
+    }
+  }
+  if (!MODE.mini) {
+    for (const sel of ['#btn-demo', '#btn-verify', '#btn-protect', '#btn-add-fact',
+      '#btn-delete-fact', '#btn-audit', '#btn-rerun']) {
+      const el = $(sel);
+      if (!el) continue;
+      el.disabled = true;
+      el.title = '本地草稿需要 MiniApp 宿主；开发预览里只显示界面';
+    }
+    const banner = $('#session-banner');
+    if (banner) {
+      banner.hidden = !MODE.dev;
+      if (MODE.dev) {
+        banner.textContent = '开发模式：宿主专属的按钮和输入都显示出来了，但启动工作台、本地草稿和 AI 起草需要 MiniApp 宿主；网页里请直接用下面已经连上的服务。';
+      }
+    }
+  }
+}
 
 function renderSessionBanner() {
   const banner = $('#session-banner');
@@ -958,7 +1059,7 @@ async function acceptAi() {
   if (!state.ai.candidate) throw new Error('还没有候选正文');
   const file = aiSectionFile();
   if (!file) throw new Error('先在工作台页签选一节');
-  await api('/api/workbench/sections', {
+  await api(wb('/sections'), {
     method: 'PUT',
     body: JSON.stringify({ file, text: state.ai.candidate }),
   });
@@ -1146,7 +1247,9 @@ function renderWorkbench() {
   const badge = $('#workbench-badge');
   const summary = $('#workbench-summary');
   if (!badge) return;
-  badge.textContent = state.run ? '运行中' : (w.configured ? '已配置' : '未连接');
+  badge.textContent = MODE.mini
+    ? (state.run ? '运行中' : (w.configured ? '已配置' : '未连接'))
+    : '本机服务';
   renderProjects();
   const runState = $('#workbench-run-state');
   if (runState) {
@@ -1163,7 +1266,7 @@ function renderWorkbench() {
   $('#workbench-token').placeholder = w.tokenSet
     ? '已保存（留空不改）'
     : '启动 serve 时打印的 token';
-  $('#btn-workbench-disconnect').disabled = !w.configured;
+  $('#btn-workbench-disconnect').disabled = MODE.mini ? !w.configured : true;
   $('#btn-workbench-audit').disabled = !w.configured;
 
   if (!w.configured) {
@@ -1173,7 +1276,9 @@ function renderWorkbench() {
   }
   const s = state.workbenchStatus;
   if (!s) {
-    summary.innerHTML = '<div class="line-empty">已配置，正在读取工作台状态…</div>';
+    summary.innerHTML = '<div class="line-empty">' + (MODE.mini || state.token
+      ? '已配置，正在读取工作台状态…'
+      : '需要 token：把启动 <code>factscribe web</code> 时打印的 token 贴上。') + '</div>';
   } else {
     summary.innerHTML =
       '<div class="verdict-card green">' +
@@ -1246,9 +1351,150 @@ function renderWorkbench() {
     (findings.length > 12 ? '<div class="muted-note">只显示前 12 条；完整结果看 serve 的 --json 输出。</div>' : '');
 }
 
+
+// ------------------------------------------------ 工作台：事实账 / 证据 / 编译
+// 这三块原来只在本地面板里；统一界面后 MiniApp 和网页共用，走同一套 Python 判据。
+
+function renderWorkbenchFacts() {
+  const project = state.workbenchProject;
+  const facts = project?.facts || [];
+  const sources = project?.sources || [];
+  const count = $('#wb-facts-count');
+  if (count) count.textContent = facts.length ? '（' + facts.length + ' 条）' : '（还没有事实）';
+  const sourcesBox = $('#wb-fact-sources');
+  if (sourcesBox) {
+    sourcesBox.innerHTML = sources.map((s) => '<option value="' + esc(s.id) + '"></option>').join('');
+  }
+  const form = $('#wb-fact-form');
+  if (form) form.hidden = Boolean(project?.read_only);
+  const box = $('#wb-facts');
+  if (!box) return;
+  if (!facts.length) {
+    box.innerHTML = '<div class="line-empty">账里还没有事实。</div>';
+    return;
+  }
+  box.innerHTML = '<table class="facts-table"><thead><tr><th>ID</th><th>主张</th><th>值</th><th>来源</th></tr></thead><tbody>' +
+    facts.map((f) => '<tr><td>' + esc(f.id) + '</td><td>' + esc(f.claim) +
+      '</td><td class="code">' + esc(f.value) + '</td><td class="code">' + esc(f.source) +
+      '</td></tr>').join('') + '</tbody></table>';
+}
+
+async function addWorkbenchFact(event) {
+  event.preventDefault();
+  const body = {
+    id: $('#wb-fact-id').value.trim(),
+    claim: $('#wb-fact-claim').value.trim(),
+    value: $('#wb-fact-value').value.trim(),
+    source: $('#wb-fact-source').value.trim(),
+    locator: $('#wb-fact-locator').value.trim(),
+    confidence: $('#wb-fact-confidence').value,
+    derived_from: $('#wb-fact-derived').value.trim(),
+    expr: $('#wb-fact-expr').value.trim(),
+    note: $('#wb-fact-note').value.trim(),
+  };
+  if (!body.id || !body.claim || !body.value || !body.source) throw new Error('ID、主张、值、来源都要填');
+  if (body.derived_from && !body.expr) throw new Error('填了推算父项就要填算式');
+  if (body.expr && !body.derived_from) throw new Error('填了算式就要填推算父项');
+  const data = await api(wb('/facts'), { method: 'POST', body: JSON.stringify(body) });
+  $('#wb-fact-result').textContent = '已追加 ' + data.id + '。该抄进清单：' +
+    (data.manifest_line || '（看服务输出）');
+  $('#wb-fact-form').reset();
+  toast('已追加 ' + data.id);
+  await loadWorkbenchProject();
+  await runWorkbenchAudit();
+}
+
+function renderWorkbenchEvidence() {
+  const e = state.wbEvidence || {};
+  const meta = $('#wb-evidence-meta');
+  if (meta) meta.textContent = e.lock ? '已冻结' : '未冻结';
+  const bits = [];
+  if (e.defined === false) bits.push('未声明 [evidence]');
+  if (e.lock) {
+    bits.push('lock ' + String(e.lock.sha256 || '').slice(0, 12) + ' · ' +
+      esc(e.lock.entries) + ' 条');
+  }
+  if (e.mismatch) bits.push('<span class="chip chip-red">清单与冻结件不一致</span>');
+  if (e.unfrozen) bits.push('<span class="chip chip-yellow">已解冻：' + esc(e.unfrozen.reason || '') + '</span>');
+  if (e.log?.action) bits.push('最后动作 ' + esc(e.log.action));
+  const box = $('#wb-evidence');
+  if (!box) return;
+  box.innerHTML = bits.length
+    ? bits.map((b) => '<div class="muted-note">' + b + '</div>').join('')
+    : '<div class="line-empty">没有冻结记录。</div>';
+}
+
+async function loadWorkbenchEvidence() {
+  if (!state.workbenchProject) return;
+  state.wbEvidence = await api(wb('/evidence'));
+  renderWorkbenchEvidence();
+}
+
+async function freezeWorkbenchEvidence() {
+  const reason = prompt('冻结理由（可留空）', '') ?? null;
+  if (reason === null) return;
+  const data = await api(wb('/evidence/freeze'), {
+    method: 'POST', body: JSON.stringify({ reason }),
+  });
+  toast('已冻结：' + String(data.sha256 || '').slice(0, 12));
+  await loadWorkbenchEvidence();
+  await runWorkbenchAudit();
+}
+
+async function unfreezeWorkbenchEvidence() {
+  const reason = prompt('为什么改证据清单（必填）', '');
+  if (!reason || !reason.trim()) throw new Error('解冻必须写理由');
+  await api(wb('/evidence/unfreeze'), {
+    method: 'POST', body: JSON.stringify({ reason: reason.trim() }),
+  });
+  toast('已解冻；改完记得重新冻结');
+  await loadWorkbenchEvidence();
+  await runWorkbenchAudit();
+}
+
+async function buildWorkbenchPdf() {
+  const el = $('#wb-build-state');
+  el.textContent = '编译中…';
+  const data = await api(wb('/build'), { method: 'POST' });
+  if (data.ok) {
+    el.textContent = '编译成功 · ' + data.pdf_bytes + ' 字节';
+    $('#btn-wb-pdf').hidden = false;
+    toast('PDF 编译完成');
+  } else {
+    el.textContent = '编译失败 · 退出码 ' + data.exit;
+    el.title = String(data.output_text || '').slice(0, 2000);
+    toast('编译失败，悬停看输出');
+  }
+}
+
+async function openWorkbenchPdf() {
+  const headers = {};
+  if (!MODE.mini && state.token) headers.Authorization = 'Bearer ' + state.token;
+  const res = await fetch(wb('/pdf'), { headers });
+  if (!res.ok) throw new Error('PDF 还没生成或不可读（HTTP ' + res.status + '）');
+  const blob = await res.blob();
+  const win = window.open('', '_blank');
+  if (!win) throw new Error('浏览器拦了新窗口');
+  win.location.href = URL.createObjectURL(blob);
+}
+
 async function loadWorkbenchProject() {
-  state.workbenchProject = await api('/api/workbench/project');
+  state.workbenchProject = await api(wb('/project'));
   renderWorkbench();
+  renderWorkbenchFacts();
+  const project = state.workbenchProject;
+  const build = $('#btn-wb-build');
+  if (build) {
+    build.disabled = !project?.build_allowed;
+    build.title = project?.build_allowed
+      ? '执行 project.build 或自动编译 main.tex'
+      : '启动时没加 --allow-build';
+  }
+  const freeze = $('#btn-wb-freeze');
+  const unfreeze = $('#btn-wb-unfreeze');
+  if (freeze) freeze.disabled = Boolean(project?.read_only);
+  if (unfreeze) unfreeze.disabled = Boolean(project?.read_only);
+  await loadWorkbenchEvidence();
 }
 
 async function saveWorkbenchSection() {
@@ -1257,7 +1503,7 @@ async function saveWorkbenchSection() {
   const file = $('#workbench-section-select').value;
   const text = $('#workbench-section-text').value;
   $('#workbench-save-state').textContent = '保存中…';
-  await api('/api/workbench/sections', {
+  await api(wb('/sections'), {
     method: 'PUT',
     body: JSON.stringify({ file, text }),
   });
@@ -1267,6 +1513,13 @@ async function saveWorkbenchSection() {
 }
 
 async function loadWorkbench() {
+  if (!MODE.mini) {
+    // 网页就是 Python 服务本身：没有 Node 代理，也没有一键启动
+    state.workbench = { configured: true, url: location.origin, tokenSet: Boolean(state.token) };
+    state.run = null;
+    renderWorkbench();
+    return;
+  }
   try {
     const data = await api('/api/workbench');
     state.workbench = { configured: Boolean(data.configured), url: data.url || '', tokenSet: Boolean(data.tokenSet) };
@@ -1281,7 +1534,7 @@ async function loadWorkbench() {
 }
 
 async function loadWorkbenchStatus() {
-  state.workbenchStatus = await api('/api/workbench/status');
+  state.workbenchStatus = await api(wb('/status'));
   renderWorkbench();
 }
 
@@ -1315,7 +1568,7 @@ async function disconnectWorkbench() {
 
 async function runWorkbenchAudit() {
   $('#workbench-status').textContent = '工作台审计中…';
-  state.workbenchAudit = await api('/api/workbench/audit', { method: 'POST' });
+  state.workbenchAudit = await api(wb('/audit'), { method: 'POST' });
   $('#workbench-status').textContent = '工作台审计完成';
   renderWorkbench();
 }
@@ -1648,51 +1901,125 @@ function wire() {
   $('#btn-export-close').addEventListener('click', () => {
     $('#export-out').hidden = true;
   });
+
+  // 工作台：事实、证据、编译、token
+  $('#wb-fact-form').addEventListener('submit', (e) => {
+    addWorkbenchFact(e).catch((err) => {
+      $('#wb-fact-result').textContent = '追加失败：' + err.message;
+      toast('追加失败：' + err.message);
+    });
+  });
+  $('#btn-wb-freeze').addEventListener('click', () => {
+    freezeWorkbenchEvidence().catch((e) => toast('冻结失败：' + e.message));
+  });
+  $('#btn-wb-unfreeze').addEventListener('click', () => {
+    unfreezeWorkbenchEvidence().catch((e) => toast('解冻失败：' + e.message));
+  });
+  $('#btn-wb-build').addEventListener('click', () => {
+    buildWorkbenchPdf().catch((e) => { $('#wb-build-state').textContent = '编译失败：' + e.message; });
+  });
+  $('#btn-wb-pdf').addEventListener('click', () => {
+    openWorkbenchPdf().catch((e) => toast(e.message));
+  });
+  $('#btn-token').addEventListener('click', () => {
+    const token = $('#token-input').value.trim();
+    if (!token) return toast('先填 token');
+    state.token = token;
+    sessionStorage.setItem('factscribe.token', token);
+    $('#token-panel').hidden = true;
+    loadWorkbenchStatus()
+      .then(() => loadWorkbenchProject())
+      .then(() => runWorkbenchAudit())
+      .catch((e) => toast('连接失败：' + e.message));
+  });
+}
+
+async function loadPreviewDraft() {
+  // 开发预览：把演示草稿塞进界面，只为看布局；不联网、不写盘、不审计
+  try {
+    const demo = await fetch('/demo.json', { cache: 'no-store' }).then((r) => r.json());
+    state.project = demo;
+    state.audit = null;
+    state.verify = null;
+    state.auditSig = null;
+    const name = $('#project-name');
+    if (name) name.value = demo.name;
+    setSaveState('开发预览：草稿不写盘', false);
+    renderVerdict();
+  } catch {
+    // 预览载入失败不影响工作台
+  }
 }
 
 async function init() {
-  // 先问宿主：这是不是从论文对话打开的（fail-closed 的前提）
-  await detectHostContext();
-  try {
-    const data = await api('/api/state');
-    state.project = data.project;
-    // 上轮的联网核验结论（服务端已落盘）——刷新后红牌不该静默消失
-    state.verify = data.verify || null;
-  } catch (err) {
-    toast('加载失败：' + err.message);
-    return;
+  applyMode();
+  if (MODE.mini) {
+    // 先问宿主：这是不是从论文对话打开的（fail-closed 的前提）
+    await detectHostContext();
+  } else {
+    state.token = tokenFromUrl();
+    if (!state.token) showTokenPanel();
   }
-  $('#project-name').value = state.project.name;
-  setSaveState('无改动', false);
   wire();
-  const urlProject = new URLSearchParams(location.search).get('project') || '';
-  if (urlProject) state.projectPath = urlProject;
-  try {
-    await loadProjects();
-    // ?project=<文件夹>：AI 或用户从对话里带过来的路径，直接登记
-    if (urlProject && !state.projects.some((p) => p.path === state.projectPath)) {
-      await addProject(urlProject);
+
+  if (MODE.mini) {
+    try {
+      const data = await api('/api/state');
+      state.project = data.project;
+      // 上轮的联网核验结论（服务端已落盘）——刷新后红牌不该静默消失
+      state.verify = data.verify || null;
+    } catch (err) {
+      toast('加载失败：' + err.message);
+      return;
     }
-  } catch (err) {
-    $('#workbench-status').textContent = '项目列表读取失败：' + err.message;
+    $('#project-name').value = state.project.name;
+    setSaveState('无改动', false);
+    const urlProject = new URLSearchParams(location.search).get('project') || '';
+    if (urlProject) state.projectPath = urlProject;
+    try {
+      await loadProjects();
+      // ?project=<文件夹>：AI 或用户从对话里带过来的路径，直接登记
+      if (urlProject && !state.projects.some((p) => p.path === state.projectPath)) {
+        await addProject(urlProject);
+      }
+    } catch (err) {
+      $('#workbench-status').textContent = '项目列表读取失败：' + err.message;
+    }
+    await loadWorkbench();
+    renderVerdict();
+    switchTab('manuscript');
+    await runAudit({ focus: false });
+  } else {
+    // 网页：服务已经由命令行启动，页面只操作真实论文项目
+    if (MODE.dev) await loadPreviewDraft();
+    await loadWorkbench();
+    switchTab('workbench');
+    if (state.token) {
+      try {
+        await loadWorkbenchStatus();
+        await loadWorkbenchProject();
+        await runWorkbenchAudit();
+      } catch (err) {
+        toast('加载失败：' + err.message);
+      }
+    }
   }
-  await loadWorkbench();
-  renderVerdict();
-  switchTab('manuscript');
-  await runAudit({ focus: false });
+
   // 服务自己挂了要能看见：只在「正在跑」且停在工作台页签时轻量轮询
-  setInterval(() => {
-    if (state.tab !== 'workbench' || !state.run) return;
-    api('/api/workbench')
-      .then((data) => {
-        if (data.running) return;
-        state.run = null;
-        state.workbench = { configured: Boolean(data.configured), url: data.url || '', tokenSet: Boolean(data.tokenSet) };
-        $('#workbench-status').textContent = '工作台已不在运行（自己退出或被杀）；要接着用就再点「启动并连接」。';
-        renderWorkbench();
-      })
-      .catch(() => {});
-  }, 5000);
+  if (MODE.mini) {
+    setInterval(() => {
+      if (state.tab !== 'workbench' || !state.run) return;
+      api('/api/workbench')
+        .then((data) => {
+          if (data.running) return;
+          state.run = null;
+          state.workbench = { configured: Boolean(data.configured), url: data.url || '', tokenSet: Boolean(data.tokenSet) };
+          $('#workbench-status').textContent = '工作台已不在运行（自己退出或被杀）；要接着用就再点「启动并连接」。';
+          renderWorkbench();
+        })
+        .catch(() => {});
+    }, 5000);
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       try {
@@ -1702,12 +2029,16 @@ async function init() {
       }
     }
   });
-  try {
-    const saved = localStorage.getItem('minifactscribe.tab')
-      ?? localStorage.getItem('factgate.tab');
-    if (saved) switchTab(saved);
-  } catch {
-    /* 忽略 */
+  if (MODE.mini) {
+    try {
+      const saved = localStorage.getItem('minifactscribe.tab')
+        ?? localStorage.getItem('factgate.tab');
+      if (saved) switchTab(saved);
+    } catch {
+      /* 忽略 */
+    }
+  } else {
+    switchTab('workbench');
   }
 }
 

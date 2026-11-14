@@ -3,16 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MiniFactScribe</title>
-    <link rel="stylesheet" href="/minifactscribe/styles.css" />
+    <title>FactScribe 工作台</title>
+    <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">闸</span>
         <div class="brand-text">
-          <h1>MiniFactScribe</h1>
-          <span class="brand-sub">FactScribe · 数字与引用的机械闸门</span>
+          <h1 id="app-name">FactScribe</h1>
+          <span class="brand-sub" id="app-sub">本地工作台 · 数字与引用的机械闸门</span>
         </div>
       </div>
       <label class="project-field">
@@ -30,6 +30,13 @@
     </header>
 
     <div id="session-banner" class="session-banner" role="alert" hidden></div>
+
+    <div id="token-panel" class="session-banner" hidden>
+      <b>需要 token</b>
+      <span>启动 <code>factscribe web</code> 时打印在终端。</span>
+      <input id="token-input" type="password" autocomplete="off" placeholder="粘贴 token" />
+      <button id="btn-token" class="btn btn-primary" type="button">连接</button>
+    </div>
 
     <div class="layout">
       <nav class="sidebar" aria-label="分区导航">
@@ -290,6 +297,9 @@
             </div>
             <div class="panel-actions">
               <span id="workbench-badge" class="muted-note">未连接</span>
+              <span id="wb-build-state" class="muted-note"></span>
+              <button id="btn-wb-build" class="btn" type="button">编译 PDF</button>
+              <button id="btn-wb-pdf" class="btn" type="button" hidden>打开 PDF</button>
             </div>
           </div>
           <div class="project-block">
@@ -370,6 +380,49 @@
             <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>
           </div>
           <div id="workbench-audit" class="issues-list"></div>
+
+          <div class="subhead" style="margin-top: 18px">
+            <h3>工作台事实账</h3>
+            <p class="panel-desc">追加事实不代签：工具跑完给你该抄进清单的那一行。</p>
+          </div>
+          <div id="wb-facts" class="wb-facts"></div>
+          <details class="card" id="wb-fact-card">
+            <summary>追加一条事实 <span id="wb-facts-count" class="muted-note"></span></summary>
+            <form id="wb-fact-form" class="fact-form">
+              <div class="form-grid">
+                <label class="field">ID<input id="wb-fact-id" required /></label>
+                <label class="field">值<input id="wb-fact-value" required placeholder="10/16" /></label>
+                <label class="field wide">主张<input id="wb-fact-claim" required placeholder="一句话说清这条事实" /></label>
+                <label class="field wide">来源<input id="wb-fact-source" list="wb-fact-sources" required placeholder="results/…" /></label>
+                <datalist id="wb-fact-sources"></datalist>
+                <label class="field">定位<input id="wb-fact-locator" placeholder="§二 汇总表" /></label>
+                <label class="field">置信度
+                  <select id="wb-fact-confidence">
+                    <option value="high">高</option>
+                    <option value="med" selected>中</option>
+                    <option value="low">低</option>
+                  </select>
+                </label>
+                <label class="field">推算父项<input id="wb-fact-derived" placeholder="A1,A3（可选）" /></label>
+                <label class="field">算式<input id="wb-fact-expr" placeholder="(A1.num + A3.num) / (A1.den + A3.den) * 100" /></label>
+                <label class="field wide">备注<input id="wb-fact-note" placeholder="可选" /></label>
+              </div>
+              <div class="panel-actions">
+                <button id="btn-wb-add-fact" class="btn btn-primary" type="submit">追加事实</button>
+              </div>
+              <div id="wb-fact-result" class="muted-note"></div>
+            </form>
+          </details>
+
+          <div class="subhead" style="margin-top: 18px">
+            <h3>证据冻结 <span id="wb-evidence-meta" class="muted-note"></span></h3>
+            <p class="panel-desc">改证据清单要先解冻并写理由；冻结后改材料会在审计里报红。</p>
+          </div>
+          <div id="wb-evidence" class="wb-evidence"></div>
+          <div class="panel-actions" style="margin: 8px 0">
+            <button id="btn-wb-freeze" class="btn" type="button">冻结</button>
+            <button id="btn-wb-unfreeze" class="btn" type="button">解冻</button>
+          </div>
         </section>
 
         <section id="panel-ai" class="panel" role="tabpanel" hidden>
@@ -409,6 +462,6 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-    <script type="module" src="/minifactscribe/app.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

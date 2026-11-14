@@ -55,11 +55,13 @@ class WebUITest(unittest.TestCase):
     def test_index_is_served_without_token(self):
         status, body = self._get("/")
         self.assertEqual(status, 200)
-        self.assertIn("FactScribe Workbench", body)
+        self.assertIn("FactScribe", body)
+        self.assertIn("/app.css", body)
 
     def test_static_assets(self):
-        for path, needle in (("/app.js", "api('/api/project')"),
-                             ("/app.css", ".layout")):
+        for path, needle in (("/app.js", "wb('/project')"),
+                             ("/app.css", ".layout"),
+                             ("/demo.json", '\"name\"')):
             status, body = self._get(path)
             self.assertEqual(status, 200, path)
             self.assertIn(needle, body)
@@ -85,11 +87,11 @@ class WebUITest(unittest.TestCase):
     def test_fact_form_is_present(self):
         status, body = self._get("/")
         self.assertEqual(status, 200)
-        self.assertIn('id="fact-form"', body)
-        self.assertIn('id="btn-add-fact"', body)
+        self.assertIn('id="wb-fact-form"', body)
+        self.assertIn('id="btn-wb-add-fact"', body)
         status, js = self._get("/app.js")
         self.assertEqual(status, 200)
-        self.assertIn("/api/facts", js)
+        self.assertIn("wb('/facts')", js)
         self.assertIn("manifest_line", js)
 
     def test_api_works_with_token(self):

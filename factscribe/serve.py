@@ -35,6 +35,8 @@ _STATIC = {
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
+    # 开发模式预览用；正常界面不请求它
+    "/demo.json": ("demo.json", "application/json; charset=utf-8"),
 }
 
 

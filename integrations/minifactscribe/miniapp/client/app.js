@@ -822,19 +822,33 @@ function applyMode() {
     const el = $(sel);
     if (el) el.hidden = !MODE.showHostUi;
   }
-  for (const sel of ['.project-block', '#workbench-host-path', '.manual-connect']) {
+  // 项目管理两种模式都要：网页也要选论文项目
+  for (const sel of ['#workbench-host-path', '.manual-connect']) {
     const el = $(sel);
     if (el) el.hidden = !MODE.showHostUi;
+  }
+  // 宿主专属的启动控件：普通网页藏起来；开发模式留着看，但下面的禁用逻辑照旧
+  if (!MODE.showHostUi) {
+    for (const sel of ['#btn-workbench-start', '#btn-workbench-stop', '#btn-project-host',
+      '#workbench-allow-write', '#workbench-allow-build', '#project-python',
+      '#project-pythonpath', '#btn-project-python']) {
+      const el = $(sel);
+      if (!el) continue;
+      const label = el.closest('label');
+      if (label && el.type === 'checkbox') { label.hidden = true; continue; }
+      const field = el.closest('label') || el;
+      if (el.type === 'text' || el.type === 'password') field.hidden = true;
+      else el.hidden = true;
+    }
   }
   if (!MODE.mini) {
     // 网页里没有 Node：启动/项目登记只做界面预览，不给误点
     for (const sel of ['#btn-workbench-start', '#btn-workbench-stop', '#btn-workbench-connect',
-      '#btn-workbench-disconnect', '#btn-project-add', '#btn-project-host',
-      '#btn-project-forget', '#btn-project-python']) {
+      '#btn-workbench-disconnect', '#btn-project-host', '#btn-project-python']) {
       const el = $(sel);
       if (!el) continue;
       el.disabled = true;
-      el.title = '这是 MiniApp 专属按钮；网页里由你启动的服务已经就绪';
+      el.title = '这是 MiniApp 专属按钮；网页里由命令行启动的服务已经就绪';
     }
   }
   if (!MODE.mini) {
@@ -1131,6 +1145,17 @@ async function loadProjects() {
   renderProjects();
 }
 
+async function chooseProject(path) {
+  const project = await addProject(path);
+  if (!MODE.mini) {
+    // 网页里「选项目」就是让服务切到这个文件夹
+    await loadWorkbenchStatus();
+    await loadWorkbenchProject();
+    await runWorkbenchAudit();
+  }
+  return project;
+}
+
 async function addProject(rawPath) {
   const path = String(rawPath ?? $('#project-path').value ?? '').trim();
   if (!path) throw new Error('先填论文项目文件夹');
@@ -1276,9 +1301,12 @@ function renderWorkbench() {
   }
   const s = state.workbenchStatus;
   if (!s) {
-    summary.innerHTML = '<div class="line-empty">' + (MODE.mini || state.token
-      ? '已配置，正在读取工作台状态…'
-      : '需要 token：把启动 <code>factscribe web</code> 时打印的 token 贴上。') + '</div>';
+    const message = !MODE.mini && !state.token
+      ? '需要 token：把启动 <code>factscribe web</code> 时打印的 token 贴上。'
+      : (!MODE.mini
+        ? '还没有选论文项目：在上面选一个文件夹（或填绝对路径后点「加入项目列表」）。'
+        : '已配置，正在读取工作台状态…');
+    summary.innerHTML = '<div class="line-empty">' + message + '</div>';
   } else {
     summary.innerHTML =
       '<div class="verdict-card green">' +
@@ -1479,7 +1507,17 @@ async function openWorkbenchPdf() {
 }
 
 async function loadWorkbenchProject() {
-  state.workbenchProject = await api(wb('/project'));
+  try {
+    state.workbenchProject = await api(wb('/project'));
+  } catch (err) {
+    if (!MODE.mini && /还没有选论文项目/.test(err.message)) {
+      state.workbenchProject = null;
+      state.wbEvidence = null;
+      renderWorkbench();
+      return;
+    }
+    throw err;
+  }
   renderWorkbench();
   renderWorkbenchFacts();
   const project = state.workbenchProject;
@@ -1534,7 +1572,16 @@ async function loadWorkbench() {
 }
 
 async function loadWorkbenchStatus() {
-  state.workbenchStatus = await api(wb('/status'));
+  try {
+    state.workbenchStatus = await api(wb('/status'));
+  } catch (err) {
+    if (!MODE.mini && /还没有选论文项目/.test(err.message)) {
+      state.workbenchStatus = null;
+      renderWorkbench();
+      return;
+    }
+    throw err;
+  }
   renderWorkbench();
 }
 
@@ -1578,16 +1625,28 @@ function wire() {
   $('#btn-audit').addEventListener('click', () => runAudit());
   $('#btn-rerun').addEventListener('click', () => runAudit());
   $('#project-select').addEventListener('change', () => {
-    state.projectPath = $('#project-select').value || '';
-    $('#project-path').value = state.projectPath;
-    renderProjects();
+    const path = $('#project-select').value || '';
+    if (!path) return;
+    if (MODE.mini) {
+      state.projectPath = path;
+      $('#project-path').value = path;
+      renderProjects();
+      return;
+    }
+    chooseProject(path).catch((e) => {
+      $('#workbench-status').textContent = '切换项目失败：' + e.message;
+      toast('切换项目失败：' + e.message);
+    });
   });
   $('#project-path').addEventListener('input', () => {
     state.projectPath = $('#project-path').value.trim();
     projectBusy();
   });
   $('#btn-project-add').addEventListener('click', () => {
-    addProject().catch((e) => { $('#workbench-status').textContent = '加入失败：' + e.message; toast('加入失败：' + e.message); });
+    const run = MODE.mini
+      ? addProject()
+      : chooseProject(String($('#project-path').value ?? '').trim());
+    run.catch((e) => { $('#workbench-status').textContent = '加入失败：' + e.message; toast('加入失败：' + e.message); });
   });
   $('#btn-project-host').addEventListener('click', () => {
     useHostProject().catch((e) => { $('#workbench-status').textContent = '用当前对话项目失败：' + e.message; });
@@ -1994,11 +2053,16 @@ async function init() {
     if (MODE.dev) await loadPreviewDraft();
     await loadWorkbench();
     switchTab('workbench');
+    try {
+      await loadProjects();
+    } catch (err) {
+      $('#workbench-status').textContent = '项目列表读取失败：' + err.message;
+    }
     if (state.token) {
       try {
         await loadWorkbenchStatus();
         await loadWorkbenchProject();
-        await runWorkbenchAudit();
+        if (state.workbenchProject) await runWorkbenchAudit();
       } catch (err) {
         toast('加载失败：' + err.message);
       }

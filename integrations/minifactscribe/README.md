@@ -186,7 +186,7 @@ node --test tests/
 危险动作必须先确认、表单错误要指到字段；工作台只接受本机 http、token 不对要拒绝。
 再加上 6 例项目登记册与启动握手（`tests/projects.test.mjs`）、5 例 Node 路由
 （`tests/server-routes.test.mjs`）与 4 例界面同步（`tests/sync.test.mjs`）：
-八组共 88 例，全部离线（握手用假解释器，不 spawn 真 Python；路由用临时 HOME）。
+八组共 89 例，全部离线（握手用假解释器，不 spawn 真 Python；路由用临时 HOME）。
 
 ---
 
@@ -235,7 +235,7 @@ integrations/minifactscribe/
 │   ├── audit.test.mjs           # node:test，31 例，全离线
 │   ├── conformance.test.mjs     # 与 Python 原版的一致性锁，2 例
 │   ├── styles.test.mjs          # 暗色主题不变量，7 例
-│   ├── ui.test.mjs              # 呈现层可读性不变量，28 例
+│   ├── ui.test.mjs              # 呈现层可读性不变量，29 例
 │   ├── workbench.test.mjs       # 本地工作台连接层，5 例
 │   ├── projects.test.mjs        # 论文项目登记册 + 启动握手，6 例
 │   ├── sync.test.mjs            # 网页与 MiniApp 界面逐字节一致，4 例

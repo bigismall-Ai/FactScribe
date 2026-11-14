@@ -15,12 +15,16 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .config import ConfigError, load_config
+from .projects import (factscribe_dir, project_name, read_registry,
+                       remove_project, resolve_project, upsert_project,
+                       write_registry)
 from .constants import EXIT_OK, VERSION
 from .report import _payload, _severity_of
 from .workbench import (add_fact_data, audit_data, brief_data,
@@ -81,7 +85,12 @@ class _Handler(BaseHTTPRequestHandler):
         return bool(supplied) and hmac.compare_digest(supplied, token)
 
     def _project(self) -> Path:
-        return self.server.project  # type: ignore[attr-defined]
+        project = self.server.project  # type: ignore[attr-defined]
+        if project is None:
+            raise ConfigError(
+                "还没有选论文项目；先调 POST /api/projects 或在页面里选一个文件夹",
+                code="NO_PROJECT")
+        return project
 
     def _body(self) -> dict:
         length = int(self.headers.get("Content-Length", "0") or 0)
@@ -129,12 +138,18 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             if path == "/api/capabilities":
-                cfg = load_config(self._project())
+                project = self.server.project  # type: ignore[attr-defined]
+                cfg = load_config(project) if project is not None else None
                 self._send(200, self._base(
                     "capabilities", engine="python", files=True,
-                    workbench=True, version=VERSION, root=str(cfg.root),
-                    project=cfg.name or cfg.title,
-                    api=["health", "capabilities", "status", "brief", "audit"]))
+                    workbench=True, version=VERSION,
+                    root=str(cfg.root) if cfg else None,
+                    project=(cfg.name or cfg.title) if cfg else None,
+                    api=["health", "capabilities", "status", "brief", "audit",
+                         "projects"]))
+                return
+            if path == "/api/projects":
+                self._projects_view()
                 return
             if path == "/api/status":
                 self._status()
@@ -169,6 +184,9 @@ class _Handler(BaseHTTPRequestHandler):
                         "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
             return
         try:
+            if path == "/api/projects":
+                self._projects_add()
+                return
             if path == "/api/audit":
                 self._audit()
                 return
@@ -275,6 +293,76 @@ class _Handler(BaseHTTPRequestHandler):
                              self.server.allow_write)  # type: ignore[attr-defined]
         self._send(200, self._base("add_fact", **data))
 
+    # ------------------------------------------------------------ 项目管理
+
+    def _projects_view(self) -> None:
+        registry = read_registry()
+        current = self.server.project  # type: ignore[attr-defined]
+        self._send(200, self._base(
+            "projects", dir=str(factscribe_dir()),
+            current=str(current) if current else None,
+            projects=registry["projects"], lastPath=registry["lastPath"],
+            python=registry["python"], pythonpath=registry["pythonpath"]))
+
+    def _projects_add(self) -> None:
+        body = self._body()
+        registry = read_registry()
+        if "python" in body:
+            python = str(body.get("python") or "").strip()
+            if python and not re.fullmatch(r"[\w./-]+", python):
+                raise ConfigError(
+                    "Python 解释器只填命令名或绝对路径，不能带空格或参数",
+                    code="PROJECT_INVALID")
+            registry["python"] = python
+        if "pythonpath" in body:
+            pythonpath = str(body.get("pythonpath") or "").strip()
+            if pythonpath and not re.fullmatch(r"[\w./:~-]+", pythonpath):
+                raise ConfigError(
+                    "包路径只填绝对路径（多个用 : 分隔），不能带空格或参数",
+                    code="PROJECT_INVALID")
+            registry["pythonpath"] = pythonpath
+        if "path" in body:
+            root = resolve_project(body.get("path"))
+            name = project_name(root)
+            registry = upsert_project(registry, root, name)
+            self.server.project = root  # type: ignore[attr-defined]
+            write_registry(registry)
+            self._send(200, self._base(
+                "project_add", project={"path": str(root), "name": name},
+                projects=registry["projects"], lastPath=registry["lastPath"],
+                python=registry["python"], pythonpath=registry["pythonpath"]))
+            return
+        write_registry(registry)
+        self._send(200, self._base(
+            "projects", projects=registry["projects"],
+            lastPath=registry["lastPath"], python=registry["python"],
+            pythonpath=registry["pythonpath"]))
+
+    def do_DELETE(self) -> None:  # noqa: N802 - stdlib signature
+        path = urlparse(self.path).path
+        if not self._authorized():
+            self._error(401, "UNAUTHORIZED",
+                        "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
+            return
+        try:
+            if path == "/api/projects":
+                target = (parse_qs(urlparse(self.path).query).get("path") or [""])[0]
+                registry = remove_project(read_registry(), str(target))
+                write_registry(registry)
+                current = self.server.project  # type: ignore[attr-defined]
+                if current is not None and str(current) == str(target):
+                    self.server.project = None  # type: ignore[attr-defined]
+                self._send(200, self._base(
+                    "project_remove", projects=registry["projects"],
+                    lastPath=registry["lastPath"]))
+                return
+            self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
+        except ConfigError as exc:
+            code = getattr(exc, "code", "CONFIG_INVALID")
+            self._error(403 if code == "READ_ONLY" else 400, code, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            self._error(500, "INTERNAL", "%s: %s" % (type(exc).__name__, exc))
+
     def _status(self) -> None:
         data = status_data(self._project(), self.server.allow_write)  # type: ignore[attr-defined]
         self._send(200, self._base("status", **data))
@@ -294,7 +382,7 @@ class WorkbenchServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, project: Path, token: str,
+    def __init__(self, address, project: Path | None, token: str,
                  allow_write: bool = False, serve_ui: bool = False,
                  allow_build: bool = False):
         self.project = project
@@ -305,21 +393,26 @@ class WorkbenchServer(ThreadingHTTPServer):
         super().__init__(address, _Handler)
 
 
-def create_server(project: Path | str, *, host: str = "127.0.0.1",
+def create_server(project: Path | str | None = None, *, host: str = "127.0.0.1",
                   port: int = 0, token: str | None = None,
                   allow_write: bool = False, serve_ui: bool = False,
                   allow_build: bool = False
                   ) -> tuple[WorkbenchServer, str]:
-    """建服务但不启动；返回 (server, token)。项目不合法时抛 ConfigError。"""
+    """建服务但不启动；返回 (server, token)。项目不合法时抛 ConfigError。
+
+    不给项目＝「项目管理」模式：先起服务，由页面从登记册里选文件夹再切过来。
+    """
     if host not in LOOPBACK_HOSTS:
         raise ConfigError(
             "serve 只允许本机回环地址（127.0.0.1 / localhost），收到 %r；"
             "远程访问不在本命令范围内" % host)
-    root = Path(project).expanduser()
-    if not root.is_dir():
-        raise ConfigError("项目目录不存在：%s" % root)
-    root = root.resolve()
-    load_config(root)  # 提前校验；坏配置在启动时就 exit 2
+    root: Path | None = None
+    if project is not None:
+        root = Path(project).expanduser()
+        if not root.is_dir():
+            raise ConfigError("项目目录不存在：%s" % root)
+        root = root.resolve()
+        load_config(root)  # 提前校验；坏配置在启动时就 exit 2
     actual_token = token or secrets.token_urlsafe(24)
     server = WorkbenchServer((host, int(port)), root, actual_token,
                              allow_write=allow_write, serve_ui=serve_ui,

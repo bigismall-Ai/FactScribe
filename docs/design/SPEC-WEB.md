@@ -19,10 +19,25 @@
 在网页直连 Python `/api/project`；网页模式的 token 放 `Authorization` 头，
 MiniApp 的 token 由 Node 保管、不进页面。
 
+## 0.5 不带项目启动（项目管理模式）
+
+`factscribe web` / `factscribe serve --ui` 的项目参数可省略：
+
+```bash
+factscribe web --port 0        # 先起服务，项目稍后在页面里选
+```
+
+- 启动时不读任何项目配置，只起服务；页面显示「还没有选论文项目」；
+- 页面里的「最近项目」和「加入项目列表」调 `GET /api/projects`、`POST /api/projects`；
+  `POST {path}` 校验文件夹（含 `paperkit.toml`）后**切换当前项目**并写登记册；
+- `DELETE /api/projects?path=` 只从登记册移除，不动文件夹；移除当前项目后回到「未选择」；
+- 未选项目时，项目相关的接口返回 400 `NO_PROJECT`；`/api/capabilities` 仍可用；
+- 登记册与 MiniFactScribe 共用 `~/.factscribe/projects.json`（同一格式）。
+
 ## 1. 命令
 
 ```bash
-factscribe web <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--allow-build] [--dev]
+factscribe web [项目] [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow-write] [--allow-build] [--dev]
 ```
 
 启动打印：
@@ -57,7 +72,8 @@ URL：http://127.0.0.1:<port>
   需要启动时加 `--allow-build`，否则按钮禁用并说明；
 - 证据区显示 lock 哈希/条数、mismatch、unfrozen 与最后动作；
 - 冻结/解冻走工作台 evidence 接口；解冻必须填理由；
-- 网页模式下宿主专属区（草稿、AI、启动）隐藏；`?dev=1` 才显示，且只做界面预览。
+- 网页模式下宿主专属区（草稿、AI、一键启动）隐藏；`?dev=1` 才显示，且只做界面预览；
+- 项目管理（最近项目、加入/移除文件夹）两种模式都有；网页里选中即让服务切到该文件夹。
 
 ## 3. 安全
 

@@ -8,7 +8,9 @@ import sys
 import tempfile
 import threading
 import unittest
+import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -146,3 +148,74 @@ class WebBuildTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProjectManagementTest(unittest.TestCase):
+    """不带项目启动：先起服务，再由页面/接口选文件夹。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.home = tempfile.mkdtemp(prefix="factscribe-home-")
+        cls.saved_home = os.environ.get("HOME")
+        os.environ["HOME"] = cls.home
+        cls.server, cls.token = create_server(None, port=0, token=TOKEN,
+                                             serve_ui=True)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        if cls.saved_home is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = cls.saved_home
+        shutil.rmtree(cls.home, ignore_errors=True)
+
+    def _call(self, path, method="GET", body=None):
+        data = None if body is None else json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(self.base + path, method=method, data=data)
+        req.add_header("Authorization", "Bearer " + TOKEN)
+        req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            body_bytes = exc.read()
+            exc.close()
+            return exc.code, json.loads(body_bytes)
+
+    def test_boot_without_project(self):
+        status, data = self._call("/api/projects")
+        self.assertEqual(status, 200)
+        self.assertTrue(data["dir"].endswith(".factscribe"))
+        self.assertIsNone(data["current"])
+        status, data = self._call("/api/status")
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"]["code"], "NO_PROJECT")
+
+    def test_select_and_remove_project(self):
+        project = str(ROOT / "examples" / "minimal")
+        status, data = self._call("/api/projects", "POST", {"path": project})
+        self.assertEqual(status, 200, data)
+        self.assertEqual(data["project"]["name"], "paperkit 最小验收样例")
+        selected = data["project"]["path"]
+        self.assertEqual(data["projects"][0]["path"], selected)
+
+        status, data = self._call("/api/status")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["project"], "paperkit 最小验收样例")
+
+        status, _ = self._call("/api/projects", "POST", {"path": "/tmp"})
+        self.assertEqual(status, 400)
+
+        status, data = self._call(
+            "/api/projects?path=" + urllib.parse.quote(selected), "DELETE")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["projects"], [])
+        status, data = self._call("/api/status")
+        self.assertEqual(status, 400)

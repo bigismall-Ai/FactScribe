@@ -272,3 +272,13 @@ test('编译、事实、证据在统一界面里都有入口', () => {
   assert.match(JS, /wb\('\/evidence'\)/, '证据走工作台接口');
   assert.match(JS, /wb\('\/pdf'\)/, 'PDF 走工作台接口');
 });
+
+
+test('网页也能管项目：不带路径启动，页面里选文件夹', () => {
+  assert.match(JS, /chooseProject/, '网页里选项目要让服务切过去');
+  assert.match(JS, /还没有选论文项目/, '未选项目要说清下一步');
+  assert.match(JS, /\/api\/projects/, '项目列表与加入走同一接口');
+  assert.match(HTML, /id="project-select"/, '最近项目下拉两种模式都该在');
+  assert.match(HTML, /id="btn-project-add"/, '加入项目列表两种模式都该在');
+  assert.doesNotMatch(JS, /'#btn-project-add', '#btn-project-host',/, '网页里不能禁用加入按钮');
+});

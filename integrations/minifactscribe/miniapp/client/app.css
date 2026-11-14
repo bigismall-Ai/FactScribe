@@ -496,3 +496,78 @@ code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monos
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- 工作台三栏：章节目录 / 源码+预览 / 问题+AI ---------- */
+/* 左中右各司其职；窄于 1100px 就叠成一列，目录改成横向滚动。 */
+.wb-columns {
+  display: grid;
+  grid-template-columns: 220px minmax(0,1fr) 360px;
+  gap: 16px;
+  align-items: start;
+}
+.wb-col {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.wb-col-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap;
+}
+.wb-col-head h3 { margin: 0; }
+.wb-ai-head { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--mcode-border); }
+
+/* 章节目录 */
+.wb-section-list { display: flex; flex-direction: column; gap: 4px; }
+.wb-section-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 6px 10px; border-radius: 8px; cursor: pointer;
+  background: none; border: 1px solid transparent;
+  color: var(--mcode-text-muted); font-size: 13px; font-family: inherit; text-align: left;
+}
+.wb-section-item:hover { background: var(--mcode-surface-muted); color: var(--mcode-text); }
+.wb-section-item.is-active {
+  background: var(--mcode-surface-muted); color: var(--mcode-text); font-weight: 600;
+  border-color: var(--mcode-border); box-shadow: inset 2px 0 0 var(--mcode-accent);
+}
+.wb-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-badge { flex: none; font-size: 11px; font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.wb-badge-red { color: var(--mcode-danger); font-weight: 600; }
+.wb-badge-yellow { color: var(--mcode-warning); font-weight: 600; }
+.wb-badge-ok { color: var(--mcode-success); }
+.wb-badge-none { color: var(--mcode-text-subtle); }
+
+/* 源码 / 预览 */
+.wb-mode { display: inline-flex; gap: 6px; }
+.wb-mode-btn.is-active {
+  background: var(--mcode-primary-action-bg); color: var(--mcode-primary-action-text);
+  border-color: transparent; font-weight: 600;
+}
+.wb-pane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.wb-pane .editor { min-height: 420px; }
+#wb-preview-pdf {
+  width: 100%; height: 640px; display: block;
+  border: 1px solid var(--mcode-border); border-radius: 12px;
+  background: var(--mcode-surface-muted);
+}
+.wb-preview-error {
+  padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 18px;
+  background: var(--mcode-danger-soft); color: var(--mcode-danger);
+  border-left: 2px solid var(--mcode-danger);
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 320px; overflow: auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* 问题列表里的「跳到那一行」 */
+.wb-jump { margin-left: auto; white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  .wb-columns { grid-template-columns: 1fr; }
+  /* 单列时目录横着滚：章节多的时候不用上下找 */
+  .wb-section-list { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .wb-section-item { width: auto; min-width: 150px; flex: none; }
+  .wb-pane .editor { min-height: 300px; }
+  #wb-preview-pdf { height: 480px; }
+}
+
+.project-block > summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 2px 0; }
+.project-block[open] > summary { margin-bottom: 8px; }

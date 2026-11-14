@@ -65,6 +65,8 @@ const state = {
   token: '',
   wbEvidence: null,
   wbReports: null,
+  wbMode: 'source',
+  wbPdfUrl: '',
 };
 
 // ------------------------------------------------------------------ 词汇表
@@ -865,6 +867,14 @@ function applyMode() {
       el.disabled = true;
       el.title = '本地草稿需要 MiniApp 宿主；开发预览里只显示界面';
     }
+    // AI 入口：网页里没有宿主 agent，禁用并说清原因。
+    setWbAiNote('网页模式不能起草：需要 MiniApp 宿主。');
+    for (const sel of ['#wb-ai-input', '#btn-wb-ai-send', '#btn-wb-ai-open']) {
+      const el = $(sel);
+      if (!el) continue;
+      el.disabled = true;
+      el.title = '需要 MiniApp 宿主';
+    }
     const banner = $('#session-banner');
     if (banner) {
       banner.hidden = !MODE.dev;
@@ -1275,6 +1285,13 @@ function renderWorkbench() {
       ? '当前对话项目：' + state.hostWorkspace
       : '当前对话没有项目文件夹（或尚未读取）；可以直接填论文项目文件夹。';
   }
+  // 项目块默认收起：三栏编辑区要一进来就能看见
+  const projectSummary = $('#wb-project-summary');
+  if (projectSummary) {
+    projectSummary.textContent = state.workbenchProject
+      ? '论文项目：' + (state.workbenchProject.project || state.workbenchProject.root || '已载入') + '（点开切换）'
+      : '论文项目（点开选择）';
+  }
   const badge = $('#workbench-badge');
   const summary = $('#workbench-summary');
   if (!badge) return;
@@ -1303,6 +1320,9 @@ function renderWorkbench() {
   if (!w.configured) {
     summary.innerHTML = '<div class="line-empty">未连接。选好论文项目文件夹后点「启动并连接」，或展开「高级」手动填 URL + token。</div>';
     $('#workbench-audit').innerHTML = '';
+    $('#btn-workbench-save').disabled = true;
+    renderWorkbenchSections();
+    renderWbMode();
     return;
   }
   const s = state.workbenchStatus;
@@ -1339,11 +1359,18 @@ function renderWorkbench() {
     $('#workbench-save-state').textContent = project.read_only
       ? '工作台是只读模式（启动时没加 --allow-write）'
       : '可写';
-    $('#btn-workbench-save').disabled = project.read_only;
+    $('#btn-workbench-save').disabled = Boolean(project.read_only);
     $('#workbench-section-text').readOnly = project.read_only;
   } else {
     $('#workbench-save-state').textContent = '';
+    $('#btn-workbench-save').disabled = true;
   }
+  const emptyBox = $('#wb-section-empty');
+  if (emptyBox) emptyBox.hidden = Boolean(project);
+  const currentLabel = $('#wb-current-section');
+  if (currentLabel) currentLabel.textContent = project ? (select.value || '') : '';
+  renderWorkbenchSections();
+  renderWbMode();
 
   const a = state.workbenchAudit;
   if (!a) {
@@ -1355,6 +1382,12 @@ function renderWorkbench() {
   const yellow = findings.filter((f) => f.severity === 'yellow');
   const verdict = a.exit === 0 ? 'green' : a.exit === 3 ? 'yellow' : 'red';
   const word = { green: '绿', yellow: '黄', red: '红' }[verdict];
+  const auditMeta = $('#wb-audit-meta');
+  if (auditMeta) {
+    auditMeta.textContent = findings.length
+      ? red.length + ' 红 / ' + yellow.length + ' 黄'
+      : '';
+  }
   const note = verdict === 'green'
     ? '账有据、据未改、文有绑。它不说明结论为真。'
     : verdict === 'yellow'
@@ -1364,11 +1397,16 @@ function renderWorkbench() {
     const isRed = f.severity === 'red';
     const sev = isRed ? '红牌' : '黄牌';
     const cls = isRed ? 'chip-red' : 'chip-yellow';
+    const jump = jumpTargetFor(f.location);
+    const jumpBtn = jump
+      ? '<button type="button" class="link-btn wb-jump" data-jump-file="' + esc(jump.file) +
+        '" data-jump-line="' + jump.line + '">跳到那一行</button>'
+      : '';
     return '<div class="issue">' +
       '<div class="issue-head"><span class="chip ' + cls + '">' + sev + '</span>' +
       '<span class="issue-label">' + esc(ISSUE_LABEL[f.code] || f.code) + '</span>' +
       '<span class="code">' + esc(f.code || '') + '</span>' +
-      '<span class="loc">' + esc(f.location || '') + '</span></div>' +
+      '<span class="loc">' + esc(f.location || '') + '</span>' + jumpBtn + '</div>' +
       '<div class="issue-msg">' + esc(f.message || '') + '</div>' +
       '</div>';
   }).join('');
@@ -1383,6 +1421,257 @@ function renderWorkbench() {
     '</div>' +
     (rows || '<div class="line-empty">没有红黄项。</div>') +
     (findings.length > 12 ? '<div class="muted-note">只显示前 12 条；完整结果看 serve 的 --json 输出。</div>' : '');
+}
+
+// ------------------------------------------------------ 工作台三栏
+// 左：章节目录；中：源码 / 预览；右：要处理的问题 + AI 入口。
+// 三栏只管「看和改」，事实账、证据、报告仍各自成块放在下面。
+
+/** 章节标题：正文里的 \\section{...} 优先，没有就用文件名。 */
+function sectionTitle(section) {
+  const text = String(section?.text || '');
+  const m = /\\(?:sub)?section\*?\{([^}]*)\}/.exec(text);
+  if (m && m[1].trim()) return m[1].trim();
+  const file = String(section?.file || '');
+  const base = file.split('/').pop() || file;
+  return base.replace(/\.tex$/i, '') || file || '（未命名）';
+}
+
+/** 某一节上的问题条数：红牌与黄牌分开数，符号之外还有数字。 */
+function sectionIssueCounts(file) {
+  const findings = (state.workbenchAudit?.findings) || [];
+  let red = 0;
+  let yellow = 0;
+  for (const f of findings) {
+    const loc = String(f.location || '');
+    if (!loc.startsWith(file + ':')) continue;
+    if (f.severity === 'red') red += 1;
+    else yellow += 1;
+  }
+  return { red, yellow };
+}
+
+/** 左栏目录：由 state.workbenchProject.sections 生成，当前节高亮。 */
+function renderWorkbenchSections() {
+  const list = $('#wb-section-list');
+  const count = $('#wb-section-count');
+  const project = state.workbenchProject;
+  const sections = project?.sections || [];
+  const current = $('#workbench-section-select')?.value || '';
+  if (count) count.textContent = sections.length ? sections.length + ' 节' : '';
+  if (!list) return;
+  if (!sections.length) {
+    list.innerHTML = '<div class="line-empty">还没有章节：先载入工作台项目。</div>';
+    return;
+  }
+  list.innerHTML = sections.map((s) => {
+    const active = s.file === current;
+    const c = sectionIssueCounts(s.file);
+    const badge = !state.workbenchAudit
+      ? '<span class="wb-badge wb-badge-none" title="还没审计，这一节的问题未知">·</span>'
+      : c.red
+        ? '<span class="wb-badge wb-badge-red" title="这一节有 ' + c.red + ' 条红牌问题">✕ ' + c.red + '</span>'
+        : c.yellow
+          ? '<span class="wb-badge wb-badge-yellow" title="这一节有 ' + c.yellow + ' 条黄牌问题">! ' + c.yellow + '</span>'
+          : '<span class="wb-badge wb-badge-ok" title="这一节没有红黄项">✓</span>';
+    return '<button type="button" class="wb-section-item' + (active ? ' is-active' : '') +
+      '" data-section="' + esc(s.file) + '" aria-current="' + (active ? 'true' : 'false') +
+      '" title="' + esc(s.file) + '">' +
+      '<span class="wb-section-name">' + esc(sectionTitle(s)) + '</span>' + badge +
+      '</button>';
+  }).join('');
+}
+
+/** 切到某一节：隐藏下拉是唯一事实来源，目录与源码都跟着它走。 */
+function selectWorkbenchSection(file) {
+  const select = $('#workbench-section-select');
+  if (!select || !file) return;
+  if (select.value === file) return;
+  select.value = file;
+  select.dispatchEvent(new Event('change'));
+}
+
+/** 源码 / 预览 两个视图的显隐与按钮状态。 */
+function renderWbMode() {
+  const preview = state.wbMode === 'preview';
+  const sourcePane = $('#wb-source-pane');
+  const previewPane = $('#wb-preview-pane');
+  if (sourcePane) sourcePane.hidden = preview;
+  if (previewPane) previewPane.hidden = !preview;
+  const srcBtn = $('#btn-wb-mode-source');
+  const pdfBtn = $('#btn-wb-mode-preview');
+  if (srcBtn) srcBtn.classList.toggle('is-active', !preview);
+  if (pdfBtn) pdfBtn.classList.toggle('is-active', preview);
+  const buildBtn = $('#btn-wb-preview-build');
+  if (buildBtn) {
+    const allowed = Boolean(state.workbenchProject?.build_allowed);
+    buildBtn.disabled = !allowed;
+    buildBtn.title = allowed ? '编译当前项目并显示 PDF' : '启动时没加 --allow-build';
+  }
+}
+
+/** 切到预览：已有 PDF 直接显示，没有就编译一份。 */
+async function setWbMode(mode) {
+  state.wbMode = mode === 'preview' ? 'preview' : 'source';
+  renderWbMode();
+  if (state.wbMode !== 'preview') return;
+  if (state.wbPdfUrl) {
+    setWbPreviewState('已显示上次编译的 PDF');
+    return;
+  }
+  await buildWbPreview();
+}
+
+/** 预览区的状态行。 */
+function setWbPreviewState(text) {
+  const el = $('#wb-preview-state');
+  if (el) el.textContent = text;
+}
+
+/** 预览区里的编译输出：编译失败时把输出摊开给人看，不能只弹个 toast。 */
+function setWbPreviewError(text) {
+  const box = $('#wb-preview-error');
+  if (!box) return;
+  const body = String(text || '');
+  box.hidden = !body;
+  box.textContent = body;
+}
+
+/** 编译算不算成功：服务端 exit 为 0 才是成功。 */
+function buildSucceeded(data) {
+  if (!data || data.ok === false) return false;
+  if (data.exit === undefined || data.exit === null) return true;
+  return Number(data.exit) === 0;
+}
+
+/** 编译预览：先 POST wb('/build')，再 GET wb('/pdf') 取 blob。 */
+async function buildWbPreview() {
+  const project = state.workbenchProject;
+  if (!project) {
+    setWbPreviewState('还没载入工作台项目');
+    setWbPreviewError('');
+    return;
+  }
+  if (project.build_allowed === false) {
+    setWbPreviewState('不能编译：启动时没加 --allow-build');
+    setWbPreviewError('这个工作台启动时没加 --allow-build，所以这里不能编译 PDF。');
+    return;
+  }
+  setWbPreviewError('');
+  setWbPreviewState('编译中…');
+  let data;
+  try {
+    data = await api(wb('/build'), { method: 'POST' });
+  } catch (err) {
+    setWbPreviewState('编译失败：' + err.message);
+    setWbPreviewError(String(err.message || ''));
+    return;
+  }
+  if (!buildSucceeded(data)) {
+    setWbPreviewState('编译失败 · 退出码 ' + (data?.exit ?? '未知'));
+    setWbPreviewError(String(data?.output_text || '').slice(0, 2000) || '（没有编译输出）');
+    return;
+  }
+  setWbPreviewState('编译成功，正在取 PDF…');
+  try {
+    await loadWbPdfBlob();
+    setWbPreviewState('PDF 已就绪；这里不显示就点「在新标签打开 PDF」');
+  } catch (err) {
+    setWbPreviewState('PDF 读不出来：' + err.message);
+    setWbPreviewError(String(err.message || ''));
+  }
+}
+
+/** 取 PDF 并塞进 <embed>。 */
+async function loadWbPdfBlob() {
+  const headers = {};
+  if (!MODE.mini && state.token) headers.Authorization = 'Bearer ' + state.token;
+  const res = await fetch(wb('/pdf'), { headers });
+  if (!res.ok) throw new Error('PDF 还没生成或不可读（HTTP ' + res.status + '）');
+  const blob = await res.blob();
+  if (state.wbPdfUrl) {
+    try { URL.revokeObjectURL(state.wbPdfUrl); } catch { /* 旧 blob 回收失败不影响显示 */ }
+  }
+  state.wbPdfUrl = URL.createObjectURL(blob);
+  const embed = $('#wb-preview-pdf');
+  if (embed) embed.setAttribute('src', state.wbPdfUrl);
+  // 有些浏览器不在 <embed> 里画 PDF（Chrome 就是）。留一条真能看见的路：
+  // 同一个 blob 在新标签里打开，PDF 照常渲染。
+  const open = $('#wb-preview-open');
+  if (open) {
+    open.setAttribute('href', state.wbPdfUrl);
+    open.hidden = false;
+  }
+}
+
+/** 问题的位置能不能跳：正文:N 跳当前节；<节文件>:<行> 跳那一节那一行。 */
+function jumpTargetFor(location) {
+  const loc = String(location || '');
+  let m = /^正文:(\d+)$/.exec(loc);
+  if (m) {
+    return { file: $('#workbench-section-select')?.value || '', line: Number(m[1]) };
+  }
+  m = /^([^:]+):(\d+)(?::\d+)?$/.exec(loc);
+  if (!m) return null;
+  const file = m[1];
+  const known = (state.workbenchProject?.sections || []).some((s) => s.file === file);
+  if (!known) return null;
+  return { file, line: Number(m[2]) };
+}
+
+/** 跳到源码的某一行：滚动过去并选中那一行。 */
+function jumpToLine(file, line) {
+  const ta = $('#workbench-section-text');
+  if (!ta) return;
+  if (file) selectWorkbenchSection(file);
+  const lines = (ta.value || '').split('\n');
+  const target = Math.max(1, Math.min(Number(line) || 1, lines.length));
+  let start = 0;
+  for (let i = 0; i < target - 1; i += 1) start += lines[i].length + 1;
+  const end = start + lines[target - 1].length;
+  state.wbMode = 'source';
+  renderWbMode();
+  ta.focus();
+  ta.setSelectionRange(start, end);
+  const style = window.getComputedStyle(ta);
+  const lineHeight = parseFloat(style.lineHeight) || 23;
+  ta.scrollTop = Math.max(0, (target - 3) * lineHeight);
+}
+
+/** 和 AI 说：把要求带进 AI 页签，AI 面板本身不在这里重做一遍。 */
+function sendWbToAi() {
+  if (!MODE.mini) {
+    setWbAiNote('网页模式不能起草：需要 MiniApp 宿主。');
+    return;
+  }
+  const file = $('#workbench-section-select')?.value || '';
+  if (!file) {
+    toast('先在左边选一节');
+    return;
+  }
+  const input = $('#wb-ai-input');
+  const want = String(input?.value || '').trim();
+  const instruction = $('#ai-instruction');
+  if (instruction) instruction.value = '只改这一节：' + file + '。要求：' + want;
+  switchTab('ai');
+  renderAi();
+  toast('已带到 AI 起草页：' + file);
+}
+
+/** 只切页签，不带要求——AI 页签自己会显示当前节。 */
+function openAiTab() {
+  if (!MODE.mini) {
+    setWbAiNote('网页模式不能起草：需要 MiniApp 宿主。');
+    return;
+  }
+  switchTab('ai');
+  renderAi();
+}
+
+/** AI 入口在网页模式下要说明为什么点不了。 */
+function setWbAiNote(text) {
+  const el = $('#wb-ai-note');
+  if (el) el.textContent = text;
 }
 
 
@@ -1624,13 +1913,22 @@ async function buildWorkbenchPdf() {
   const el = $('#wb-build-state');
   el.textContent = '编译中…';
   const data = await api(wb('/build'), { method: 'POST' });
-  if (data.ok) {
+  if (buildSucceeded(data)) {
     el.textContent = '编译成功 · ' + data.pdf_bytes + ' 字节';
     $('#btn-wb-pdf').hidden = false;
     toast('PDF 编译完成');
+    // 预览区跟着更新：编译过了就把新的 PDF 拿过来，不用再点一次预览。
+    try {
+      await loadWbPdfBlob();
+      setWbPreviewState('PDF 已就绪');
+    } catch (err) {
+      setWbPreviewState('PDF 读不出来：' + err.message);
+    }
   } else {
     el.textContent = '编译失败 · 退出码 ' + data.exit;
     el.title = String(data.output_text || '').slice(0, 2000);
+    setWbPreviewState('编译失败 · 退出码 ' + (data.exit ?? '未知'));
+    setWbPreviewError(String(data.output_text || '').slice(0, 2000) || '（没有编译输出）');
     toast('编译失败，悬停看输出');
   }
 }
@@ -1851,7 +2149,47 @@ function wire() {
     const project = state.workbenchProject;
     const row = project && project.sections.find((s) => s.file === $('#workbench-section-select').value);
     $('#workbench-section-text').value = row ? row.text : '';
+    renderWorkbenchSections();
+    const label = $('#wb-current-section');
+    if (label) label.textContent = $('#workbench-section-select').value;
     renderAi();
+  });
+
+  // 三栏：章节目录点一下就切到那一节
+  $('#wb-section-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-section]');
+    if (!btn) return;
+    selectWorkbenchSection(btn.dataset.section);
+    renderWorkbenchSections();
+  });
+
+  // 三栏：源码 / 预览
+  $('#btn-wb-mode-source').addEventListener('click', () => {
+    setWbMode('source').catch((e) => toast('切换失败：' + e.message));
+  });
+  $('#btn-wb-mode-preview').addEventListener('click', () => {
+    setWbMode('preview').catch((e) => toast('预览失败：' + e.message));
+  });
+  $('#btn-wb-preview-build').addEventListener('click', () => {
+    buildWbPreview().catch((e) => {
+      setWbPreviewState('编译失败：' + e.message);
+      toast('编译失败：' + e.message);
+    });
+  });
+
+  // 三栏：问题列表里「跳到那一行」
+  $('#workbench-audit').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-jump-line]');
+    if (!btn) return;
+    jumpToLine(btn.dataset.jumpFile, Number(btn.dataset.jumpLine));
+  });
+
+  // 三栏：和 AI 说（只做入口，AI 面板不在这里重做一遍）
+  $('#btn-wb-ai-send').addEventListener('click', () => {
+    sendWbToAi();
+  });
+  $('#btn-wb-ai-open').addEventListener('click', () => {
+    openAiTab();
   });
 
   $('#save-state').addEventListener('click', () => {

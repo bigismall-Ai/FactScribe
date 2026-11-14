@@ -302,7 +302,8 @@
               <button id="btn-wb-pdf" class="btn" type="button" hidden>打开 PDF</button>
             </div>
           </div>
-          <div class="project-block">
+          <details class="project-block" id="wb-project">
+            <summary id="wb-project-summary">论文项目（点开切换）</summary>
             <div class="project-head">
               <h3>论文项目</h3>
               <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
@@ -357,29 +358,83 @@
                 </div>
               </div>
             </details>
-          </div>
+          </details>
           <p id="workbench-host-path" class="muted-note"></p>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
           <div class="panel-actions" style="margin: 10px 0">
             <button id="btn-workbench-load" class="btn" type="button">载入工作台项目</button>
             <span id="workbench-save-state" class="muted-note"></span>
           </div>
-          <div id="workbench-editor" hidden>
-            <label class="field" style="max-width: 520px">
-              <span>选择一节</span>
-              <select id="workbench-section-select"></select>
-            </label>
-            <label class="editor-label" for="workbench-section-text">当前节（写给工作台项目，不是本地草稿）</label>
-            <textarea id="workbench-section-text" class="editor" spellcheck="false" aria-label="工作台章节内容"></textarea>
-            <div class="panel-actions" style="margin: 10px 0">
-              <button id="btn-workbench-save" class="btn btn-primary" type="button">保存本节</button>
-            </div>
-          </div>
           <div id="workbench-summary" class="audit-summary"></div>
-          <div class="panel-actions" style="margin: 12px 0">
-            <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>
+
+          <!-- 三栏工作区：章节目录 / 源码+预览 / 要处理的问题 + AI 入口 -->
+          <div id="wb-columns" class="wb-columns">
+            <aside class="wb-col wb-col-sections" aria-label="章节目录">
+              <div class="wb-col-head">
+                <h3>章节目录</h3>
+                <span id="wb-section-count" class="muted-note"></span>
+              </div>
+              <div id="wb-section-list" class="wb-section-list"></div>
+              <!-- 隐藏的下拉：现有逻辑与测试都认它，目录按钮改动时同步它 -->
+              <label class="field" hidden>
+                <span>选择一节</span>
+                <select id="workbench-section-select"></select>
+              </label>
+            </aside>
+
+            <section class="wb-col wb-col-main" aria-label="当前节">
+              <div class="wb-col-head">
+                <div class="wb-mode" role="group" aria-label="看源码还是看预览">
+                  <button id="btn-wb-mode-source" class="btn wb-mode-btn is-active" type="button">源码</button>
+                  <button id="btn-wb-mode-preview" class="btn wb-mode-btn" type="button">预览</button>
+                </div>
+                <div class="panel-actions">
+                  <span id="wb-current-section" class="muted-note"></span>
+                  <button id="btn-workbench-save" class="btn btn-primary" type="button">保存本节</button>
+                </div>
+              </div>
+              <div id="wb-source-pane" class="wb-pane">
+                <div id="workbench-editor" hidden>
+                  <label class="editor-label" for="workbench-section-text">当前节（写给工作台项目，不是本地草稿）</label>
+                  <textarea id="workbench-section-text" class="editor" spellcheck="false" aria-label="工作台章节内容"></textarea>
+                </div>
+                <div id="wb-section-empty" class="line-empty">还没载入工作台项目。先在上面载入或连接一个论文项目。</div>
+              </div>
+              <div id="wb-preview-pane" class="wb-pane" hidden>
+                <div class="panel-actions">
+                  <button id="btn-wb-preview-build" class="btn" type="button">编译预览</button>
+                  <a id="wb-preview-open" class="link-btn" href="#" target="_blank" rel="noopener" hidden>在新标签打开 PDF</a>
+                  <span id="wb-preview-state" class="muted-note" role="status" aria-live="polite"></span>
+                </div>
+                <div id="wb-preview-error" class="wb-preview-error" hidden></div>
+                <embed id="wb-preview-pdf" type="application/pdf" title="编译后的 PDF 预览" />
+              </div>
+            </section>
+
+            <aside class="wb-col wb-col-side" aria-label="要处理的问题与 AI 入口">
+              <div class="wb-col-head">
+                <h3>要处理的问题</h3>
+                <div class="panel-actions">
+                  <span id="wb-audit-meta" class="muted-note"></span>
+                  <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>
+                </div>
+              </div>
+              <div id="workbench-audit" class="issues-list"></div>
+
+              <div class="wb-col-head wb-ai-head">
+                <h3>和 AI 说</h3>
+              </div>
+              <p id="wb-ai-note" class="muted-note"></p>
+              <label class="field">
+                <span>这一节想怎么改</span>
+                <textarea id="wb-ai-input" rows="3" placeholder="例如：把实验部分拆成三段，并补一句显著性检验"></textarea>
+              </label>
+              <div class="panel-actions">
+                <button id="btn-wb-ai-send" class="btn btn-primary" type="button">发给 AI 起草</button>
+                <button id="btn-wb-ai-open" class="btn" type="button">去 AI 起草</button>
+              </div>
+            </aside>
           </div>
-          <div id="workbench-audit" class="issues-list"></div>
 
           <div class="subhead" style="margin-top: 18px">
             <h3>工作台事实账</h3>

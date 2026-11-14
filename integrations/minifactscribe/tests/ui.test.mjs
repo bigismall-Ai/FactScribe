@@ -319,3 +319,72 @@ test('审阅卡逐行显示、不截断：截掉的行等于人没看见却签�
   assert.doesNotMatch(card, /\.slice\(|substring\(/, '审阅卡不许截断');
   assert.match(card, /wb-report-line/, '卡片要一行一条');
 });
+
+// ---------------------------------------------------- 10. 工作台三栏
+
+test('工作台是左中右三栏：目录 / 源码+预览 / 问题+AI', () => {
+  assert.match(HTML, /id="wb-section-list"/, '左栏应有章节目录');
+  assert.match(HTML, /id="btn-wb-mode-source"/, '中栏应有源码切换');
+  assert.match(HTML, /id="btn-wb-mode-preview"/, '中栏应有预览切换');
+  assert.match(HTML, /id="wb-preview-pdf"/, '中栏应有 PDF 预览位');
+  assert.match(HTML, /id="wb-ai-input"/, '右栏应有 AI 输入框');
+  assert.match(HTML, /id="btn-wb-ai-send"/, '右栏应有 AI 发送按钮');
+  assert.match(HTML, /id="workbench-section-select"/, '隐藏的下拉要留着：现有逻辑与测试都认它');
+  assert.match(CSS, /\.wb-columns\s*\{[^}]*grid-template-columns:\s*220px minmax\(0,\s*1fr\) 360px/,
+    '三栏要用 CSS grid：220px / 中栏 / 360px');
+  assert.match(CSS, /@media \(max-width: 1100px\)[\s\S]*\.wb-columns\s*\{\s*grid-template-columns:\s*1fr/,
+    '窄屏要叠成一列');
+});
+
+test('章节目录来自项目章节，当前节高亮，点一下切到那一节', () => {
+  const block = JS.slice(JS.indexOf('function renderWorkbenchSections'),
+    JS.indexOf('/** 切到某一节'));
+  assert.ok(block.length > 0, '应有目录渲染函数');
+  assert.match(block, /workbenchProject/, '目录来自工作台项目的章节');
+  assert.match(block, /is-active/, '当前节要高亮');
+  assert.match(block, /data-section/, '每一节都要能点');
+  const jump = JS.slice(JS.indexOf('function selectWorkbenchSection'),
+    JS.indexOf('/** 源码 / 预览 两个视图'));
+  assert.match(jump, /workbench-section-select/, '目录点击要同步隐藏的下拉');
+});
+
+test('预览走工作台接口：先编译再取 PDF，失败要把输出摊开', () => {
+  const build = JS.slice(JS.indexOf('async function buildWbPreview'),
+    JS.indexOf('/** 取 PDF 并塞进'));
+  assert.ok(build.length > 0, '应有预览编译函数');
+  assert.match(build, /wb\('\/build'\)/, '预览要先编译');
+  assert.match(build, /output_text/, '编译失败要把输出摊在预览区');
+  assert.match(build, /slice\(0, 2000\)/, '输出最多摊 2000 字');
+  const pdf = JS.slice(JS.indexOf('async function loadWbPdfBlob'),
+    JS.indexOf('/** 问题的位置能不能跳'));
+  assert.match(pdf, /wb\('\/pdf'\)/, '预览要取 PDF');
+  assert.match(HTML, /<embed id="wb-preview-pdf"[^>]*type="application\/pdf"/, '预览用 embed');
+  assert.doesNotMatch(HTML, /<iframe/, '预览不用 iframe');
+});
+
+test('不能编译时预览要说明为什么：启动时没加 --allow-build', () => {
+  const block = JS.slice(JS.indexOf('async function buildWbPreview'),
+    JS.indexOf('/** 取 PDF 并塞进'));
+  assert.match(block, /build_allowed === false/, '只读编译时要挡住');
+  assert.match(block, /启动时没加 --allow-build/, '要说清原因');
+});
+
+test('问题列表能跳到源码那一行：滚动过去并选中', () => {
+  assert.match(JS, /function jumpToLine/, '应有跳转函数');
+  assert.match(JS, /data-jump-line/, '每条问题要带跳转入口');
+  const block = JS.slice(JS.indexOf('function jumpToLine'),
+    JS.indexOf('/** 和 AI 说'));
+  assert.match(block, /setSelectionRange/, '跳转要选中那一行');
+  assert.match(block, /scrollTop/, '跳转要把那一行滚进视野');
+});
+
+test('AI 入口在网页模式禁用并说明原因：需要 MiniApp 宿主', () => {
+  const block = JS.slice(JS.indexOf('function sendWbToAi'),
+    JS.indexOf('/** 只切页签'));
+  assert.ok(block.length > 0, '应有 AI 入口函数');
+  assert.match(block, /!MODE\.mini/, '网页模式不许起草');
+  assert.match(block, /只改这一节：/, '要求要带上当前节');
+  assert.match(block, /#ai-instruction|#'ai-instruction'|\$\('#ai-instruction'\)/,
+    '要求写进 AI 页签的输入框');
+  assert.match(JS, /需要 MiniApp 宿主/, '要说明为什么点不了');
+});

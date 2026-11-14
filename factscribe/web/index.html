@@ -71,6 +71,7 @@
           <button class="nav-item" data-tab="ai" role="tab" aria-selected="false" aria-controls="panel-ai" data-i18n="page.ai">AI 起草</button>
           <button class="nav-item" data-tab="facts" role="tab" aria-selected="false" aria-controls="panel-facts" data-i18n="nav.facts">工作台事实账</button>
           <button class="nav-item" data-tab="reports" role="tab" aria-selected="false" aria-controls="panel-reports" data-i18n="nav.reports">实验报告</button>
+          <button class="nav-item" data-tab="citations" role="tab" aria-selected="false" aria-controls="panel-citations" data-i18n="page.citations">引用</button>
         </div>
 
         <div class="sidebar-foot">
@@ -492,6 +493,39 @@
             <input id="wb-report-by" data-i18n-placeholder="ph.signer" placeholder="谁签的（签收必填，工具不替你猜）" />
           </label>
           <div id="wb-report-card" class="wb-report-card"></div>
+        </section>
+
+        <section id="panel-citations" class="panel panel-narrow" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="page.citations">引用</h2>
+              <p class="panel-desc">多个 bib 汇总：配置里的 bib 与正文 <code>\bibliography{}</code> 都算。只读，不联网核对。</p>
+            </div>
+            <div class="panel-actions">
+              <span id="cite-summary" class="muted-note" role="status" aria-live="polite"></span>
+            </div>
+          </div>
+          <div id="cite-filters" class="cite-filters" role="group" aria-label="按状态过滤">
+            <button id="cite-filter-all" class="cite-filter is-active" type="button" data-filter="all" aria-pressed="true" data-i18n="cite.filterAll">全部</button>
+            <button id="cite-filter-no-id" class="cite-filter" type="button" data-filter="no-id" aria-pressed="false" data-i18n="cite.filterNoId">缺标识</button>
+            <button id="cite-filter-unused" class="cite-filter" type="button" data-filter="unused" aria-pressed="false" data-i18n="cite.filterUnused">未引用</button>
+          </div>
+          <div id="cite-files" class="cite-files"></div>
+          <div class="ledger-table-wrap">
+            <table class="data-table" id="cite-table">
+              <caption class="sr-only">参考文献条目与状态</caption>
+              <thead>
+                <tr>
+                  <th scope="col" data-i18n="th.key">Key</th>
+                  <th scope="col" data-i18n="th.title">标题</th>
+                  <th scope="col" data-i18n="th.identifier">DOI / arXiv</th>
+                  <th scope="col" data-i18n="th.citeCount">引用次数</th>
+                  <th scope="col" data-i18n="th.status">状态</th>
+                </tr>
+              </thead>
+              <tbody id="cite-tbody"></tbody>
+            </table>
+          </div>
         </section>
 
         <section id="panel-project" class="panel panel-narrow" role="tabpanel" hidden>

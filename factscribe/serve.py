@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .citeview import citations_data
 from .config import ConfigError, load_config
 from .projects import (ProjectCreateError, create_project, factscribe_dir,
                        project_description, project_name, read_registry,
@@ -151,7 +152,7 @@ class _Handler(BaseHTTPRequestHandler):
                     root=str(cfg.root) if cfg else None,
                     project=(cfg.name or cfg.title) if cfg else None,
                     api=["health", "capabilities", "status", "brief", "audit",
-                         "projects", "reports"]))
+                         "projects", "reports", "citations"]))
                 return
             if path == "/api/projects":
                 self._projects_view()
@@ -174,6 +175,11 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/reports":
                 data = reports_data(self._project())
                 self._send(200, self._base("reports", **data))
+                return
+            if path == "/api/citations":
+                # 只读：多 bib 汇总 + 每条的状态。不联网核对（那是 audit 的活）。
+                data = citations_data(self._project())
+                self._send(200, self._base("citations", **data))
                 return
             if path == "/api/pdf":
                 self._pdf()

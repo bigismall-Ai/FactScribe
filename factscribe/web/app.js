@@ -69,6 +69,10 @@ const state = {
   token: '',
   wbEvidence: null,
   wbReports: null,
+  wbCitations: null,
+  // 引用页当前的过滤：all | no-id | unused
+  citeFilter: 'all',
+  citeLoading: false,
   wbMode: 'source',
   wbPdfUrl: '',
   // 当前选中的章节（空＝还没选过）。引导条的第 ① 步就看它。
@@ -109,6 +113,7 @@ const I18N = {
     'page.projectNew': '新建论文项目',
     'page.ai': 'AI 起草',
     'page.reports': '实验报告',
+    'page.citations': '引用',
     'btn.check': '检查',
     'btn.lock': '封存',
     'btn.sign': '签收',
@@ -169,6 +174,24 @@ const I18N = {
     'th.source': '来源',
     'th.status': '状态',
     'th.actions': '操作',
+    'th.key': 'Key',
+    'th.title': '标题',
+    'th.identifier': 'DOI / arXiv',
+    'th.citeCount': '引用次数',
+    'cite.filterAll': '全部',
+    'cite.filterNoId': '缺标识',
+    'cite.filterUnused': '未引用',
+    'cite.statusOk': '有标识',
+    'cite.statusNoId': '缺 DOI/arXiv',
+    'cite.statusBadId': '标识不合法',
+    'cite.statusUnused': '未引用',
+    'cite.duplicate': '重复 key',
+    'cite.summary': '共 {total} 条 · 已用 {used} · 未用 {unused} · 缺标识 {noId} · 重复 {dup} · 文件 {files} 个',
+    'cite.fileCount': '{n} 条',
+    'cite.empty': '没有参考文献文件（配置 bib 或正文 \\bibliography{}）',
+    'cite.needProject': '先载入工作台项目，再看引用。',
+    'cite.error': '引用列表读不出来：',
+    'cite.none': '没有符合条件的条目。',
     'empty.noReports': '没有找到实验报告（experiments/*/reports/*.report.toml）',
     'empty.noFacts': '账里还没有事实。',
     'empty.noRedYellow': '没有红黄项。',
@@ -260,6 +283,7 @@ const I18N = {
     'page.projectNew': 'New project',
     'page.ai': 'AI draft',
     'page.reports': 'Experiment reports',
+    'page.citations': 'Citations',
     'btn.check': 'Check',
     'btn.lock': 'Lock',
     'btn.sign': 'Sign',
@@ -320,6 +344,24 @@ const I18N = {
     'th.source': 'Source',
     'th.status': 'Status',
     'th.actions': 'Actions',
+    'th.key': 'Key',
+    'th.title': 'Title',
+    'th.identifier': 'DOI / arXiv',
+    'th.citeCount': 'Cites',
+    'cite.filterAll': 'All',
+    'cite.filterNoId': 'Missing id',
+    'cite.filterUnused': 'Unused',
+    'cite.statusOk': 'Has id',
+    'cite.statusNoId': 'Missing DOI/arXiv',
+    'cite.statusBadId': 'Invalid id',
+    'cite.statusUnused': 'Unused',
+    'cite.duplicate': 'duplicate key',
+    'cite.summary': '{total} entries · {used} used · {unused} unused · {noId} missing id · {dup} duplicate · {files} files',
+    'cite.fileCount': '{n} entries',
+    'cite.empty': 'No reference file (config bib or \\bibliography{} in the text)',
+    'cite.needProject': 'Load a workbench project first, then open citations.',
+    'cite.error': 'Cannot read the citation list: ',
+    'cite.none': 'No entry matches this filter.',
     'empty.noReports': 'No experiment reports found (experiments/*/reports/*.report.toml)',
     'empty.noFacts': 'No facts in the ledger yet.',
     'empty.noRedYellow': 'No red or yellow items.',
@@ -781,15 +823,16 @@ const PAGE_LABEL = {
   workbench: 'page.workbench',
   facts: 'nav.facts',
   reports: 'page.reports',
+  citations: 'page.citations',
   project: 'page.project',
   ai: 'page.ai',
 };
 
 const ALL_PAGES = Object.keys(PAGE_LABEL);
 
-// 网页模式（也含 dev）都有的页：工作台、工作台事实账、实验报告、项目
+// 网页模式（也含 dev）都有的页：工作台、工作台事实账、实验报告、引用、项目
 // 工作台本身没有导航项——章节才是入口；项目视图只由侧栏顶部按钮进入。
-const WEB_PAGES = ['workbench', 'facts', 'reports', 'project'];
+const WEB_PAGES = ['workbench', 'facts', 'reports', 'citations', 'project'];
 
 // 网页模式只有工作台三页；草稿与 AI 是宿主的，不给路由。
 function availablePages() {
@@ -841,7 +884,7 @@ function updateTitle() {
   const wbName = String(state.workbenchProject?.project || state.workbenchStatus?.project || '').trim();
   const localName = String(state.project?.name || '').trim();
   const wbTab = state.tab === 'workbench' || state.tab === 'facts'
-    || state.tab === 'reports' || state.tab === 'project';
+    || state.tab === 'reports' || state.tab === 'citations' || state.tab === 'project';
   const name = wbTab ? (wbName || localName) : (localName || wbName);
   document.title = name ? label + ' · ' + name : label;
 }
@@ -905,6 +948,11 @@ function renderTab() {
     // 按需加载：只有真的切到「实验报告」页才请求；其他视图不预拉
     renderWorkbenchReports();
     if (state.workbenchProject) loadWorkbenchReports().catch(() => {});
+  }
+  else if (state.tab === 'citations') {
+    // 引用页同理：进页面才请求 /api/citations
+    renderCitations();
+    if (state.workbenchProject) loadCitations().catch(() => {});
   }
   else if (state.tab === 'project') renderProjects();
   else if (state.tab === 'ai') renderAi();
@@ -3012,6 +3060,121 @@ async function loadWorkbenchReports() {
   renderWorkbenchReports();
 }
 
+// ------------------------------------------------------------------ 引用页
+//
+// 多个 bib 汇总 + 每条的状态。只读：这里不编辑 bib，也不联网核对
+// （联网核对仍然走 audit）。状态短名：ok 有标识 / no_id 缺 DOI/arXiv /
+// bad_id 标识不合法 / unused 未引用。
+
+const CITE_STATUS = {
+  ok: { label: 'cite.statusOk', chip: 'ok' },
+  no_id: { label: 'cite.statusNoId', chip: 'warn' },
+  bad_id: { label: 'cite.statusBadId', chip: 'bad' },
+  duplicate: { label: 'cite.duplicate', chip: 'bad' },
+  unused: { label: 'cite.statusUnused', chip: 'mute' },
+};
+
+/** 状态短名：中文标签 + 颜色（颜色之外还有字，色盲也读得出）。 */
+function citeStatusChip(status) {
+  const item = CITE_STATUS[status] || CITE_STATUS.ok;
+  return '<span class="num-chip ' + item.chip + '">' + esc(t(item.label)) + '</span>';
+}
+
+/** 当前过滤下的条目：all / no-id（缺标识）/ unused（正文没引到）。 */
+function citeFiltered(data) {
+  const rows = data.entries || [];
+  const filter = state.citeFilter;
+  if (filter === 'no-id') return rows.filter((r) => r.status === 'no_id');
+  if (filter === 'unused') return rows.filter((r) => Number(r.used || 0) <= 0);
+  return rows;
+}
+
+function renderCitations() {
+  const data = state.wbCitations || {};
+  const rows = data.entries || [];
+  const files = data.files || [];
+  for (const btn of $$('.cite-filter')) {
+    const on = (btn.dataset.filter || 'all') === state.citeFilter;
+    btn.classList.toggle('is-active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+  const summary = $('#cite-summary');
+  if (summary) {
+    summary.textContent = rows.length
+      ? tf('cite.summary', {
+        total: data.total ?? rows.length,
+        used: data.used ?? 0,
+        unused: data.unused ?? 0,
+        noId: data.no_id ?? 0,
+        dup: data.duplicate ?? 0,
+        files: files.length,
+      })
+      : '';
+  }
+  const filesBox = $('#cite-files');
+  if (filesBox) {
+    filesBox.innerHTML = files.length
+      ? files.map((f) => '<span class="cite-file"><span class="cite-file-path">' +
+        esc(f.path) + '</span><span class="cite-file-count">' +
+        esc(tf('cite.fileCount', { n: f.entries ?? 0 })) + '</span></span>').join('')
+      : '';
+  }
+  const tbody = $('#cite-tbody');
+  if (!tbody) return;
+  if (!state.workbenchProject) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">' +
+      esc(t('cite.needProject')) + '</td></tr>';
+    return;
+  }
+  if (data.error) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">' +
+      esc(t('cite.error') + data.error) + '</td></tr>';
+    return;
+  }
+  if (!files.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">' +
+      esc(t('cite.empty')) + '</td></tr>';
+    return;
+  }
+  const shown = citeFiltered(data);
+  if (!shown.length) {
+    tbody.innerHTML = '<tr class="table-empty-row"><td colspan="5">' +
+      esc(t('cite.none')) + '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = shown.map((r) => {
+    const id = r.doi || r.arxiv || r.url || '';
+    const dup = r.duplicate
+      ? '<span class="cite-dup">' + esc(t('cite.duplicate')) + '</span>' : '';
+    const where = (r.files || []).length > 1
+      ? '<div class="cite-row-files">' + esc((r.files || []).join(' · ')) + '</div>' : '';
+    return '<tr>'
+      + '<td class="mono" title="' + esc((r.file || '') + ':' + (r.line || 0)) + '">'
+      + esc(r.key) + dup + where + '</td>'
+      + '<td>' + esc(r.title || '—') + '</td>'
+      + '<td class="mono">' + esc(id || '—') + '</td>'
+      + '<td class="cell-num">' + esc(String(r.used ?? 0)) + '</td>'
+      + '<td>' + citeStatusChip(r.status) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+async function loadCitations() {
+  if (!state.workbenchProject || state.citeLoading) return;
+  state.citeLoading = true;
+  try {
+    state.wbCitations = await api(wb('/citations'));
+  } catch (err) {
+    state.wbCitations = {
+      total: 0, used: 0, unused: 0, no_id: 0, bad_id: 0,
+      files: [], entries: [], error: err.message,
+    };
+  } finally {
+    state.citeLoading = false;
+  }
+  renderCitations();
+}
+
 const REPORT_ACTION_LABEL = {
   check: '检查', lock: '封存', sign: '签收', import: '导入',
 };
@@ -3148,6 +3311,11 @@ async function loadWorkbenchProject() {
     renderWorkbenchReports();
     loadWorkbenchReports().catch(() => {});
   }
+  // 引用页同理
+  if (state.tab === 'citations') {
+    renderCitations();
+    loadCitations().catch(() => {});
+  }
 }
 
 async function saveWorkbenchSection() {
@@ -3242,6 +3410,14 @@ async function runWorkbenchAudit() {
 
 function wire() {
   for (const btn of $$('.nav-item')) btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+
+  // 引用页：按状态过滤（全部 / 缺标识 / 未引用）
+  for (const btn of $$('.cite-filter')) {
+    btn.addEventListener('click', () => {
+      state.citeFilter = btn.dataset.filter || 'all';
+      renderCitations();
+    });
+  }
 
   // 侧栏底部：语言 / 主题。点一下就换，并且记住（刷新后还在）。
   $('#btn-lang-zh').addEventListener('click', () => setLang('zh'));

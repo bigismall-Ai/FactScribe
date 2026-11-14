@@ -97,7 +97,7 @@ class TestDiffListIsHonest(unittest.TestCase):
 
     批 139 修的是同名不同义：JS 曾把「缺 source 字段」也叫 MISSING_SOURCE，
     而 Python 那个码指「来源文件不存在」。这里只锁文档口径——判据本身由
-    两侧的审计测试守（JS 侧见 integrations/minifactscribe/tests/audit.test.mjs）。
+    Python 原版守；JS 移植件已删除，不再有第二套实现需要比对。
     """
 
     SPEC = ROOT / "docs" / "design" / "SPEC-CONFORMANCE.md"

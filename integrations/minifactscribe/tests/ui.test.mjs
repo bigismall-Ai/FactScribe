@@ -14,7 +14,6 @@ import { test } from 'node:test';
 const HTML = readFileSync(new URL('../miniapp/client/index.html', import.meta.url), 'utf8');
 const JS = readFileSync(new URL('../miniapp/client/app.js', import.meta.url), 'utf8');
 const CSS = readFileSync(new URL('../miniapp/client/app.css', import.meta.url), 'utf8');
-const AUDIT = readFileSync(new URL('../miniapp/node/audit.mjs', import.meta.url), 'utf8');
 const SERVER = readFileSync(new URL('../miniapp/node/server.mjs', import.meta.url), 'utf8');
 const MINIAPP = readFileSync(new URL('../miniapp/miniapp.json', import.meta.url), 'utf8');
 const LAUNCHER = readFileSync(new URL('../miniapp/node/launcher.mjs', import.meta.url), 'utf8');
@@ -26,55 +25,25 @@ function issueLabelKeys() {
   return new Set([...block.matchAll(/^\s{2}'?([A-Z_]+)'?:/gm)].map((m) => m[1]));
 }
 
-/** 引擎里出现过的全部违规码：issue(...) 调用 + PRESCRIPTIONS 的键。 */
-function engineCodes() {
-  const codes = new Set();
-  for (const m of AUDIT.matchAll(/issue\(\s*'(?:red|yellow)'\s*,\s*'([A-Z_]+)'/g)) codes.add(m[1]);
-  const block = AUDIT.slice(AUDIT.indexOf('export const PRESCRIPTIONS = {'), AUDIT.indexOf('};', AUDIT.indexOf('export const PRESCRIPTIONS = {')));
-  for (const m of block.matchAll(/^\s{2}([A-Z_]+):\s*\{/gm)) codes.add(m[1]);
-  return codes;
-}
-
 // ------------------------------------------------------- 1. 违规码必须有人话
+//
+// 判定来自 Python 引擎；工作台把引擎给的码翻成中文短名。
+// 翻不出来时退回原码，所以短名表要覆盖引擎真的会发出的那一批码。
 
-test('引擎里的每个违规码都有中文短名：新增码不许只留英文常量', () => {
-  const labels = issueLabelKeys();
-  const missing = [...engineCodes()].filter((c) => !labels.has(c)).sort();
-  assert.deepEqual(missing, [], '这些违规码还没有中文短名：' + missing.join('、'));
-});
-
-test('中文短名本身真的是中文，且不是空串', () => {
+test('工作台的问题码有中文短名：翻不出来就退回原码', () => {
   const block = JS.slice(JS.indexOf('const ISSUE_LABEL = {'), JS.indexOf('};', JS.indexOf('const ISSUE_LABEL = {')));
   const pairs = [...block.matchAll(/^\s{2}'?([A-Z_]+)'?:\s*'([^']*)'/gm)];
   assert.ok(pairs.length > 20, '短名表不该只有几条');
   for (const [, code, label] of pairs) {
     assert.match(label, /[\u4e00-\u9fff]/, code + ' 的短名里没有中文');
   }
+  assert.match(JS, /ISSUE_LABEL\[f\.code\] \|\| f\.code/, '工作台要给出中文短名，查不到才退回原码');
 });
 
 // ------------------------------------------------------------- 2. 过期要说出来
-
-test('改了内容但没重跑审计，界面必须声明结果已过期', () => {
-  assert.match(JS, /function refreshStale\(\)/, '客户端应有过期判定');
-  assert.match(JS, /state\.auditSig/, '应记录审计时的内容指纹');
-  assert.match(JS, /sigOf\(state\.project\)\s*!==\s*state\.auditSig/, '过期判定应基于内容指纹比对');
-  assert.match(HTML, /id="stale-banner"/, '页面应有过期提示条');
-  assert.match(HTML, /id="btn-rerun"/, '过期时要有"重新审计"的出路');
-});
-
-test('过期时顶栏结论不能继续用红/黄牌冒充现状', () => {
-  assert.match(JS, /verdict-stale/, '应有独立的过期样式分支');
-  const block = JS.slice(JS.indexOf('function renderVerdict'), JS.indexOf('// ------------------------------------------------------------------ 正文'));
-  assert.match(block, /state\.stale[\s\S]*'state\.stale'/, '过期时应显示"结果已过期"而不是旧的绿/黄/红');
-  assert.match(JS, /'state\.stale':\s*'结果已过期'/, '"结果已过期"这句文案要留在字典里');
-});
-
-test('审计前先保存：否则服务端审旧稿，结论却按新稿记为新鲜', () => {
-  const block = JS.slice(JS.indexOf('async function runAudit'), JS.indexOf('async function loadDemo'));
-  assert.match(block, /await saveNow\(\)/, '审计前必须先把当前项目落到服务端');
-  assert.match(block, /if \(!saved\)/, '保存失败时不能继续审计');
-  assert.match(block, /saveNow\(\)[\s\S]*api\('\/api\/audit'/, '保存必须发生在审计请求之前');
-});
+//
+// 本地草稿整套已经删掉了：运行时只剩 Python 引擎，判定直接来自引擎。
+// 「过期」这件事现在由引擎侧负责，界面不再自己存一份结论。
 
 test('[hidden] 必须压过组件自己的 display：否则"隐藏"只改了属性', () => {
   assert.match(
@@ -84,58 +53,14 @@ test('[hidden] 必须压过组件自己的 display：否则"隐藏"只改了属�
   );
 });
 
-// --------------------------------------------------- 3. 判定不能只靠颜色
-
-test('数字判定同时给符号和文字：色弱与单色打印也读得出', () => {
-  assert.match(JS, /const CHIP = \{/, '应有判定符号表');
-  for (const key of ['ok', 'warn', 'bad', 'mute']) {
-    assert.match(JS, new RegExp(key + ':\\s*\\{\\s*sym:'), key + ' 判定应有符号');
-  }
-  assert.match(JS, /chip-sym/, '符号应渲染进 chip');
-  assert.match(HTML, /chip-legend/, '页面应有判定图例');
-  for (const sym of ['✓', '!', '✕']) {
-    assert.ok(HTML.includes(sym), '图例里应有符号 ' + sym);
-  }
-});
-
-// ----------------------------------------------- 4. 术语与位置要说人话
-
-test('事实账与覆盖矩阵用同一套状态词', () => {
-  assert.match(JS, /const USED_IN_LABEL = \{/, '应有状态词映射表');
-  assert.match(JS, /'已内联绑定':\s*'已绑定'/, '"已内联绑定"应统一显示为"已绑定"');
-});
-
-test('问题位置翻成人话，不再直接甩 "正文:12"', () => {
-  assert.match(JS, /function formatLocation/, '应有位置格式化函数');
-  assert.match(JS, /正文 第 /, '正文位置应带行号说明');
-});
-
-test('内部违规码降级为次要信息，中文短名当主角', () => {
-  assert.match(JS, /issue-label/, '问题卡应有中文短名元素');
-  assert.match(JS, /class="code" title="内部违规码"/, '违规码应标成内部信息');
-});
-
 // ------------------------------------------------- 5. 危险动作必须先确认
+//
+// 危险动作现在只剩工作台这一侧：删章节要 confirm、冻结证据要问理由。
 
-test('覆盖项目、删事实、改哈希都要先确认', () => {
-  assert.match(HTML, /id="demo-confirm"/, '载入演示数据应有确认');
-  assert.match(HTML, /id="fact-delete-confirm"/, '删除事实应有确认');
-  assert.match(JS, /data-rehash-confirm/, '更新哈希应有确认');
-  assert.match(JS, /确认更新/, '更新哈希的确认要说清后果');
-});
-
-test('删除按钮只在编辑态出现，不给一个永远灰着的按钮', () => {
-  assert.match(JS, /\$\('#btn-delete-fact'\)\.hidden = !f/, '删除按钮应随编辑态显隐');
-});
-
-// ------------------------------------------------------ 6. 表单要能填错
-
-test('必填字段有标记与字段级错误，不靠一个 toast 打发了事', () => {
-  assert.ok((HTML.match(/aria-required="true"/g) || []).length >= 4, '必填字段应有 aria-required');
-  assert.match(HTML, /id="form-errors"/, '应有错误摘要区');
-  assert.match(HTML, /class="field-error"/, '应有字段级错误位');
-  assert.match(JS, /function validateFact/, '应有校验函数');
-  assert.match(JS, /function showFormErrors/, '应有错误呈现函数');
+test('删章节与冻结证据都要先问人', () => {
+  assert.match(JS, /confirm\(/, '删章节要先确认');
+  assert.match(JS, /prompt\(/, '冻结证据要问理由');
+  assert.match(JS, /冻结理由/, '要说清冻结的理由是什么');
 });
 
 // --------------------------------------------------- 7. 表头与表格可读
@@ -148,9 +73,9 @@ test('表头不换行：中文表头被压成竖排时整张表都读不下去',
   );
 });
 
-test('正文与 bib 的编辑框有可见 label，不只靠 aria-label', () => {
-  assert.match(HTML, /for="manuscript-input"/, '正文应有可见 label');
-  assert.match(HTML, /for="bib-input"/, 'bib 应有可见 label');
+test('工作台章节编辑框有可见 label，不只靠 aria-label', () => {
+  assert.match(HTML, /for="workbench-section-text"/, '当前节应有可见 label');
+  assert.match(HTML, /写给工作台项目/, '要说明写给谁');
 });
 
 // -------------------------------------------------------- 8. 服务端别乱报 500
@@ -163,10 +88,10 @@ test('未知路径回 404 而不是 500：content-type 不能是 undefined', () 
   );
 });
 
-test('本地工作台是独立入口，并明确与本地草稿不是同一个项目', () => {
+test('本地工作台是独立入口，界面只呈现工作台项目的结果', () => {
   assert.match(HTML, /id="panel-workbench"/, '应有独立的工作台面板');
   assert.match(HTML, /id="btn-workbench-connect"/, '应有连接按钮');
-  assert.match(HTML, /不是同一个项目/, '界面必须说清工作台项目与本地草稿不同');
+  assert.match(HTML, /只显示工作台项目的结果/, '界面必须说清这里只呈现工作台项目');
   assert.match(JS, /\/api\/workbench/, '客户端应调用工作台代理接口');
   assert.match(JS, /runWorkbenchAudit/, '应有工作台审计入口');
 });
@@ -175,7 +100,7 @@ test('工作台可载入项目并按节保存，且保存前说明写给工作�
   assert.match(HTML, /id="btn-workbench-load"/, '应有载入项目按钮');
   assert.match(HTML, /id="workbench-section-select"/, '应有节选择');
   assert.match(HTML, /id="btn-workbench-save"/, '应有保存按钮');
-  assert.match(HTML, /写给工作台项目，不是本地草稿/, '必须说明写入目标');
+  assert.match(HTML, /写给工作台项目/, '必须说明写入目标');
   assert.match(JS, /wb\('\/project'\)/, '应载入工作台项目（经 wb 适配）');
   assert.match(JS, /wb\('\/sections'\)/, '应能保存工作台章节（经 wb 适配）');
   assert.match(JS, /MODE\.mini \? '\/api\/workbench' : '\/api'/, 'MiniApp 走 Node 代理，网页直连 Python');
@@ -249,7 +174,7 @@ test('一套界面两种启动：宿主检测决定显示哪一区', () => {
   assert.match(JS, /showHostUi/, '宿主专属区由一个开关控制');
   assert.match(JS, /applyMode/, '启动时要应用模式');
   assert.match(JS, /data-tab="' \+ tab \+ '"/, '按页签逐个显隐');
-  assert.match(JS, /'manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai'/, '草稿与 AI 页签算宿主专属');
+  assert.match(JS, /const hostTabs = \['ai'\]/, '只有 AI 起草是宿主专属页签');
 });
 
 test('网页模式：直连 Python、要 token、藏掉宿主专属按钮', () => {
@@ -473,14 +398,14 @@ test('AI 入口在网页模式禁用并说明原因：需要 MiniApp 宿主', ()
 // 拆页不是为了好看，是为了让「刷新后还在同一页」「后退能退回上一页」
 // 这两件事成立。所以这里钉死的是路由本身：hash 写法、面板、导航项。
 
-test('导航只剩宿主页签 + 工作台事实账 + 实验报告 + 引用，工作台与项目没有导航项', () => {
+test('导航只剩 AI 起草 + 工作台事实账 + 实验报告 + 引用，工作台与项目没有导航项', () => {
   assert.match(HTML, /data-tab="reports"[^>]*aria-controls="panel-reports"/, '应有实验报告导航项');
   assert.match(HTML, /data-tab="facts"[^>]*aria-controls="panel-facts"/, '应有工作台事实账导航项');
   assert.match(HTML, /data-tab="citations"[^>]*aria-controls="panel-citations"/, '应有引用导航项');
-  const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
+  const nav = HTML.slice(HTML.indexOf('data-tab="ai"'), HTML.indexOf('</nav>'));
   const order = [...nav.matchAll(/data-tab="([a-z-]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(order, ['manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai',
-    'facts', 'reports', 'citations'], '导航顺序：宿主页签 → 工作台事实账 → 实验报告 → 引用');
+  assert.deepEqual(order, ['ai', 'facts', 'reports', 'citations'],
+    '导航顺序：AI 起草 → 工作台事实账 → 实验报告 → 引用');
 });
 
 test('工作台与项目不再有导航项：章节是工作台的入口，项目靠顶部按钮', () => {
@@ -633,7 +558,7 @@ test('启动落在哪一页由 hash 说了算；非法 hash 退回默认页', ()
   assert.match(JS, /const hashPage = pageFromHash\(\)/, '启动时应读 hash');
   assert.match(JS, /hashPage \|\| defaultPage\(\)/, '没给 hash 时用默认页');
   assert.match(JS, /function defaultPage/, '应有默认页函数');
-  assert.match(JS, /MODE\.mini \? 'manuscript' : 'workbench'/, 'MiniApp 默认正文，网页默认工作台');
+  assert.match(JS, /function defaultPage\(\) \{\s*return 'workbench'/, '两种模式都默认落到工作台');
   // 非法 hash 不能停在一个空白面板上
   const on = JS.slice(JS.indexOf('function onHashChange'), JS.indexOf('function renderTab'));
   assert.match(on, /const fallback = defaultPage\(\)/, '非法 hash 要退回默认页');
@@ -641,7 +566,7 @@ test('启动落在哪一页由 hash 说了算；非法 hash 退回默认页', ()
 });
 
 test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目，事实页渲染事实账', () => {
-  const block = JS.slice(JS.indexOf('function renderTab'), JS.indexOf('// ------------------------------------------------------------------ 顶栏'));
+  const block = JS.slice(JS.indexOf('function renderTab'), JS.indexOf('// ------------------------------------------------------------------ KPI'));
   assert.match(block, /state\.tab === 'reports'/, '报告页分支要在');
   assert.match(block, /renderWorkbenchReports\(\)/, '报告页要渲染报告');
   assert.match(block, /loadWorkbenchReports\(\)/, '报告页才按需拉列表');
@@ -651,17 +576,17 @@ test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目�
 
 test('事实账有自己的路由 #/facts：页表里要写明', () => {
   assert.match(JS, /facts:\s*'nav\.facts'/, '页面名要挂一个 i18n 键（文案在字典里）');
-  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'citations', 'project'\]/,
-    '网页页表应写明（含事实账与引用）');
+  assert.match(JS, /const PAGE_LABEL = \{[\s\S]*?workbench: 'page\.workbench'[\s\S]*?ai: 'page\.ai'/,
+    '页表要写明这六页：工作台 / 事实账 / 实验报告 / 引用 / 项目 / AI 起草');
 });
 
-test('applyMode 不再把 facts / reports 藏起来：网页模式这两项都要能进', () => {
+test('applyMode 只把 AI 起草当宿主专属：facts / reports 两项都要能进', () => {
   const block = JS.slice(JS.indexOf('function applyMode'), JS.indexOf('function renderSessionBanner'));
   assert.ok(block.length > 0, '应有 applyMode');
   const hostTabs = /const hostTabs = \[([^\]]*)\]/.exec(block);
   assert.ok(hostTabs, '应有宿主专属页签清单');
   assert.doesNotMatch(hostTabs[1], /facts|reports|project|citations/, '这些页不是宿主专属，不该在隐藏名单里');
-  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'citations', 'project'\]/, '网页页表应写明');
+  assert.match(JS, /citations: 'page\.citations'/, '引用页要在页表里');
 });
 
 test('点侧栏章节就打开工作台：章节本身就是入口', () => {
@@ -789,15 +714,14 @@ test('三种静态文案标记都要认：正文 / 提示 / 占位符', () => {
 });
 
 test('导航与页标题带 data-i18n', () => {
-  const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
+  const nav = HTML.slice(HTML.indexOf('data-tab="ai"'), HTML.indexOf('</nav>'));
   const items = [...nav.matchAll(/data-tab="([a-z]+)"([^>]*)>/g)];
-  assert.ok(items.length >= 8, '导航项要够多');
+  assert.ok(items.length >= 4, '导航项要够多');
   for (const [, tab, rest] of items) {
     assert.match(rest, /data-i18n="/, '导航项 ' + tab + ' 要带 data-i18n');
   }
   // 页标题（面板 h2）也要能翻
-  for (const panel of ['panel-manuscript', 'panel-ledger', 'panel-refs', 'panel-protect',
-    'panel-audit', 'panel-workbench', 'panel-facts', 'panel-reports', 'panel-citations',
+  for (const panel of ['panel-workbench', 'panel-facts', 'panel-reports', 'panel-citations',
     'panel-project', 'panel-ai']) {
     const block = HTML.slice(HTML.indexOf('id="' + panel + '"'), HTML.indexOf('</section>', HTML.indexOf('id="' + panel + '"')));
     assert.match(block, /<h2[^>]*data-i18n="/, panel + ' 的页标题要带 data-i18n');
@@ -974,4 +898,47 @@ test('项目列表：排除示例论文、当前项带「当前」徽标、每�
   assert.match(block, /project-badge/, '当前项目要有徽标');
   assert.match(block, /description/, '每项要显示详情');
   assert.match(JS, /'project\.current':/, '「当前」文案要进字典');
+});
+
+// ------------------------------------------- 13. 旧的「本地草稿」整套不许回来
+//
+// 运行时只剩 Python 引擎：界面里没有草稿页，Node 里没有草稿接口。
+// 这一节钉的就是「删干净了」——任何一处草稿冒头都会让测试变红。
+
+test('界面里没有草稿页：导航、面板、顶栏控件都不许再有', () => {
+  for (const tab of ['manuscript', 'ledger', 'refs', 'protect', 'audit']) {
+    assert.doesNotMatch(HTML, new RegExp('data-tab="' + tab + '"'), '不该有草稿页签：' + tab);
+    assert.doesNotMatch(HTML, new RegExp('id="panel-' + tab + '"'), '不该有草稿面板：' + tab);
+  }
+  for (const id of ['project-name', 'save-state', 'verdict', 'btn-demo', 'btn-audit',
+    'demo-confirm', 'stale-banner', 'btn-rerun', 'export-out', 'manuscript-input',
+    'bib-input', 'facts-tbody', 'fact-form', 'protect-result', 'issues-list']) {
+    assert.doesNotMatch(HTML, new RegExp('id="' + id + '"'), '不该再有草稿控件：' + id);
+  }
+});
+
+test('客户端不再有草稿状态与函数：也不许再请求草稿接口', () => {
+  for (const fn of ['renderManuscript', 'renderLedger', 'renderRefs', 'renderProtect',
+    'renderAudit', 'runAudit', 'loadDemo', 'scheduleSave', 'saveNow', 'refreshStale',
+    'sigOf', 'setSaveState', 'loadFactForm', 'validateFact', 'showFormErrors',
+    'renderVerdict', 'loadPreviewDraft']) {
+    assert.doesNotMatch(JS, new RegExp('function ' + fn + '\\b'), '不该再有草稿函数：' + fn);
+  }
+  for (const key of ['state.project', 'state.audit', 'state.verify', 'state.auditSig',
+    'state.stale', 'state.saveFailed', 'state.editingFactId']) {
+    assert.doesNotMatch(JS, new RegExp(key + '\\b'), '不该再有草稿状态：' + key);
+  }
+  for (const route of ['/api/state', '/api/demo', '/api/verify', '/api/protect', '/api/export']) {
+    assert.doesNotMatch(JS, new RegExp(route.replace('/', '\\/')), '不该再请求草稿接口：' + route);
+  }
+});
+
+test('Node 侧没有草稿路由：判定只来自 Python 工作台', () => {
+  for (const route of ["'/api/state'", "'/api/demo'", "'/api/verify'", "'/api/protect'",
+    "'/api/export/", "'/api/audit'"]) {
+    assert.doesNotMatch(SERVER, new RegExp('path === ' + route), 'Node 不该再有草稿路由：' + route);
+  }
+  assert.doesNotMatch(SERVER, /from '\.\/audit\.mjs'/, 'Node 不该再引 JS 审计引擎');
+  assert.doesNotMatch(SERVER, /from '\.\/demo\.mjs'/, 'Node 不该再引演示数据');
+  assert.match(SERVER, /'\/api\/workbench\/audit'/, '工作台审计代理要留着');
 });

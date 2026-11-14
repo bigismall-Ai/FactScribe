@@ -62,8 +62,7 @@ class WebUITest(unittest.TestCase):
 
     def test_static_assets(self):
         for path, needle in (("/app.js", "wb('/project')"),
-                             ("/app.css", ".layout"),
-                             ("/demo.json", '\"name\"')):
+                             ("/app.css", ".layout")):
             status, body = self._get(path)
             self.assertEqual(status, 200, path)
             self.assertIn(needle, body)

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""把一致性锁夹具投影成 JS 移植件可消费的 project.json（批 138）。
+"""把一致性锁夹具投影成扁平的 project.json（批 138）。
 
 为什么需要这层：Python 原版（factscribe/audit.py）读的是磁盘上的项目目录，
-JS 移植件（integrations/minifactscribe/miniapp/node/audit.mjs）读的是一个内存对象。
-两边要在一起比对，就得先把项目「拍平」成双方都认的形状；这个脚本就是那条
-唯一的投影路——两边吃同一份 project.json，才不会各说各话。
+而一致性锁要的是一份可逐字节比对的扁平读数；这个脚本就是那条唯一的投影路。
+
+（原先 JS 移植件也吃同一份投影；那份移植件已删除，现在只剩 Python 一侧。）
 
 输出契约（docs/design/SPEC-CONFORMANCE.md §3）::
 

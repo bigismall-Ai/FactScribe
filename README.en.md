@@ -39,6 +39,8 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 | `doctor` | Pre-flight check: environment (Python/tectonic/poppler/fonts/git) and project (config/ledger/manifest/freeze), each with a fix command; not a gate, it never changes a verdict |
 | `serve` | Local workbench HTTP API: loopback only, random token by default; structured `status` / `brief` / `audit` / `project` for MiniFactScribe, local pages or agents; read-only unless `--allow-write`; PDF builds only with `--allow-build` |
 | `mcp` | MCP stdio server for `status` / `project` / `brief` / `audit`; Claude Code / Codex / OpenCode launch `python3 -m factscribe mcp <project>`; writes only with `--allow-write` |
+| `report` | Normalized experiment reports: `check` runs probes against raw artifacts, `lock` writes a lock, `sign` renders a review card and records sign-off (see `docs/design/SPEC-REPORT-SYNC.md`) |
+| `fact import` | Imports a signed report into the fact ledger (final/lock/sign-off gates; no hand-copied numbers) |
 | `web` | Local workbench page: the `serve` backend plus a three-column UI (sections / editor / evidence + audit); read-only unless `--allow-write`; PDF builds only with `--allow-build` |
 | `fact` | Bookkeeping: `add` computes the hash and writes one fact; it never signs the manifest for you |
 | `check` | Validates the ledger: unique ids, live sha256, signed manifest, expression arithmetic, duplicate values |
@@ -109,7 +111,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1164 tests, fully offline
+python3 -m unittest discover -s tests     # 1227 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -575,8 +576,11 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "approve_target）已过期，必须重签" % f.id,
                     location=loc, token=f.id))
 
-        # value 回查：非派生 claim 的数字必须字面出现在 source 里（B6 的内容锚）
-        if not f.is_derived and f.kind == "claim" and src in texts:
+        # value 回查：非派生 claim 的数字必须字面出现在 source 里（B6 的内容锚）。
+        # 报告背书的 fact 例外：它的值由探针重算并进了签收摘要，字面回查对
+        # JSONL 计数/CSV 取格没有意义。
+        if (not f.is_derived and f.kind == "claim" and src in texts
+                and not str(getattr(f, "report", "")).strip()):
             src_keys = _source_text_keys(texts[src])
             missing = []
             for raw, suffix, pct in literal_tokens(f.value):
@@ -661,6 +665,107 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
 # check
 # --------------------------------------------------------------------------
 
+def _find_report_base(cfg: Config, rel: str):
+    """找报告：报告路径是相对工作区的，审计跑在论文项目根上。
+
+    依次试论文项目根与其上若干层（工作区通常是论文项目的父目录）。
+    找不到返回 (None, None)。只读，不写盘。
+    """
+    text = str(rel or "").strip().replace("\\", "/")
+    if not text:
+        return None, None
+    p = Path(text)
+    if p.is_absolute() or ".." in p.parts:
+        return None, None
+    bases = [cfg.root] + list(cfg.root.parents)[:4]
+    for base in bases:
+        if (base / p).is_file():
+            return base, p.as_posix()
+    return None, None
+
+
+def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
+    """P0：带 report 的 fact 必须跟报告对账（报告在、指标在、签过、值一致）。
+
+    只对带 report 字段的 fact 生效：旧账零行为变化。
+    """
+    out: list[Issue] = []
+    if not any((f.report or "").strip() for f in facts):
+        return out
+    # report.py 顶层 import 本模块；这里必须函数内局部 import，否则循环依赖。
+    from .report import ReportError, load_report, verify_signoff
+
+    # 同一份报告可能背书很多条事实：读一次、核一次，别让审计变成 O(事实×原始文件)
+    cache: dict = {}
+    for f in facts:
+        rel = str(f.report or "").strip()
+        if not rel:
+            continue
+        loc = "%s:%s" % (f.file, f.line or "?")
+        base, rel_path = _find_report_base(cfg, rel)
+        if base is None:
+            out.append(Issue(
+                "REPORT_MISSING",
+                "fact %r 指向的报告 %s 找不到（相对工作区的路径）" % (f.id, rel),
+                location=loc, token=f.id))
+            continue
+        key = (str(base), rel_path)
+        if key not in cache:
+            try:
+                cache[key] = (load_report(base, rel_path),
+                              verify_signoff(base, rel_path))
+            except ReportError as exc:
+                cache[key] = (exc, None)
+        loaded, verified = cache[key]
+        if isinstance(loaded, ReportError):
+            out.append(Issue(
+                "REPORT_METRIC_MISSING",
+                "fact %r 指向的报告 %s 读不了：%s" % (f.id, rel, loaded),
+                location=loc, token=f.id))
+            continue
+        report = loaded
+        mid = str(f.report_metric or "").strip()
+        metric = next((m for m in report.get("metrics", [])
+                       if m.get("id", "") == mid), None)
+        if metric is None:
+            out.append(Issue(
+                "REPORT_METRIC_MISSING",
+                "fact %r 指向的指标 %r 不在报告 %s 里" % (f.id, mid, rel),
+                location=loc, token=f.id))
+            continue
+        if not verified.get("ok"):
+            out.append(Issue(
+                "REPORT_NOT_SIGNED",
+                "fact %r 指向的报告 %s 没签收或签收已失效：%s"
+                % (f.id, rel, verified.get("reason", "")),
+                location=loc, token=f.id))
+        # 来源归属：账里那条 fact 必须指向该指标声明的某个来源文件。
+        # 只比路径、不比哈希——哈希不符已有 SOURCE_SHA256_MISMATCH，别为同一个
+        # 现象出两个码。路径比较用 realpath，兼容 source_root 的不同写法。
+        allowed = cache.get(("paths", key, mid))
+        if allowed is None:
+            allowed = {os.path.realpath(str(base / str(source.get("path", ""))))
+                       for source in (metric.get("sources") or [])}
+            cache[("paths", key, mid)] = allowed
+        try:
+            fact_path = os.path.realpath(str(source_path(cfg, f.source)))
+        except (OSError, ValueError):
+            fact_path = ""
+        if allowed and fact_path not in allowed:
+            out.append(Issue(
+                "REPORT_SOURCE_MISMATCH",
+                "fact %r 的来源 %s 不是报告指标 %s 的任何来源"
+                % (f.id, f.source, mid),
+                location=loc, token=f.id))
+        if str(f.value).strip() != str(metric.get("display", "")).strip():
+            out.append(Issue(
+                "REPORT_METRIC_MISMATCH",
+                "fact %r 的值 %r 与报告指标 %s 的显示值 %r 对不上"
+                % (f.id, f.value, mid, metric.get("display", "")),
+                location=loc, token=f.id))
+    return out
+
+
 def run_check(cfg: Config, facts: list[Fact]):
     issues: list[Issue] = []
     warnings: list[Issue] = []
@@ -673,6 +778,8 @@ def run_check(cfg: Config, facts: list[Fact]):
     issues += red_src
     warnings += yellow_src
     issues += _display_issues(facts)
+    # P0：报告来源的 fact 要跟报告对账（只有带 report 字段的 fact 受影响）。
+    issues += _report_issues(cfg, facts)
 
     seen: dict[str, Fact] = {}
     superseded = {s.strip().casefold() for f in facts for s in f.supersedes}
@@ -880,6 +987,9 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     red_src, yellow_src = verify_sources(cfg, facts)
     red += red_src
     yellow += yellow_src
+
+    # P0：报告来源的 fact 要跟报告对账（只有带 report 字段的 fact 受影响）。
+    red += _report_issues(cfg, facts)
 
     scanned = {rel: scan_tex(text) for rel, text in sections}
 

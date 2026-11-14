@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .citeview import citations_data
 from .config import ConfigError, load_config
+from .pdfmap import locate, section_title
 from .projects import (ProjectCreateError, create_project, factscribe_dir,
                        project_description, project_name, read_registry,
                        remove_project, resolve_project, upsert_project,
@@ -154,6 +155,9 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/projects":
                 self._projects_view()
+                return
+            if path == "/api/section-page":
+                self._section_page()
                 return
             if path == "/api/status":
                 self._status()
@@ -390,6 +394,39 @@ class _Handler(BaseHTTPRequestHandler):
             row["guide"] = is_guide_path(item.get("path") or "")
             rows.append(row)
         return rows
+
+    def _section_page(self) -> None:
+        """当前节在编译后 PDF 的第几页（整篇编译，再翻到这一节）。"""
+        cfg = load_config(self._project())
+        rel = (parse_qs(urlparse(self.path).query).get("file") or [""])[0]
+        rel = str(rel or "").strip().replace("\\", "/")
+        if not rel or rel.startswith("/") or ".." in rel.split("/"):
+            raise ConfigError("file 必须是项目内的 .tex 路径", code="SECTION_INVALID")
+        if not rel.lower().endswith(".tex"):
+            raise ConfigError("只接受 .tex 章节：%s" % rel, code="SECTION_INVALID")
+        tex = cfg.root / rel
+        try:
+            tex.resolve().relative_to(cfg.root.resolve())
+        except ValueError:
+            raise ConfigError("章节越出项目根：%s" % rel, code="PATH_ESCAPE")
+        if not tex.is_file():
+            raise ConfigError("章节不存在：%s" % rel, code="SECTION_MISSING")
+        out = str(getattr(cfg, "output", "") or "").strip() or "main.pdf"
+        pdf = cfg.root / out
+        if not pdf.is_file():
+            raise ConfigError("还没有编译产物 %s，先编译一次" % out,
+                              code="PDF_MISSING")
+        title = section_title(tex.read_text(encoding="utf-8", errors="replace"))
+        try:
+            data = locate(pdf, title)
+        except FileNotFoundError:
+            raise ConfigError("本机没有 pdftotext（poppler），无法定位页码",
+                              code="PDFTOTEXT_MISSING")
+        except RuntimeError as exc:
+            raise ConfigError("PDF 文本抽取失败：%s" % exc, code="PDF_TEXT_FAILED")
+        data["file"] = rel
+        data["pdf"] = out
+        self._send(200, self._base("section_page", **data))
 
     def _projects_view(self) -> None:
         registry = read_registry()

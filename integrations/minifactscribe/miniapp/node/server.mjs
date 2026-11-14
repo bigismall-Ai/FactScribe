@@ -545,6 +545,13 @@ export async function start(context) {
                 '/api/build', 'POST', body));
             return;
           }
+          if (request.method === 'GET' && path === '/api/workbench/section-page') {
+            const file = new URL(request.url ?? '/', 'http://x').searchParams.get('file') || '';
+            sendJson(response, 200,
+              await workbenchFetch(workbench.url, workbench.token,
+                '/api/section-page?file=' + encodeURIComponent(file)));
+            return;
+          }
           if (request.method === 'GET' && path === '/api/workbench/pdf') {
             const upstream = await fetch(workbench.url + '/api/pdf', {
               headers: { authorization: `Bearer ${workbench.token}` },

@@ -942,3 +942,10 @@ test('Node 侧没有草稿路由：判定只来自 Python 工作台', () => {
   assert.doesNotMatch(SERVER, /from '\.\/demo\.mjs'/, 'Node 不该再引演示数据');
   assert.match(SERVER, /'\/api\/workbench\/audit'/, '工作台审计代理要留着');
 });
+
+
+test('预览会定位到本节页：走 wb(/section-page)，不是只看整本', () => {
+  assert.match(JS, /locateWbSectionPage/, '应有定位函数');
+  assert.match(JS, /wb\('\/section-page\?file='/, '页码走工作台接口');
+  assert.match(JS, /#page=/, 'embed 要带页码片段');
+});

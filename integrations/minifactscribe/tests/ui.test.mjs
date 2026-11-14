@@ -65,7 +65,8 @@ test('改了内容但没重跑审计，界面必须声明结果已过期', () =>
 test('过期时顶栏结论不能继续用红/黄牌冒充现状', () => {
   assert.match(JS, /verdict-stale/, '应有独立的过期样式分支');
   const block = JS.slice(JS.indexOf('function renderVerdict'), JS.indexOf('// ------------------------------------------------------------------ 正文'));
-  assert.match(block, /state\.stale[\s\S]*结果已过期/, '过期时应显示"结果已过期"而不是旧的绿/黄/红');
+  assert.match(block, /state\.stale[\s\S]*'state\.stale'/, '过期时应显示"结果已过期"而不是旧的绿/黄/红');
+  assert.match(JS, /'state\.stale':\s*'结果已过期'/, '"结果已过期"这句文案要留在字典里');
 });
 
 test('审计前先保存：否则服务端审旧稿，结论却按新稿记为新鲜', () => {
@@ -320,20 +321,29 @@ test('审阅卡逐行显示、不截断：截掉的行等于人没看见却签�
   assert.match(card, /wb-report-line/, '卡片要一行一条');
 });
 
-// ---------------------------------------------------- 10. 工作台三栏
+// ---------------------------------------------------- 10. 工作台两栏
 
-test('工作台是左中右三栏：目录 / 源码+预览 / 问题+AI', () => {
-  assert.match(HTML, /id="wb-section-list"/, '左栏应有章节目录');
-  assert.match(HTML, /id="btn-wb-mode-source"/, '中栏应有源码切换');
-  assert.match(HTML, /id="btn-wb-mode-preview"/, '中栏应有预览切换');
-  assert.match(HTML, /id="wb-preview-pdf"/, '中栏应有 PDF 预览位');
+test('工作台是两栏：源码+预览 / 问题+AI；章节目录搬到左侧栏', () => {
+  assert.match(HTML, /id="wb-section-list"/, '侧栏应有章节目录');
+  assert.match(HTML, /id="btn-wb-mode-source"/, '左栏应有源码切换');
+  assert.match(HTML, /id="btn-wb-mode-preview"/, '左栏应有预览切换');
+  assert.match(HTML, /id="wb-preview-pdf"/, '左栏应有 PDF 预览位');
   assert.match(HTML, /id="wb-ai-input"/, '右栏应有 AI 输入框');
   assert.match(HTML, /id="btn-wb-ai-send"/, '右栏应有 AI 发送按钮');
   assert.match(HTML, /id="workbench-section-select"/, '隐藏的下拉要留着：现有逻辑与测试都认它');
-  assert.match(CSS, /\.wb-columns\s*\{[^}]*grid-template-columns:\s*220px minmax\(0,\s*1fr\) 360px/,
-    '三栏要用 CSS grid：220px / 中栏 / 360px');
+  assert.match(CSS, /\.wb-columns\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) 360px/,
+    '两栏要用 CSS grid：中栏 / 360px');
   assert.match(CSS, /@media \(max-width: 1100px\)[\s\S]*\.wb-columns\s*\{\s*grid-template-columns:\s*1fr/,
     '窄屏要叠成一列');
+});
+
+test('工作台面板里不再有章节列：目录搬进左侧栏了', () => {
+  const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-facts"'));
+  assert.ok(wb.length > 0, '应能找到工作台面板');
+  assert.doesNotMatch(wb, /wb-col-sections/, '工作台里不该再有章节列');
+  assert.doesNotMatch(wb, /id="wb-section-list"/, '章节目录不该留在工作台面板里');
+  assert.match(wb, /id="workbench-status"/, '动作消息行要留在工作台页签');
+  assert.match(wb, /id="workbench-save-state"/, '保存状态要留在工作台页签');
 });
 
 test('章节目录来自项目章节，当前节高亮，点一下切到那一节', () => {
@@ -394,13 +404,39 @@ test('AI 入口在网页模式禁用并说明原因：需要 MiniApp 宿主', ()
 // 拆页不是为了好看，是为了让「刷新后还在同一页」「后退能退回上一页」
 // 这两件事成立。所以这里钉死的是路由本身：hash 写法、面板、导航项。
 
-test('左侧导航多出「实验报告」和「项目」两项，顺序在工作台之后、AI 之前', () => {
+test('导航只剩宿主页签 + 工作台事实账 + 实验报告，工作台与项目没有导航项', () => {
   assert.match(HTML, /data-tab="reports"[^>]*aria-controls="panel-reports"/, '应有实验报告导航项');
-  assert.match(HTML, /data-tab="project"[^>]*aria-controls="panel-project"/, '应有项目导航项');
+  assert.match(HTML, /data-tab="facts"[^>]*aria-controls="panel-facts"/, '应有工作台事实账导航项');
   const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
   const order = [...nav.matchAll(/data-tab="([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(order, ['manuscript', 'ledger', 'refs', 'protect', 'audit',
-    'workbench', 'reports', 'project', 'ai'], '导航顺序：宿主页签 → 工作台 → 实验报告 → 项目 → AI');
+  assert.deepEqual(order, ['manuscript', 'ledger', 'refs', 'protect', 'audit', 'ai',
+    'facts', 'reports'], '导航顺序：宿主页签 → 工作台事实账 → 实验报告');
+});
+
+test('工作台与项目不再有导航项：章节是工作台的入口，项目靠顶部按钮', () => {
+  assert.doesNotMatch(HTML, /data-tab="workbench"/, '工作台不该再有导航项：章节承担入口');
+  assert.doesNotMatch(HTML, /data-tab="project"/, '项目不该再有导航项：用顶部按钮进 #/project');
+});
+
+test('左侧栏：项目切换按钮 + 章节目录 + 事实账导航，左下角留偏好容器', () => {
+  assert.match(HTML, /id="btn-sidebar-project"/, '侧栏顶部应有项目切换按钮');
+  assert.match(HTML, /id="sidebar-project-name"/, '按钮里要有项目名');
+  assert.match(HTML, /id="wb-section-list"/, '章节目录应在侧栏里');
+  assert.match(HTML, /id="sidebar-prefs"/, '左下角要留偏好容器（放语言/主题）');
+  assert.doesNotMatch(HTML, /绿只说明三件事/, '左下角那句边界说明不该再出现');
+  assert.doesNotMatch(HTML, /class="boundary"/, '边界说明的样式位也不该再出现');
+});
+
+test('项目按钮是按钮样，不是导航项：整宽、左对齐、有边框', () => {
+  assert.match(CSS, /\.project-switch\s*\{[^}]*width:\s*100%/, '按钮要整宽');
+  assert.match(CSS, /\.project-switch\s*\{[^}]*border:/, '按钮要有边框');
+  assert.match(CSS, /\.project-switch\s*\{[^}]*text-align:\s*left/, '按钮内容要左对齐');
+  assert.doesNotMatch(CSS, /\.project-switch[^{]*\{[^}]*background:\s*none/, '按钮不能是透明底的导航项');
+});
+
+test('侧栏目录可滚动：章节多了不许把下面的导航顶走', () => {
+  assert.match(CSS, /\.sidebar\s+\.wb-section-list\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/,
+    '侧栏里的章节目录要限高并自己滚');
 });
 
 test('实验报告与项目各有独立面板：报告块搬走了，id 一个没变', () => {
@@ -425,13 +461,27 @@ test('项目页装的是项目管理：列表、路径、加入/移除、权限�
     'btn-workbench-load', 'workbench-host-path']) {
     assert.match(panel, new RegExp('id="' + id + '"'), '项目面板里应有 ' + id);
   }
-  // 工作台页签只留三栏与状态行
-  const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-reports"'));
+  // 工作台页签只留两栏与状态行
+  const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-facts"'));
   assert.doesNotMatch(wb, /id="project-select"/, '项目列表不该留在工作台页签');
   assert.doesNotMatch(wb, /id="wb-report-select"/, '报告下拉不该留在工作台页签');
-  assert.match(wb, /id="wb-section-list"/, '章节目录要留在工作台页签');
+  assert.doesNotMatch(wb, /id="wb-section-list"/, '章节目录搬去左侧栏了，不该留在工作台页签');
   assert.match(wb, /id="workbench-status"/, '动作消息行要留在工作台页签');
   assert.match(wb, /id="workbench-save-state"/, '保存状态要留在工作台页签');
+});
+
+test('工作台事实账搬进独立面板 #/facts：事实块 id 一个没变', () => {
+  assert.match(HTML, /id="panel-facts"[^>]*role="tabpanel"/, '应有事实账面板');
+  const panel = HTML.slice(HTML.indexOf('id="panel-facts"'), HTML.indexOf('id="panel-reports"'));
+  for (const id of ['wb-facts', 'wb-facts-count', 'wb-fact-card', 'wb-fact-form',
+    'wb-fact-id', 'wb-fact-value', 'wb-fact-claim', 'wb-fact-source',
+    'wb-fact-derived', 'wb-fact-expr', 'wb-fact-note', 'btn-wb-add-fact']) {
+    assert.match(panel, new RegExp('id="' + id + '"'), '事实块 id 要留在事实账面板里：' + id);
+  }
+  // 事实块要真的搬走了，不只是复制了一份
+  const wb = HTML.slice(HTML.indexOf('id="panel-workbench"'), HTML.indexOf('id="panel-facts"'));
+  assert.doesNotMatch(wb, /id="wb-facts"/, '事实块不该留在工作台面板里');
+  assert.doesNotMatch(wb, /id="wb-fact-card"/, '事实表单不该留在工作台面板里');
 });
 
 test('路由靠地址栏 hash：切页写 hash，hashchange 回读，前进/后退因此可用', () => {
@@ -459,21 +509,53 @@ test('启动落在哪一页由 hash 说了算；非法 hash 退回默认页', ()
   assert.match(on, /switchTab\(fallback/, '退回后要真的切过去');
 });
 
-test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目', () => {
+test('renderTab 认得新页面：报告页渲染报告，项目页渲染项目，事实页渲染事实账', () => {
   const block = JS.slice(JS.indexOf('function renderTab'), JS.indexOf('// ------------------------------------------------------------------ 顶栏'));
   assert.match(block, /state\.tab === 'reports'/, '报告页分支要在');
   assert.match(block, /renderWorkbenchReports\(\)/, '报告页要渲染报告');
   assert.match(block, /loadWorkbenchReports\(\)/, '报告页才按需拉列表');
   assert.match(block, /state\.tab === 'project'\) renderProjects\(\)/, '项目页要渲染项目');
+  assert.match(block, /state\.tab === 'facts'\) renderWorkbenchFacts\(\)/, '事实账页要渲染事实块');
 });
 
-test('applyMode 不再把 reports / project 藏起来：网页模式这三页都要能进', () => {
+test('事实账有自己的路由 #/facts：页表里要写明', () => {
+  assert.match(JS, /facts:\s*'nav\.facts'/, '页面名要挂一个 i18n 键（文案在字典里）');
+  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'project'\]/,
+    '网页页表应写明（含事实账）');
+});
+
+test('applyMode 不再把 facts / reports 藏起来：网页模式这两项都要能进', () => {
   const block = JS.slice(JS.indexOf('function applyMode'), JS.indexOf('function renderSessionBanner'));
   assert.ok(block.length > 0, '应有 applyMode');
   const hostTabs = /const hostTabs = \[([^\]]*)\]/.exec(block);
   assert.ok(hostTabs, '应有宿主专属页签清单');
-  assert.doesNotMatch(hostTabs[1], /reports|project/, '新页不是宿主专属，不该在隐藏名单里');
-  assert.match(JS, /const WEB_PAGES = \['workbench', 'reports', 'project'\]/, '网页三页应写明');
+  assert.doesNotMatch(hostTabs[1], /facts|reports|project/, '这些页不是宿主专属，不该在隐藏名单里');
+  assert.match(JS, /const WEB_PAGES = \['workbench', 'facts', 'reports', 'project'\]/, '网页页表应写明');
+});
+
+test('点侧栏章节就打开工作台：章节本身就是入口', () => {
+  const block = JS.slice(JS.indexOf("$('#wb-section-list').addEventListener"),
+    JS.indexOf("$('#btn-wb-mode-source').addEventListener"));
+  assert.ok(block.length > 0, '应有目录点击处理');
+  assert.match(block, /selectWorkbenchSection\(btn\.dataset\.section\)/, '点章节要切到那一节');
+  assert.match(block, /switchTab\('workbench'\)/, '点章节要打开工作台');
+});
+
+test('侧栏顶部按钮进项目页：项目视图不在导航里，只能从按钮进', () => {
+  const block = JS.slice(JS.indexOf("$('#btn-sidebar-project').addEventListener"),
+    JS.indexOf("$('#btn-wb-mode-source').addEventListener"));
+  assert.ok(block.length > 0, '项目按钮要有点击处理');
+  assert.match(block, /switchTab\('project'\)/, '项目按钮要进项目页');
+});
+
+test('侧栏项目名跟着工作台项目走：没有项目就写「未选择」', () => {
+  const block = JS.slice(JS.indexOf('function renderSidebarProject'),
+    JS.indexOf('function renderWorkbench()'));
+  assert.ok(block.length > 0, '应有侧栏项目名渲染函数');
+  assert.match(block, /workbenchProject/, '名字来自工作台项目');
+  assert.match(block, /sidebar\.noProject/, '没有项目要说清没选（文案走字典）');
+  assert.match(JS, /'sidebar\.noProject':\s*'未选择'/, '"未选择"这句文案要留在字典里');
+  assert.match(block, /sidebar-project-name/, '要写到侧栏那个名字位');
 });
 
 test('标题跟着当前页与项目走：工作台 · 论文名', () => {
@@ -495,4 +577,175 @@ test('报告列表按需加载：进报告页才请求，工作台启动不预�
     JS.indexOf('function reportAction'));
   assert.match(loader, /wbReportsLoading/, '要有并发/重复请求保护');
   assert.match(loader, /api\(wb\('\/reports'\)\)/, '列表仍走同一个接口');
+});
+
+// ------------------------------------------------- 12. 语言 / 主题切换
+//
+// 这一步只做「界面偏好」：语言与主题是这台机器的事，不是项目的事。
+// 之所以要钉死，是因为这类退化不响：文案没跟着换、刷新后不记得、
+// 浅色下看不清——都不会让任何后端测试变红。
+
+/** 从 app.js 里取出 I18N 字典某个语言的键。 */
+function i18nKeys(lang) {
+  const m = new RegExp('\\n  ' + lang + ': \\{([\\s\\S]*?)\\n  \\},').exec(JS);
+  assert.ok(m, 'I18N 里要有 ' + lang + ' 这一套');
+  return [...m[1].matchAll(/^\s{4}'([^']+)':/gm)].map((x) => x[1]);
+}
+
+/** 取出一段 CSS 里的 --mcode-* 变量名与取值。 */
+function cssVars(block) {
+  const out = new Map();
+  for (const m of block.matchAll(/(--mcode-[a-z0-9-]+):\s*([^;]+);/g)) out.set(m[1], m[2].trim());
+  return out;
+}
+
+test('左下角有四个切换按钮：中文/EN 与浅/深', () => {
+  assert.match(HTML, /id="sidebar-prefs"/, '要有放切换按钮的容器');
+  for (const id of ['btn-lang-zh', 'btn-lang-en', 'btn-theme-light', 'btn-theme-dark']) {
+    assert.match(HTML, new RegExp('id="' + id + '"'), '应有按钮 ' + id);
+  }
+  // 两组分段按钮，别做成一堆散按钮
+  assert.ok((HTML.match(/class="prefs-group"/g) || []).length === 2, '要有两组分段按钮');
+  // 样式小巧、不抢主导航
+  assert.match(CSS, /\.prefs-btn\s*\{[^}]*font-size:\s*12px/, '切换按钮字号要小（12px）');
+});
+
+test('当前选中项加 is-active：语言与主题各有一格', () => {
+  assert.match(JS, /classList\.toggle\('is-active'/, '选中项要加 is-active');
+  assert.match(HTML, /id="btn-lang-zh"[^>]*class="prefs-btn is-active"/,
+    '默认语言是中文，中文那一格默认选中');
+  const block = JS.slice(JS.indexOf('function syncThemeButtons'), JS.indexOf('function syncLangButtons'));
+  assert.match(block, /btn-theme-light/, '浅色那一格也要有选中态');
+  assert.match(block, /btn-theme-dark/, '深色那一格也要有选中态');
+  assert.match(block, /is-active/, '主题按钮要跟着当前生效的主题打标');
+  const lang = JS.slice(JS.indexOf('function syncLangButtons'), JS.indexOf('function initPrefs'));
+  assert.match(lang, /btn-lang-zh[\s\S]*btn-lang-en/, '语言按钮也要按当前语言打标');
+});
+
+test('语言与主题都要记住：刷新后还在', () => {
+  assert.match(JS, /localStorage\.setItem\('factscribe\.lang'/, '语言要存 localStorage');
+  assert.match(JS, /localStorage\.setItem\('factscribe\.theme'/, '主题要存 localStorage');
+  assert.match(JS, /localStorage\.getItem\('factscribe\.lang'/, '启动时要读回语言');
+  assert.match(JS, /localStorage\.getItem\('factscribe\.theme'/, '启动时要读回主题');
+  assert.match(JS, /function initPrefs/, '要有读回偏好的入口');
+  assert.match(JS, /initPrefs\(\)/, '启动时要真的调用它');
+});
+
+test('主题写到 <html> 上：不写就是跟随系统', () => {
+  assert.match(JS, /document\.documentElement\.dataset\.theme = next/, '主题要写进 dataset.theme');
+  assert.match(JS, /delete\s+document\.documentElement\.dataset\.theme/, '跟随系统时要把 data-theme 拿掉');
+  assert.match(JS, /^\s*theme:\s*''/m, '默认主题是空的＝跟随系统');
+});
+
+test('state.lang 默认中文，document.documentElement.lang 跟着变', () => {
+  assert.match(JS, /lang:\s*'zh'/, '默认语言是中文');
+  assert.match(JS, /document\.documentElement\.lang\s*=/, 'html 的 lang 属性要跟着变');
+});
+
+test('切语言：扫一遍 DOM 再重渲染当前页', () => {
+  assert.match(JS, /function applyLang\(/, '要有 applyLang');
+  assert.match(JS, /function applyLangDom\(/, '静态文案要扫 DOM');
+  const block = JS.slice(JS.indexOf('function applyLang('), JS.indexOf('function setLang'));
+  assert.match(block, /applyLangDom\(\)/, '静态文案要扫一遍 DOM');
+  assert.match(block, /renderTab\(\)/, 'JS 生成的文案要靠重渲染当前页跟上');
+  assert.match(block, /updateTitle\(\)/, '页标题也要跟着变');
+});
+
+test('三种静态文案标记都要认：正文 / 提示 / 占位符', () => {
+  assert.match(JS, /\[data-i18n\]/, '要认 data-i18n（正文）');
+  assert.match(JS, /\[data-i18n-title\]/, '要认 data-i18n-title（title）');
+  assert.match(JS, /\[data-i18n-placeholder\]/, '要认 data-i18n-placeholder（占位符）');
+});
+
+test('导航与页标题带 data-i18n', () => {
+  const nav = HTML.slice(HTML.indexOf('data-tab="manuscript"'), HTML.indexOf('</nav>'));
+  const items = [...nav.matchAll(/data-tab="([a-z]+)"([^>]*)>/g)];
+  assert.ok(items.length >= 8, '导航项要够多');
+  for (const [, tab, rest] of items) {
+    assert.match(rest, /data-i18n="/, '导航项 ' + tab + ' 要带 data-i18n');
+  }
+  // 页标题（面板 h2）也要能翻
+  for (const panel of ['panel-manuscript', 'panel-ledger', 'panel-refs', 'panel-protect',
+    'panel-audit', 'panel-workbench', 'panel-facts', 'panel-reports', 'panel-project',
+    'panel-ai']) {
+    const block = HTML.slice(HTML.indexOf('id="' + panel + '"'), HTML.indexOf('</section>', HTML.indexOf('id="' + panel + '"')));
+    assert.match(block, /<h2[^>]*data-i18n="/, panel + ' 的页标题要带 data-i18n');
+  }
+});
+
+test('字典里中英键数量一致：漏一个就是半中半英', () => {
+  const zh = i18nKeys('zh');
+  const en = i18nKeys('en');
+  assert.ok(zh.length >= 40, '字典不该只有几条（' + zh.length + '）');
+  assert.equal(zh.length, en.length, '中英键数量要一致');
+  assert.deepEqual([...zh].sort(), [...en].sort(), '中英要有一模一样的键');
+});
+
+test('HTML 里每个 data-i18n 键都要在字典里：写了标记却查不到就会露出原文', () => {
+  const known = new Set(i18nKeys('zh'));
+  const used = new Set();
+  for (const attr of ['data-i18n', 'data-i18n-title', 'data-i18n-placeholder']) {
+    for (const m of HTML.matchAll(new RegExp(attr + '="([^"]+)"', 'g'))) used.add(m[1]);
+  }
+  assert.ok(used.size >= 40, '标记要覆盖得够广（' + used.size + '）');
+  const missing = [...used].filter((k) => !known.has(k)).sort();
+  assert.deepEqual(missing, [], '这些键字典里没有：' + missing.join('、'));
+});
+
+test('报告页的状态词要跟着语言变：final / 已封存 / 已签收', () => {
+  for (const key of ['report.final', 'report.locked', 'report.signed', 'report.unsigned',
+    'report.readOnly']) {
+    assert.match(JS, new RegExp("'" + key + "'"), '字典里要有 ' + key);
+  }
+  const block = JS.slice(JS.indexOf('function renderReportState'),
+    JS.indexOf('function renderReportCard'));
+  assert.match(block, /reportStatusWord\(item\.status\)/, '报告状态词要走字典');
+  assert.match(block, /'report\.locked'|'report\.lockStale'|'report\.unlocked'/, '封存状态要跟着语言变');
+  assert.match(block, /'report\.signed'|'report\.unsigned'/, '签收状态要跟着语言变');
+});
+
+test('空状态提示要跟着语言变：没有报告 / 没有事实 / 没有红黄项', () => {
+  for (const key of ['empty.noReports', 'empty.noFacts', 'empty.noRedYellow']) {
+    assert.match(JS, new RegExp("'" + key + "'"), '字典里要有 ' + key);
+    assert.match(JS, new RegExp('t\\(\\s*' + "'" + key + "'"), key + ' 要真的被用上');
+  }
+});
+
+test('浅色/深色两套变量照抄现有色板：不许自创颜色', () => {
+  const root = CSS.slice(CSS.indexOf(':root,'), CSS.indexOf('@media (prefers-color-scheme: dark)'));
+  const darkMedia = CSS.slice(CSS.indexOf('@media (prefers-color-scheme: dark)'),
+    CSS.indexOf("html[data-theme='light']"));
+  const light = CSS.slice(CSS.indexOf("html[data-theme='light']"),
+    CSS.indexOf("html[data-theme='dark']"));
+  const dark = CSS.slice(CSS.indexOf("html[data-theme='dark']"),
+    CSS.indexOf('* { box-sizing: border-box; }'));
+  assert.ok(light.length > 0 && dark.length > 0, '两套显式主题都要在');
+  const rootVars = cssVars(root);
+  const lightVars = cssVars(light);
+  const darkVars = cssVars(dark);
+  const mediaVars = cssVars(darkMedia);
+  assert.deepEqual([...lightVars.keys()].sort(), [...rootVars.keys()].sort(),
+    '浅色主题的变量名要和 :root 一模一样');
+  assert.deepEqual([...darkVars.keys()].sort(), [...mediaVars.keys()].sort(),
+    '深色主题的变量名要和系统暗色那一套一模一样');
+  for (const [k, v] of lightVars) {
+    assert.equal(v, rootVars.get(k), '浅色主题里 ' + k + ' 的取值要和 :root 一样');
+  }
+  for (const [k, v] of darkVars) {
+    assert.equal(v, mediaVars.get(k), '深色主题里 ' + k + ' 的取值要和系统暗色一样');
+  }
+});
+
+test('显式主题压得住系统偏好：系统是暗色时点「浅」也要真的变浅', () => {
+  // html[data-theme] 的特异性 (0,1,1) 高过媒体查询里的 :root (0,1,0)，
+  // 而且必须在媒体查询之后出现，不然会被系统配色顶回去。
+  assert.match(CSS, /html\[data-theme='light'\]\s*\{[^}]*color-scheme:\s*light/,
+    '浅色主题要自己声明 color-scheme');
+  assert.match(CSS, /html\[data-theme='dark'\]\s*\{[^}]*color-scheme:\s*dark/,
+    '深色主题要自己声明 color-scheme');
+  const lightAt = CSS.indexOf("html[data-theme='light']");
+  const darkAt = CSS.indexOf("html[data-theme='dark']");
+  const mediaAt = CSS.indexOf('@media (prefers-color-scheme: dark)');
+  assert.ok(lightAt > mediaAt && darkAt > lightAt,
+    '两套显式主题都要排在系统媒体查询之后');
 });

@@ -16,7 +16,7 @@
         </div>
       </div>
       <label class="project-field">
-        <span class="field-label">项目</span>
+        <span class="field-label" data-i18n="page.project">项目</span>
         <input id="project-name" type="text" aria-label="项目名称" autocomplete="off" />
       </label>
       <div class="topbar-right">
@@ -24,35 +24,70 @@
           title="改动会自动保存到本地数据目录">无改动</span>
         <div id="verdict" class="verdict verdict-idle" role="status" aria-live="polite"
           title="还没跑过审计">未审计</div>
-        <button id="btn-demo" class="btn btn-ghost" type="button">载入演示数据</button>
-        <button id="btn-audit" class="btn btn-primary" type="button">运行审计</button>
+        <button id="btn-demo" class="btn btn-ghost" type="button" data-i18n="btn.loadDemo">载入演示数据</button>
+        <button id="btn-audit" class="btn btn-primary" type="button" data-i18n="btn.runAudit">运行审计</button>
       </div>
     </header>
 
     <div id="session-banner" class="session-banner" role="alert" hidden></div>
 
     <div id="token-panel" class="session-banner" hidden>
-      <b>需要 token</b>
+      <b data-i18n="token.need">需要 token</b>
       <span>启动 <code>factscribe web</code> 时打印在终端。</span>
-      <input id="token-input" type="password" autocomplete="off" placeholder="粘贴 token" />
-      <button id="btn-token" class="btn btn-primary" type="button">连接</button>
+      <input id="token-input" type="password" autocomplete="off" data-i18n-placeholder="token.paste" placeholder="粘贴 token" />
+      <button id="btn-token" class="btn btn-primary" type="button" data-i18n="btn.connect">连接</button>
     </div>
 
     <div class="layout">
       <nav class="sidebar" aria-label="分区导航">
-        <button class="nav-item is-active" data-tab="manuscript" role="tab" aria-selected="true" aria-controls="panel-manuscript">正文</button>
-        <button class="nav-item" data-tab="ledger" role="tab" aria-selected="false" aria-controls="panel-ledger">事实账</button>
-        <button class="nav-item" data-tab="refs" role="tab" aria-selected="false" aria-controls="panel-refs">引用</button>
-        <button class="nav-item" data-tab="protect" role="tab" aria-selected="false" aria-controls="panel-protect">改写保护</button>
-        <button class="nav-item" data-tab="audit" role="tab" aria-selected="false" aria-controls="panel-audit">审计</button>
-        <button class="nav-item" data-tab="workbench" role="tab" aria-selected="false" aria-controls="panel-workbench">工作台</button>
-        <button class="nav-item" data-tab="reports" role="tab" aria-selected="false" aria-controls="panel-reports">实验报告</button>
-        <button class="nav-item" data-tab="project" role="tab" aria-selected="false" aria-controls="panel-project">项目</button>
-        <button class="nav-item" data-tab="ai" role="tab" aria-selected="false" aria-controls="panel-ai">AI 起草</button>
+        <button id="btn-sidebar-project" class="project-switch" type="button"
+          title="切换论文项目：点它去项目页">
+          <span class="project-switch-label" data-i18n="page.project">项目</span>
+          <span id="sidebar-project-name" class="project-switch-name">未选择</span>
+          <span class="project-switch-caret" aria-hidden="true">▾</span>
+        </button>
+
+        <div class="sidebar-block" aria-label="章节目录">
+          <div class="sidebar-block-head">
+            <h2 class="sidebar-block-title" data-i18n="nav.sections">章节目录</h2>
+            <span id="wb-section-count" class="muted-note"></span>
+          </div>
+          <div id="wb-section-list" class="wb-section-list"></div>
+          <!-- 隐藏的下拉：现有逻辑与测试都认它，目录按钮改动时同步它 -->
+          <label class="field" hidden>
+            <span data-i18n="field.pickSection">选择一节</span>
+            <select id="workbench-section-select"></select>
+          </label>
+        </div>
+
+        <div class="sidebar-nav">
+          <button class="nav-item is-active" data-tab="manuscript" role="tab" aria-selected="true" aria-controls="panel-manuscript" data-i18n="page.manuscript">正文</button>
+          <button class="nav-item" data-tab="ledger" role="tab" aria-selected="false" aria-controls="panel-ledger" data-i18n="page.ledger">事实账</button>
+          <button class="nav-item" data-tab="refs" role="tab" aria-selected="false" aria-controls="panel-refs" data-i18n="page.refs">引用</button>
+          <button class="nav-item" data-tab="protect" role="tab" aria-selected="false" aria-controls="panel-protect" data-i18n="page.protect">改写保护</button>
+          <button class="nav-item" data-tab="audit" role="tab" aria-selected="false" aria-controls="panel-audit" data-i18n="page.audit">审计</button>
+          <button class="nav-item" data-tab="ai" role="tab" aria-selected="false" aria-controls="panel-ai" data-i18n="page.ai">AI 起草</button>
+          <button class="nav-item" data-tab="facts" role="tab" aria-selected="false" aria-controls="panel-facts" data-i18n="nav.facts">工作台事实账</button>
+          <button class="nav-item" data-tab="reports" role="tab" aria-selected="false" aria-controls="panel-reports" data-i18n="nav.reports">实验报告</button>
+        </div>
+
         <div class="sidebar-foot">
-          <p class="boundary">
-            绿只说明三件事：<b>账有据</b>、<b>据未改</b>、<b>文有绑</b>。<br />它不说明结论为真。
-          </p>
+          <div id="sidebar-prefs" class="prefs">
+            <div class="prefs-row">
+              <div class="prefs-group" role="group" aria-label="语言" data-i18n-title="prefs.groupLang">
+                <button id="btn-lang-zh" class="prefs-btn is-active" type="button" data-lang="zh"
+                  aria-pressed="true" title="中文" data-i18n-title="prefs.langZh">中</button>
+                <button id="btn-lang-en" class="prefs-btn" type="button" data-lang="en"
+                  aria-pressed="false" title="English" data-i18n-title="prefs.langEn">EN</button>
+              </div>
+              <div class="prefs-group" role="group" aria-label="主题" data-i18n-title="prefs.groupTheme">
+                <button id="btn-theme-light" class="prefs-btn" type="button" data-theme="light"
+                  aria-pressed="false" data-i18n="prefs.themeLight">浅</button>
+                <button id="btn-theme-dark" class="prefs-btn" type="button" data-theme="dark"
+                  aria-pressed="false" data-i18n="prefs.themeDark">深</button>
+              </div>
+            </div>
+          </div>
         </div>
       </nav>
 
@@ -63,8 +98,8 @@
             <span>现在的正文、事实账、引用都会被替换成演示内容，这一步不能撤销。</span>
           </div>
           <div class="confirm-actions">
-            <button id="btn-demo-ok" class="btn btn-danger" type="button">确认覆盖</button>
-            <button id="btn-demo-cancel" class="btn" type="button">取消</button>
+            <button id="btn-demo-ok" class="btn btn-danger" type="button" data-i18n="btn.confirmOverwrite">确认覆盖</button>
+            <button id="btn-demo-cancel" class="btn" type="button" data-i18n="btn.cancel">取消</button>
           </div>
         </div>
 
@@ -74,13 +109,13 @@
             <b>审计结果已过期</b>
             <span id="stale-text">你在上次审计之后改过正文 / 事实账 / 引用，下面显示的还是改动前的结果。</span>
           </div>
-          <button id="btn-rerun" class="btn btn-primary" type="button">重新审计</button>
+          <button id="btn-rerun" class="btn btn-primary" type="button" data-i18n="btn.rerunAudit">重新审计</button>
         </div>
 
         <section id="panel-manuscript" class="panel is-active" role="tabpanel">
           <div class="panel-head">
             <div>
-              <h2>正文</h2>
+              <h2 data-i18n="page.manuscript">正文</h2>
               <p class="panel-desc">正文里用 <code>\fact{ID}</code> 把一行绑定到事实账；绑定是硬约束，该行的每个数字都必须落在绑定事实的值域里。</p>
             </div>
             <div class="panel-actions">
@@ -105,12 +140,12 @@
         <section id="panel-ledger" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>事实账</h2>
+              <h2 data-i18n="page.ledger">事实账</h2>
               <p class="panel-desc">每条事实记一个数、它的来源材料与那份材料的哈希。<b>改值会覆盖原条目</b>——想留住旧值就新增一条事实，并在备注里写「取代 A1」。</p>
             </div>
             <div class="panel-actions">
               <span id="facts-count" class="muted-note"></span>
-              <button id="btn-add-fact" class="btn" type="button">新增事实</button>
+              <button id="btn-add-fact" class="btn" type="button" data-i18n="btn.addFact">新增事实</button>
             </div>
           </div>
           <div class="ledger-layout">
@@ -118,7 +153,7 @@
               <table class="data-table">
                 <caption class="sr-only">事实账清单</caption>
                 <thead>
-                  <tr><th scope="col">ID</th><th scope="col">主张</th><th scope="col">值</th><th scope="col">来源</th><th scope="col">状态</th><th scope="col">操作</th></tr>
+                  <tr><th scope="col" data-i18n="th.id">ID</th><th scope="col" data-i18n="th.claim">主张</th><th scope="col" data-i18n="th.value">值</th><th scope="col" data-i18n="th.source">来源</th><th scope="col" data-i18n="th.status">状态</th><th scope="col" data-i18n="th.actions">操作</th></tr>
                 </thead>
                 <tbody id="facts-tbody"></tbody>
               </table>
@@ -130,34 +165,34 @@
                 <ul id="form-errors-list"></ul>
               </div>
               <label class="field" for="f-id">
-                <span>ID <span class="req">必填</span></span>
+                <span><span data-i18n="field.id">ID</span> <span class="req">必填</span></span>
                 <input id="f-id" type="text" autocomplete="off" aria-required="true" aria-describedby="f-id-error" />
                 <span class="field-error" id="f-id-error" hidden></span>
               </label>
               <label class="field" for="f-claim">
-                <span>主张 <span class="req">必填</span></span>
+                <span><span data-i18n="field.claim">主张</span> <span class="req">必填</span></span>
                 <input id="f-claim" type="text" autocomplete="off" aria-required="true" aria-describedby="f-claim-error"
-                  placeholder="一句话说清这条事实在讲什么" />
+                  data-i18n-placeholder="ph.claim" placeholder="一句话说清这条事实在讲什么" />
                 <span class="field-error" id="f-claim-error" hidden></span>
               </label>
               <label class="field" for="f-value">
-                <span>值 <span class="req">必填</span></span>
+                <span><span data-i18n="field.value">值</span> <span class="req">必填</span></span>
                 <input id="f-value" type="text" autocomplete="off" aria-required="true" aria-describedby="f-value-error"
                   placeholder="10/16、56.25%、90431" />
                 <span class="field-error" id="f-value-error" hidden></span>
               </label>
               <label class="field" for="f-source">
-                <span>来源 <span class="req">必填</span></span>
+                <span><span data-i18n="field.source">来源</span> <span class="req">必填</span></span>
                 <select id="f-source" aria-required="true" aria-describedby="f-source-error"></select>
                 <span class="field-error" id="f-source-error" hidden></span>
               </label>
               <label class="field" for="f-locator">
-                <span>定位</span>
+                <span data-i18n="field.locator">定位</span>
                 <input id="f-locator" type="text" autocomplete="off" placeholder="§二 汇总表 open 行" />
                 <span class="field-hint">在来源材料里的哪一行／哪一段能找到这个数</span>
               </label>
               <label class="field" for="f-confidence">
-                <span>置信度</span>
+                <span data-i18n="field.confidence">置信度</span>
                 <select id="f-confidence" aria-describedby="f-confidence-hint">
                   <option value="high">高 · 材料里直接写明</option>
                   <option value="med">中 · 换算或取整得到</option>
@@ -166,12 +201,12 @@
                 <span class="field-hint" id="f-confidence-hint">只作记录，不参与判定</span>
               </label>
               <label class="field" for="f-expr">
-                <span>算式（可选，派生事实）</span>
+                <span data-i18n="field.expr">算式（可选，派生事实）</span>
                 <input id="f-expr" type="text" autocomplete="off" placeholder="(A1.num + A3.num) / (A1.den + A3.den) * 100" />
                 <span class="field-hint">填了算式，审计会重算一遍，跟「值」对不上就判红</span>
               </label>
               <label class="field" for="f-notes">
-                <span>备注</span>
+                <span data-i18n="field.notes">备注</span>
                 <input id="f-notes" type="text" autocomplete="off" placeholder="取代 A1；2024 年 3 月版报告第 4 页" />
               </label>
               <label class="checkbox" for="f-dup">
@@ -186,8 +221,8 @@
               <div id="fact-delete-confirm" class="confirm-box" hidden>
                 <span>删掉 <b id="fact-delete-id"></b> 之后，正文里对它的 <code>\fact{}</code> 绑定会变成红牌。这一步不能撤销。</span>
                 <div class="confirm-actions">
-                  <button id="btn-delete-ok" class="btn btn-danger" type="button">确认删除</button>
-                  <button id="btn-delete-cancel" class="btn" type="button">取消</button>
+                  <button id="btn-delete-ok" class="btn btn-danger" type="button" data-i18n="btn.confirmDelete">确认删除</button>
+                  <button id="btn-delete-cancel" class="btn" type="button" data-i18n="btn.cancel">取消</button>
                 </div>
               </div>
             </form>
@@ -203,12 +238,12 @@
         <section id="panel-refs" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>引用</h2>
+              <h2 data-i18n="page.refs">引用</h2>
               <p class="panel-desc">正文里的每个 <code>\cite{key}</code> 都必须在 bib 里；每条 bib 必须有 doi、arXiv 或 url 之一，否则不可复核。</p>
             </div>
             <div class="panel-actions">
               <span id="refs-count" class="muted-note"></span>
-              <button id="btn-verify" class="btn btn-primary" type="button">联网核验存在性</button>
+              <button id="btn-verify" class="btn btn-primary" type="button" data-i18n="btn.verifyOnline">联网核验存在性</button>
             </div>
           </div>
           <label class="editor-label" for="bib-input">bib 文件内容</label>
@@ -235,11 +270,11 @@
         <section id="panel-protect" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>改写保护</h2>
+              <h2 data-i18n="page.protect">改写保护</h2>
               <p class="panel-desc">改写前后，事实标记、数字、引用、公式、表格、交叉引用六类不许变。只改标点与断句应当全绿。</p>
             </div>
             <div class="panel-actions">
-              <button id="btn-protect" class="btn btn-primary" type="button">比对保护面</button>
+              <button id="btn-protect" class="btn btn-primary" type="button" data-i18n="btn.compareProtect">比对保护面</button>
             </div>
           </div>
           <div class="protect-grid">
@@ -261,20 +296,20 @@
         <section id="panel-audit" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>审计</h2>
+              <h2 data-i18n="page.audit">审计</h2>
               <p class="panel-desc">红＝事实层矛盾，必须改；黄＝未核验、待人判断。绿不是「论文没问题」。</p>
             </div>
             <div class="panel-actions">
-              <button class="btn" type="button" data-export="report.md">报告 Markdown</button>
-              <button class="btn" type="button" data-export="matrix.md">追溯矩阵</button>
-              <button class="btn" type="button" data-export="manifest.json">可复现清单</button>
+              <button class="btn" type="button" data-export="report.md" data-i18n="btn.exportReport">报告 Markdown</button>
+              <button class="btn" type="button" data-export="matrix.md" data-i18n="btn.exportMatrix">追溯矩阵</button>
+              <button class="btn" type="button" data-export="manifest.json" data-i18n="btn.exportManifest">可复现清单</button>
             </div>
           </div>
           <div id="audit-summary" class="audit-summary"></div>
           <div id="export-out" class="export-out" hidden>
             <div class="export-head">
               <span id="export-title" class="muted-note"></span>
-              <button id="btn-export-close" class="link-btn" type="button">关闭</button>
+              <button id="btn-export-close" class="link-btn" type="button" data-i18n="btn.close">关闭</button>
             </div>
             <pre id="export-body"></pre>
           </div>
@@ -294,44 +329,31 @@
         <section id="panel-workbench" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>本地工作台</h2>
+              <h2 data-i18n="page.workbench">本地工作台</h2>
               <p class="panel-desc">这里跑真实论文项目：章节、源码与预览、要处理的问题。左侧正文与事实账仍是本地草稿，两者不是同一个项目；选文件夹与启动服务在「项目」页。</p>
             </div>
             <div class="panel-actions">
               <span id="workbench-badge" class="muted-note">未连接</span>
               <span id="wb-build-state" class="muted-note"></span>
-              <button id="btn-wb-build" class="btn" type="button">编译 PDF</button>
-              <button id="btn-wb-pdf" class="btn" type="button" hidden>打开 PDF</button>
+              <button id="btn-wb-build" class="btn" type="button" data-i18n="btn.buildPdf">编译 PDF</button>
+              <button id="btn-wb-pdf" class="btn" type="button" hidden data-i18n="btn.openPdf">打开 PDF</button>
             </div>
           </div>
           <p id="workbench-status" class="muted-note" role="status" aria-live="polite"></p>
           <div id="workbench-summary" class="audit-summary"></div>
 
-          <!-- 三栏工作区：章节目录 / 源码+预览 / 要处理的问题 + AI 入口 -->
+          <!-- 两栏工作区：源码+预览 / 要处理的问题+AI。章节入口在左侧栏。 -->
           <div id="wb-columns" class="wb-columns">
-            <aside class="wb-col wb-col-sections" aria-label="章节目录">
-              <div class="wb-col-head">
-                <h3>章节目录</h3>
-                <span id="wb-section-count" class="muted-note"></span>
-              </div>
-              <div id="wb-section-list" class="wb-section-list"></div>
-              <!-- 隐藏的下拉：现有逻辑与测试都认它，目录按钮改动时同步它 -->
-              <label class="field" hidden>
-                <span>选择一节</span>
-                <select id="workbench-section-select"></select>
-              </label>
-            </aside>
-
             <section class="wb-col wb-col-main" aria-label="当前节">
               <div class="wb-col-head">
                 <div class="wb-mode" role="group" aria-label="看源码还是看预览">
-                  <button id="btn-wb-mode-source" class="btn wb-mode-btn is-active" type="button">源码</button>
-                  <button id="btn-wb-mode-preview" class="btn wb-mode-btn" type="button">预览</button>
+                  <button id="btn-wb-mode-source" class="btn wb-mode-btn is-active" type="button" data-i18n="btn.source">源码</button>
+                  <button id="btn-wb-mode-preview" class="btn wb-mode-btn" type="button" data-i18n="btn.preview">预览</button>
                 </div>
                 <div class="panel-actions">
                   <span id="wb-current-section" class="muted-note"></span>
                   <span id="workbench-save-state" class="muted-note"></span>
-                  <button id="btn-workbench-save" class="btn btn-primary" type="button">保存本节</button>
+                  <button id="btn-workbench-save" class="btn btn-primary" type="button" data-i18n="btn.saveSection">保存本节</button>
                 </div>
               </div>
               <div id="wb-source-pane" class="wb-pane">
@@ -343,7 +365,7 @@
               </div>
               <div id="wb-preview-pane" class="wb-pane" hidden>
                 <div class="panel-actions">
-                  <button id="btn-wb-preview-build" class="btn" type="button">编译预览</button>
+                  <button id="btn-wb-preview-build" class="btn" type="button" data-i18n="btn.buildPreview">编译预览</button>
                   <a id="wb-preview-open" class="link-btn" href="#" target="_blank" rel="noopener" hidden>在新标签打开 PDF</a>
                   <span id="wb-preview-state" class="muted-note" role="status" aria-live="polite"></span>
                 </div>
@@ -357,7 +379,7 @@
                 <h3>要处理的问题</h3>
                 <div class="panel-actions">
                   <span id="wb-audit-meta" class="muted-note"></span>
-                  <button id="btn-workbench-audit" class="btn" type="button">用工作台审计</button>
+                  <button id="btn-workbench-audit" class="btn" type="button" data-i18n="btn.wbAudit">用工作台审计</button>
                 </div>
               </div>
               <div id="workbench-audit" class="issues-list"></div>
@@ -371,24 +393,41 @@
                 <textarea id="wb-ai-input" rows="3" placeholder="例如：把实验部分拆成三段，并补一句显著性检验"></textarea>
               </label>
               <div class="panel-actions">
-                <button id="btn-wb-ai-send" class="btn btn-primary" type="button">发给 AI 起草</button>
-                <button id="btn-wb-ai-open" class="btn" type="button">去 AI 起草</button>
+                <button id="btn-wb-ai-send" class="btn btn-primary" type="button" data-i18n="btn.sendToAi">发给 AI 起草</button>
+                <button id="btn-wb-ai-open" class="btn" type="button" data-i18n="btn.goToAi">去 AI 起草</button>
               </div>
             </aside>
           </div>
 
           <div class="subhead" style="margin-top: 18px">
-            <h3>工作台事实账</h3>
-            <p class="panel-desc">追加事实不代签：工具跑完给你该抄进清单的那一行。</p>
+            <h3>证据冻结 <span id="wb-evidence-meta" class="muted-note"></span></h3>
+            <p class="panel-desc">改证据清单要先解冻并写理由；冻结后改材料会在审计里报红。</p>
+          </div>
+          <div id="wb-evidence" class="wb-evidence"></div>
+          <div class="panel-actions" style="margin: 8px 0">
+            <button id="btn-wb-freeze" class="btn" type="button" data-i18n="btn.freeze">冻结</button>
+            <button id="btn-wb-unfreeze" class="btn" type="button" data-i18n="btn.unfreeze">解冻</button>
+          </div>
+        </section>
+
+        <section id="panel-facts" class="panel panel-narrow" role="tabpanel" hidden>
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="nav.facts">工作台事实账</h2>
+              <p class="panel-desc">追加事实不代签：工具跑完给你该抄进清单的那一行。这里是论文项目的事实账，与左侧正文草稿不是同一本账。</p>
+            </div>
+            <div class="panel-actions">
+              <span id="wb-facts-count" class="muted-note"></span>
+            </div>
           </div>
           <div id="wb-facts" class="wb-facts"></div>
           <details class="card" id="wb-fact-card">
-            <summary>追加一条事实 <span id="wb-facts-count" class="muted-note"></span></summary>
+            <summary>追加一条事实</summary>
             <form id="wb-fact-form" class="fact-form">
               <div class="form-grid">
                 <label class="field">ID<input id="wb-fact-id" required /></label>
                 <label class="field">值<input id="wb-fact-value" required placeholder="10/16" /></label>
-                <label class="field wide">主张<input id="wb-fact-claim" required placeholder="一句话说清这条事实" /></label>
+                <label class="field wide">主张<input id="wb-fact-claim" required data-i18n-placeholder="ph.claimShort" placeholder="一句话说清这条事实" /></label>
                 <label class="field wide">来源<input id="wb-fact-source" list="wb-fact-sources" required placeholder="results/…" /></label>
                 <datalist id="wb-fact-sources"></datalist>
                 <label class="field">定位<input id="wb-fact-locator" placeholder="§二 汇总表" /></label>
@@ -404,27 +443,17 @@
                 <label class="field wide">备注<input id="wb-fact-note" placeholder="可选" /></label>
               </div>
               <div class="panel-actions">
-                <button id="btn-wb-add-fact" class="btn btn-primary" type="submit">追加事实</button>
+                <button id="btn-wb-add-fact" class="btn btn-primary" type="submit" data-i18n="btn.appendFact">追加事实</button>
               </div>
               <div id="wb-fact-result" class="muted-note"></div>
             </form>
           </details>
-
-          <div class="subhead" style="margin-top: 18px">
-            <h3>证据冻结 <span id="wb-evidence-meta" class="muted-note"></span></h3>
-            <p class="panel-desc">改证据清单要先解冻并写理由；冻结后改材料会在审计里报红。</p>
-          </div>
-          <div id="wb-evidence" class="wb-evidence"></div>
-          <div class="panel-actions" style="margin: 8px 0">
-            <button id="btn-wb-freeze" class="btn" type="button">冻结</button>
-            <button id="btn-wb-unfreeze" class="btn" type="button">解冻</button>
-          </div>
         </section>
 
         <section id="panel-reports" class="panel panel-narrow" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>实验报告</h2>
+              <h2 data-i18n="page.reports">实验报告</h2>
               <p class="panel-desc">封存＝把当前文件哈希钉住；签收＝你确认取数位置；导入＝写进事实账。</p>
             </div>
             <div class="panel-actions">
@@ -433,19 +462,19 @@
           </div>
           <div id="wb-reports" class="wb-reports"></div>
           <label class="field" style="max-width: 520px">
-            <span>报告</span>
+            <span data-i18n="field.report">报告</span>
             <select id="wb-report-select"></select>
           </label>
           <div class="panel-actions" style="margin: 8px 0">
-            <button id="btn-wb-report-check" class="btn" type="button">检查</button>
-            <button id="btn-wb-report-lock" class="btn" type="button">封存</button>
-            <button id="btn-wb-report-sign" class="btn" type="button">签收</button>
-            <button id="btn-wb-report-import" class="btn" type="button">导入</button>
+            <button id="btn-wb-report-check" class="btn" type="button" data-i18n="btn.check">检查</button>
+            <button id="btn-wb-report-lock" class="btn" type="button" data-i18n="btn.lock">封存</button>
+            <button id="btn-wb-report-sign" class="btn" type="button" data-i18n="btn.sign">签收</button>
+            <button id="btn-wb-report-import" class="btn" type="button" data-i18n="btn.import">导入</button>
           </div>
           <p id="wb-report-state" class="muted-note" role="status" aria-live="polite"></p>
           <label class="field" style="max-width: 520px">
-            <span>签收人</span>
-            <input id="wb-report-by" placeholder="谁签的（签收必填，工具不替你猜）" />
+            <span data-i18n="field.signer">签收人</span>
+            <input id="wb-report-by" data-i18n-placeholder="ph.signer" placeholder="谁签的（签收必填，工具不替你猜）" />
           </label>
           <div id="wb-report-card" class="wb-report-card"></div>
         </section>
@@ -453,12 +482,12 @@
         <section id="panel-project" class="panel panel-narrow" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>项目</h2>
+              <h2 data-i18n="page.project">项目</h2>
               <p class="panel-desc">选一个论文文件夹，一键启动本机 <code>factscribe serve</code>，用 Python 原版跑真实论文项目。</p>
             </div>
             <div class="panel-actions">
               <span id="workbench-run-state" class="muted-note"></span>
-              <button id="btn-workbench-load" class="btn" type="button">载入工作台项目</button>
+              <button id="btn-workbench-load" class="btn" type="button" data-i18n="btn.loadProject">载入工作台项目</button>
             </div>
           </div>
           <p id="project-status" class="muted-note" role="status" aria-live="polite"></p>
@@ -469,25 +498,25 @@
               <p class="panel-desc">一个文件夹就是一个论文项目（里面有 <code>paperkit.toml</code>）。换项目＝换文件夹；启动后工作台的读写只对这个文件夹生效。</p>
             </div>
             <label class="field" style="max-width: 640px">
-              <span>最近项目</span>
+              <span data-i18n="field.recentProjects">最近项目</span>
               <select id="project-select"></select>
             </label>
             <label class="field" style="max-width: 640px">
-              <span>项目文件夹</span>
+              <span data-i18n="field.projectFolder">项目文件夹</span>
               <input id="project-path" type="text" autocomplete="off" placeholder="/Users/you/paper" />
             </label>
             <div class="panel-actions" style="margin: 8px 0">
-              <button id="btn-project-add" class="btn" type="button">加入项目列表</button>
-              <button id="btn-project-host" class="btn" type="button">用当前对话项目</button>
-              <button id="btn-project-forget" class="btn" type="button">从列表移除</button>
+              <button id="btn-project-add" class="btn" type="button" data-i18n="btn.addProject">加入项目列表</button>
+              <button id="btn-project-host" class="btn" type="button" data-i18n="btn.useHostProject">用当前对话项目</button>
+              <button id="btn-project-forget" class="btn" type="button" data-i18n="btn.removeProject">从列表移除</button>
             </div>
             <div class="checkline">
               <label><input id="workbench-allow-write" type="checkbox" /> 允许写章节与事实（<code>--allow-write</code>）</label>
               <label><input id="workbench-allow-build" type="checkbox" /> 允许编译 PDF（<code>--allow-build</code>）</label>
             </div>
             <div class="panel-actions" style="margin: 10px 0">
-              <button id="btn-workbench-start" class="btn btn-primary" type="button">启动并连接</button>
-              <button id="btn-workbench-stop" class="btn" type="button">停止工作台</button>
+              <button id="btn-workbench-start" class="btn btn-primary" type="button" data-i18n="btn.startConnect">启动并连接</button>
+              <button id="btn-workbench-stop" class="btn" type="button" data-i18n="btn.stopWorkbench">停止工作台</button>
             </div>
             <details class="manual-connect">
               <summary>高级：手动连接 / Python 解释器</summary>
@@ -501,8 +530,8 @@
                   <input id="workbench-token" type="password" autocomplete="off" placeholder="启动 serve 时打印的 token" />
                 </label>
                 <div class="workbench-actions">
-                  <button id="btn-workbench-connect" class="btn" type="button">连接</button>
-                  <button id="btn-workbench-disconnect" class="btn" type="button">断开</button>
+                  <button id="btn-workbench-connect" class="btn" type="button" data-i18n="btn.connect">连接</button>
+                  <button id="btn-workbench-disconnect" class="btn" type="button" data-i18n="btn.disconnect">断开</button>
                 </div>
                 <label class="field">
                   <span>Python 解释器（一键启动用）</span>
@@ -513,7 +542,7 @@
                   <input id="project-pythonpath" type="text" autocomplete="off" placeholder="/path/to/factscribe 仓库根（留空＝已安装）" />
                 </label>
                 <div class="workbench-actions">
-                  <button id="btn-project-python" class="btn" type="button">保存解释器设置</button>
+                  <button id="btn-project-python" class="btn" type="button" data-i18n="btn.savePython">保存解释器设置</button>
                 </div>
               </div>
             </details>
@@ -524,7 +553,7 @@
         <section id="panel-ai" class="panel" role="tabpanel" hidden>
           <div class="panel-head">
             <div>
-              <h2>AI 起草</h2>
+              <h2 data-i18n="page.ai">AI 起草</h2>
               <p class="panel-desc">用宿主 agent 起草或改写当前节。为了读写论文，请从<b>论文项目的对话</b>里打开本页；输出只进候选区，人采纳后才写工作台项目。</p>
             </div>
             <div class="panel-actions"><span id="ai-host-status" class="muted-note"></span></div>
@@ -537,8 +566,8 @@
               <textarea id="ai-instruction" rows="3">按事实账起草/改写当前节。只能使用账里已有的数字，不得编造；输出完整替换本节正文的 LaTeX，不解释。</textarea>
             </label>
             <div class="panel-actions" style="margin: 10px 0">
-              <button id="btn-ai-run" class="btn btn-primary" type="button">生成候选</button>
-              <button id="btn-ai-stop" class="btn" type="button">停止</button>
+              <button id="btn-ai-run" class="btn btn-primary" type="button" data-i18n="btn.genCandidate">生成候选</button>
+              <button id="btn-ai-stop" class="btn" type="button" data-i18n="btn.stop">停止</button>
               <span id="ai-state" class="muted-note" role="status" aria-live="polite"></span>
             </div>
           </div>
@@ -549,7 +578,7 @@
           </div>
           <textarea id="ai-candidate" class="editor" spellcheck="false" readonly aria-label="AI 候选正文"></textarea>
           <div class="panel-actions" style="margin: 10px 0">
-            <button id="btn-ai-accept" class="btn btn-primary" type="button">采纳并写入本节</button>
+            <button id="btn-ai-accept" class="btn btn-primary" type="button" data-i18n="btn.acceptWrite">采纳并写入本节</button>
             <span id="ai-accept-state" class="muted-note"></span>
           </div>
         </section>

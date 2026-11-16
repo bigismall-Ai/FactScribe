@@ -1,0 +1,688 @@
+{
+  "command": "python3 -m factscribe audit <project> --json",
+  "note": "核验槽 M1 行为锁（SPEC-CHECKS §7 M1）：重构前后同命令同项目 findings 与退出码逐字节相同才算过锁。只由 scripts/audit_golden_dump.py 生成。",
+  "projects": {
+    "examples/minimal": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "UNMATCHED_NUMBER",
+          "context": "上一轮离线复跑把端到端时延压到 47.3\\,ms，这个数字还没有进事实账，",
+          "location": "sections/02-results.tex:17:17",
+          "message": "数字 47.3 回不到任何 fact.value",
+          "severity": "red",
+          "token": "47.3"
+        },
+        {
+          "code": "MISSING_CITE",
+          "context": "相关工作另见 \\cite{ghost2024}，这是一条不存在的条目。",
+          "location": "sections/02-results.tex:19:14",
+          "message": "引用了 bib 里不存在的 key 'ghost2024'",
+          "severity": "red",
+          "token": "ghost2024"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "open   & 10 & 16 \\\\",
+          "location": "sections/02-results.tex:10:10",
+          "message": "数字 10 回得到账（A1），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "10"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "open   & 10 & 16 \\\\",
+          "location": "sections/02-results.tex:10:15",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "closed &  8 & 16 \\\\",
+          "location": "sections/02-results.tex:11:11",
+          "message": "数字 8 回得到账（A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "8"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "closed &  8 & 16 \\\\",
+          "location": "sections/02-results.tex:11:15",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "\\caption{两臂在同一组 16 道题上的解决数。}",
+          "location": "sections/02-results.tex:14:17",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNUSED_BIB",
+          "location": "refs.bib:11",
+          "message": "bib 条目 'lewis2020rag' 在审计闭包内从未被 \\cite 引用——参考文献里有它、正文没用它（R-11）；确属保留请写 bib_allow_unused = ['lewis2020rag'] 或在正文 \\nocite{lewis2020rag}",
+          "severity": "yellow",
+          "token": "lewis2020rag"
+        },
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 4/10 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "UNMATCHED_NUMBER",
+          "context": "上一轮离线复跑把端到端时延压到 47.3\\,ms，这个数字还没有进事实账，",
+          "location": "sections/02-results.tex:17:17",
+          "message": "数字 47.3 回不到任何 fact.value",
+          "severity": "red",
+          "token": "47.3"
+        },
+        {
+          "code": "MISSING_CITE",
+          "context": "相关工作另见 \\cite{ghost2024}，这是一条不存在的条目。",
+          "location": "sections/02-results.tex:19:14",
+          "message": "引用了 bib 里不存在的 key 'ghost2024'",
+          "severity": "red",
+          "token": "ghost2024"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "open   & 10 & 16 \\\\",
+          "location": "sections/02-results.tex:10:10",
+          "message": "数字 10 回得到账（A1），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "10"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "open   & 10 & 16 \\\\",
+          "location": "sections/02-results.tex:10:15",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "closed &  8 & 16 \\\\",
+          "location": "sections/02-results.tex:11:11",
+          "message": "数字 8 回得到账（A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "8"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "closed &  8 & 16 \\\\",
+          "location": "sections/02-results.tex:11:15",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNBOUND_NUMBER",
+          "context": "\\caption{两臂在同一组 16 道题上的解决数。}",
+          "location": "sections/02-results.tex:14:17",
+          "message": "数字 16 回得到账（A1/A3），但正文没内联绑定——只算黄，不算已核验",
+          "severity": "yellow",
+          "token": "16"
+        },
+        {
+          "code": "UNUSED_BIB",
+          "location": "refs.bib:11",
+          "message": "bib 条目 'lewis2020rag' 在审计闭包内从未被 \\cite 引用——参考文献里有它、正文没用它（R-11）；确属保留请写 bib_allow_unused = ['lewis2020rag'] 或在正文 \\nocite{lewis2020rag}",
+          "severity": "yellow",
+          "token": "lewis2020rag"
+        },
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 4/10 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ]
+    },
+    "fixtures/benign/R1-B1": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R1-B2": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R1-B3": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R1-B4": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R2-CONCAT": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R2-MACRO": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R2-MULTIFACT": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R2-NUMEXPR": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R2-ROUNDTO": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R3-PDF-ONEWAY": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R3-PDF-RASTER": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/benign/R3-STAMP-SELFSIGN": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/hostile/R1-B1": {
+      "exit": 5,
+      "findings": [
+        {
+          "code": "TABLE_UNBOUND",
+          "context": "ours & 9/16 \\\\",
+          "location": "tables/t1.tex:3:8",
+          "message": "表格 cell 里的数字 9/16 回不到任何 fact.value——表格必须进扫描闭包并带 cell→fact 映射（R-06）",
+          "severity": "red",
+          "token": "9/16"
+        }
+      ],
+      "hints": [
+        {
+          "code": "UNUSED_FACT",
+          "location": "facts/ledger.toml:2",
+          "message": "账上有、文里没用：fact 'A2'（A2）",
+          "severity": "info",
+          "token": "A2"
+        }
+      ],
+      "issues": [
+        {
+          "code": "TABLE_UNBOUND",
+          "context": "ours & 9/16 \\\\",
+          "location": "tables/t1.tex:3:8",
+          "message": "表格 cell 里的数字 9/16 回不到任何 fact.value——表格必须进扫描闭包并带 cell→fact 映射（R-06）",
+          "severity": "red",
+          "token": "9/16"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R1-B2": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We resolved 1/16 of the tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:13",
+          "message": "该段绑定 A2，但数字 1/16 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1/16"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We resolved 1/16 of the tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:13",
+          "message": "该段绑定 A2，但数字 1/16 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1/16"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R1-B3": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The baseline resolved 5/16 and ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:23",
+          "message": "组内第 1 个数字 5/16 归 A2，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "5/16"
+        },
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The baseline resolved 5/16 and ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:46",
+          "message": "组内第 2 个数字 10/16 归 A3，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "10/16"
+        },
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 0/4 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The baseline resolved 5/16 and ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:23",
+          "message": "组内第 1 个数字 5/16 归 A2，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "5/16"
+        },
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The baseline resolved 5/16 and ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:46",
+          "message": "组内第 2 个数字 10/16 归 A3，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "10/16"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 0/4 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ]
+    },
+    "fixtures/hostile/R1-B4": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "FSIGNORE_QUANT",
+          "location": "sections/body.tex:1",
+          "message": "\\fsignore 参数里出现定量（99, 100）——豁免宏不得用来抹掉结论句：'In a fabricated rerun we resolved 99 of 100 tasks.'",
+          "severity": "red",
+          "token": "99, 100"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "FSIGNORE_QUANT",
+          "location": "sections/body.tex:1",
+          "message": "\\fsignore 参数里出现定量（99, 100）——豁免宏不得用来抹掉结论句：'In a fabricated rerun we resolved 99 of 100 tasks.'",
+          "severity": "red",
+          "token": "99, 100"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R2-CONCAT": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "NUM_ADJACENT_GROUP",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:24",
+          "message": "空组 {} 把两个数字粘在一起（'9'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "NUM_AFTER_GROUP",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "数字紧跟一个闭合组（'1.4%'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "1.4%"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:24",
+          "message": "该段绑定 A2，但数字 9 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "该段绑定 A2，但数字 1.4% 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1.4%"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "NUM_ADJACENT_GROUP",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:24",
+          "message": "空组 {} 把两个数字粘在一起（'9'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "NUM_AFTER_GROUP",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "数字紧跟一个闭合组（'1.4%'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "1.4%"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:24",
+          "message": "该段绑定 A2，但数字 9 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "Our headline result is 9{}1.4\\%\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "该段绑定 A2，但数字 1.4% 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1.4%"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R2-MACRO": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "NUMERIC_IN_MACRO",
+          "location": "sections/body.tex:1",
+          "message": "宏 \\acc 的定义体携带数字（'9'）——宏可以携带 fact id，不可以携带数字（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）",
+          "severity": "red",
+          "token": "\\acc"
+        },
+        {
+          "code": "NUMERIC_IN_MACRO",
+          "location": "sections/body.tex:2",
+          "message": "宏 \\onefour 的定义体携带数字（'1.4'）——宏可以携带 fact id，不可以携带数字（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）",
+          "severity": "red",
+          "token": "\\onefour"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "NUMERIC_IN_MACRO",
+          "location": "sections/body.tex:1",
+          "message": "宏 \\acc 的定义体携带数字（'9'）——宏可以携带 fact id，不可以携带数字（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）",
+          "severity": "red",
+          "token": "\\acc"
+        },
+        {
+          "code": "NUMERIC_IN_MACRO",
+          "location": "sections/body.tex:2",
+          "message": "宏 \\onefour 的定义体携带数字（'1.4'）——宏可以携带 fact id，不可以携带数字（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）",
+          "severity": "red",
+          "token": "\\onefour"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R2-MULTIFACT": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The plain arm resolved 5/16 while ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:24",
+          "message": "组内第 1 个数字 5/16 归 A2，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "5/16"
+        },
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The plain arm resolved 5/16 while ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:49",
+          "message": "组内第 2 个数字 10/16 归 A3，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "10/16"
+        },
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 0/4 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The plain arm resolved 5/16 while ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:24",
+          "message": "组内第 1 个数字 5/16 归 A2，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "5/16"
+        },
+        {
+          "code": "BINDING_ATTRIBUTION",
+          "context": "The plain arm resolved 5/16 while ours resolved 10/16\\fact{A2}\\fact{A3}.",
+          "location": "sections/body.tex:1:49",
+          "message": "组内第 2 个数字 10/16 归 A3，但不在它的 value 里——标记组成员按书写顺序一一对应（想真·同值请写 co_claim）",
+          "severity": "red",
+          "token": "10/16"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "LOW_BINDING_RATE",
+          "location": "audit",
+          "message": "内联绑定率 0/4 低于 50%——大部分数字只是「回得到账」，还没回到对的那条账",
+          "severity": "yellow"
+        }
+      ]
+    },
+    "fixtures/hostile/R2-NUMEXPR": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "ARITH_IN_BODY",
+          "location": "sections/body.tex:1",
+          "message": "算术/计数器命令 \\the 会产生账上没有的数字——数值不可寻址（R-01A-A）",
+          "severity": "red",
+          "token": "\\the"
+        },
+        {
+          "code": "ARITH_IN_BODY",
+          "location": "sections/body.tex:1",
+          "message": "算术/计数器命令 \\numexpr 会产生账上没有的数字——数值不可寻址（R-01A-A）",
+          "severity": "red",
+          "token": "\\numexpr"
+        },
+        {
+          "code": "NUM_ADJACENT_MACRO",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:29",
+          "message": "宏 \\relax 紧跟数字（'1'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "1"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "该段绑定 A2，但数字 9 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:29",
+          "message": "该段绑定 A2，但数字 1 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "ARITH_IN_BODY",
+          "location": "sections/body.tex:1",
+          "message": "算术/计数器命令 \\the 会产生账上没有的数字——数值不可寻址（R-01A-A）",
+          "severity": "red",
+          "token": "\\the"
+        },
+        {
+          "code": "ARITH_IN_BODY",
+          "location": "sections/body.tex:1",
+          "message": "算术/计数器命令 \\numexpr 会产生账上没有的数字——数值不可寻址（R-01A-A）",
+          "severity": "red",
+          "token": "\\numexpr"
+        },
+        {
+          "code": "NUM_ADJACENT_MACRO",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:29",
+          "message": "宏 \\relax 紧跟数字（'1'）——渲染出的数字必须由连续字面数字构成",
+          "severity": "red",
+          "token": "1"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:27",
+          "message": "该段绑定 A2，但数字 9 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "9"
+        },
+        {
+          "code": "BOUND_MISMATCH",
+          "context": "We evaluated \\the\\numexpr 9+1\\relax tasks\\fact{A2}.",
+          "location": "sections/body.tex:1:29",
+          "message": "该段绑定 A2，但数字 1 不在其 value 里（内联绑定是硬约束）",
+          "severity": "red",
+          "token": "1"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R2-ROUNDTO": {
+      "exit": 1,
+      "findings": [
+        {
+          "code": "DISPLAY_INCONSISTENT",
+          "location": "facts/ledger.toml:2",
+          "message": "fact 'A2'：display '{ text = \"0.9\"' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "severity": "red",
+          "token": "A2"
+        },
+        {
+          "code": "DISPLAY_INCONSISTENT",
+          "location": "facts/ledger.toml:2",
+          "message": "fact 'A2'：display 'round_to = 1 }' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "severity": "red",
+          "token": "A2"
+        }
+      ],
+      "hints": [],
+      "issues": [
+        {
+          "code": "DISPLAY_INCONSISTENT",
+          "location": "facts/ledger.toml:2",
+          "message": "fact 'A2'：display '{ text = \"0.9\"' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "severity": "red",
+          "token": "A2"
+        },
+        {
+          "code": "DISPLAY_INCONSISTENT",
+          "location": "facts/ledger.toml:2",
+          "message": "fact 'A2'：display 'round_to = 1 }' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "severity": "red",
+          "token": "A2"
+        }
+      ],
+      "warnings": []
+    },
+    "fixtures/hostile/R3-PDF-ONEWAY": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/hostile/R3-PDF-RASTER": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/hostile/R3-STAMP-SELFSIGN": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    },
+    "fixtures/regression/paper-en": {
+      "exit": 0,
+      "findings": [],
+      "hints": [],
+      "issues": [],
+      "warnings": []
+    }
+  },
+  "schema": "factscribe-audit-golden/1.0"
+}

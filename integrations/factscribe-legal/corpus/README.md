@@ -1,6 +1,6 @@
-# corpus/ —— 法律五闸消费的语料与防再丢清单
+# corpus/ —— 法律六闸消费的语料与防再丢清单
 
-本目录是 `tools/fetch_corpus.py` 的产物＋对账清单。五闸 reader 直接吃这里的数据：
+本目录是 `tools/fetch_corpus.py` 的产物＋对账清单。各闸 reader 直接吃这里的数据：
 
 | 子目录 | reader | 内容 |
 |---|---|---|
@@ -8,6 +8,7 @@
 | `cn/` | `cn_corpus.py`（verify-cn 闸） | `catalog.jsonl.gz`＋证据卡＋详情 JSON 原始字节 |
 | `it/run-<vigenza>-it-<anno>n<numero>/` | `it_verify.py`（verify-it 闸） | `index.json`＋官方 AKN 整件＋条文切片＋证据卡 |
 | `es/run-<YYYYMMDD>-es-<slug>/` | `es_verify.py`（verify-es 闸） | `index.json`＋官方 BOE 合并文本整件＋条文切片＋证据卡 |
+| `fr-case/run-<YYYYMMDD>-inca/` | `fr_case_verify.py`（verify-fr-case 闸） | `index.json`＋官方判决 XML＋纯文本还原件＋证据卡＋`ATTRIBUTION.txt`（许可署名） |
 | `case/` | `case_verify.py`（verify-case 闸） | **本批为空**：检索接口需登录（见下） |
 | `manifest.json` | —— | 防再丢清单：每文件 sha256＋取数时间＋来源 URL |
 | `state/fetch_state.json` | —— | 增量续抓状态（已取清单＋sha），重跑自动跳过 |
@@ -25,6 +26,7 @@ python3 tools/fetch_corpus.py fetch --source fr --mode bulk            # Freemiu
 python3 tools/fetch_corpus.py fetch --source cn --mode bulk            # 全库翻页＋逐部详情
 python3 tools/fetch_corpus.py fetch --source it --mode bulk            # 样单内每法 3 请求
 python3 tools/fetch_corpus.py fetch --source es --mode bulk            # 样单内每法 1 请求（by-id 整件）
+python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk       # INCA 全球判决全量档案 ≈664MB
 
 # 把语料物化成合成小项目（事实账＋证据卡＋paper.tex，四闸直接跑）
 python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -56,6 +58,13 @@ python3 tools/fetch_corpus.py manifest
   （官方对别的 mime 头回 400「No soportado ningún mime type…」）；⚠️ 域名是
   `www.boe.es`，`api.boe.es` **不存在**（DNS NXDOMAIN）。整件＝合并文本 XML，
   条文＝`<bloque id="a7" tipo="precepto">` 块。复用须注明出处（AEBOE 复用条件）。
+- **法国判例** DILA 开放数据 INCA 全球判决档案
+  `echanges.dila.gouv.fr/OPENDATA/INCA/`（stock `Freemium_inca_global_*.tar.gz`
+  全量约 664MB）。sample＝**只取 12MB 前缀**（1 次目录索引 ＋ 1 次 HTTP Range
+  206），流式解 tar.gz 到够数即停，不下载全量；bulk＝整包下载（须 `--yes`）。
+  每件判决一个 XML（`TEXTE_JURI_JUDI` ＋ LEGIFRANCE DTD），正文完整。
+  许可：**licence ouverte v2.0**（Etalab/DILA）⇒ 署名三件套＝发布方 DILA ＋
+  源 URL（档案 URL＋档案内路径）＋下载日期，见 `fr-case/ATTRIBUTION.txt`。
 
 ## TLS 注意
 
@@ -75,4 +84,10 @@ GlobalSign Root R46，`api.normattiva.it` 2025-10 起的新链验不过），放
 - ES 3 法 9 切片：Ley 39/2015（BOE-A-2015-10565，art.1–3）、
   Ley 40/2015（BOE-A-2015-10566，art.1–3）、
   Constitución Española（BOE-A-1978-31229，art.1–3）
+- FR-CASE 4 件判决（`fr-case/run-20261116-inca/`，取自
+  `Freemium_inca_global_20261108-140000.tar.gz`，下载日期 2026-11-16）：
+  Cour de cassation 1900-07-30（JURITEXT000006953017）、1990-10-09
+  （JURITEXT000007100000）、2004-09-29（JURITEXT000007471838，正文含
+  «3 500 euros»）、Tribunal de grande instance de Paris 2006-12-15
+  （JURITEXT000006951547，正文含 «300.000 euros»＝30 万）
 - CASE：无（需登录，见上）

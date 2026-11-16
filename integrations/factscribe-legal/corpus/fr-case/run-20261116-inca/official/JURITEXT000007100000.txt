@@ -1,0 +1,58 @@
+[ID] JURITEXT000007100000
+[ANCIEN_ID] IXCXCX1990X10X01X00150X059
+[ORIGINE] JURI
+[URL] texte/juri/judi/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml
+[NATURE] ARRET
+[TITRE] Cour de cassation, Chambre civile 1, du 9 octobre 1990, 89-15.059, Inédit
+[DATE_DEC] 1990-10-09
+[JURIDICTION] Cour de cassation
+[SOLUTION] Rejet
+[NUMERO_AFFAIRE] 89-15059
+[FORMATION] CHAMBRE_CIVILE_1
+[FORM_DEC_ATT] Tribunal de grande instance de Lyon 1989-02-17
+[DATE_DEC_ATT] 1989-02-17
+[CONTENU]
+LA COUR DE CASSATION, PREMIERE CHAMBRE CIVILE, a rendu l'arrêt suivant :
+
+ Sur le pourvoi formé par :
+
+ 1°) Mlle Nicole, Emma, Marie X..., 
+
+ 2°) M. Joseph, Marie X...,
+
+ en cassation d'un jugement rendu le 17 février 1989 par le tribunal de grande instance de Lyon, au profit de l'association tutelaire des majeurs protégés du Rhône, gérant de tutelle, demeurant 44, rue du Père Chevrier à Lyon (Rhône),
+
+ défenderesse à la cassation ;
+
+ Les demandeurs invoquent, à l'appui de leur pourvoi, le moyen unique de cassation annexé au présent arrêt ;
+
+ LA COUR, composée selon l'article L. 131-6, alinéa 2, du Code de l'organisation judiciaire, en l'audience publique du 27 juin 1990, où étaient présents :
+
+ M. Camille Bernard, conseiller doyen faisant fonction de président, M. Gélineau-Larrivet, rapporteur, M. Massip, conseiller, M. Sadon, premier avocat général, Mlle Ydrac, greffier de chambre ;
+
+ Sur le rapport de M. le conseiller Gélineau-Larrivet, les observations de Me Goutet, avocat des consorts X..., les conclusions de M. Sadon, premier avocat général, et après en avoir délibéré conformément à la loi ;
+
+ Sur le moyen unique, pris en ses deux branches :
+
+ Attendu que, selon les énonciations des juges du fond, Mlle Nicole X... a été placée sous tutelle par un jugement du juge des tutelles de Lyon, le 8 avril 1987, qui a désigné son père, M. Joseph X..., en qualité d'administrateur légal sous contrôle judiciaire ;
+
+ que, constatant la carence de M.  X... dans l'exécution de sa mission, le juge des tutelles a, par ordonnance du 14 octobre 1988, transformé l'administration légale en gérance de tutelle et a désigné l'Association tutélaire des majeurs protégés du Rhône en qualité de gérant de tutelle des biens de Mlle X... ;
+
+ que le tribunal de grande instance a confirmé cette décision ; Attendu qu'il est fait grief au jugement attaqué d'avoir ainsi statué alors que, d'une part, les intérêts de Mlle X..., pleinement intégrée dans son milieu familial, ne sauraient être compromis ni par le refus de son père de percevoir pour elle les allocations accordées aux handicapés, ni par un retard dans le règlement d'une succession, et que le seul fait pour M. X... de n'avoir pas répondu à la convocation du juge des tutelles ne suffit pas à justifier la mesure prononcée ;
+
+ qu'ainsi le tribunal, en ne prenant pas en considération le
+
+véritable intérêt de la majeure protégée, aurait violé les articles 497 et 499 du Code civil ;
+
+ alors, d'autre part, que les juges du second degré auraient omis d'examiner le moyen selon lequel l'intervention de personnes étrangères à la famille, résultant de la désignation d'un gérant de
+
+ tutelle, était de nature à nuire aux intérêts de Mlle X... en causant à celle-ci un certain trouble phychologique ;
+
+ Mais attendu que c'est dans l'exercice de son pouvoir souverain d'appréciation qu'après avoir relevé que M. X... n'avait pas préservé les intérêts de sa fille comme il aurait dû le faire en sa qualité d'administrateur légal sous contrôle judiciaire, le tribunal, qui n'était pas tenu de suivre les auteurs du recours dans le détail de leur argumentation, a estimé qu'il était nécessaire de pourvoir à son remplacement et de transformer l'administration légal sous contrôle judiciaire en gérance de tutelle ;
+
+ D'où il suit que le moyen du pourvoi ne peut être accueilli en aucune de ses branches ;
+
+ PAR CES MOTIFS :
+
+ REJETTE le pourvoi formé contre le jugement rendu le 17 février 1989 par le tribunal de grande instance de Lyon ;
+[SOMMAIRE] MAJEUR PROTEGE - Tutelle - Administration légale sous contrôle judiciaire - Transformation en gérance de tutelle - Intérêts du majeur protégé - Appréciation souveraine.

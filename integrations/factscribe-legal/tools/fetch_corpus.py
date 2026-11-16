@@ -31,6 +31,7 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   python3 tools/fetch_corpus.py fetch --source cn --mode sample
   python3 tools/fetch_corpus.py fetch --source it --mode sample
   python3 tools/fetch_corpus.py fetch --source es --mode sample
+  python3 tools/fetch_corpus.py fetch --source fr-case --mode sample
 
   # 全量（以后真要时照此跑；会先打印预计请求数）
   python3 tools/fetch_corpus.py fetch --source fr --mode bulk          # 只出计划
@@ -38,6 +39,7 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes
   python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes
   python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes
+  python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk --yes
 
   # 把语料物化成一个合成小项目（事实账＋证据卡＋paper.tex，供四闸跑读数）
   python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -73,6 +75,13 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
       <block_id>.es.card.txt      证据卡
     case/                        案例库（人民法院案例库）——检索接口需登录，
                                   匿名通道拒绝抓取（见 fetch_case_probe），本批为空。
+    fr-case/run-<YYYYMMDD>-inca/ fr_case_verify reader 直接吃的形状：
+      index.json                  {"source_archive_url", "archive_path",
+                                   "fetched_at", "licence", "cases": {ID: {...}}}
+      official/<ID>.xml           官方判决 XML 原字节（权威层）
+      official/<ID>.txt           确定性纯文本还原件（哈希入 index 与卡）
+      <ID>.fr-case.card.txt       证据卡（含 OFFICIAL_XML_SHA256/OFFICIAL_TXT_SHA256）
+      ATTRIBUTION.txt             许可署名（licence ouverte v2.0 三件套）
 
 官方通道（均为开放数据接口，非爬页面；出处 README「语料从哪来」节）
 ------------------------------------------------------------------
@@ -83,9 +92,18 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   ES  BOE 开放数据 https://www.boe.es/datosabiertos/api/legislacion-consolidada
       （合并文本 by-id；AEBOE 复用条件，须注明出处）  BOE 复用条款（2024-06-27 决议）
   CN案例 人民法院案例库 https://rmfyalk.court.gov.cn/（需登录，匿名不抓）
+  FR判例 DILA INCA 全球判决档案
+      https://echanges.dila.gouv.fr/OPENDATA/INCA/
+      （stock tar.gz 约 664MB；sample 只取 12MB **前缀**（HTTP Range 206），
+        流式解到够数即停）  licence ouverte v2.0（Etalab）
 
 退出码：0 全部成功 / 2 用法错或 bulk 未确认 / 3 部分源失败（详见日志）
 Python ≥ 3.10，纯标准库。
+
+（唯一的例外：`fr-case` 源的**还原/归一**要与核验闸共用同一份实现
+`factscribe_legal/fr_case_reader.py`——同一份官方 XML 必须永远还原出同一份
+字节，否则 official/*.txt 的 sha256 对账自己就废了。故 `fr-case` 路径会
+import 同仓的 `factscribe_legal` 包；其余源仍是纯标准库、单文件可拷走。）
 """
 from __future__ import annotations
 
@@ -143,6 +161,8 @@ IT_ADV_SEARCH_PATH = "/bff-opendata/v1/api/v1/ricerca/avanzata"
 IT_AKN_URL = "https://www.normattiva.it/do/atto/caricaAKN"
 ES_API_BASE = "https://www.boe.es/datosabiertos/api/legislacion-consolidada"
 CASE_HOME_URL = "https://rmfyalk.court.gov.cn/"
+# 法国**判例**（INCA 全球判决档案）：DILA 开放数据，免注册免 key
+INCA_BASE = "https://echanges.dila.gouv.fr/OPENDATA/INCA/"
 
 # sample 抽样默认目标（规模闸：bulk 之外每源最多取这么多件）
 CN_SAMPLE_QUERIES = ["中华人民共和国劳动法", "中华人民共和国劳动合同法",
@@ -164,6 +184,15 @@ IT_ARTICLE_RE = re.compile(rb'<article eId="(art_[0-9]+)">(.*?)</article>', re.S
 IT_ARTICLE_EID_RE = re.compile(rb'<article eId="(art_[0-9]+)">')
 DILA_INCREMENT_RE = re.compile(r'href="(LEGI_\d{8}-\d{6}\.tar\.gz)"')
 DILA_GLOBAL_RE = re.compile(r'href="(Freemium_legi_global_\d{8}-\d{6}\.tar\.gz)"')
+DILA_INCA_GLOBAL_RE = re.compile(
+    r'href="(Freemium_inca_global_\d{8}-\d{6}\.tar\.gz)"')
+
+# ---- 法国判例（INCA）取件口径 ----
+FR_CASE_PREFIX_BYTES = 12 * 1024 * 1024   # sample：只取档案**前缀** 12MB（不拉全量）
+FR_CASE_SAMPLE_MAX = 4                    # sample：最多取 4 件判决
+FR_CASE_LICENCE = "Licence ouverte v2.0 (DILA / Etalab)"
+FR_CASE_ATTRIBUTION = ("Source : DILA (Direction de l'Information Légale et "
+                       "Administrative) — données ouvertes INCA")
 
 
 class FetchError(RuntimeError):
@@ -472,6 +501,9 @@ def build_manifest(corpus_root, state, reference_date):
             "bulk_cn": "python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes",
             "bulk_it": "python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes",
             "bulk_es": "python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes",
+            "bulk_fr_case": "python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk --yes",
+            "sample_fr_case": "python3 tools/fetch_corpus.py fetch --source fr-case --mode sample "
+                              "(目录索引 1 次 + Range 前缀 1 次)",
             "note": "state/fetch_state.json 记了已取清单与 sha256；重跑自动跳过已取件。"
                     "manifest.files 的 sha256 可对账：对不上即该文件与取件时不一致。",
         },
@@ -1404,6 +1436,241 @@ def fetch_es(http, corpus_root, state, max_items, mode, reference_date, yes):
 
 
 # ---------------------------------------------------------------------------
+# FR-CASE —— DILA INCA 全球判决档案（stock tar.gz；Range 前缀取件）
+# ---------------------------------------------------------------------------
+# 官方通道（2026-11-16 实测）：
+#   GET https://echanges.dila.gouv.fr/OPENDATA/INCA/          → Apache 目录索引
+#   → 里面有 Freemium_inca_global_<stamp>.tar.gz（stock 全量，约 664MB）
+#   GET <档案>（Range: bytes=0-12582911）                       → 206，取前 12MB 前缀
+#   → 前缀是 gzip 流的一半：tarfile 用 "r|gz" 流式解，解到够数即停（不下载全量）
+# 档案内布局（实测）：inca/global/JURI/TEXT/… 与 inca/global/civile/JURI/TEXT/…
+#   每件判决一个 XML（TEXTE_JURI_JUDI ＋ LEGIFRANCE DTD，正文完整非截断）
+#
+# ⚠️ 还原/归一逻辑与核验闸共用一份实现（factscribe_legal/fr_case_reader.py）：
+#   同一份 XML 必须永远还原出**同一份字节**，否则 official/*.txt 的 sha256
+#   对账自己就废了（卡上钉的哈希 vs 闸里现算的哈希会对不上）。
+def _fr_case_reader():
+    """取法国判例侧的还原/归一实现（与核验闸同一份代码）。
+
+    返回一个小命名空间：build_card / parse_meta / to_plain / norm_fr_number /
+    fr_number_token_pairs。
+    """
+    parent = os.path.dirname(SCRIPT_DIR)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+    import types
+    from factscribe_legal import fr_case_reader
+    return types.SimpleNamespace(
+        build_card=fr_case_reader.build_card,
+        parse_meta=fr_case_reader.parse_meta,
+        to_plain=fr_case_reader.to_plain,
+        norm_fr_number=fr_case_reader.norm_fr_number,
+        fr_number_token_pairs=fr_case_reader.fr_number_token_pairs,
+    )
+
+
+def inca_list_archives(http):
+    """INCA 目录索引 → 判决档案名（按名序，最后一个＝最新）。"""
+    r = http.request(INCA_BASE, headers={"Accept": "text/html"})
+    html = r["body"].decode("utf-8", "replace")
+    return sorted(set(DILA_INCA_GLOBAL_RE.findall(html)))
+
+
+def _fr_case_is_decision(data):
+    """是不是一份判决 XML（首部找 TEXTE_JURI_JUDI 根标记）。"""
+    return b"TEXTE_JURI_JUDI" in data[:4096]
+
+
+def _fr_case_stream_xmls(tar_path, want, stop_at=None):
+    """流式解 tar.gz，取出判决 XML（(成员路径, 字节) 列表）。
+
+    前缀被截断时 tarfile 会抛 ReadError/EOFError——那正是「前缀到此为止」的
+    信号，不算失败。解到 want 件就停。
+    """
+    out = []
+    try:
+        with tarfile.open(tar_path, "r|gz") as tar:
+            for member in tar:
+                if not member.isfile():
+                    continue
+                if not member.name.lower().endswith(".xml"):
+                    continue
+                fh = tar.extractfile(member)
+                if fh is None:
+                    continue
+                data = fh.read()
+                if len(data) < 200 or not _fr_case_is_decision(data):
+                    continue
+                out.append((member.name, data))
+                if want and len(out) >= want:
+                    break
+                if stop_at and len(out) >= stop_at:
+                    break
+    except (tarfile.ReadError, EOFError, OSError, ValueError) as e:
+        log("[scan]  tar.gz 解到文件尾/截断处为止（%s: %s）"
+            % (type(e).__name__, str(e)[:80]))
+    return out
+
+
+def _fr_case_attribution(archive_url, cases, fetched_at):
+    """许可署名（licence ouverte v2.0 三件套：发布方／源 URL／下载日期）。"""
+    lines = [
+        "法国判例语料（INCA 全球判决档案）——许可与署名",
+        "",
+        "许可   : Licence ouverte v2.0（Etalab / DILA，开放许可 2.0）",
+        "发布方 : DILA — Direction de l'Information Légale et Administrative",
+        "档案   : %s" % archive_url,
+        "下载日期: %s" % fetched_at,
+        "",
+        "署名三件套（Open Licence 2.0 要求）：",
+        "  ① 发布方：DILA（Direction de l'Information Légale et Administrative）",
+        "  ② 源 URL：档案 URL ＋ 档案内路径（逐件列在下面）",
+        "  ③ 下载日期：%s" % fetched_at,
+        "",
+        "本目录内的官方字节副本**钉了 sha256**（index.json 与证据卡里都有），",
+        "属 Open Licence 2.0 允许的再分发；改动副本即破坏哈希对账。",
+        "",
+        "逐件源 URL（档案 URL ＋ 档案内路径）：",
+    ]
+    for case_id in sorted(cases):
+        meta = cases[case_id]
+        lines.append("  %s" % case_id)
+        lines.append("    %s#%s" % (archive_url, meta.get("source_path", "")))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def fetch_fr_case(http, corpus_root, state, max_items, mode, reference_date, yes):
+    """法国判例：INCA 全球判决档案 → corpus/fr-case/run-<YYYYMMDD>-inca/。"""
+    fr_case_dir = os.path.join(corpus_root, "fr-case")
+    raw_dir = os.path.join(fr_case_dir, "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    run_id = "run-%s-inca" % reference_date.replace("-", "")
+    run_dir = os.path.join(fr_case_dir, run_id)
+    off_dir = os.path.join(run_dir, "official")
+    os.makedirs(off_dir, exist_ok=True)
+
+    archives = inca_list_archives(http)
+    if not archives:
+        raise FetchError("DILA INCA 目录里没找到 Freemium_inca_global_*.tar.gz")
+    name = archives[-1]
+    archive_url = INCA_BASE + name
+    log("[pick]   FR-CASE 判决档案：%s" % name)
+
+    if mode == "bulk":
+        log("[plan]  FR-CASE bulk：%s（全量 stock 档案，约 664MB）" % name)
+        log("[plan]   预计请求：1 次目录索引（已发）＋ 1 次整包下载 ＝ 2 次")
+        if not yes:
+            if sys.stdin.isatty():
+                if input("确认开跑？[y/N] ").strip().lower() not in ("y", "yes"):
+                    log("[abort] 未确认，停止（--yes 可跳过询问）")
+                    return 3
+            else:
+                log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
+                return 2
+        dest = os.path.join(raw_dir, name)
+        if os.path.exists(dest):
+            log("[skip]  全量档案已在本地：%s" % dest)
+        else:
+            http.download(archive_url, dest)
+        found = _fr_case_stream_xmls(dest, want=0)
+    else:
+        # sample：只取前缀（Range），流式解到够数即停
+        want = min(max_items or FR_CASE_SAMPLE_MAX, FR_CASE_SAMPLE_MAX)
+        prefix_path = os.path.join(raw_dir, name + ".prefix")
+        state_key = "prefix:%s:%d" % (name, FR_CASE_PREFIX_BYTES)
+        prev = state.fetched("fr-case", state_key)
+        if prev and os.path.exists(prefix_path):
+            log("[skip]  前缀已取过（state 命中），不重复下载：%s" % name)
+        else:
+            rng = "bytes=0-%d" % (FR_CASE_PREFIX_BYTES - 1)
+            r = http.request(archive_url, headers={"Range": rng,
+                                                  "Accept-Encoding": "identity"})
+            status = r.get("status")
+            if status == 200:
+                raise FetchError("服务器忽略了 Range（200 而非 206）：拒绝下载全量档案")
+            if status != 206:
+                raise FetchError("Range 请求返回 %s（期望 206）" % status)
+            with open(prefix_path, "wb") as fh:
+                fh.write(r["body"])
+            state.mark("fr-case", state_key, url=archive_url,
+                       sha256=sha256_bytes(r["body"]), bytes_=len(r["body"]),
+                       range_header=rng, archive=name)
+        found = _fr_case_stream_xmls(prefix_path, want=want)
+        if not found:
+            raise FetchError("INCA 前缀里没解出判决 XML（前缀 %d 字节）"
+                             % FR_CASE_PREFIX_BYTES)
+
+    R = _fr_case_reader()
+    fetched_at = now_iso()
+    cases = {}
+    for member_name, data in found:
+        meta = R.parse_meta(data)
+        case_id = meta.get("id") or os.path.splitext(
+            os.path.basename(member_name))[0]
+        if not case_id:
+            continue
+        plain = R.to_plain(data)
+        txt_bytes = plain.encode("utf-8")
+        with open(os.path.join(off_dir, "%s.xml" % case_id), "wb") as fh:
+            fh.write(data)
+        with open(os.path.join(off_dir, "%s.txt" % case_id), "wb") as fh:
+            fh.write(txt_bytes)
+        card = R.build_card(meta, plain, data, txt_bytes,
+                            source_url=archive_url, source_path=member_name,
+                            fetched_at=fetched_at,
+                            licence=FR_CASE_LICENCE,
+                            attribution=FR_CASE_ATTRIBUTION)
+        with open(os.path.join(run_dir, "%s.fr-case.card.txt" % case_id),
+                  "w", encoding="utf-8") as fh:
+            fh.write(card)
+        cases[case_id] = {
+            "titre": meta.get("titre", ""),
+            "date_dec": meta.get("date_dec", ""),
+            "juridiction": meta.get("juridiction", ""),
+            "numeros_affaires": meta.get("numeros_affaires") or [],
+            "nature": meta.get("nature", ""),
+            "solution": meta.get("solution", ""),
+            "xml_file": "official/%s.xml" % case_id,
+            "xml_sha256": sha256_bytes(data),
+            "txt_file": "official/%s.txt" % case_id,
+            "txt_sha256": sha256_bytes(txt_bytes),
+            "source_url": archive_url,
+            "source_path": member_name,
+            "card_file": "%s.fr-case.card.txt" % case_id,
+        }
+        state.mark("fr-case", case_id, url=archive_url + "#" + member_name,
+                   sha256=sha256_bytes(data), bytes_=len(data), run=run_id,
+                   member=member_name, txt_sha256=sha256_bytes(txt_bytes))
+        log("[ok]    fr-case:%s  %s  %s" % (case_id, meta.get("date_dec", ""),
+                                           meta.get("juridiction", "")))
+    if not cases:
+        raise FetchError("INCA 档案里没解出任何判决（run=%s）" % run_id)
+
+    index = {
+        "source_archive_url": archive_url,
+        "archive_path": name,
+        "fetched_at": fetched_at,
+        "licence": FR_CASE_LICENCE,
+        "attribution": FR_CASE_ATTRIBUTION,
+        "generator": "fetch_corpus.py " + TOOL_VERSION,
+        "run": run_id,
+        "cases": cases,
+    }
+    with open(os.path.join(run_dir, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        fh.write("\n")
+    with open(os.path.join(fr_case_dir, "ATTRIBUTION.txt"), "w",
+              encoding="utf-8") as fh:
+        fh.write(_fr_case_attribution(archive_url, cases, fetched_at))
+    state.note("fr-case", "last_run", fetched_at)
+    state.note("fr-case", "runs", sorted(
+        d for d in os.listdir(fr_case_dir) if d.startswith("run-")))
+    log("[done]  FR-CASE：%s 共 %d 件判决（档案 %s）" % (run_id, len(cases), name))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CASE —— 人民法院案例库：匿名通道不可用，如实报备（不硬闯）
 # ---------------------------------------------------------------------------
 def fetch_case_probe(http, corpus_root, state, max_items, mode, reference_date, yes):
@@ -1430,6 +1697,37 @@ def fetch_case_probe(http, corpus_root, state, max_items, mode, reference_date, 
     return 0
 
 
+def _pick_fr_case_value(plain_text):
+    """从判决正文里挑一个确定性的「确实存在」的数值（物化示例用）。
+
+    优先**带货币单位**的金额（`3 500 euros` / `300.000 euros`）——那才是这个
+    闸真正要判的东西；找不到就退回正文里最大的非年份整数。
+    返回**规范形**（`3500`），法式归一后与正文 token 一致 ⇒ 闸必绿。
+    """
+    R = _fr_case_reader()
+    content = plain_text
+    idx = plain_text.find("[CONTENU]")
+    if idx >= 0:
+        content = plain_text[idx:]
+    # 金额：token 紧跟 euros / € / francs
+    amt_re = re.compile(r"(\d(?:[\d   .,]*\d)?)\s*"
+                        r"(?:euros?|€|francs?)", re.IGNORECASE)
+    for m in amt_re.finditer(content):
+        canon = R.norm_fr_number(m.group(1))
+        if canon:
+            return canon
+    plain_nums = []
+    for _raw, canon in R.fr_number_token_pairs(content):
+        if not canon.isdigit():
+            continue
+        if len(canon) == 4 and 1800 <= int(canon) <= 2100:
+            continue   # 年份不算「数值示例」
+        plain_nums.append(canon)
+    if plain_nums:
+        return sorted(plain_nums, key=lambda x: -int(x))[0]
+    return None
+
+
 # ---------------------------------------------------------------------------
 # materialize —— 把语料物化成合成小项目（四闸直接吃）
 # ---------------------------------------------------------------------------
@@ -1447,7 +1745,7 @@ def _pick_number(text, minimum=10):
 def materialize(corpus_root, project_dir):
     os.makedirs(os.path.join(project_dir, "facts"), exist_ok=True)
     os.makedirs(os.path.join(project_dir, "cards"), exist_ok=True)
-    facts_fr, facts_cn, facts_it, facts_es = [], [], [], []
+    facts_fr, facts_cn, facts_it, facts_es, facts_fr_case = [], [], [], [], []
     tex_lines = ["% 合成小项目：由 tools/fetch_corpus.py materialize 生成",
                  "% 事实账引用的是真官方件的钉哈希证据卡（两层证据模型）", ""]
 
@@ -1668,6 +1966,67 @@ def materialize(corpus_root, project_dir):
                   "w", encoding="utf-8") as fh:
             fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_es))
 
+    # ---- FR-CASE（法国判例：DILA INCA 官方判决 XML）----
+    fr_case_root = os.path.join(corpus_root, "fr-case")
+    if os.path.isdir(fr_case_root):
+        for run_name in sorted(d for d in os.listdir(fr_case_root)
+                               if d.startswith("run-")):
+            run_dir = os.path.join(fr_case_root, run_name)
+            idx_path = os.path.join(run_dir, "index.json")
+            if not os.path.exists(idx_path):
+                continue
+            with open(idx_path, encoding="utf-8") as fh:
+                index = json.load(fh)
+            prj_run = os.path.join(project_dir, "runs", run_name)
+            os.makedirs(os.path.join(prj_run, "official"), exist_ok=True)
+            for case_id in sorted(index.get("cases") or {}):
+                meta = index["cases"][case_id]
+                xml_src = os.path.join(
+                    run_dir, meta.get("xml_file") or ("official/%s.xml" % case_id))
+                txt_src = os.path.join(
+                    run_dir, meta.get("txt_file") or ("official/%s.txt" % case_id))
+                card_src = os.path.join(run_dir, "%s.fr-case.card.txt" % case_id)
+                if not all(os.path.exists(p)
+                           for p in (xml_src, txt_src, card_src)):
+                    log("[warn]  fr-case:%s 语料件不全，跳过" % case_id)
+                    continue
+                shutil.copyfile(xml_src, os.path.join(
+                    prj_run, "official", "%s.xml" % case_id))
+                shutil.copyfile(txt_src, os.path.join(
+                    prj_run, "official", "%s.txt" % case_id))
+                card_dst = os.path.join(prj_run, "%s.fr-case.card.txt" % case_id)
+                shutil.copyfile(card_src, card_dst)
+                with open(os.path.join(prj_run, "official", "%s.txt" % case_id),
+                          encoding="utf-8") as fh:
+                    plain = fh.read()
+                val = _pick_fr_case_value(plain)
+                if val is None:
+                    continue
+                digits = re.search(r"(\d+)\s*$", case_id)
+                fid = "FRCASE-%s" % ((digits.group(1).lstrip("0") or "0")
+                                     if digits else case_id[:12].upper())
+                facts_fr_case.append([
+                    "[[fact]]",
+                    'id = "%s"' % fid,
+                    'claim = "%s 判决正文数值（官方件引用示例）"'
+                    % (meta.get("juridiction") or "法国法院"),
+                    'value = "%s"' % val,
+                    'source = "runs/%s/%s.fr-case.card.txt"' % (run_name, case_id),
+                    'source_sha256 = "sha256:%s"' % sha256_file(card_dst),
+                    'locator = "%s (%s, %s)"'
+                    % (case_id, meta.get("date_dec") or "", meta.get("juridiction") or ""),
+                    'confidence = "high"',
+                    "derived_from = []",
+                    "",
+                ])
+                tex_lines.append(r"法国判例侧引用示例：%s（%s）。"
+                                 % (case_id, meta.get("date_dec") or ""))
+    if facts_fr_case:
+        with open(os.path.join(project_dir, "facts", "50-fr-case.toml"),
+                  "w", encoding="utf-8") as fh:
+            fh.write('schema = "paperkit-fact/3.0"\n\n'
+                     + "\n".join("\n".join(b) for b in facts_fr_case))
+
     # ---- CASE（有真实官方正文才物化）----
     case_off = os.path.join(corpus_root, "case", "official")
     if os.path.isdir(case_off):
@@ -1739,10 +2098,10 @@ def materialize(corpus_root, project_dir):
     def _count(blocks):
         return sum(b.count("[[fact]]") for b in blocks)
     log("[done]  materialize：%s" % project_dir)
-    log("        facts: FR %d + CN %d + IT %d + ES %d 条；paper.tex 引用 %d 行"
+    log("        facts: FR %d + CN %d + IT %d + ES %d + FR-CASE %d 条；paper.tex 引用 %d 行"
         % (_count(facts_fr), _count(facts_cn), _count(facts_it), _count(facts_es),
-           len(tex_lines) - 3))
-    log("        五闸验证命令：")
+           _count(facts_fr_case), len(tex_lines) - 3))
+    log("        六闸验证命令：")
     log("          PYTHONPATH=<integrations/factscribe-legal> python3 -m factscribe_legal verify "
         "--project %s --corpus <corpus>/fr --date <参考日> --view <corpus>/fr/view_current.jsonl"
         % project_dir)
@@ -1753,6 +2112,7 @@ def materialize(corpus_root, project_dir):
     log("          ... verify-es   --project %s --corpus <corpus>/es/<run> --date <参考日>"
         % project_dir)
     log("          ... verify-case --project %s" % project_dir)
+    log("          ... verify-fr-case --project %s" % project_dir)
     return 0
 
 
@@ -1767,7 +2127,7 @@ def main(argv=None):
 
     f = sub.add_parser("fetch", help="抓语料（默认 sample 小样例）")
     f.add_argument("--source", required=True,
-                   choices=["fr", "cn", "it", "es", "case", "all"])
+                   choices=["fr", "cn", "it", "es", "fr-case", "case", "all"])
     f.add_argument("--mode", default="sample", choices=["sample", "bulk"])
     f.add_argument("--max-per-source", type=int, default=10,
                    help="sample 模式每源最多取几件（默认 10）")
@@ -1820,10 +2180,10 @@ def main(argv=None):
         % (http.interval_min, http.interval_max, MIN_INTERVAL_S,
            BACKOFF_START_S, BACKOFF_FACTOR, BACKOFF_CAP_S))
 
-    sources = ["fr", "cn", "it", "es", "case"] if args.source == "all" \
+    sources = ["fr", "cn", "it", "es", "fr-case", "case"] if args.source == "all" \
         else [args.source]
     runners = {"fr": fetch_fr, "cn": fetch_cn, "it": fetch_it, "es": fetch_es,
-               "case": fetch_case_probe}
+               "fr-case": fetch_fr_case, "case": fetch_case_probe}
     failures = []
     for src in sources:
         log("---- source: %s ----" % src)

@@ -1,0 +1,79 @@
+[ID] JURITEXT000007471838
+[ANCIEN_ID] IXCXCX2004X09X01X00165X095
+[ORIGINE] JURI
+[URL] texte/juri/judi/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml
+[NATURE] ARRET
+[TITRE] Cour de Cassation, Chambre civile 1, du 29 septembre 2004, 01-16.595, Inédit
+[DATE_DEC] 2004-09-29
+[JURIDICTION] Cour de cassation
+[SOLUTION] Rejet
+[NUMERO_AFFAIRE] 01-16595
+[FORMATION] CHAMBRE_CIVILE_1
+[FORM_DEC_ATT] cour d'appel d'Orléans (chambre solennelle) 2001-09-14
+[DATE_DEC_ATT] 2001-09-14
+[PRESIDENT] Président : M. RENARD-PAYEN conseiller
+[CONTENU]
+AU NOM DU PEUPLE FRANCAIS
+
+
+   LA COUR DE CASSATION, PREMIERE CHAMBRE CIVILE, a rendu l'arrêt suivant :
+
+
+
+
+   Attendu que la société France Télécom a consenti à la société Copper communications 17 conventions de fourniture de services télématiques pour l'exploitation de messageries conviviales ; que reprochant à son cocontractant un manquement à ses obligations contractuelles au motif que le contenu des services portait atteinte au respect de la dignité de la personne humaine et à la protection des adolescents, elle a saisi pour avis le Comité de la télématique anonyme (CTA) et sur avis favorable de cet organisme consultatif a procédé à la résiliation des conventions ; que la société Copper communications a sollicité en référé la suspension de ces décisions ;
+
+
+   Sur le premier moyen :
+
+
+   Attendu que la société Copper communications fait grief à l'arrêt confirmatif attaqué (Orléans, 14 septembre 2001) rendu sur renvoi après cassation (25 janvier 2000, pourvoi n° 98-10.525) de ne comporter aucune mention indiquant qu'il a été rendu en audience solennelle alors que la simple indication du fait que la cour de renvoi s'est réunie en chambre solennelle et qu'elle était composée de 5 magistrats n'implique pas que ceux-ci appartenaient effectivement à 2 chambres distinctes, qu'ainsi l'arrêt attaqué manque de base légale au regard de l'article R. 212-5 du Code de l'Organisation Judiciaire ;
+
+
+   Mais attendu que les mentions de la chambre à laquelle appartient chacun des magistrats ayant statué sur renvoi après cassation ne sont pas requises à peine de nullité ;
+
+
+   D'où il suit que le moyen ne peut être accueilli ;
+
+
+   Sur le deuxième moyen, pris en ses trois branches, tel qu'il figure au mémoire en demande et est reproduit en annexe :
+
+
+   Attendu que la société Copper communications fait grief à l'arrêt attaqué d'avoir rejeté ses demandes de suspension des décisions de résiliation de contrats ;
+
+
+   Attendu, d'abord, que la cour d'appel a exactement décidé que le délai de 2 mois, laissé par l'article D 406.2 du Code des Postes et Télécommunications, au CTA pour donner son avis n'était pas prescrit à peine de nullité ; qu'ensuite, c'est sans violer l'article 6 de la Convention européenne des droits de l'homme inapplicable à la procédure suivie devant un organisme administratif n'émettant que des avis consultatifs, et sans rajouter une condition au décret n° 83-1025 du 28 novembre 1983 concernant les relations entre l'Administration et les usagers, que la cour d'appel, statuant en référé et faisant application du décret n° 92-274 du 28 février 1993 réglementant la procédure devant le CTA, a exactement énoncé que cet organisme n'était pas tenu de procéder à l'audition d'une partie dès lors que le rapporteur désigné pour instruire l'affaire avait invité celle-ci à fournir ses observations écrites ; qu'enfin c'est sans se contredire qu'elle a retenu, nonobstant l'existence d'une procédure écrite ne faisant pas obstacle à l'audition d'une partie, qu'une telle mesure pouvait ne pas être ordonnée lorsque les observations écrites de cette partie avaient été recueillies ;
+
+
+   D'où il suit que le moyen ne peut être accueilli dans aucune de ses branches ;
+
+
+   Sur le troisième moyen, tel qu'il figure au mémoire en demande et est reproduit en annexe :
+
+
+   Attendu que la société Copper communications formule encore les mêmes griefs à l'encontre de l'arrêt attaqué ;
+
+
+   Attendu que c'est sans se fonder sur des éléments de preuve fournis par une partie, mais en s'appuyant à la fois sur des procès-verbaux établis par ses agents, qu'elle a jugé probants et sur la publicité parue dans le magazine Hot Vidéo que la cour d'appel a souverainement relevé que les manquements reprochés à la société Copper communications étaient établis ;
+
+
+   Sur le quatrième moyen, tel qu'il figure au mémoire en demande et est reproduit en annexe :
+
+
+   Attendu que la cour d'appel a relevé, d'une part, qu'il ne pouvait être admis que le décret du 25 février 1993 violait le principe de la liberté de communication instaurée par la loi du 30 septembre 1986, dès lors que celui-ci trouvait ses limites dans le respect de la dignité de la personne et dans la sauvegarde de l'ordre public, et, d'autre part, que le litige s'inscrivant dans le cadre d'une résiliation d'un contrat civil pour non-respect par l'un des cocontractants des obligations contractuelles qu'il a librement acceptées en signant la convention en cause, les moyens tirés de la violation des articles II à 10 de la Convention européenne des droits de l'homme sont inopérants ; qu'elle a ainsi répondu aux conclusions prétendument délaissées ;
+
+
+   PAR CES MOTIFS :
+
+
+   REJETTE le pourvoi ;
+
+
+   Condamne la société Copper communications aux dépens ;
+
+
+   Vu l'article 700 du nouveau Code de procédure civile, rejette la demande de la société Copper communications et de Mme X..., ès qualités, et les condamne à payer à la société France Télécom la somme globale de 3 500 euros ;
+
+
+   Ainsi fait et jugé par la Cour de Cassation, Première chambre civile, signé et prononcé conformément à l'article 452 du nouveau Code de procédure civile par M. Renard-Payen, conseiller doyen en ayant délibéré, en remplacement de M. le président Lemontey, en son audience publique du vingt-neuf septembre deux mille quatre.
+[SOMMAIRE] 

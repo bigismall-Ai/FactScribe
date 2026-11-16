@@ -1,0 +1,17 @@
+# 意大利法条证据卡（派生件；官方 AKN 整件与条文切片哈希钉在这里）
+ACT_URN: urn:nir:stato:legge:1990-08-07;241
+ACT_ELI: eli/id/1990/08/18/090G0294/CONSOLIDATED/20260421
+ARTICLE_EID: art_1
+ARTICLE_NUM: 1
+CODICE_REDAZIONALE: 090G0294
+VERSION_DATE: 2026-04-21
+FETCH_VIGENZA: 20261116
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.akn.xml
+OFFICIAL_XML_SHA256: 1c4692163f814f1374e9dcc38aaf98b935b402806a5b82babf5f69ef07bc0a6a
+ARTICLE_SHA256: d5acc44120b846dee681f03b2793d1a2d675235261d97995835b1f3f9a9623c5
+TEXT_CHARS: 1160
+LICENCE: CC BY 4.0 (Normattiva OpenData)
+ATTRIBUTION: Fonte: Normattiva, Istituto Poligrafico e Zecca dello Stato
+--- OFFICIAL TEXT ---
+Art. 1. (Principi generali dell'attivita' amministrativa) 1. L'attivita' amministrativa persegue i fini determinati dalla legge ed e' retta da criteri di economicita', di efficacia, di imparzialita', di pubblicita' e di trasparenza secondo le modalita' previste dalla presente legge e dalle altre disposizioni che disciplinano singoli procedimenti , nonche' dai principi dell'ordinamento comunitario. 1-bis. La pubblica amministrazione, nell'adozione di atti di natura non autoritativa, agisce secondo le norme di diritto privato salvo che la legge disponga diversamente. 1-ter. I soggetti privati pr…

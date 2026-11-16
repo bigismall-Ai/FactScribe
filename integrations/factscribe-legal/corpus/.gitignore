@@ -1,0 +1,4 @@
+# 抓取器的大文件不进仓：raw 是官方包下载/解压区（可凭 manifest 重取），
+# cacert-mozilla.pem 是第三方信任束（会过时；重取见 tools/fetch_corpus.py 文档）。
+raw/
+cacert-mozilla.pem

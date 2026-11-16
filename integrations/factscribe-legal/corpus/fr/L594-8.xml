@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ARTICLE>
+<META>
+<META_COMMUN>
+<ID>LEGIARTI000025110353</ID>
+<ANCIEN_ID/>
+<ORIGINE>LEGI</ORIGINE>
+<URL>article/LEGI/ARTI/00/00/25/11/03/LEGIARTI000025110353.xml</URL>
+<NATURE>Article</NATURE>
+</META_COMMUN>
+<META_SPEC>
+<META_ARTICLE>
+
+<NUM>L594-8</NUM>
+
+<ETAT>VIGUEUR</ETAT>
+
+<DATE_DEBUT>2012-01-07</DATE_DEBUT>
+<DATE_FIN>2999-01-01</DATE_FIN>
+
+
+
+<TYPE>AUTONOME</TYPE>
+</META_ARTICLE>
+</META_SPEC>
+</META>
+<CONTEXTE>
+<TEXTE autorite="" cid="LEGITEXT000006074220" date_publi="2999-01-01" date_signature="2999-01-01" ministere="" nature="CODE" nor="" num="" num_parution_jo="">
+<TITRE_TXT c_titre_court="Code de l'environnement" debut="2000-09-21" fin="2999-01-01" id_txt="LEGITEXT000006074220">Code de l'environnement</TITRE_TXT>
+<TM>
+<TITRE_TM debut="2000-09-21" fin="2999-01-01" id="LEGISCTA000006108630">Partie législative</TITRE_TM>
+<TM>
+<TITRE_TM debut="2000-09-21" fin="2999-01-01" id="LEGISCTA000006129026">Livre V : Prévention des pollutions, des risques et des nuisances</TITRE_TM>
+<TM>
+<TITRE_TM debut="2012-01-07" fin="2999-01-01" id="LEGISCTA000025108604">Titre IX : La sécurité nucléaire et les installations nucléaires de base</TITRE_TM>
+<TM>
+<TITRE_TM debut="2012-01-07" fin="2999-01-01" id="LEGISCTA000025110335">Chapitre IV : Dispositions à caractère financier relatives aux installations nucléaires de base &#13;
+&#13;
+&#13;
+&#13;
+&#13;
+&#13;
+</TITRE_TM>
+<TM>
+<TITRE_TM debut="2012-01-07" fin="2999-01-01" id="LEGISCTA000025110337">Section 1 : Obligation de constitution d'actifs &#13;
+&#13;
+&#13;
+&#13;
+&#13;
+</TITRE_TM>
+</TM>
+</TM>
+</TM>
+</TM>
+</TM>
+</TEXTE>
+</CONTEXTE>
+
+<VERSIONS>
+<VERSION etat="VIGUEUR">
+<LIEN_ART debut="2012-01-07" etat="VIGUEUR" fin="2999-01-01" id="LEGIARTI000025110353" num="L594-8" origine="LEGI"/>
+</VERSION>
+</VERSIONS>
+<NOTA>
+<CONTENU/>
+</NOTA>
+<BLOC_TEXTUEL>
+<CONTENU>Les modalités d'application des articles L. 594-1 à L. 594-6, notamment les modalités d'évaluation, dans le respect des normes comptables applicables, des charges mentionnées à l'article L. 594-1 et de calcul des provisions prévues à l'article L. 594-2 ainsi que les informations que les exploitants sont tenus de rendre publiques et les règles de publicité correspondantes sont déterminées par voie réglementaire.</CONTENU>
+</BLOC_TEXTUEL>
+<LIENS>
+<LIEN cidtexte="JORFTEXT000025104850" datesignatexte="2012-01-05" id="LEGIARTI000025107640" naturetexte="ORDONNANCE" nortexte="DEVX1133595R" num="3" numtexte="2012-6" sens="cible" typelien="CREE">Ordonnance n°2012-6
+ du 5 janvier 2012 - art. 3</LIEN>
+
+<LIEN cidtexte="LEGITEXT000006074220" datesignatexte="2999-01-01" id="LEGIARTI000025110339" naturetexte="CODE" nortexte="" num="L594-1" numtexte="" sens="source" typelien="CITATION">Code de l'environnement - art. L594-1</LIEN>
+<LIEN cidtexte="LEGITEXT000006074220" datesignatexte="2999-01-01" id="LEGIARTI000025110357" naturetexte="CODE" nortexte="" num="L594-10" numtexte="" sens="cible" typelien="CITATION">Code de l'environnement - art. L594-10 (V)</LIEN>
+<LIEN cidtexte="LEGITEXT000006074220" datesignatexte="2999-01-01" id="LEGIARTI000025110341" naturetexte="CODE" nortexte="" num="L594-2" numtexte="" sens="source" typelien="CITATION">Code de l'environnement - art. L594-2</LIEN>
+</LIENS>
+</ARTICLE>

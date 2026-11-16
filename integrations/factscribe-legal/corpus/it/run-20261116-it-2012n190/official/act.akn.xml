@@ -1,0 +1,1981 @@
+<?xml version="1.0" encoding="UTF-8"?><akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0" xmlns:eli="http://data.europa.eu/eli/ontology#" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:gu="http://www.gazzettaufficiale.it/eli/" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:na="http://www.normattiva.it/eli/" xmlns:nakn="http://normattiva.it/akn/vocabulary" xmlns:nrdfa="http://www.normattiva.it/rdfa/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:rdfa="http://www.w3.org/1999/xhtml#">
+    <act name="monovigente">
+        <meta>
+            <identification source="">
+                <FRBRWork>
+                    <FRBRthis value="/akn/it/act/legge/stato/2012-11-06/190/!main"/>
+                    <FRBRuri value="/akn/it/act/legge/stato/2012-11-06/190"/>
+                    <FRBRalias name="urn:nir" value="urn:nir:stato:legge:2012-11-06;190"/>
+                    <FRBRalias name="eli" value="eli/id/2012/11/13/012G0213/CONSOLIDATED/20260826"/>
+                    <FRBRdate date="2012-11-06" name=""/>
+                    <FRBRauthor as="#author" href=""/>
+                    <preservation>
+                        <nrdfa:eli about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826" aknrelname="eli/id/2012/11/13/012G0213/CONSOLIDATED/20260826">
+                            <nrdfa:span property="rdf:type" resource="eli:LegalResource"/>
+                            <nrdfa:span content="Disposizioni per la prevenzione e la repressione della corruzione e dell'illegalita' nella pubblica amministrazione. (12G0213)  " lang="it" property="eli:title" xml:lang="it"/>
+                            <nrdfa:span content="http://www.normattiva.it/eli/id/{yyyy}/{mm}/{dd}/{codiceRedazionale}/{tipoVersione}" property="eli:uri_schema"/>
+                            <nrdfa:span content="012G0213" property="eli:id_local"/>
+                            <nrdfa:span property="eli:type_document" resource="gu:tables/resource-type#LEGGE"/>
+                            <nrdfa:span content="2012-11-06" datatype="xsd:date" property="eli:date_document"/>
+                            <nrdfa:span property="eli:version" resource="gu:tables/versions#ORIGINAL"/>
+                        </nrdfa:eli>
+                    </preservation>
+                    <FRBRcountry value="it"/>
+                </FRBRWork>
+                <FRBRExpression>
+                    <FRBRthis value="/akn/it/act/legge/stato/2012-11-06/190/ita@2026-08-26/!main"/>
+                    <FRBRuri value="/akn/it/act/legge/stato/2012-11-06/190/ita@2026-08-26"/>
+                    <FRBRdate date="2026-08-26" name=""/>
+                    <FRBRauthor as="#author" href=""/>
+                    <preservation>
+                        <nrdfa:eli about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita">
+                            <nrdfa:span property="rdf:type" resource="eli:LegalExpression"/>
+                            <nrdfa:span property="eli:realizes" resource="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826"/>
+                            <nrdfa:span property="eli:is_embodied_by" resource="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita/akn"/>
+                            <nrdfa:span property="eli:language" resource="http://publications.europa.eu/resource/authority/language/ITA"/>
+                            <nrdfa:span property="eli:publisher_agent" resource="http://www.ipzs.it"/>
+                        </nrdfa:eli>
+                    </preservation>
+                    <FRBRlanguage language="ita"/>
+                </FRBRExpression>
+                <FRBRManifestation>
+                    <FRBRthis value="/akn/it/act/legge/stato/2012-11-06/190/ita@2026-08-26/!main.xml"/>
+                    <FRBRuri value="/akn/it/act/legge/stato/2012-11-06/190/ita@2026-08-26.xml"/>
+                    <FRBRdate date="2012-11-06" name=""/>
+                    <FRBRauthor as="#author" href=""/>
+                    <preservation>
+                        <nrdfa:eli about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita/akn">
+                            <nrdfa:span property="rdf:type" resource="eli:Format"/>
+                            <nrdfa:span property="eli:format" resource="http://www.iana.org/assignments/media-types/xml"/>
+                        </nrdfa:eli>
+                    </preservation>
+                </FRBRManifestation>
+            </identification>
+            <publication date="2012-11-13" name="" number="265" showAs=""/>
+            <lifecycle source="">
+                <eventRef date="2012-11-13" eId="eventRef_0" source="ro1"/>
+                <eventRef date="2012-10-19" eId="eventRef_1" source="rp1"/>
+                <eventRef date="2012-12-29" eId="eventRef_2" source="rp2"/>
+                <eventRef date="2013-04-26" eId="eventRef_3" source="rp3"/>
+                <eventRef date="2013-06-21" eId="eventRef_4" source="rp4"/>
+                <eventRef date="2014-03-31" eId="eventRef_5" source="rp5"/>
+                <eventRef date="2014-06-24" eId="eventRef_6" source="rp6"/>
+                <eventRef date="2015-05-30" eId="eventRef_7" source="rp7"/>
+                <eventRef date="2016-01-28" eId="eventRef_8" source="rp8"/>
+                <eventRef date="2016-04-19" eId="eventRef_9" source="rp9"/>
+                <eventRef date="2016-06-08" eId="eventRef_10" source="rp10"/>
+                <eventRef date="2017-05-05" eId="eventRef_11" source="rp11"/>
+                <eventRef date="2020-04-08" eId="eventRef_12" source="rp12"/>
+                <eventRef date="2020-06-06" eId="eventRef_13" source="rp13"/>
+                <eventRef date="2022-06-30" eId="eventRef_14" source="rp14"/>
+                <eventRef date="2022-12-29" eId="eventRef_15" source="rp15"/>
+                <eventRef date="2023-02-27" eId="eventRef_16" source="rp16"/>
+                <eventRef date="2023-03-31" eId="eventRef_17" source="rp17"/>
+                <eventRef date="2026-02-19" eId="eventRef_18" source="rp18"/>
+                <eventRef date="2026-08-11" eId="eventRef_19" source="rp19"/>
+            </lifecycle>
+            <workflow source="">
+                <step by="#senato" date="2012-11-06" refersTo="#S.2156"/>
+                <step by="#camera" date="2012-11-06" refersTo="#C.4434"/>
+                <step by="#senato" date="2012-11-06" refersTo="#S.2156-B"/>
+                <step by="#camera" date="2012-11-06" refersTo="#C.4434-B"/>
+            </workflow>
+            <analysis source="">
+                <activeModifications>
+                    <textualMod eId="amod_0" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 32 quater"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera a)) la modifica dell'art. 32-quater.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_1" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 32 quinquies"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera b)) la modifica dell'art. 32-quinquies.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_2" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 314"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera c)) la modifica del'art. 314, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_3" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 317"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera d)) la modifica dell'art. 317.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_4" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 317 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera e)) la modifica dell'art. 317-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_5" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 318"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera f)) la modifica dell'art. 318.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_6" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 319"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera g)) la modifica dell'art. 319.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_7" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 319 ter"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera h)) la modifica dell'art. 319-ter, commi 1 e 2.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_8" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 319 quater"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera i)) l'introduzione dell'art. 319-quater.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_9" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 320"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera l)) la modifica dell'art. 320, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_10" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 322"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera m)) la modifica dell'art. 322, commi 1 e 3.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_11" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 322 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera n)) la modifica della rubrica e del comma 2 dell'art. 322-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_12" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 322 ter"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera o)) la modifica dell'art. 322-ter, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_13" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 323"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera p)) la modifica dell'art. 323, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_14" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 323 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera q)) la modifica dell'art. 323-bis, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_15" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1930-10-19;1398#Codice Penale-art. 346 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 75, lettera r)) l'introduzione dell'art. 346-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_16" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:regio.decreto:1942-03-16;262#CODICE CIVILE-art. 2635"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 76) la modifica dell'art. 2635.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_17" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.del.presidente.della.repubblica:1988-09-22;447#308"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 78) l'introduzione del comma 2-bis all'art. 308.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_18" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:1989-07-28;271#Norme-art. 133"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 79) la modifica dell'art. 133, comma 1-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_19" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:1990-08-07;241#1"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 37) la modifica dell'art. 1, comma 1-ter.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_20" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:1990-08-07;241#2"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 38) la modifica dell'art. 2, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_21" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:1990-08-07;241#6 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 41) l'introduzione dell'art. 6-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_22" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:1990-08-07;241#11"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 47) la modifica dell'art. 11, comma 2.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_23" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legge:1992-06-08;306#12 sexies"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 80, lettera a)) la modifica dell'art. 12-sexies, comma 1; (con l'art. 1, comma 80, lettera b)) la modifica dell'art. 12-sexies, comma 2-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_24" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:1994-01-14;20#1"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 62) l'introduzione dei commi 1-sexies e 1-septies all'art. 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_25" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2000-08-18;267#58"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 81, lettera a)) la modifica dell'art. 58, comma 1, lettera b).</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_26" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2000-08-18;267#59"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 81, lettera b)) la modifica dell'art. 59, comma 1, lettera a); (con l'art. 1, comma 81, lettera c)) la modifica dell'art. 59, comma 1, lettera c).</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_27" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:legge:2001-03-27;97#3"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 83) la modifica dell'art. 3, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_28" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-03-30;165#35 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 46) l'introduzione dell'art. 35-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_29" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-03-30;165#53"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 42, lettera a)) l'introduzione del comma 3-bis all'art. 53; (con l'art. 1, comma 42, lettera b)) la modifica dell'art. 53, comma 5; (con l'art. 1, comma 42, lettera c)) la modifica dell'art. 53, commi 7 e 9; (con l'art. 1, comma 42, lettera d)) l'introduzione del comma 7-bis all'art. 53; (con l'art. 1, comma 42, lettera e)) la modifica dell'art. 53, comma 11; (con l'art. 1, comma 42, lettera f)) la modifica dell'art. 53, comma 12; (con l'art. 1, comma 42, lettera g)) la modifica dell'art. 53, comma 13; (con l'art. 1, comma 42, lettere h) e i)) la modifica dell'art. 53, comma 14; (con l'art. 1, comma 42, lettera l)) l'introduzione del comma 16-ter all'art. 53; (con l'art. 1, comma 43) la modifica dell'art. 53, comma 16-ter.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_30" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-03-30;165#54"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 44) la modifica dell'art. 54; (con l'art. 1, comma 45) la modifica dell'art. 54, commi 1 e 4.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_31" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-03-30;165#54 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 51) l'introduzione dell'art. 54-bis.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_32" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-06-08;231#25"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 77, lettera a)) la modifica dell'art. 25, comma 3 e rubrica.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_33" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2001-06-08;231#25 ter"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 77, lettera b)) l'introduzione della lettera s-bis) all'art. 25-ter, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_34" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2006-04-12;163#135"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 58) la modifica dell'art. 135, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_35" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legislativo:2006-04-12;163#241"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, commi 19, 20 e 34) la modifica dell'art. 241, comma 1.</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="amod_36" type="insertion">
+                        <source href="urn:nir:stato:legge:2012-11-06;190#1"/>
+                        <destination href="urn:nir:stato:decreto.legge:2008-09-16;143#1 bis"/>
+                        <new>
+                            <nakn:text>ha disposto (con l'art. 1, comma 71) la modifica dell'art. 1-bis, comma 4.</nakn:text>
+                        </new>
+                    </textualMod>
+                </activeModifications>
+                <passiveModifications>
+                    <textualMod eId="pmod_0" type="insertion">
+                        <source href="#"/>
+                        <destination href="#ins_1"/>
+                        <new>
+                            <nakn:text>((componenti delle corti))</nakn:text>
+                        </new>
+                    </textualMod>
+                    <textualMod eId="pmod_1" type="insertion">
+                        <source href="#"/>
+                        <destination href="#ins_2"/>
+                        <new>
+                            <nakn:text>((a magistrati ordinari, amministrativi, contabili, militari e tributari))</nakn:text>
+                        </new>
+                    </textualMod>
+                </passiveModifications>
+            </analysis>
+            <references source="">
+                <original eId="ro1" href="/akn/it/act/LEGGE/stato/2012-11-06/190/!main" showAs=""/>
+                <passiveRef eId="rp1" href="/akn/it/act/DECRETO-LEGGE/stato/2012-10-18/179/!main" showAs=""/>
+                <passiveRef eId="rp2" href="/akn/it/act/LEGGE/stato/2012-12-24/228/!main" showAs=""/>
+                <passiveRef eId="rp3" href="/akn/it/act/CIRCOLARE/PRESIDENZA_DEL_CONSIGLIO_DEI_MINISTRI_DIPARTIMENTO_DELLA_FUNZIONE_PUBBLICA/2013-01-25/1/!main" showAs=""/>
+                <passiveRef eId="rp4" href="/akn/it/act/DECRETO-LEGGE/stato/2013-06-21/69/!main" showAs=""/>
+                <passiveRef eId="rp5" href="/akn/it/act/CIRCOLARE/PRESIDENZA_DEL_CONSIGLIO_DEI_MINISTRI_DIPARTIMENTO_DELLA_FUNZIONE_PUBBLICA/2014-02-14/1/!main" showAs=""/>
+                <passiveRef eId="rp6" href="/akn/it/act/DECRETO-LEGGE/stato/2014-06-24/90/!main" showAs=""/>
+                <passiveRef eId="rp7" href="/akn/it/act/LEGGE/stato/2015-05-27/69/!main" showAs=""/>
+                <passiveRef eId="rp8" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2016-01-22/10/!main" showAs=""/>
+                <passiveRef eId="rp9" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2016-04-18/50/!main" showAs=""/>
+                <passiveRef eId="rp10" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2016-05-25/97/!main" showAs=""/>
+                <passiveRef eId="rp11" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2017-04-19/56/!main" showAs=""/>
+                <passiveRef eId="rp12" href="/akn/it/act/DECRETO-LEGGE/stato/2020-04-08/23/!main" showAs=""/>
+                <passiveRef eId="rp13" href="/akn/it/act/LEGGE/stato/2020-06-05/40/!main" showAs=""/>
+                <passiveRef eId="rp14" href="/akn/it/act/DECRETO_DEL_PRESIDENTE_DELLA_REPUBBLICA/stato/2022-06-24/81/!main" showAs=""/>
+                <passiveRef eId="rp15" href="/akn/it/act/DECRETO-LEGGE/stato/2022-12-29/198/!main" showAs=""/>
+                <passiveRef eId="rp16" href="/akn/it/act/LEGGE/stato/2023-02-24/14/!main" showAs=""/>
+                <passiveRef eId="rp17" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2023-03-31/36/!main" showAs=""/>
+                <passiveRef eId="rp18" href="/akn/it/act/DECRETO-LEGGE/stato/2026-02-19/19/!main" showAs=""/>
+                <passiveRef eId="rp19" href="/akn/it/act/DECRETO_LEGISLATIVO/stato/2026-08-07/149/!main" showAs=""/>
+                <passiveRef eId="S.2156" href="/akn/it/senato-it:parl:ddl:senato;16.legislatura;2156" showAs=""/>
+                <passiveRef eId="C.4434" href="/akn/it/camera-it:parlamento:scheda.progetto.legge:camera;16.legislatura;4434" showAs=""/>
+                <passiveRef eId="S.2156-B" href="/akn/it/senato-it:parl:ddl:senato;16.legislatura;2156-B" showAs=""/>
+                <passiveRef eId="C.4434-B" href="/akn/it/camera-it:parlamento:scheda.progetto.legge:camera;16.legislatura;4434-B" showAs=""/>
+            </references>
+            <proprietary source="">
+                <rdf:RDF>
+                    <rdf:Description rdf:about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826">
+                        <rdf:type rdf:resource="eli:LegalResource"/>
+                        <eli:title xml:lang="it">Disposizioni per la prevenzione e la repressione della corruzione e dell'illegalita' nella pubblica amministrazione. (12G0213)  </eli:title>
+                        <eli:uri_schema>http://www.normattiva.it/eli/id/{yyyy}/{mm}/{dd}/{codiceRedazionale}/{tipoVersione}</eli:uri_schema>
+                        <eli:id_local>012G0213</eli:id_local>
+                        <eli:type_document rdf:resource="gu:tables/resource-type#LEGGE"/>
+                        <eli:date_document rdf:datatype="xsd:date">2012-11-06</eli:date_document>
+                        <eli:version rdf:resource="gu:tables/versions#ORIGINAL"/>
+                    </rdf:Description>
+                    <rdf:Description rdf:about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita">
+                        <rdf:type rdf:resource="eli:LegalExpression"/>
+                        <eli:realizes rdf:resource="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826"/>
+                        <eli:is_embodied_by rdf:resource="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita/akn"/>
+                        <eli:language rdf:resource="http://publications.europa.eu/resource/authority/language/ITA"/>
+                        <eli:publisher_agent rdf:resource="http://www.ipzs.it"/>
+                    </rdf:Description>
+                    <rdf:Description rdf:about="na:id/2012/11/13/012G0213/CONSOLIDATED/20260826/ita/akn">
+                        <rdf:type rdf:resource="eli:format"/>
+                        <eli:format rdf:resource="http://www.iana.org/assignments/media-types/xml"/>
+                    </rdf:Description>
+                </rdf:RDF>
+            </proprietary>
+        </meta>
+        <preface>
+            <p>
+                <docType>LEGGE</docType>
+                <docDate date="2012-11-06">06 novembre 2012</docDate>
+                <docNumber>190</docNumber>
+                <docTitle>Disposizioni per la prevenzione e la repressione della corruzione e dell'illegalita' nella pubblica amministrazione. (12G0213) 
+</docTitle>
+            </p>
+            <p>
+                <authorialNote eId="atn1" placement="bottom">
+                    <p>Entrata in vigore del provvedimento: 28/11/2012</p>
+                </authorialNote>
+            </p>
+        </preface>
+        <preamble>
+            <formula name="primaDiFormulaInizialePreambolo">
+                <p>La Camera dei deputati ed il Senato della Repubblica hanno approvato;</p>
+            </formula>
+            <formula name="formulaInizialePreambolo">
+                <p>IL PRESIDENTE DELLA REPUBBLICA</p>
+            </formula>
+            <formula name="formulaFinalePreambolo">
+                <p>Promulga la seguente legge:</p>
+            </formula>
+        </preamble>
+        <body>
+            <article eId="art_1">
+                <num>Art. 1.</num>
+                <heading/>
+                <paragraph>
+                    <content>
+                        <p>
+ 
+Disposizioni per la prevenzione e la repressione della corruzione e dell'illegalita' nella pubblica amministrazione 
+ 
+ </p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_1">
+                    <num>1.</num>
+                    <content>
+                        <p>In attuazione dell'articolo 6 della Convenzione dell'Organizzazione delle Nazioni Unite contro la corruzione, adottata dalla Assemblea generale dell'ONU il 31 ottobre 2003 e ratificata ai sensi della <ref eId="content__ref_1" href="/akn/it/act/legge/stato/2009-08-03/116/!main#art_20">legge 3 agosto 2009, n. 116, e degli articoli 20</ref> e <ref eId="content__ref_2" href="/akn/it/act/legge/stato/2009-08-03/116/!main#art_21">21</ref> della Convenzione penale sulla corruzione, fatta a Strasburgo il 27 gennaio 1999 e ratificata ai sensi della <ref eId="content__ref_3" href="/akn/it/act/legge/stato/2012-06-28/110/!main">legge 28 giugno 2012, n.110</ref>, la presente legge individua, in ambito nazionale, l'Autorita' nazionale anticorruzione e gli altri organi incaricati di svolgere, con modalita' tali da assicurare azione coordinata, attivita' di controllo, di prevenzione e di contrasto della corruzione e dell'illegalita' nella pubblica amministrazione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_2">
+                    <num>2.</num>
+                    <list>
+                        <intro eId="art_1__para_2__intro_1">
+                            <p>La Commissione per la valutazione, la trasparenza e l'integrita' delle amministrazioni pubbliche, di cui all'<ref eId="content__ref_4" href="/akn/it/act/decretoLegislativo/stato/2009-10-27/150/!main#art_13">articolo 13 del decreto legislativo 27 ottobre 2009, n.150</ref>, e successive modificazioni, di seguito denominata «Commissione», opera quale Autorita' nazionale anticorruzione, ai sensi del comma 1 del presente articolo. In particolare, la Commissione: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_2.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>collabora con i paritetici organismi stranieri, con le organizzazioni regionali ed internazionali competenti; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>adotta il Piano nazionale anticorruzione ai sensi del comma 2-bis; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>analizza le cause e i fattori della corruzione e individua gli interventi che ne possono favorire la prevenzione e il contrasto; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>esprime parere obbligatorio sugli atti di direttiva e di indirizzo, nonche' sulle circolari del Ministro per la pubblica amministrazione e la semplificazione in materia di conformita' di atti e comportamenti dei funzionari pubblici alla legge, ai codici di comportamento e ai contratti, collettivi e individuali, regolanti il rapporto di lavoro pubblico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>esprime pareri facoltativi in materia di autorizzazioni, di cui all'<ref eId="content__ref_5" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_53">articolo 53 del decreto legislativo 30 marzo 2001, n.165</ref>, e successive modificazioni, allo svolgimento di incarichi esterni da parte dei dirigenti amministrativi dello Stato e degli enti pubblici nazionali, con particolare riferimento all'applicazione del comma 16-ter, introdotto dal comma 42, lettera l), del presente articolo; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>esercita la vigilanza e il controllo sull'effettiva applicazione e sull'efficacia delle misure adottate dalle pubbliche amministrazioni ai sensi dei commi 4 e 5 del presente articolo e sul rispetto delle regole sulla trasparenza dell'attivita' amministrativa previste dai commi da 15 a 36 del presente articolo e dalle altre disposizioni vigenti; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_f-bis">
+                            <num>f-bis)</num>
+                            <content>
+                                <p>LETTERA ABROGATA DAL <ref eId="content__ref_6" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>, COME MODIFICATO DAL <ref eId="content__ref_7" href="/akn/it/act/decretoLegislativo/stato/2017-04-19/56/!main">D.LGS. 19 APRILE 2017, N. 56</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_2.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>riferisce al Parlamento, presentando una relazione entro il 31 dicembre di ciascun anno, sull'attivita' di contrasto della corruzione e dell'illegalita' nella pubblica amministrazione e sull'efficacia delle disposizioni vigenti in materia. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_2-bis">
+                    <num>2-bis.</num>
+                    <content>
+                        <p>Il Piano nazionale anticorruzione e' adottato sentiti il Comitato interministeriale di cui al comma 4 e la Conferenza unificata di cui all'<ref eId="content__ref_8" href="/akn/it/act/decretoLegislativo/stato/1997-08-28/281/!main#art_8-com1">articolo 8, comma 1, del decreto legislativo 28 agosto 1997, n. 281</ref>. Il Piano ha durata triennale ed e' aggiornato annualmente. Esso costituisce atto di indirizzo per le pubbliche amministrazioni di cui all'<ref eId="content__ref_9" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, ai fini dell'adozione dei propri piani triennali di prevenzione della corruzione, e per gli altri soggetti di cui all'<ref eId="content__ref_10" href="/akn/it/act/decretoLegislativo/stato/2013-03-14/33/!main#art_2bis-com2">articolo 2-bis, comma 2, del decreto legislativo 14 marzo 2013, n. 33</ref>, ai fini dell'adozione di misure di prevenzione della corruzione integrative di quelle adottate ai sensi del <ref eId="content__ref_11" href="/akn/it/act/decretoLegislativo/stato/2001-06-08/231/!main">decreto legislativo 8 giugno 2001, n. 231</ref>, anche per assicurare l'attuazione dei compiti di cui al comma 4, lettera a). Esso, inoltre, anche in relazione alla dimensione e ai diversi settori di attivita' degli enti, individua i principali rischi di corruzione e i relativi rimedi e contiene l'indicazione di obiettivi, tempi e modalita' di adozione e attuazione delle misure di contrasto alla corruzione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_3">
+                    <num>3.</num>
+                    <content>
+                        <p>Per l'esercizio delle funzioni di cui al comma 2, lettera f), l'Autorita' nazionale anticorruzione esercita poteri ispettivi mediante richiesta di notizie, informazioni, atti e documenti alle pubbliche amministrazioni, e ordina l'adozione di atti o provvedimenti richiesti dai piani di cui ai commi 4 e 5 e dalle regole sulla trasparenza dell'attivita' amministrativa previste dalle disposizioni vigenti, ovvero la rimozione di comportamenti o atti contrastanti con i piani e le regole sulla trasparenza citati. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_4">
+                    <num>4.</num>
+                    <list>
+                        <intro eId="art_1__para_4__intro_1">
+                            <p>Il Dipartimento della funzione pubblica, anche secondo linee di indirizzo adottate dal Comitato interministeriale istituito e disciplinato con decreto del Presidente del Consiglio dei Ministri: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_4.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>coordina l'attuazione delle strategie di prevenzione e contrasto della corruzione e dell'illegalita' nella pubblica amministrazione elaborate a livello nazionale e internazionale; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_4.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>promuove e definisce norme e metodologie comuni per la prevenzione della corruzione, coerenti con gli indirizzi, i programmi e i progetti internazionali; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_4.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>LETTERA SOPPRESSA DAL <ref eId="content__ref_12" href="/akn/it/act/decretoLegislativo/stato/2016-05-25/97/!main">D.LGS. 25 MAGGIO 2016, N. 97</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_4.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>definisce modelli standard delle informazioni e dei dati occorrenti per il conseguimento degli obiettivi previsti dalla presente legge, secondo modalita' che consentano la loro gestione ed analisi informatizzata; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_4.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>definisce criteri per assicurare la rotazione dei dirigenti nei settori particolarmente esposti alla corruzione e misure per evitare sovrapposizioni di funzioni e cumuli di incarichi nominativi in capo ai dirigenti pubblici, anche esterni. (4) 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_5">
+                    <num>5.</num>
+                    <list>
+                        <intro eId="art_1__para_5__intro_1">
+                            <p>Le pubbliche amministrazioni centrali definiscono e trasmettono al Dipartimento della funzione pubblica: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_5.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>un piano di prevenzione della corruzione che fornisce una valutazione del diverso livello di esposizione degli uffici al rischio di corruzione e indica gli interventi organizzativi volti a prevenire il medesimo rischio; (12) 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_5.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>procedure appropriate per selezionare e formare, in collaborazione con la Scuola superiore della pubblica amministrazione, i dipendenti chiamati ad operare in settori particolarmente esposti alla corruzione, prevedendo, negli stessi settori, la rotazione di dirigenti e funzionari. (4) 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_6">
+                    <num>6.</num>
+                    <content>
+                        <p>I comuni con popolazione inferiore a 15.000 abitanti possono aggregarsi per definire in comune, tramite accordi ai sensi dell'<ref eId="content__ref_13" href="/akn/it/act/legge/stato/1990-08-07/241/!main#art_15">articolo 15 della legge 7 agosto 1990, n. 241</ref>, il piano triennale per la prevenzione della corruzione, secondo le indicazioni contenute nel Piano nazionale anticorruzione di cui al comma 2-bis.
+Ai fini della predisposizione del piano triennale per la prevenzione della corruzione, il prefetto, su richiesta, fornisce il necessario supporto tecnico e informativo agli enti locali, anche al fine di assicurare che i piani siano formulati e adottati nel rispetto delle linee guida contenute nel Piano nazionale approvato dalla Commissione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_7">
+                    <num>7.</num>
+                    <content>
+                        <p>L'organo di indirizzo individua, di norma tra i dirigenti di ruolo in servizio, il Responsabile della prevenzione della corruzione e della trasparenza, disponendo le eventuali modifiche organizzative necessarie per assicurare funzioni e poteri idonei per lo svolgimento dell'incarico con piena autonomia ed effettivita'. Negli enti locali, il Responsabile della prevenzione della corruzione e della trasparenza e' individuato, di norma, nel segretario o nel dirigente apicale, salva diversa e motivata determinazione. Nelle unioni di comuni, puo' essere nominato un unico responsabile della prevenzione della corruzione e della trasparenza. Il Responsabile della prevenzione della corruzione e della trasparenza segnala all'organo di indirizzo e all'organismo indipendente di valutazione le disfunzioni inerenti all'attuazione delle misure in materia di prevenzione della corruzione e di trasparenza e indica agli uffici competenti all'esercizio dell'azione disciplinare i nominativi dei dipendenti che non hanno attuato correttamente le misure in materia di prevenzione della corruzione e di trasparenza. Eventuali misure discriminatorie, dirette o indirette, nei confronti del Responsabile della prevenzione della corruzione e della trasparenza per motivi collegati, direttamente o indirettamente, allo svolgimento delle sue funzioni devono essere segnalate all'Autorita' nazionale anticorruzione, che puo' chiedere informazioni all'organo di indirizzo e intervenire nelle forme di cui al <ref eId="content__ref_14" href="/akn/it/act/decretoLegislativo/stato/2013-04-08/39/!main#art_15-com3">comma 3, articolo 15, decreto legislativo 8 aprile 2013, n. 39</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_8">
+                    <num>8.</num>
+                    <content>
+                        <p>L'organo di indirizzo definisce gli obiettivi strategici in materia di prevenzione della corruzione e trasparenza, che costituiscono contenuto necessario dei documenti di programmazione strategico-gestionale e del Piano triennale per la prevenzione della corruzione. L'organo di indirizzo adotta il Piano triennale per la prevenzione della corruzione su proposta del Responsabile della prevenzione della corruzione e della trasparenza entro il 31 gennaio di ogni anno e ne cura la trasmissione all'Autorita' nazionale anticorruzione. Negli enti locali il piano e' approvato dalla giunta.
+L'attivita' di elaborazione del piano non puo' essere affidata a soggetti estranei all'amministrazione. Il responsabile della prevenzione della corruzione e della trasparenza, entro lo stesso termine, definisce procedure appropriate per selezionare e formare, ai sensi del comma 10, i dipendenti destinati ad operare in settori particolarmente esposti alla corruzione. Le attivita' a rischio di corruzione devono essere svolte, ove possibile, dal personale di cui al comma 11. (13) 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_8-bis">
+                    <num>8-bis.</num>
+                    <content>
+                        <p>L'Organismo indipendente di valutazione verifica, anche ai fini della validazione della Relazione sulla performance, che i piani triennali per la prevenzione della corruzione siano coerenti con gli obiettivi stabiliti nei documenti di programmazione strategico-gestionale e che nella misurazione e valutazione delle performance si tenga conto degli obiettivi connessi all'anticorruzione e alla trasparenza. Esso verifica i contenuti della Relazione di cui al comma 14 in rapporto agli obiettivi inerenti alla prevenzione della corruzione e alla trasparenza. A tal fine, l'Organismo medesimo puo' chiedere al Responsabile della prevenzione della corruzione e della trasparenza le informazioni e i documenti necessari per lo svolgimento del controllo e puo' effettuare audizioni di dipendenti. L'Organismo medesimo riferisce all'Autorita' nazionale anticorruzione sullo stato di attuazione delle misure di prevenzione della corruzione e di trasparenza. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_9">
+                    <num>9.</num>
+                    <list>
+                        <intro eId="art_1__para_9__intro_1">
+                            <p>Il piano di cui al comma 5 risponde alle seguenti esigenze: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_9.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>individuare le attivita', tra le quali quelle di cui al comma 16, anche ulteriori rispetto a quelle indicate nel Piano nazionale anticorruzione, nell'ambito delle quali e' piu' elevato il rischio di corruzione, e le relative misure di contrasto, anche raccogliendo le proposte dei dirigenti, elaborate nell'esercizio delle competenze previste dall'<ref eId="content__ref_15" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_16-com1-letabis">articolo 16, comma 1, lettera a-bis), del decreto legislativo 30 marzo 2001, n.165</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_9.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>prevedere, per le attivita' individuate ai sensi della lettera a), meccanismi di formazione, attuazione e controllo delle decisioni idonei a prevenire il rischio di corruzione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_9.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>prevedere, con particolare riguardo alle attivita' individuate ai sensi della lettera a), obblighi di informazione nei confronti del responsabile, individuato ai sensi del comma 7, chiamato a vigilare sul funzionamento e sull'osservanza del piano; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_9.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>definire le modalita' di monitoraggio del rispetto dei termini, previsti dalla legge o dai regolamenti, per la conclusione dei procedimenti; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_9.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>definire le modalita' di monitoraggio dei rapporti tra l'amministrazione e i soggetti che con la stessa stipulano contratti o che sono interessati a procedimenti di autorizzazione, concessione o erogazione di vantaggi economici di qualunque genere, anche verificando eventuali relazioni di parentela o affinita' sussistenti tra i titolari, gli amministratori, i soci e i dipendenti degli stessi soggetti e i dirigenti e i dipendenti dell'amministrazione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_9.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>individuare specifici obblighi di trasparenza ulteriori rispetto a quelli previsti da disposizioni di legge. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_10">
+                    <num>10.</num>
+                    <list>
+                        <intro eId="art_1__para_10__intro_1">
+                            <p>Il responsabile individuato ai sensi del comma 7 provvede anche: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_10.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>alla verifica dell'efficace attuazione del piano e della sua idoneita', nonche' a proporre la modifica dello stesso quando sono accertate significative violazioni delle prescrizioni ovvero quando intervengono mutamenti nell'organizzazione o nell'attivita' dell'amministrazione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_10.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>alla verifica, d'intesa con il dirigente competente, dell'effettiva rotazione degli incarichi negli uffici preposti allo svolgimento delle attivita' nel cui ambito e' piu' elevato il rischio che siano commessi reati di corruzione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_10.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>ad individuare il personale da inserire nei programmi di formazione di cui al comma 11. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_11">
+                    <num>11.</num>
+                    <content>
+                        <p>La Scuola superiore della pubblica amministrazione, senza nuovi o maggiori oneri per la finanza pubblica e utilizzando le risorse umane, strumentali e finanziarie disponibili a legislazione vigente, predispone percorsi, anche specifici e settoriali, di formazione dei dipendenti delle pubbliche amministrazioni statali sui temi dell'etica e della legalita'. Con cadenza periodica e d'intesa con le amministrazioni, provvede alla formazione dei dipendenti pubblici chiamati ad operare nei settori in cui e' piu' elevato, sulla base dei piani adottati dalle singole amministrazioni, il rischio che siano commessi reati di corruzione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_12">
+                    <num>12.</num>
+                    <list>
+                        <intro eId="art_1__para_12__intro_1">
+                            <p>In caso di commissione, all'interno dell'amministrazione, di un reato di corruzione accertato con sentenza passata in giudicato, il responsabile individuato ai sensi del comma 7 del presente articolo risponde ai sensi dell'<ref eId="content__ref_16" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_21">articolo 21 del decreto legislativo 30 marzo 2001, n.165</ref>, e successive modificazioni, nonche' sul piano disciplinare, oltre che per il danno erariale e all'immagine della pubblica amministrazione, salvo che provi tutte le seguenti circostanze: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_12.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>di avere predisposto, prima della commissione del fatto, il piano di cui al comma 5 e di aver osservato le prescrizioni di cui ai commi 9 e 10 del presente articolo; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_12.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>di aver vigilato sul funzionamento e sull'osservanza del piano. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_13">
+                    <num>13.</num>
+                    <content>
+                        <p>La sanzione disciplinare a carico del responsabile individuato ai sensi del comma 7 non puo' essere inferiore alla sospensione dal servizio con privazione della retribuzione da un minimo di un mese ad un massimo di sei mesi. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_14">
+                    <num>14.</num>
+                    <content>
+                        <p>In caso di ripetute violazioni delle misure di prevenzione previste dal Piano, il responsabile individuato ai sensi del comma 7 del presente articolo risponde ai sensi dell'<ref eId="content__ref_17" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_21">articolo 21 del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni, nonche', per omesso controllo, sul piano disciplinare, salvo che provi di avere comunicato agli uffici le misure da adottare e le relative modalita' e di avere vigilato sull'osservanza del Piano. La violazione, da parte dei dipendenti dell'amministrazione, delle misure di prevenzione previste dal Piano costituisce illecito disciplinare. Entro il 15 dicembre di ogni anno, il dirigente individuato ai sensi del comma 7 del presente articolo trasmette all'organismo indipendente di valutazione e all'organo di indirizzo dell'amministrazione una relazione recante i risultati dell'attivita' svolta e la pubblica nel sito web dell'amministrazione. Nei casi in cui l'organo di indirizzo lo richieda o qualora il dirigente responsabile lo ritenga opportuno, quest'ultimo riferisce sull'attivita'. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_15">
+                    <num>15.</num>
+                    <content>
+                        <p>Ai fini della presente legge, la trasparenza dell'attivita' amministrativa, che costituisce livello essenziale delle prestazioni concernenti i diritti sociali e civili ai sensi dell'<ref eId="content__ref_18" href="/akn/it/act/costituzione/stato/1947-12-27/const/!main#art_117-com2-letm">articolo 117, secondo comma, lettera m), della Costituzione</ref>, secondo quanto previsto all'<ref eId="content__ref_19" href="/akn/it/act/decretoLegislativo/stato/2009-10-27/150/!main#art_11">articolo 11 del decreto legislativo 27 ottobre 2009, n.150</ref>, e' assicurata mediante la pubblicazione, nei siti web istituzionali delle pubbliche amministrazioni, delle informazioni relative ai procedimenti amministrativi, secondo criteri di facile accessibilita', completezza e semplicita' di consultazione, nel rispetto delle disposizioni in materia di segreto di Stato, di segreto d'ufficio e di protezione dei dati personali. Nei siti web istituzionali delle amministrazioni pubbliche sono pubblicati anche i relativi bilanci e conti consuntivi, nonche' i costi unitari di realizzazione delle opere pubbliche e di produzione dei servizi erogati ai cittadini. Le informazioni sui costi sono pubblicate sulla base di uno schema tipo redatto dall'Autorita' per la vigilanza sui contratti pubblici di lavori, servizi e forniture, che ne cura altresi' la raccolta e la pubblicazione nel proprio sito web istituzionale al fine di consentirne una agevole comparazione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_16">
+                    <num>16.</num>
+                    <list>
+                        <intro eId="art_1__para_16__intro_1">
+                            <p>Fermo restando quanto stabilito nell'<ref eId="content__ref_20" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_53">articolo 53 del decreto legislativo 30 marzo 2001, n. 165</ref>, come da ultimo modificato dal comma 42 del presente articolo, nell'<ref eId="content__ref_21" href="/akn/it/act/decretoLegislativo/stato/2005-03-07/82/!main#art_54">articolo 54 del codice dell'amministrazione digitale</ref>, di cui al <ref eId="content__ref_22" href="/akn/it/act/decretoLegislativo/stato/2005-03-07/82/!main">decreto legislativo 7 marzo 2005, n. 82</ref>, e successive modificazioni, nell'<ref eId="content__ref_23" href="/akn/it/act/legge/stato/2009-06-18/69/!main#art_21">articolo 21 della legge 18 giugno 2009, n. 69</ref>, e successive modificazioni, e nell'<ref eId="content__ref_24" href="/akn/it/act/decretoLegislativo/stato/2009-10-27/150/!main#art_11">articolo 11 del decreto legislativo 27 ottobre 2009, n. 150</ref>, le pubbliche amministrazioni assicurano i livelli essenziali di cui al comma 15 del presente articolo con particolare riferimento ai procedimenti di: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_16.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>autorizzazione o concessione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_16.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>scelta del contraente per l'affidamento di lavori, forniture e servizi, anche con riferimento alla modalita' di selezione prescelta ai sensi del <ref eId="content__ref_25" href="/akn/it/act/decretoLegislativo/stato/2006-04-12/163/!main">codice dei contratti pubblici</ref> relativi a lavori, servizi e forniture, di cui al <ref eId="content__ref_26" href="/akn/it/act/decretoLegislativo/stato/2006-04-12/163/!main">decreto legislativo 12 aprile 2006, n.163</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_16.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>concessione ed erogazione di sovvenzioni, contributi, sussidi, ausili finanziari, nonche' attribuzione di vantaggi economici di qualunque genere a persone ed enti pubblici e privati; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_16.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>concorsi e prove selettive per l'assunzione del personale e progressioni di carriera di cui all'articolo 24 del citato <ref eId="content__ref_27" href="/akn/it/act/decretoLegislativo/stato/2009/150/!main">decreto legislativo n.150 del 2009</ref>. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_17">
+                    <num>17.</num>
+                    <content>
+                        <p>Le stazioni appaltanti possono prevedere negli avvisi, bandi di gara o lettere di invito che il mancato rispetto delle clausole contenute nei protocolli di legalita' o nei patti di integrita' costituisce causa di esclusione dalla gara. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_18">
+                    <num>18.</num>
+                    <content>
+                        <p>Ai magistrati ordinari, amministrativi, contabili e militari, agli avvocati e procuratori dello Stato e ai <ins eId="ins_1">((componenti delle corti))</ins> tributarie e' vietata, pena la decadenza dagli incarichi e la nullita' degli atti compiuti, la partecipazione a collegi arbitrali o l'assunzione di incarico di arbitro unico. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_19">
+                    <num>19.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_28" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_20">
+                    <num>20.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_29" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_21">
+                    <num>21.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_30" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_22">
+                    <num>22.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_31" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_23">
+                    <num>23.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_32" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_24">
+                    <num>24.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_33" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_25">
+                    <num>25.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_34" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_26">
+                    <num>26.</num>
+                    <content>
+                        <p>Le disposizioni di cui ai commi 15 e 16 si applicano anche ai procedimenti posti in essere in deroga alle procedure ordinarie. I soggetti che operano in deroga e che non dispongono di propri siti web istituzionali pubblicano le informazioni di cui ai citati commi 15 e 16 nei siti web istituzionali delle amministrazioni dalle quali sono nominati. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_27">
+                    <num>27.</num>
+                    <content>
+                        <p>Le informazioni pubblicate ai sensi dei commi 15 e 16 sono trasmesse in via telematica alla Commissione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_28">
+                    <num>28.</num>
+                    <content>
+                        <p>Le amministrazioni provvedono altresi' al monitoraggio periodico del rispetto dei tempi procedimentali attraverso la tempestiva eliminazione delle anomalie. I risultati del monitoraggio sono consultabili nel sito web istituzionale di ciascuna amministrazione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_29">
+                    <num>29.</num>
+                    <content>
+                        <p>Ogni amministrazione pubblica rende noto, tramite il proprio sito web istituzionale, almeno un indirizzo di posta elettronica certificata cui il cittadino possa rivolgersi per trasmettere istanze ai sensi dell'<ref eId="content__ref_35" href="/akn/it/act/decretoDelPresidenteDellaRepubblica/stato/2000-12-28/445/!main#art_38">articolo 38 del testo unico delle disposizioni legislative e regolamentari in materia di documentazione amministrativa</ref>, di cui al <ref eId="content__ref_36" href="/akn/it/act/decretoDelPresidenteDellaRepubblica/stato/2000-12-28/445/!main">decreto del Presidente della Repubblica 28 dicembre 2000, n.445</ref>, e successive modificazioni, e ricevere informazioni circa i provvedimenti e i procedimenti amministrativi che lo riguardano. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_30">
+                    <num>30.</num>
+                    <content>
+                        <p>Le amministrazioni, nel rispetto della disciplina del diritto di accesso ai documenti amministrativi di cui al capo V della <ref eId="content__ref_37" href="/akn/it/act/legge/stato/1990-08-07/241/!main">legge 7 agosto 1990, n.241</ref>, e successive modificazioni, in materia di procedimento amministrativo, hanno l'obbligo di rendere accessibili in ogni momento agli interessati, tramite strumenti di identificazione informatica di cui all'articolo 65, comma 1, del codice di cui al <ref eId="content__ref_38" href="/akn/it/act/decretoLegislativo/stato/2005-03-07/82/!main">decreto legislativo 7 marzo 2005, n.82</ref>, e successive modificazioni, le informazioni relative ai provvedimenti e ai procedimenti amministrativi che li riguardano, ivi comprese quelle relative allo stato della procedura, ai relativi tempi e allo specifico ufficio competente in ogni singola fase. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_31">
+                    <num>31.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_39" href="/akn/it/act/decretoLegislativo/stato/2016-01-22/10/!main">D.LGS. 22 GENNAIO 2016, N. 10</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_32">
+                    <num>32.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_40" href="/akn/it/act/decretoLegislativo/stato/2023-03-31/36/!main">D.LGS. 31 MARZO 2023, N. 36</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_32-bis">
+                    <num>32-bis.</num>
+                    <content>
+                        <p>Nelle controversie concernenti le materie di cui al comma 1, lettera e), dell'articolo 133 del codice di cui all'allegato 1 al <ref eId="content__ref_41" href="/akn/it/act/decretoLegislativo/stato/2010-07-02/104/!main">decreto legislativo 2 luglio 2010, n. 104</ref>, il giudice amministrativo trasmette alla commissione ogni informazione o notizia rilevante emersa nel corso del giudizio che, anche in esito a una sommaria valutazione, ponga in evidenza condotte o atti contrastanti con le regole della trasparenza. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_33">
+                    <num>33.</num>
+                    <content>
+                        <p>La mancata o incompleta pubblicazione, da parte delle pubbliche amministrazioni, delle informazioni di cui al comma 31 costituisce violazione degli standard qualitativi ed economici ai sensi dell'<ref eId="content__ref_42" href="/akn/it/act/decretoLegislativo/stato/2009-12-20/198/!main#art_1-com1">articolo 1, comma 1, del decreto legislativo 20 dicembre 2009, n. 198</ref>, ed e' comunque valutata ai sensi dell'<ref eId="content__ref_43" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_21">articolo 21 del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni.
+Eventuali ritardi nell'aggiornamento dei contenuti sugli strumenti informatici sono sanzionati a carico dei responsabili del servizio. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_34">
+                    <num>34.</num>
+                    <content>
+                        <p>Le disposizioni dei commi da 15 a 33 si applicano alle amministrazioni pubbliche di cui all'<ref eId="content__ref_44" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni, agli enti pubblici nazionali, nonche' alle societa' partecipate dalle amministrazioni pubbliche e dalle loro controllate, ai sensi dell'<ref eId="content__ref_45" href="/akn/it/act/codice.civile/stato/1942-03-16/262/!main#art_2359">articolo 2359 del codice civile</ref>, limitatamente alla loro attivita' di pubblico interesse disciplinata dal diritto nazionale o dell'Unione europea. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_35">
+                    <num>35.</num>
+                    <list>
+                        <intro eId="art_1__para_35__intro_1">
+                            <p>Il Governo e' delegato ad adottare, senza nuovi o maggiori oneri per la finanza pubblica, entro sei mesi dalla data di entrata in vigore della presente legge, un decreto legislativo per il riordino della disciplina riguardante gli obblighi di pubblicita', trasparenza e diffusione di informazioni da parte delle pubbliche amministrazioni, mediante la modifica o l'integrazione delle disposizioni vigenti, ovvero mediante la previsione di nuove forme di pubblicita', nel rispetto dei seguenti principi e criteri direttivi: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_35.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>ricognizione e coordinamento delle disposizioni che prevedono obblighi di pubblicita' a carico delle amministrazioni pubbliche; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>previsione di forme di pubblicita' sia in ordine all'uso delle risorse pubbliche sia in ordine allo svolgimento e ai risultati delle funzioni amministrative; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>precisazione degli obblighi di pubblicita' di dati relativi ai titolari di incarichi politici, di carattere elettivo o comunque di esercizio di poteri di indirizzo politico, di livello statale, regionale e locale. Le dichiarazioni oggetto di pubblicazione obbligatoria di cui alla lettera a) devono concernere almeno la situazione patrimoniale complessiva del titolare al momento dell'assunzione della carica, la titolarita' di imprese, le partecipazioni azionarie proprie, del coniuge e dei parenti entro il secondo grado di parentela, nonche' tutti i compensi cui da' diritto l'assunzione della carica; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>ampliamento delle ipotesi di pubblicita', mediante pubblicazione nei siti web istituzionali, di informazioni relative ai titolari degli incarichi dirigenziali nelle pubbliche amministrazioni di cui all'<ref eId="content__ref_46" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni, sia con riferimento a quelli che comportano funzioni di amministrazione e gestione, sia con riferimento agli incarichi di responsabilita' degli uffici di diretta collaborazione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>definizione di categorie di informazioni che le amministrazioni devono pubblicare e delle modalita' di elaborazione dei relativi formati; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>obbligo di pubblicare tutti gli atti, i documenti e le informazioni di cui al presente comma anche in formato elettronico elaborabile e in formati di dati aperti. Per formati di dati aperti si devono intendere almeno i dati resi disponibili e fruibili on line in formati non proprietari, a condizioni tali da permetterne il piu' ampio riutilizzo anche a fini statistici e la ridistribuzione senza ulteriori restrizioni d'uso, di riuso o di diffusione diverse dall'obbligo di citare la fonte e di rispettarne l'integrita'; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>individuazione, anche mediante integrazione e coordinamento della disciplina vigente, della durata e dei termini di aggiornamento per ciascuna pubblicazione obbligatoria; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_35.__point_h">
+                            <num>h)</num>
+                            <content>
+                                <p>individuazione, anche mediante revisione e integrazione della disciplina vigente, delle responsabilita' e delle sanzioni per il mancato, ritardato o inesatto adempimento degli obblighi di pubblicazione. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_36">
+                    <num>36.</num>
+                    <content>
+                        <p>Le disposizioni di cui al decreto legislativo adottato ai sensi del comma 35 integrano l'individuazione del livello essenziale delle prestazioni erogate dalle amministrazioni pubbliche a fini di trasparenza, prevenzione, contrasto della corruzione e della cattiva amministrazione, a norma dell'<ref eId="content__ref_47" href="/akn/it/act/costituzione/stato/1947-12-27/const/!main#art_117-com2-letm">articolo 117, secondo comma, lettera m), della Costituzione</ref>, e costituiscono altresi' esercizio della funzione di coordinamento informativo statistico e informatico dei dati dell'amministrazione statale, regionale e locale, di cui all'articolo 117, secondo comma, lettera r), della Costituzione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_37">
+                    <num>37.</num>
+                    <content>
+                        <p>All'<ref eId="content__ref_48" href="/akn/it/act/legge/stato/1990-08-07/241/!main#art_1">articolo 1 della legge 7 agosto 1990, n. 241</ref>, al comma 1-ter sono aggiunte, in fine, le seguenti parole: «, con un livello di garanzia non inferiore a quello cui sono tenute le pubbliche amministrazioni in forza delle disposizioni di cui alla presente legge». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_38">
+                    <num>38.</num>
+                    <content>
+                        <p>All'<ref eId="content__ref_49" href="/akn/it/act/legge/stato/1990-08-07/241/!main#art_2">articolo 2 della legge 7 agosto 1990, n. 241</ref>, al comma 1 e' aggiunto, in fine, il seguente periodo: «Se ravvisano la manifesta irricevibilita', inammissibilita', improcedibilita' o infondatezza della domanda, le pubbliche amministrazioni concludono il procedimento con un provvedimento espresso redatto in forma semplificata, la cui motivazione puo' consistere in un sintetico riferimento al punto di fatto o di diritto ritenuto risolutivo». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_39">
+                    <num>39.</num>
+                    <content>
+                        <p>Al fine di garantire l'esercizio imparziale delle funzioni amministrative e di rafforzare la separazione e la reciproca autonomia tra organi di indirizzo politico e organi amministrativi, le amministrazioni pubbliche di cui all'<ref eId="content__ref_50" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, nonche' le aziende e le societa' partecipate dallo Stato e dagli altri enti pubblici, in occasione del monitoraggio posto in essere ai fini dell'articolo 36, comma 3, del medesimo <ref eId="content__ref_51" href="/akn/it/act/decretoLegislativo/stato/2001/165/!main">decreto legislativo n. 165 del 2001</ref>, e successive modificazioni, comunicano al Dipartimento della funzione pubblica, per il tramite degli organismi indipendenti di valutazione, tutti i dati utili a rilevare le posizioni dirigenziali attribuite a persone, anche esterne alle pubbliche amministrazioni, individuate discrezionalmente dall'organo di indirizzo politico senza procedure pubbliche di selezione. I dati forniti confluiscono nella relazione annuale al Parlamento di cui al citato <ref eId="content__ref_52" href="/akn/it/act/decretoLegislativo/stato/2001/165/!main#art_36-com3">articolo 36, comma 3, del decreto legislativo n. 165 del 2001</ref>, e vengono trasmessi alla Commissione per le finalita' di cui ai commi da 1 a 14 del presente articolo. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_40">
+                    <num>40.</num>
+                    <content>
+                        <p>I titoli e i curricula riferiti ai soggetti di cui al comma 39 si intendono parte integrante dei dati comunicati al Dipartimento della funzione pubblica. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_41">
+                    <num>41.</num>
+                    <content>
+                        <p>Nel capo II della <ref eId="content__ref_53" href="/akn/it/act/legge/stato/1990-08-07/241/!main">legge 7 agosto 1990, n. 241</ref>, dopo l'articolo 6 e' aggiunto il seguente: 
+ «Art. 6-bis. - (Conflitto di interessi). - 1. Il responsabile del procedimento e i titolari degli uffici competenti ad adottare i pareri, le valutazioni tecniche, gli atti endoprocedimentali e il provvedimento finale devono astenersi in caso di conflitto di interessi, segnalando ogni situazione di conflitto, anche potenziale». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_42">
+                    <num>42.</num>
+                    <list>
+                        <intro eId="art_1__para_42__intro_1">
+                            <p>All'<ref eId="content__ref_54" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_53">articolo 53 del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni, sono apportate le seguenti modificazioni: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_42.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>dopo il comma 3 e' inserito il seguente: 
+ «3-bis. Ai fini previsti dal comma 2, con appositi regolamenti emanati su proposta del Ministro per la pubblica amministrazione e la semplificazione, di concerto con i Ministri interessati, ai sensi dell'<ref eId="content__ref_55" href="/akn/it/act/legge/stato/1988-08-23/400/!main#art_17-com2">articolo 17, comma 2, della legge 23 agosto 1988, n. 400</ref>, e successive modificazioni, sono individuati, secondo criteri differenziati in rapporto alle diverse qualifiche e ruoli professionali, gli incarichi vietati ai dipendenti delle amministrazioni pubbliche di cui all'articolo 1, comma 2»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>al comma 5 sono aggiunte, in fine, le seguenti parole: «o situazioni di conflitto, anche potenziale, di interessi, che pregiudichino l'esercizio imparziale delle funzioni attribuite al dipendente»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>al comma 7 e al comma 9, dopo il primo periodo e' inserito il seguente: 
+ «Ai fini dell'autorizzazione, l'amministrazione verifica l'insussistenza di situazioni, anche potenziali, di conflitto di interessi»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>dopo il comma 7 e' inserito il seguente: 
+ «7-bis. L'omissione del versamento del compenso da parte del dipendente pubblico indebito percettore costituisce ipotesi di responsabilita' erariale soggetta alla giurisdizione della Corte dei conti»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>il comma 11 e' sostituito dal seguente: 
+ «11. Entro quindici giorni dall'erogazione del compenso per gli incarichi di cui al comma 6, i soggetti pubblici o privati comunicano all'amministrazione di appartenenza l'ammontare dei compensi erogati ai dipendenti pubblici»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>al comma 12, il primo periodo e' sostituito dal seguente: «Le amministrazioni pubbliche che conferiscono o autorizzano incarichi, anche a titolo gratuito, ai propri dipendenti comunicano in via telematica, nel termine di quindici giorni, al Dipartimento della funzione pubblica gli incarichi conferiti o autorizzati ai dipendenti stessi, con l'indicazione dell'oggetto dell'incarico e del compenso lordo, ove previsto»; al medesimo comma 12, al secondo periodo, le parole: «L'elenco e' accompagnato» sono sostituite dalle seguenti: «La comunicazione e' accompagnata» e, al terzo periodo, le parole: «Nello stesso termine» sono sostituite dalle seguenti: «Entro il 30 giugno di ciascun anno»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>al comma 13, le parole: «Entro lo stesso termine di cui al comma 12» sono sostituite dalle seguenti: «Entro il 30 giugno di ciascun anno»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_h">
+                            <num>h)</num>
+                            <content>
+                                <p>al comma 14, secondo periodo, dopo le parole: «l'oggetto, la durata e il compenso dell'incarico» sono aggiunte le seguenti: «nonche' l'attestazione dell'avvenuta verifica dell'insussistenza di situazioni, anche potenziali, di conflitto di interessi»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_i">
+                            <num>i)</num>
+                            <content>
+                                <p>al comma 14, dopo il secondo periodo sono inseriti i seguenti: «Le informazioni relative a consulenze e incarichi comunicate dalle amministrazioni al Dipartimento della funzione pubblica, nonche' le informazioni pubblicate dalle stesse nelle proprie banche dati accessibili al pubblico per via telematica ai sensi del presente articolo, sono trasmesse e pubblicate in tabelle riassuntive rese liberamente scaricabili in un formato digitale standard aperto che consenta di analizzare e rielaborare, anche a fini statistici, i dati informatici. Entro il 31 dicembre di ciascun anno il Dipartimento della funzione pubblica trasmette alla Corte dei conti l'elenco delle amministrazioni che hanno omesso di trasmettere e pubblicare, in tutto o in parte, le informazioni di cui al terzo periodo del presente comma in formato digitale standard aperto»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_42.__point_l">
+                            <num>l)</num>
+                            <content>
+                                <p>dopo il comma 16-bis e' aggiunto il seguente: 
+ «16-ter. I dipendenti che, negli ultimi tre anni di servizio, hanno esercitato poteri autoritativi o negoziali per conto delle pubbliche amministrazioni di cui all'articolo 1, comma 2, non possono svolgere, nei tre anni successivi alla cessazione del rapporto di pubblico impiego, attivita' lavorativa o professionale presso i soggetti privati destinatari dell'attivita' della pubblica amministrazione svolta attraverso i medesimi poteri. I contratti conclusi e gli incarichi conferiti in violazione di quanto previsto dal presente comma sono nulli ed e' fatto divieto ai soggetti privati che li hanno conclusi o conferiti di contrattare con le pubbliche amministrazioni per i successivi tre anni con obbligo di restituzione dei compensi eventualmente percepiti e accertati ad essi riferiti». 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_43">
+                    <num>43.</num>
+                    <content>
+                        <p>Le disposizioni di cui all'articolo 53, comma 16-ter, secondo periodo, del <ref eId="content__ref_56" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main">decreto legislativo 30 marzo 2001, n.165</ref>, introdotto dal comma 42, lettera l), non si applicano ai contratti gia' sottoscritti alla data di entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_44">
+                    <num>44.</num>
+                    <content>
+                        <p>L'<ref eId="content__ref_57" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_54">articolo 54 del decreto legislativo 30 marzo 2001, n.165</ref>, e' sostituito dal seguente: 
+ «Art. 54. - (Codice di comportamento). - 1. Il Governo definisce un codice di comportamento dei dipendenti delle pubbliche amministrazioni al fine di assicurare la qualita' dei servizi, la prevenzione dei fenomeni di corruzione, il rispetto dei doveri costituzionali di diligenza, lealta', imparzialita' e servizio esclusivo alla cura dell'interesse pubblico. Il codice contiene una specifica sezione dedicata ai doveri dei dirigenti, articolati in relazione alle funzioni attribuite, e comunque prevede per tutti i dipendenti pubblici il divieto di chiedere o di accettare, a qualsiasi titolo, compensi, regali o altre utilita', in connessione con l'espletamento delle proprie funzioni o dei compiti affidati, fatti salvi i regali d'uso, purche' di modico valore e nei limiti delle normali relazioni di cortesia. 
+ 2. Il codice, approvato con decreto del Presidente della Repubblica, previa deliberazione del Consiglio dei ministri, su proposta del Ministro per la pubblica amministrazione e la semplificazione, previa intesa in sede di Conferenza unificata, e' pubblicato nella Gazzetta Ufficiale e consegnato al dipendente, che lo sottoscrive all'atto dell'assunzione. 
+ 3. La violazione dei doveri contenuti nel codice di comportamento, compresi quelli relativi all'attuazione del Piano di prevenzione della corruzione, e' fonte di responsabilita' disciplinare. La violazione dei doveri e' altresi' rilevante ai fini della responsabilita' civile, amministrativa e contabile ogniqualvolta le stesse responsabilita' siano collegate alla violazione di doveri, obblighi, leggi o regolamenti. Violazioni gravi o reiterate del codice comportano l'applicazione della sanzione di cui all'articolo 55-quater, comma 1. 
+ 4. Per ciascuna magistratura e per l'Avvocatura dello Stato, gli organi delle associazioni di categoria adottano un codice etico a cui devono aderire gli appartenenti alla magistratura interessata. In caso di inerzia, il codice e' adottato dall'organo di autogoverno. 
+ 5. Ciascuna pubblica amministrazione definisce, con procedura aperta alla partecipazione e previo parere obbligatorio del proprio organismo indipendente di valutazione, un proprio codice di comportamento che integra e specifica il codice di comportamento di cui al comma 1. Al codice di comportamento di cui al presente comma si applicano le disposizioni del comma 3. A tali fini, la Commissione per la valutazione, la trasparenza e l'integrita' delle amministrazioni pubbliche (CIVIT) definisce criteri, linee guida e modelli uniformi per singoli settori o tipologie di amministrazione. 
+ 6. Sull'applicazione dei codici di cui al presente articolo vigilano i dirigenti responsabili di ciascuna struttura, le strutture di controllo interno e gli uffici di disciplina. 
+ 7. Le pubbliche amministrazioni verificano annualmente lo stato di applicazione dei codici e organizzano attivita' di formazione del personale per la conoscenza e la corretta applicazione degli stessi». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_45">
+                    <num>45.</num>
+                    <content>
+                        <p>I codici di cui all'<ref eId="content__ref_58" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_54-com1">articolo 54, commi 1</ref> e <ref eId="content__ref_59" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_54-com4">4, del decreto legislativo 30 marzo 2001, n. 165</ref>, come sostituito dal comma 44, sono approvati entro sei mesi dalla data di entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_46">
+                    <num>46.</num>
+                    <content>
+                        <p>Dopo l'<ref eId="content__ref_60" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_35">articolo 35 del decreto legislativo 30 marzo 2001, n. 165</ref>, e' inserito il seguente: 
+ «Art. 35-bis. - (Prevenzione del fenomeno della corruzione nella formazione di commissioni e nelle assegnazioni agli uffici) - 1.
+Coloro che sono stati condannati, anche con sentenza non passata in giudicato, per i reati previsti nel capo I del titolo II del libro secondo del <ref eId="content__ref_61" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref>: 
+ a) non possono fare parte, anche con compiti di segreteria, di commissioni per l'accesso o la selezione a pubblici impieghi; 
+ b) non possono essere assegnati, anche con funzioni direttive, agli uffici preposti alla gestione delle risorse finanziarie, all'acquisizione di beni, servizi e forniture, nonche' alla concessione o all'erogazione di sovvenzioni, contributi, sussidi, ausili finanziari o attribuzioni di vantaggi economici a soggetti pubblici e privati; 
+ c) non possono fare parte delle commissioni per la scelta del contraente per l'affidamento di lavori, forniture e servizi, per la concessione o l'erogazione di sovvenzioni, contributi, sussidi, ausili finanziari, nonche' per l'attribuzione di vantaggi economici di qualunque genere. 
+ 2. La disposizione prevista al comma l integra le leggi e regolamenti che disciplinano la formazione di commissioni e la nomina dei relativi segretari». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_47">
+                    <num>47.</num>
+                    <content>
+                        <p>All'<ref eId="content__ref_62" href="/akn/it/act/legge/stato/1990-08-07/241/!main#art_11">articolo 11 della legge 7 agosto 1990, n. 241</ref>, al comma 2, e' aggiunto, in fine, il seguente periodo: «Gli accordi di cui al presente articolo devono essere motivati ai sensi dell'articolo 3». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_48">
+                    <num>48.</num>
+                    <list>
+                        <intro eId="art_1__para_48__intro_1">
+                            <p>Il Governo e' delegato ad adottare, entro sei mesi dalla data di entrata in vigore della presente legge, un decreto legislativo per la disciplina organica degli illeciti, e relative sanzioni disciplinari, correlati al superamento dei termini di definizione dei procedimenti amministrativi, secondo i seguenti principi e criteri direttivi: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_48.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>omogeneita' degli illeciti connessi al ritardo, superando le logiche specifiche dei differenti settori delle pubbliche amministrazioni; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_48.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>omogeneita' dei controlli da parte dei dirigenti, volti a evitare ritardi; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_48.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>omogeneita', certezza e cogenza nel sistema delle sanzioni, sempre in relazione al mancato rispetto dei termini. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_49">
+                    <num>49.</num>
+                    <content>
+                        <p>Ai fini della prevenzione e del contrasto della corruzione, nonche' della prevenzione dei conflitti di interessi, il Governo e' delegato ad adottare, senza nuovi o maggiori oneri per la finanza pubblica, entro sei mesi dalla data di entrata in vigore della presente legge, uno o piu' decreti legislativi diretti a modificare la disciplina vigente in materia di attribuzione di incarichi dirigenziali e di incarichi di responsabilita' amministrativa di vertice nelle pubbliche amministrazioni di cui all'articolo l, <ref eId="content__ref_63" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_com2">comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni, e negli enti di diritto privato sottoposti a controllo pubblico esercitanti funzioni amministrative, attivita' di produzione di beni e servizi a favore delle amministrazioni pubbliche o di gestione di servizi pubblici, da conferire a soggetti interni o esterni alle pubbliche amministrazioni, che comportano funzioni di amministrazione e gestione, nonche' a modificare la disciplina vigente in materia di incompatibilita' tra i detti incarichi e lo svolgimento di incarichi pubblici elettivi o la titolarita' di interessi privati che possano porsi in conflitto con l'esercizio imparziale delle funzioni pubbliche affidate. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_50">
+                    <num>50.</num>
+                    <list>
+                        <intro eId="art_1__para_50__intro_1">
+                            <p>I decreti legislativi di cui al comma 49 sono emanati nel rispetto dei seguenti principi e criteri direttivi: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_50.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>prevedere in modo esplicito, ai fini della prevenzione e del contrasto della corruzione, i casi di non conferibilita' di incarichi dirigenziali, adottando in via generale il criterio della non conferibilita' per coloro che sono stati condannati, anche con sentenza non passata in giudicato, per i reati previsti dal capo I del titolo II del libro secondo del <ref eId="content__ref_64" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_50.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>prevedere in modo esplicito, ai fini della prevenzione e del contrasto della corruzione, i casi di non conferibilita' di incarichi dirigenziali, adottando in via generale il criterio della non conferibilita' per coloro che per un congruo periodo di tempo, non inferiore ad un anno, antecedente al conferimento abbiano svolto incarichi o ricoperto cariche in enti di diritto privato sottoposti a controllo o finanziati da parte dell'amministrazione che conferisce l'incarico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_50.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>disciplinare i criteri di conferimento nonche' i casi di non conferibilita' di incarichi dirigenziali ai soggetti estranei alle amministrazioni che, per un congruo periodo di tempo, non inferiore ad un anno, antecedente al conferimento abbiano fatto parte di organi di indirizzo politico o abbiano ricoperto cariche pubbliche elettive.
+I casi di non conferibilita' devono essere graduati e regolati in rapporto alla rilevanza delle cariche di carattere politico ricoperte, all'ente di riferimento e al collegamento, anche territoriale, con l'amministrazione che conferisce l'incarico. E' escluso in ogni caso, fatta eccezione per gli incarichi di responsabile degli uffici di diretta collaborazione degli organi di indirizzo politico, il conferimento di incarichi dirigenziali a coloro che presso le medesime amministrazioni abbiano svolto incarichi di indirizzo politico o abbiano ricoperto cariche pubbliche elettive nel periodo, comunque non inferiore ad un anno, immediatamente precedente al conferimento dell'incarico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_50.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>comprendere tra gli incarichi oggetto della disciplina: 
+ 1) gli incarichi amministrativi di vertice nonche' gli incarichi dirigenziali, anche conferiti a soggetti estranei alle pubbliche amministrazioni, che comportano l'esercizio in via esclusiva delle competenze di amministrazione e gestione; 
+ 2) gli incarichi di direttore generale, sanitario e amministrativo delle aziende sanitarie locali e delle aziende ospedaliere; 
+ 3) gli incarichi di amministratore di enti pubblici e di enti di diritto privato sottoposti a controllo pubblico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_50.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>disciplinare i casi di incompatibilita' tra gli incarichi di cui alla lettera d) gia' conferiti e lo svolgimento di attivita', retribuite o no, presso enti di diritto privato sottoposti a regolazione, a controllo o finanziati da parte dell'amministrazione che ha conferito l'incarico o lo svolgimento in proprio di attivita' professionali, se l'ente o l'attivita' professionale sono soggetti a regolazione o finanziati da parte dell'amministrazione; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_50.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>disciplinare i casi di incompatibilita' tra gli incarichi di cui alla lettera d) gia' conferiti e l'esercizio di cariche negli organi di indirizzo politico. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_51">
+                    <num>51.</num>
+                    <content>
+                        <p>Dopo l'<ref eId="content__ref_65" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_54">articolo 54 del decreto legislativo 30 marzo 2001, n. 165</ref>, e' inserito il seguente: 
+ «Art. 54-bis. - (Tutela del dipendente pubblico che segnala illeciti). - 1. Fuori dei casi di responsabilita' a titolo di calunnia o diffamazione, ovvero per lo stesso titolo ai sensi dell'<ref eId="content__ref_66" href="/akn/it/act/codice.civile/stato/1942-03-16/262/!main#art_2043">articolo 2043 del codice civile</ref>, il pubblico dipendente che denuncia all'autorita' giudiziaria o alla Corte dei conti, ovvero riferisce al proprio superiore gerarchico condotte illecite di cui sia venuto a conoscenza in ragione del rapporto di lavoro, non puo' essere sanzionato, licenziato o sottoposto ad una misura discriminatoria, diretta o indiretta, avente effetti sulle condizioni di lavoro per motivi collegati direttamente o indirettamente alla denuncia. 
+ 2. Nell'ambito del procedimento disciplinare, l'identita' del segnalante non puo' essere rivelata, senza il suo consenso, sempre che la contestazione dell'addebito disciplinare sia fondata su accertamenti distinti e ulteriori rispetto alla segnalazione. Qualora la contestazione sia fondata, in tutto o in parte, sulla segnalazione, l'identita' puo' essere rivelata ove la sua conoscenza sia assolutamente indispensabile per la difesa dell'incolpato. 
+ 3. L'adozione di misure discriminatorie e' segnalata al Dipartimento della funzione pubblica, per i provvedimenti di competenza, dall'interessato o dalle organizzazioni sindacali maggiormente rappresentative nell'amministrazione nella quale le stesse sono state poste in essere. 
+ 4. La denuncia e' sottratta all'accesso previsto dagli <ref eId="content__ref_67" href="/akn/it/act/legge/stato/1990-08-07/241/!main#art_22">articoli 22 e seguenti della legge 7 agosto 1990, n. 241</ref>, e successive modificazioni». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_52">
+                    <num>52.</num>
+                    <content>
+                        <p>Per le attivita' imprenditoriali di cui al comma 53 la comunicazione e l'informazione antimafia liberatoria da acquisire indipendentemente dalle soglie stabilite dal codice di cui al <ref eId="content__ref_68" href="/akn/it/act/decretoLegislativo/stato/2011-09-06/159/!main">decreto legislativo 6 settembre 2011, n. 159</ref>, e' obbligatoriamente acquisita dai soggetti di cui all'<ref eId="content__ref_69" href="/akn/it/act/decretoLegislativo/stato/2011-09-06/159/!main#art_83-com1">articolo 83, commi 1</ref> e <ref eId="content__ref_70" href="/akn/it/act/decretoLegislativo/stato/2011-09-06/159/!main#art_83-com2">2, del decreto legislativo 6 settembre 2011, n. 159</ref>, attraverso la consultazione, anche in via telematica, di apposito elenco di fornitori, prestatori di servizi ed esecutori di lavori non soggetti a tentativi di infiltrazione mafiosa operanti nei medesimi settori. Il suddetto elenco e' istituito presso ogni prefettura. L'iscrizione nell'elenco e' disposta dalla prefettura della provincia in cui il soggetto richiedente ha la propria sede. Si applica l'articolo 92, commi 2 e 3, del citato <ref eId="content__ref_71" href="/akn/it/act/decretoLegislativo/stato/2011/159/!main">decreto legislativo n. 159 del 2011</ref>. La prefettura effettua verifiche periodiche circa la perdurante insussistenza dei tentativi di infiltrazione mafiosa e, in caso di esito negativo, dispone la cancellazione dell'impresa dall'elenco. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_52-bis">
+                    <num>52-bis.</num>
+                    <content>
+                        <p>L'iscrizione nell'elenco di cui al comma 52 tiene luogo della comunicazione e dell'informazione antimafia liberatoria anche ai fini della stipula, approvazione o autorizzazione di contratti o subcontratti relativi ad attivita' diverse da quelle per le quali essa e' stata disposta. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_53">
+                    <num>53.</num>
+                    <list>
+                        <intro eId="art_1__para_53__intro_1">
+                            <p>Sono definite come maggiormente esposte a rischio di infiltrazione mafiosa le seguenti attivita': 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_53.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>LETTERA ABROGATA DAL <ref eId="content__ref_72" href="/akn/it/act/decretoLegge/stato/2020-04-08/23/!main">D.L. 8 APRILE 2020, N. 23</ref>, CONVERTITO CON MODIFICAZIONI DALLA <ref eId="content__ref_73" href="/akn/it/act/legge/stato/2020-06-05/40/!main">L. 5 GIUGNO 2020, N. 40</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>LETTERA ABROGATA DAL <ref eId="content__ref_74" href="/akn/it/act/decretoLegge/stato/2020-04-08/23/!main">D.L. 8 APRILE 2020, N. 23</ref>, CONVERTITO CON MODIFICAZIONI DALLA <ref eId="content__ref_75" href="/akn/it/act/legge/stato/2020-06-05/40/!main">L. 5 GIUGNO 2020, N. 40</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>estrazione, fornitura e trasporto di terra e materiali inerti; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>confezionamento, fornitura e trasporto di calcestruzzo e di bitume; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>noli a freddo di macchinari; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>fornitura di ferro lavorato; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>noli a caldo; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_h">
+                            <num>h)</num>
+                            <content>
+                                <p>autotrasporti per conto di terzi; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_i">
+                            <num>i)</num>
+                            <content>
+                                <p>guardiania dei cantieri. 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_i-bis">
+                            <num>i-bis)</num>
+                            <content>
+                                <p>servizi funerari e cimiteriali; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_i-ter">
+                            <num>i-ter)</num>
+                            <content>
+                                <p>ristorazione, gestione delle mense e catering; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_53.__point_i-quater">
+                            <num>i-quater)</num>
+                            <content>
+                                <p>servizi ambientali, comprese le attivita' di raccolta, di trasporto nazionale e transfrontaliero, anche per conto di terzi, di trattamento e di smaltimento dei rifiuti, nonche' le attivita' di risanamento e di bonifica e gli altri servizi connessi alla gestione dei rifiuti. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_54">
+                    <num>54.</num>
+                    <content>
+                        <p>L'indicazione delle attivita' di cui al comma 53 puo' essere aggiornata, entro il 31 dicembre di ogni anno, con apposito decreto del Ministro dell'interno, adottato di concerto con i Ministri della giustizia, delle infrastrutture e dei trasporti e dell'economia e delle finanze, previo parere delle Commissioni parlamentari competenti, da rendere entro trenta giorni dalla data di trasmissione del relativo schema alle Camere. Qualora le Commissioni non si pronuncino entro il termine, il decreto puo' essere comunque adottato. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_55">
+                    <num>55.</num>
+                    <content>
+                        <p>L'impresa iscritta nell'elenco di cui al comma 52 comunica alla prefettura competente qualsiasi modifica dell'assetto proprietario e dei propri organi sociali, entro trenta giorni dalla data della modifica. Le societa' di capitali quotate in mercati regolamentati comunicano le variazioni rilevanti secondo quanto previsto dal testo unico di cui al <ref eId="content__ref_76" href="/akn/it/act/decretoLegislativo/stato/1998-02-24/58/!main">decreto legislativo 24 febbraio 1998, n. 58</ref>. La mancata comunicazione comporta la cancellazione dell'iscrizione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_56">
+                    <num>56.</num>
+                    <content>
+                        <p>Con decreto del Presidente del Consiglio dei ministri, su proposta dei Ministri per la pubblica amministrazione e la semplificazione, dell'interno, della giustizia, delle infrastrutture e dei trasporti e dello sviluppo economico, da adottare entro sessanta giorni dalla data di entrata in vigore della presente legge, sono definite le modalita' per l'istituzione e l'aggiornamento, senza nuovi o maggiori oneri per la finanza pubblica, dell'elenco di cui al comma 52, nonche' per l'attivita' di verifica. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_57">
+                    <num>57.</num>
+                    <content>
+                        <p>Fino al sessantesimo giorno successivo alla data di entrata in vigore del decreto di cui al comma 56 continua ad applicarsi la normativa vigente alla data di entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_58">
+                    <num>58.</num>
+                    <content>
+                        <p>COMMA ABROGATO DAL <ref eId="content__ref_77" href="/akn/it/act/decretoLegislativo/stato/2016-04-18/50/!main">D.LGS. 18 APRILE 2016, N. 50</ref>. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_59">
+                    <num>59.</num>
+                    <content>
+                        <p>Le disposizioni di prevenzione della corruzione di cui ai commi da 1 a 57 del presente articolo, di diretta attuazione del principio di imparzialita' di cui all'<ref eId="content__ref_78" href="/akn/it/act/costituzione/stato/1947-12-27/const/!main#art_97">articolo 97 della Costituzione</ref>, sono applicate in tutte le amministrazioni pubbliche di cui all'<ref eId="content__ref_79" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, e successive modificazioni. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_60">
+                    <num>60.</num>
+                    <list>
+                        <intro eId="art_1__para_60__intro_1">
+                            <p>Entro centoventi giorni dalla data di entrata in vigore della presente legge, attraverso intese in sede di Conferenza unificata di cui all'articolo 8, comma l, del <ref eId="content__ref_80" href="/akn/it/act/decretoLegislativo/stato/1997-08-28/281/!main">decreto legislativo 28 agosto 1997, n. 281</ref>, si definiscono gli adempimenti, con l'indicazione dei relativi termini, delle regioni e delle province autonome di Trento e di Bolzano e degli enti locali, nonche' degli enti pubblici e dei soggetti di diritto privato sottoposti al loro controllo, volti alla piena e sollecita attuazione delle disposizioni della presente legge, con particolare riguardo: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_60.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>alla definizione, da parte di ciascuna amministrazione, del piano triennale di prevenzione della corruzione, a partire da quello relativo agli anni 2013-2015, e alla sua trasmissione alla regione interessata e al Dipartimento della funzione pubblica; (12) 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_60.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>all'adozione, da parte di ciascuna amministrazione, di norme regolamentari relative all'individuazione degli incarichi vietati ai dipendenti pubblici di cui all'<ref eId="content__ref_81" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_53-com3bis">articolo 53, comma 3-bis, del decreto legislativo 30 marzo 2001, n. 165</ref>, introdotto dal comma 42, lettera a), del presente articolo, ferma restando la disposizione del comma 4 dello stesso articolo 53; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_60.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>all'adozione, da parte di ciascuna amministrazione, del codice di comportamento di cui all'<ref eId="content__ref_82" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_54-com5">articolo 54, comma 5, del decreto legislativo 30 marzo 2001, n. 165</ref>, come sostituito dal comma 44 del presente articolo. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_61">
+                    <num>61.</num>
+                    <content>
+                        <p>Attraverso intese in sede di Conferenza unificata sono altresi' definiti gli adempimenti attuativi delle disposizioni dei decreti legislativi previsti dalla presente legge da parte delle regioni e delle province autonome di Trento e di Bolzano e degli enti locali, nonche' degli enti pubblici e dei soggetti di diritto privato sottoposti al loro controllo. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_62">
+                    <num>62.</num>
+                    <content>
+                        <p>All'articolo l della <ref eId="content__ref_83" href="/akn/it/act/legge/stato/1994-01-14/20/!main">legge 14 gennaio 1994, n. 20</ref>, dopo il comma 1-quinquies sono inseriti i seguenti: 
+ «1-sexies. Nel giudizio di responsabilita', l'entita' del danno all'immagine della pubblica amministrazione derivante dalla commissione di un reato contro la stessa pubblica amministrazione accertato con sentenza passata in giudicato si presume, salva prova contraria, pari al doppio della somma di denaro o del valore patrimoniale di altra utilita' illecitamente percepita dal dipendente. 
+ 1-septies. Nei giudizi di responsabilita' aventi ad oggetto atti o fatti di cui al comma 1-sexies, il sequestro conservativo di cui all'<ref eId="content__ref_84" href="/akn/it/act/decretoLegge/stato/1993-11-15/453/!main#art_5-com2">articolo 5, comma 2, del decreto-legge 15 novembre 1993, n. 453</ref>, convertito, con modificazioni, dalla <ref eId="content__ref_85" href="/akn/it/act/legge/stato/1994-01-14/19/!main">legge 14 gennaio 1994, n. 19</ref>, e' concesso in tutti i casi di fondato timore di attenuazione della garanzia del credito erariale». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_63">
+                    <num>63.</num>
+                    <content>
+                        <p>Il Governo e' delegato ad adottare, senza nuovi o maggiori oneri per la finanza pubblica, entro un anno dalla data di entrata in vigore della presente legge, un decreto legislativo recante un testo unico della normativa in materia di incandidabilita' alla carica di membro del Parlamento europeo, di deputato e di senatore della Repubblica, di incandidabilita' alle elezioni regionali, provinciali, comunali e circoscrizionali e di divieto di ricoprire le cariche di presidente e di componente del consiglio di amministrazione dei consorzi, di presidente e di componente dei consigli e delle giunte delle unioni di comuni, di consigliere di amministrazione e di presidente delle aziende speciali e delle istituzioni di cui all'articolo 114 del testo unico delle leggi sull'ordinamento degli enti locali, di cui al <ref eId="content__ref_86" href="/akn/it/act/decretoLegislativo/stato/2000-08-18/267/!main">decreto legislativo 18 agosto 2000, n.267</ref>, e successive modificazioni, di presidente e di componente degli organi esecutivi delle comunita' montane. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_64">
+                    <num>64.</num>
+                    <list>
+                        <intro eId="art_1__para_64__intro_1">
+                            <p>Il decreto legislativo di cui al comma 63 provvede al riordino e all'armonizzazione della vigente normativa ed e' adottato secondo i seguenti principi e criteri direttivi: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_64.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>ferme restando le disposizioni del <ref eId="content__ref_87" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref> in materia di interdizione perpetua dai pubblici uffici, prevedere che non siano temporaneamente candidabili a deputati o a senatori coloro che abbiano riportato condanne definitive a pene superiori a due anni di reclusione per i delitti previsti dall'<ref eId="content__ref_88" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_51-com3bis">articolo 51, commi 3-bis</ref> e <ref eId="content__ref_89" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_51-com3quater">3-quater, del codice di procedura penale</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>in aggiunta a quanto previsto nella lettera a), prevedere che non siano temporaneamente candidabili a deputati o a senatori coloro che abbiano riportato condanne definitive a pene superiori a due anni di reclusione per i delitti previsti nel libro secondo, titolo II, capo I, del <ref eId="content__ref_90" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref> ovvero per altri delitti per i quali la legge preveda una pena detentiva superiore nel massimo a tre anni; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>prevedere la durata dell'incandidabilita' di cui alle lettere a) e b); 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>prevedere che l'incandidabilita' operi anche in caso di applicazione della pena su richiesta, ai sensi dell'<ref eId="content__ref_91" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_444">articolo 444 del codice di procedura penale</ref>; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>coordinare le disposizioni relative all'incandidabilita' con le vigenti norme in materia di interdizione dai pubblici uffici e di riabilitazione, nonche' con le restrizioni all'esercizio del diritto di elettorato attivo; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>prevedere che le condizioni di incandidabilita' alla carica di deputato e di senatore siano applicate altresi' all'assunzione delle cariche di governo; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>operare una completa ricognizione della normativa vigente in materia di incandidabilita' alle elezioni provinciali, comunali e circoscrizionali e di divieto di ricoprire le cariche di presidente della provincia, sindaco, assessore e consigliere provinciale e comunale, presidente e componente del consiglio circoscrizionale, presidente e componente del consiglio di amministrazione dei consorzi, presidente e componente dei consigli e delle giunte delle unioni di comuni, consigliere di amministrazione e presidente delle aziende speciali e delle istituzioni di cui all'articolo 114 del testo unico di cui al citato <ref eId="content__ref_92" href="/akn/it/act/decretoLegislativo/stato/2000/267/!main">decreto legislativo n. 267 del 2000</ref>, presidente e componente degli organi delle comunita' montane, determinata da sentenze definitive di condanna; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_h">
+                            <num>h)</num>
+                            <content>
+                                <p>valutare per le cariche di cui alla lettera g), in coerenza con le scelte operate in attuazione delle lettere a) e i), l'introduzione di ulteriori ipotesi di incandidabilita' determinate da sentenze definitive di condanna per delitti di grave allarme sociale; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_i">
+                            <num>i)</num>
+                            <content>
+                                <p>individuare, fatta salva la competenza legislativa regionale sul sistema di elezione e i casi di ineleggibilita' e di incompatibilita' del presidente e degli altri componenti della giunta regionale nonche' dei consiglieri regionali, le ipotesi di incandidabilita' alle elezioni regionali e di divieto di ricoprire cariche negli organi politici di vertice delle regioni, conseguenti a sentenze definitive di condanna; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_l">
+                            <num>l)</num>
+                            <content>
+                                <p>prevedere l'abrogazione espressa della normativa incompatibile con le disposizioni del decreto legislativo di cui al comma 63; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_64.__point_m">
+                            <num>m)</num>
+                            <content>
+                                <p>disciplinare le ipotesi di sospensione e decadenza di diritto dalle cariche di cui al comma 63 in caso di sentenza definitiva di condanna per delitti non colposi successiva alla candidatura o all'affidamento della carica. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_65">
+                    <num>65.</num>
+                    <content>
+                        <p>Lo schema del decreto legislativo di cui al comma 63, corredato di relazione tecnica, ai sensi dell'<ref eId="content__ref_93" href="/akn/it/act/legge/stato/2009-12-31/196/!main#art_17-com3">articolo 17, comma 3, della legge 31 dicembre 2009, n. 196</ref>, e' trasmesso alle Camere ai fini dell'espressione dei pareri da parte delle Commissioni parlamentari competenti per materia e per i profili finanziari, che sono resi entro sessanta giorni dalla data di trasmissione dello schema di decreto. Decorso il termine di cui al periodo precedente senza che le Commissioni abbiano espresso i pareri di rispettiva competenza, il decreto legislativo puo' essere comunque adottato. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_66">
+                    <num>66.</num>
+                    <content>
+                        <p>Tutti gli incarichi presso istituzioni, organi ed enti pubblici, nazionali ed internazionali attribuiti in posizioni apicali o semiapicali, compresi quelli, comunque denominati, negli uffici di diretta collaborazione, ivi inclusi quelli di consulente giuridico, nonche' quelli di componente degli organismi indipendenti di valutazione, <ins eId="ins_2">((a magistrati ordinari, amministrativi, contabili, militari e tributari))</ins>, avvocati e procuratori dello Stato, devono essere svolti con contestuale collocamento in posizione di fuori ruolo, che deve permanere per tutta la durata dell'incarico. E' escluso il ricorso all'istituto dell'aspettativa. Gli incarichi in corso alla data di entrata in vigore della presente legge cessano di diritto se nei centottanta giorni successivi non viene adottato il provvedimento di collocamento in posizione di fuori ruolo. (4) 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_67">
+                    <num>67.</num>
+                    <list>
+                        <intro eId="art_1__para_67__intro_1">
+                            <p>Il Governo e' delegato ad adottare, entro quattro mesi dalla data di entrata in vigore della presente legge, un decreto legislativo per l'individuazione di ulteriori incarichi, anche negli uffici di diretta collaborazione, che, in aggiunta a quelli di cui al comma 66, comportano l'obbligatorio collocamento in posizione di fuori ruolo, sulla base dei seguenti principi e criteri direttivi: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_67.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>tener conto delle differenze e specificita' dei regimi e delle funzioni connessi alla giurisdizione ordinaria, amministrativa, contabile e militare, nonche' all'Avvocatura dello Stato; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_67.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>durata dell'incarico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_67.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>continuativita' e onerosita' dell'impegno lavorativo connesso allo svolgimento dell'incarico; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_67.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>possibili situazioni di conflitto di interesse tra le funzioni esercitate presso l'amministrazione di appartenenza e quelle esercitate in ragione dell'incarico ricoperto fuori ruolo. 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_68">
+                    <num>68.</num>
+                    <content>
+                        <p>Salvo quanto previsto dal comma 69, i magistrati ordinari, amministrativi, contabili e militari, gli avvocati e procuratori dello Stato non possono essere collocati in posizione di fuori ruolo per un tempo che, nell'arco del loro servizio, superi complessivamente dieci anni, anche continuativi. Ai fini dell'applicazione del primo periodo, non e' mai computata nel termine complessivo la durata degli incarichi conferiti o autorizzati e di quelli da conferire o autorizzare presso la Presidenza della Repubblica, la Corte costituzionale, il Parlamento, la Presidenza del Consiglio dei ministri e gli organi di governo autonomo. Le disposizioni del secondo periodo si applicano anche agli incarichi di capo e vice capo degli uffici di diretta collaborazione e agli incarichi di capo e vice capo di dipartimento gia' conferiti o da conferire fino al 31 dicembre 2029 presso i Ministeri titolari di interventi previsti nel PNRR, ovvero nel Piano nazionale per gli investimenti complementari al PNRR di cui all'<ref eId="content__ref_94" href="/akn/it/act/decretoLegge/stato/2021-05-06/59/!main#art_1">articolo 1 del decreto-legge 6 maggio 2021, n. 59</ref>, convertito, con modificazioni, dalla <ref eId="content__ref_95" href="/akn/it/act/legge/stato/2021-07-01/101/!main">legge 1° luglio 2021, n. 101</ref>. Il predetto collocamento non puo' comunque determinare alcun pregiudizio con riferimento alla posizione rivestita nei ruoli di appartenenza. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_69">
+                    <num>69.</num>
+                    <content>
+                        <p>Salvo quanto previsto nei commi 70, 71 e 72 le disposizioni di cui al comma 68 si applicano anche agli incarichi in corso alla data di entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_70">
+                    <num>70.</num>
+                    <content>
+                        <p>Le disposizioni di cui ai commi da 66 a 72 non si applicano ai membri di Governo, alle cariche elettive, anche presso gli organi di autogoverno, e ai componenti delle Corti internazionali comunque denominate. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_71">
+                    <num>71.</num>
+                    <content>
+                        <p>Per gli incarichi previsti dal <ref eId="content__ref_96" href="/akn/it/act/decretoLegge/stato/2008-09-16/143/!main#art_1bis-com4">comma 4 dell'articolo 1-bis del decreto-legge 16 settembre 2008, n. 143</ref>, convertito, con modificazioni, dalla <ref eId="content__ref_97" href="/akn/it/act/legge/stato/2008-11-13/181/!main">legge 13 novembre 2008, n. 181</ref>, anche se conferiti successivamente all'entrata in vigore della presente legge, il termine di cui al comma 68 decorre dalla data di entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_72">
+                    <num>72.</num>
+                    <content>
+                        <p>I magistrati ordinari, amministrativi, contabili e militari, nonche' gli avvocati e procuratori dello Stato che, alla data di entrata in vigore della presente legge, hanno gia' maturato o che, successivamente a tale data, maturino il periodo massimo di collocamento in posizione di fuori ruolo, di cui al comma 68, si intendono confermati nella posizione di fuori ruolo sino al termine dell'incarico, della legislatura, della consiliatura o del mandato relativo all'ente o soggetto presso cui e' svolto l'incarico. Qualora l'incarico non preveda un termine, il collocamento in posizione di fuori ruolo si intende confermato per i dodici mesi successivi all'entrata in vigore della presente legge. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_73">
+                    <num>73.</num>
+                    <content>
+                        <p>Lo schema del decreto legislativo di cui al comma 67 e' trasmesso alle Camere ai fini dell'espressione dei pareri da parte delle Commissioni parlamentari competenti per materia, che sono resi entro trenta giorni dalla data di trasmissione del medesimo schema di decreto. Decorso il termine senza che le Commissioni abbiano espresso i pareri di rispettiva competenza il decreto legislativo puo' essere comunque adottato. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_74">
+                    <num>74.</num>
+                    <content>
+                        <p>Entro un anno dalla data di entrata in vigore del decreto legislativo di cui al comma 67, nel rispetto dei principi e criteri direttivi ivi stabiliti, il Governo e' autorizzato ad adottare disposizioni integrative o correttive del decreto legislativo stesso. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_75">
+                    <num>75.</num>
+                    <list>
+                        <intro eId="art_1__para_75__intro_1">
+                            <p>Al <ref eId="content__ref_98" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref> sono apportate le seguenti modificazioni: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_75.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>all'articolo 32-quater, dopo le parole: «319-bis,» sono inserite le seguenti: «319-quater,»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>all'articolo 32-quinquies, dopo le parole: «319-ter» sono inserite le seguenti: «, 319-quater, primo comma,»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>al primo comma dell'articolo 314, la parola: «tre» e' sostituita dalla seguente: «quattro»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_d">
+                            <num>d)</num>
+                            <content>
+                                <p>l'articolo 317 e' sostituito dal seguente: 
+ «Art. 317. - (Concussione). - Il pubblico ufficiale che, abusando della sua qualita' o dei suoi poteri, costringe taluno a dare o a promettere indebitamente, a lui o a un terzo, denaro o altra utilita' e' punito con la reclusione da sei a dodici anni»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_e">
+                            <num>e)</num>
+                            <content>
+                                <p>all'articolo 317-bis, le parole: «314 e 317» sono sostituite dalle seguenti: «314, 317, 319 e 319-ter»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_f">
+                            <num>f)</num>
+                            <content>
+                                <p>l'articolo 318 e' sostituito dal seguente: 
+ «Art. 318. - (Corruzione per l'esercizio della funzione). - Il pubblico ufficiale che, per l'esercizio delle sue funzioni o dei suoi poteri, indebitamente riceve, per se' o per un terzo, denaro o altra utilita' o ne accetta la promessa e' punito con la reclusione da uno a cinque anni»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_g">
+                            <num>g)</num>
+                            <content>
+                                <p>all'articolo 319, le parole: «da due a cinque» sono sostituite dalle seguenti: «da quattro a otto»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_h">
+                            <num>h)</num>
+                            <content>
+                                <p>all'articolo 319-ter sono apportate le seguenti modificazioni: 
+ 1) nel primo comma, le parole: «da tre a otto» sono sostituite dalle seguenti: «da quattro a dieci»; 
+ 2) nel secondo comma, la parola: «quattro» e' sostituita dalla seguente: «cinque»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_i">
+                            <num>i)</num>
+                            <content>
+                                <p>dopo l'articolo 319-ter e' inserito il seguente: 
+ «Art. 319-quater. - (Induzione indebita a dare o promettere utilita'). - Salvo che il fatto costituisca piu' grave reato, il pubblico ufficiale o l'incaricato di pubblico servizio che, abusando della sua qualita' o dei suoi poteri, induce taluno a dare o a promettere indebitamente, a lui o a un terzo, denaro o altra utilita' e' punito con la reclusione da tre a otto anni. 
+ Nei casi previsti dal primo comma, chi da' o promette denaro o altra utilita' e' punito con la reclusione fino a tre anni»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_l">
+                            <num>l)</num>
+                            <content>
+                                <p>all'articolo 320, il primo comma e' sostituito dal seguente:  «Le disposizioni degli articoli 318 e 319 si applicano anche all'incaricato di un pubblico servizio»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_m">
+                            <num>m)</num>
+                            <content>
+                                <p>all'articolo 322 sono apportate le seguenti modificazioni: 
+ 1) nel primo comma, le parole: «che riveste la qualita' di pubblico impiegato, per indurlo a compiere un atto del suo ufficio» sono sostituite dalle seguenti: «, per l'esercizio delle sue funzioni o dei suoi poteri»; 
+ 2) il terzo comma e' sostituito dal seguente: 
+ «La pena di cui al primo comma si applica al pubblico ufficiale o all'incaricato di un pubblico servizio che sollecita una promessa o dazione di denaro o altra utilita' per l'esercizio delle sue funzioni o dei suoi poteri»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_n">
+                            <num>n)</num>
+                            <content>
+                                <p>all'articolo 322-bis sono apportate le seguenti modificazioni: 
+ 1) nel secondo comma, dopo le parole: «Le disposizioni degli articoli» sono inserite le seguenti: «319-quater, secondo comma,»; 
+ 2) nella rubrica, dopo la parola: «concussione,» sono inserite le seguenti: «induzione indebita a dare o promettere utilita',»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_o">
+                            <num>o)</num>
+                            <content>
+                                <p>all'articolo 322-ter, primo comma, dopo le parole: «a tale prezzo» sono aggiunte le seguenti: «o profitto»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_p">
+                            <num>p)</num>
+                            <content>
+                                <p>all'articolo 323, primo comma, le parole: «da sei mesi a tre anni» sono sostituite dalle seguenti: «da uno a quattro anni»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_q">
+                            <num>q)</num>
+                            <content>
+                                <p>all'articolo 323-bis, dopo la parola: «319,» sono inserite le seguenti: «319-quater,»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_75.__point_r">
+                            <num>r)</num>
+                            <content>
+                                <p>dopo l'articolo 346 e' inserito il seguente: 
+ «Art. 346-bis. - (Traffico di influenze illecite). - Chiunque, fuori dei casi di concorso nei reati di cui agli articoli 319 e 319-ter, sfruttando relazioni esistenti con un pubblico ufficiale o con un incaricato di un pubblico servizio, indebitamente fa dare o promettere, a se' o ad altri, denaro o altro vantaggio patrimoniale, come prezzo della propria mediazione illecita verso il pubblico ufficiale o l'incaricato di un pubblico servizio ovvero per remunerarlo, in relazione al compimento di un atto contrario ai doveri di ufficio o all'omissione o al ritardo di un atto del suo ufficio, e' punito con la reclusione da uno a tre anni. 
+ La stessa pena si applica a chi indebitamente da' o promette denaro o altro vantaggio patrimoniale. 
+ La pena e' aumentata se il soggetto che indebitamente fa dare o promettere, a se' o ad altri, denaro o altro vantaggio patrimoniale riveste la qualifica di pubblico ufficiale o di incaricato di un pubblico servizio. 
+ Le pene sono altresi' aumentate se i fatti sono commessi in relazione all'esercizio di attivita' giudiziarie. 
+ Se i fatti sono di particolare tenuita', la pena e' diminuita». 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_76">
+                    <num>76.</num>
+                    <content>
+                        <p>L'<ref eId="content__ref_99" href="/akn/it/act/codice.civile/stato/1942-03-16/262/!main#art_2635">articolo 2635 del codice civile</ref> e' sostituito dal seguente: 
+ «Art. 2635. - (Corruzione tra privati). - Salvo che il fatto costituisca piu' grave reato, gli amministratori, i direttori generali, i dirigenti preposti alla redazione dei documenti contabili societari, i sindaci e i liquidatori, che, a seguito della dazione o della promessa di denaro o altra utilita', per se' o per altri, compiono od omettono atti, in violazione degli obblighi inerenti al loro ufficio o degli obblighi di fedelta', cagionando nocumento alla societa', sono puniti con la reclusione da uno a tre anni. 
+ Si applica la pena della reclusione fino a un anno e sei mesi se il fatto e' commesso da chi e' sottoposto alla direzione o alla vigilanza di uno dei soggetti indicati al primo comma. 
+ Chi da' o promette denaro o altra utilita' alle persone indicate nel primo e nel secondo comma e' punito con le pene ivi previste. 
+ Le pene stabilite nei commi precedenti sono raddoppiate se si tratta di societa' con titoli quotati in mercati regolamentati italiani o di altri Stati dell'Unione europea o diffusi tra il pubblico in misura rilevante ai sensi dell'articolo 116 del testo unico delle disposizioni in materia di intermediazione finanziaria, di cui al <ref eId="content__ref_100" href="/akn/it/act/decretoLegislativo/stato/1998-02-24/58/!main">decreto legislativo 24 febbraio 1998, n. 58</ref>, e successive modificazioni. 
+ Si procede a querela della persona offesa, salvo che dal fatto derivi una distorsione della concorrenza nella acquisizione di beni o servizi». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_77">
+                    <num>77.</num>
+                    <list>
+                        <intro eId="art_1__para_77__intro_1">
+                            <p>Al <ref eId="content__ref_101" href="/akn/it/act/decretoLegislativo/stato/2001-06-08/231/!main">decreto legislativo 8 giugno 2001, n. 231</ref>, sono apportate le seguenti modificazioni: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_77.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>all'articolo 25: 
+ 1) nella rubrica, dopo la parola: «Concussione» sono inserite le seguenti: «, induzione indebita a dare o promettere utilita'»; 
+ 2) al comma 3, dopo le parole: «319-ter, comma 2,» sono inserite le seguenti: «319-quater»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_77.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>all'articolo 25-ter, comma 1, dopo la lettera s) e' aggiunta la seguente: 
+ «s-bis) per il delitto di corruzione tra privati, nei casi previsti dal <ref eId="content__ref_102" href="/akn/it/act/codice.civile/stato/1942-03-16/262/!main#art_2635-com3">terzo comma dell'articolo 2635 del codice civile</ref>, la sanzione pecuniaria da duecento a quattrocento quote». 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_78">
+                    <num>78.</num>
+                    <content>
+                        <p>All'<ref eId="content__ref_103" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_308">articolo 308 del codice di procedura penale</ref>, dopo il comma 2 e' inserito il seguente: 
+ «2-bis. Nel caso si proceda per uno dei delitti previsti dagli articoli 314, 316, 316-bis, 316-ter, 317, 318, 319, 319-ter, 319-quater, primo comma, e 320 del <ref eId="content__ref_104" href="/akn/it/act/regioDecreto/stato/1930-10-19/1398/!main">codice penale</ref>, le misure interdittive perdono efficacia decorsi sei mesi dall'inizio della loro esecuzione. In ogni caso, qualora esse siano state disposte per esigenze probatorie, il giudice puo' disporne la rinnovazione anche oltre sei mesi dall'inizio dell'esecuzione, fermo restando che comunque la loro efficacia viene meno se dall'inizio della loro esecuzione e' decorso un periodo di tempo pari al triplo dei termini previsti dall'articolo 303». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_79">
+                    <num>79.</num>
+                    <content>
+                        <p>All'articolo 133, comma 1-bis, delle norme di attuazione, di coordinamento e transitorie del <ref eId="content__ref_105" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main">codice di procedura penale</ref>, di cui al <ref eId="content__ref_106" href="/akn/it/act/decretoLegislativo/stato/1989-07-28/271/!main">decreto legislativo 28 luglio 1989, n. 271</ref>, dopo le parole: «319-ter» sono inserite le seguenti: «, 319-quater». 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_80">
+                    <num>80.</num>
+                    <list>
+                        <intro eId="art_1__para_80__intro_1">
+                            <p>All'<ref eId="content__ref_107" href="/akn/it/act/decretoLegge/stato/1992-06-08/306/!main#art_12sexies">articolo 12-sexies del decreto-legge 8 giugno 1992, n. 306</ref>, convertito, con modificazioni, dalla <ref eId="content__ref_108" href="/akn/it/act/legge/stato/1992-08-07/356/!main">legge 7 agosto 1992, n.356</ref>, e successive modificazioni, sono apportate le seguenti modificazioni: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_80.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>al comma 1, dopo le parole: «319-ter,» sono inserite le seguenti: «319-quater,»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_80.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>al comma 2-bis, dopo le parole: «319-ter,» sono inserite le seguenti: «319-quater,». 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_81">
+                    <num>81.</num>
+                    <list>
+                        <intro eId="art_1__para_81__intro_1">
+                            <p>Al testo unico delle leggi sull'ordinamento degli enti locali, di cui al <ref eId="content__ref_109" href="/akn/it/act/decretoLegislativo/stato/2000-08-18/267/!main">decreto legislativo 18 agosto 2000, n. 267</ref>, sono apportate le seguenti modificazioni: 
+ </p>
+                        </intro>
+                        <point eId="art_1__para_81.__point_a">
+                            <num>a)</num>
+                            <content>
+                                <p>all'articolo 58, comma 1, lettera b), le parole: «(corruzione per un atto d'ufficio)» sono sostituite dalle seguenti: «(corruzione per l'esercizio della funzione)» e dopo le parole: «319-ter (corruzione in atti giudiziari),» sono inserite le seguenti: «319-quater, primo comma (induzione indebita a dare o promettere utilita'),»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_81.__point_b">
+                            <num>b)</num>
+                            <content>
+                                <p>all'articolo 59, comma 1, lettera a), dopo le parole: «319-ter» sono inserite le seguenti: «, 319-quater»; 
+</p>
+                            </content>
+                        </point>
+                        <point eId="art_1__para_81.__point_c">
+                            <num>c)</num>
+                            <content>
+                                <p>all'articolo 59, comma 1, lettera c), dopo le parole: «misure coercitive di cui agli <ref eId="content__ref_110" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_284">articoli 284</ref>, <ref eId="content__ref_111" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_285">285</ref> e <ref eId="content__ref_112" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_286">286 del codice di procedura penale</ref>» sono aggiunte le seguenti: «nonche' di cui all'<ref eId="content__ref_113" href="/akn/it/act/codice.procedura.penale/presidente.repubblica/1988-09-22/447/!main#art_283-com1">articolo 283, comma 1, del codice di procedura penale</ref>, quando il divieto di dimora riguarda la sede dove si svolge il mandato elettorale». 
+</p>
+                            </content>
+                        </point>
+                    </list>
+                </paragraph>
+                <paragraph eId="art_1__para_82">
+                    <num>82.</num>
+                    <content>
+                        <p>Il provvedimento di revoca di cui all'articolo 100, comma 1, del testo unico di cui al <ref eId="content__ref_114" href="/akn/it/act/decretoLegislativo/stato/2000-08-18/267/!main">decreto legislativo 18 agosto 2000, n. 267</ref>, e' comunicato dal prefetto all'Autorita' nazionale anticorruzione, di cui al comma 1 del presente articolo, che si esprime entro trenta giorni. Decorso tale termine, la revoca diventa efficace, salvo che l'Autorita' rilevi che la stessa sia correlata alle attivita' svolte dal segretario in materia di prevenzione della corruzione. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_1__para_83">
+                    <num>83.</num>
+                    <content>
+                        <p>All'<ref eId="content__ref_115" href="/akn/it/act/legge/stato/2001-03-27/97/!main#art_3-com1">articolo 3, comma 1, della legge 27 marzo 2001, n. 97</ref>, dopo le parole: «319-ter» sono inserite le seguenti: «, 319-quater». 
+ 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph>
+                    <content>
+                        <p>-------------</p>
+                        <p>AGGIORNAMENTO (1)</p>
+                        <p>
+ Il <ref eId="116" href="/akn/it/act/decretoLegge/stato/2012-10-18/179/!main">D.L. 18 ottobre 2012, n. 179</ref>, convertito con modificazioni dalla <ref eId="117" href="/akn/it/act/legge/stato/2012-12-17/221/!main">L. 17 dicembre 2012, n. 221</ref>, ha disposto (con l'art. 34-bis, comma 4) che "Conseguentemente, in sede di prima applicazione, il termine di cui all'<ref eId="118" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_1-com8">articolo 1, comma 8, della legge 6 novembre 2012, n. 190</ref>, e' differito al 31 marzo 2013". </p>
+                        <p>-------------</p>
+                        <p>AGGIORNAMENTO (2)</p>
+                        <p>
+ La <ref eId="119" href="/akn/it/act/legge/stato/2012-12-24/228/!main">L. 24 dicembre 2012, n. 228</ref>, ha disposto (con l'art. 1, comma 418) che "In sede di prima applicazione, all'<ref eId="120" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_1-com32">articolo 1, comma 32, della legge 6 novembre 2012, n. 190</ref>, il termine di cui al secondo periodo e' prorogato al 31 marzo 2013 ed il termine di cui al quarto periodo e' prorogato al 30 giugno 2013". </p>
+                        <p>-------------</p>
+                        <p>AGGIORNAMENTO (4)</p>
+                        <p>
+ Il <ref eId="121" href="/akn/it/act/decretoLegge/stato/2014-06-24/90/!main">D.L. 24 giugno 2014, n. 90</ref>, convertito con modificazioni dalla <ref eId="122" href="/akn/it/act/legge/stato/2014-08-11/114/!main">L. 11 agosto 2014, n. 114</ref> ha disposto (con l'art. 8, comma 2) che "Gli incarichi di cui all'<ref eId="123" href="/akn/it/act/legge/stato/2012/190/!main#art_1-com66">articolo 1, comma 66, della legge n. 190 del 2012</ref>, come modificato dal comma 1, in corso alla data di entrata in vigore della legge di conversione del presente decreto, cessano di diritto se nei trenta giorni successivi non e' adottato il provvedimento di collocamento in posizione di fuori ruolo". 
+ Ha inoltre disposto (con l'art. 19, comma 15) che "Le funzioni del Dipartimento della funzione pubblica della Presidenza del Consiglio dei Ministri in materia di trasparenza e prevenzione della corruzione di cui all'<ref eId="124" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_1-com4">articolo 1 , commi 4</ref>, <ref eId="125" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_1-com5">5</ref> e <ref eId="126" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_1-com8">8, della legge 6 novembre 2012 n. 190</ref>, e le funzioni di cui all'<ref eId="127" href="/akn/it/act/decretoLegislativo/stato/2013-03-14/33/!main#art_48">articolo 48 del decreto legislativo 14 marzo 2013, n. 33</ref>, sono trasferite all'Autorita' nazionale anticorruzione". </p>
+                        <p>-------------</p>
+                        <p>AGGIORNAMENTO (12)</p>
+                        <p>
+ Il <ref eId="128" href="/akn/it/act/decretoDelPresidenteDellaRepubblica/stato/2022-06-24/81/!main">D.P.R. 24 giugno 2022, n. 81</ref>, ha disposro (con l'art. 1, comma 1, lettera d)) che "Ai sensi di quanto previsto dall'<ref eId="129" href="/akn/it/act/decretoLegge/stato/2021-06-09/80/!main#art_6-com1">articolo 6, comma 1, del decreto-legge 9 giugno 2021, n. 80</ref>, convertito, con modificazioni, dalla <ref eId="130" href="/akn/it/act/legge/stato/2021-08-06/113/!main">legge 6 agosto 2021, n. 113</ref>, per le amministrazioni pubbliche di cui all'<ref eId="131" href="/akn/it/act/decretoLegislativo/stato/2001-03-30/165/!main#art_1-com2">articolo 1, comma 2, del decreto legislativo 30 marzo 2001, n. 165</ref>, con piu' di cinquanta dipendenti, sono soppressi, in quanto assorbiti nelle apposite sezioni del Piano integrato di attivita' e organizzazione (PIAO), gli adempimenti inerenti ai piani di cui alle seguenti disposizioni: 
+ [...] 
+ d) articolo 1, commi 5, lettera a) e 60, <ref eId="132" href="/akn/it/act/legge/stato/2012-11-06/190/!main#art_leta">lettera a), della legge 6 novembre 2012, n. 190</ref> (Piano di prevenzione della corruzione)". </p>
+                        <p>-------------</p>
+                        <p>AGGIORNAMENTO (13)</p>
+                        <p>
+ Il D.L. 29 febbrao 2022, n. 198, convertito con modificazioni dalla <ref eId="133" href="/akn/it/act/legge/stato/2023-02-24/14/!main">L. 24 febbraio 2023, n. 14</ref> ha disposto (con l'art. 10, comma 11-bis) che "Per l'anno 2023 i termini previsti dall'<ref eId="134" href="/akn/it/act/decretoLegge/stato/2021-06-09/80/!main#art_6-com1">articolo 6, comma 1, del decreto-legge 9 giugno 2021, n. 80</ref>, convertito, con modificazioni, dalla <ref eId="135" href="/akn/it/act/legge/stato/2021-08-06/113/!main#art_1-com8">legge 6 agosto 2021, n. 113, e dall'articolo 1, comma 8</ref>, della <ref eId="136" href="/akn/it/act/legge/stato/2012-11-06/190/!main">legge 6 novembre 2012, n. 190</ref>, sono differiti al 31 marzo 2023". </p>
+                    </content>
+                </paragraph>
+            </article>
+            <article eId="art_2">
+                <num>Art. 2.</num>
+                <heading> Clausola di invarianza</heading>
+                <paragraph eId="art_2__para_1">
+                    <num>1.</num>
+                    <content>
+                        <p>Dall'attuazione della presente legge non devono derivare nuovi o maggiori oneri a carico della finanza pubblica. 
+</p>
+                    </content>
+                </paragraph>
+                <paragraph eId="art_2__para_2">
+                    <num>2.</num>
+                    <content>
+                        <p>Le amministrazioni competenti provvedono allo svolgimento delle attivita' previste dalla presente legge con le risorse umane, strumentali e finanziarie disponibili a legislazione vigente. 
+ </p>
+                    </content>
+                </paragraph>
+            </article>
+        </body>
+        <conclusions>
+            <formula name="formulaFinaleConclusioni">
+                <p>La presente legge, munita del sigillo dello Stato, sara' inserita nella Raccolta ufficiale degli atti normativi della Repubblica italiana. E' fatto obbligo a chiunque spetti di osservarla e di farla osservare come legge dello Stato. </p>
+            </formula>
+            <p> Data a Roma, addi' 6 novembre 2012 </p>
+            <p>NAPOLITANO Monti, Presidente del Consiglio dei Ministri Severino, Ministro della giustizia Visto, il Guardasigilli: Severino</p>
+        </conclusions>
+    </act>
+</akomaNtoso>

@@ -1,0 +1,33 @@
+{
+ "generator": "fetch_corpus.py 0.1",
+ "pool_asof": "2026-11-15",
+ "provisions": {
+  "D641-10-1": {
+   "code_id": "LEGITEXT000022197698",
+   "code_title": "Code rural et de la pêche maritime",
+   "date_debut": "2017-05-07",
+   "date_fin": "2999-01-01",
+   "etat": "VIGUEUR",
+   "legiarti": "LEGIARTI000034616245",
+   "xml_file": "D641-10-1.xml"
+  },
+  "L594-8": {
+   "code_id": "LEGITEXT000006074220",
+   "code_title": "Code de l'environnement",
+   "date_debut": "2012-01-07",
+   "date_fin": "2999-01-01",
+   "etat": "VIGUEUR",
+   "legiarti": "LEGIARTI000025110353",
+   "xml_file": "L594-8.xml"
+  },
+  "R557-6-14-1": {
+   "code_id": "LEGITEXT000006074220",
+   "code_title": "Code de l'environnement",
+   "date_debut": "2021-12-20",
+   "date_fin": "2999-01-01",
+   "etat": "VIGUEUR",
+   "legiarti": "LEGIARTI000044521842",
+   "xml_file": "R557-6-14-1.xml"
+  }
+ }
+}

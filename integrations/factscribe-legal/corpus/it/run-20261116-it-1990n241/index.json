@@ -1,0 +1,50 @@
+{
+ "act_eli": "eli/id/1990/08/18/090G0294/CONSOLIDATED/20260421",
+ "act_key": "1990/241",
+ "act_title": "LEGGE",
+ "act_urn": "urn:nir:stato:legge:1990-08-07;241",
+ "articles": {
+  "art_1": {
+   "article_bytes": 2360,
+   "article_file": "official/art_1.xml",
+   "article_sha256": "d5acc44120b846dee681f03b2793d1a2d675235261d97995835b1f3f9a9623c5",
+   "card_file": "art_1.it.card.txt",
+   "card_sha256": "04536bc2e0c34b2b75caa0857ef67950b5bfb3904644628a9372ec83d9ac57da",
+   "eid": "art_1",
+   "num": "1",
+   "text_chars": 1160,
+   "text_sha256": "4dfb20ad06176b9904a56d5e71da602cd2181c20c235bb138ddc27b55ae5bb4a"
+  },
+  "art_2": {
+   "article_bytes": 13045,
+   "article_file": "official/art_2.xml",
+   "article_sha256": "aa278839143c70244530458c6cdc08f7a303de6d2d2cd662ee4f0a7f786e7764",
+   "card_file": "art_2.it.card.txt",
+   "card_sha256": "09959945337d8fbb2069ded894a742c75d452937023b97ba886272b9143b3f93",
+   "eid": "art_2",
+   "num": "2",
+   "text_chars": 8170,
+   "text_sha256": "6f0041bb464519284f1d307dca99afdb70b15369663ba1984330d6e0774942f0"
+  },
+  "art_3": {
+   "article_bytes": 2012,
+   "article_file": "official/art_3.xml",
+   "article_sha256": "2bb3377d58993a4ba5123017a4f494fc0c5f6d0fa5773b02f848085775cdcbc2",
+   "card_file": "art_3.it.card.txt",
+   "card_sha256": "fd07f27537d1a1da2a35f1d8326a58267890917b5835f4176672e1f2c680b73c",
+   "eid": "art_3",
+   "num": "3",
+   "text_chars": 920,
+   "text_sha256": "8d00e8a8012d73434e5cfd920c968ec747bc1f6f30f5107456dbe83aa01a2499"
+  }
+ },
+ "codice_redazionale": "090G0294",
+ "data_gu": "1990-08-18",
+ "fetch_reference_date": "2026-11-16",
+ "fetch_vigenza": "20261116",
+ "reference_date": "2026-11-16",
+ "source_bytes": 253630,
+ "source_file": "official/act.akn.xml",
+ "source_sha256": "1c4692163f814f1374e9dcc38aaf98b935b402806a5b82babf5f69ef07bc0a6a",
+ "version_date": "2026-04-21"
+}

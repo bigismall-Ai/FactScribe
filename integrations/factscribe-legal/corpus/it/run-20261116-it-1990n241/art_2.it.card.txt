@@ -1,0 +1,17 @@
+# 意大利法条证据卡（派生件；官方 AKN 整件与条文切片哈希钉在这里）
+ACT_URN: urn:nir:stato:legge:1990-08-07;241
+ACT_ELI: eli/id/1990/08/18/090G0294/CONSOLIDATED/20260421
+ARTICLE_EID: art_2
+ARTICLE_NUM: 2
+CODICE_REDAZIONALE: 090G0294
+VERSION_DATE: 2026-04-21
+FETCH_VIGENZA: 20261116
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.akn.xml
+OFFICIAL_XML_SHA256: 1c4692163f814f1374e9dcc38aaf98b935b402806a5b82babf5f69ef07bc0a6a
+ARTICLE_SHA256: aa278839143c70244530458c6cdc08f7a303de6d2d2cd662ee4f0a7f786e7764
+TEXT_CHARS: 8170
+LICENCE: CC BY 4.0 (Normattiva OpenData)
+ATTRIBUTION: Fonte: Normattiva, Istituto Poligrafico e Zecca dello Stato
+--- OFFICIAL TEXT ---
+Art. 2. (Conclusione del procedimento) 1. Ove il procedimento consegua obbligatoriamente ad un'istanza, ovvero debba essere iniziato d'ufficio, le pubbliche amministrazioni hanno il dovere di concluderlo mediante l'adozione di un provvedimento espresso. Se ravvisano la manifesta irricevibilita', inammissibilita', improcedibilita' o infondatezza della domanda, le pubbliche amministrazioni concludono il procedimento con un provvedimento espresso redatto in forma semplificata, la cui motivazione puo' consistere in un sintetico riferimento al punto di fatto o di diritto ritenuto risolutivo. 2. Nei…

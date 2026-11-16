@@ -1,0 +1,17 @@
+# 意大利法条证据卡（派生件；官方 AKN 整件与条文切片哈希钉在这里）
+ACT_URN: urn:nir:stato:legge:1990-08-07;241
+ACT_ELI: eli/id/1990/08/18/090G0294/CONSOLIDATED/20260421
+ARTICLE_EID: art_3
+ARTICLE_NUM: 3
+CODICE_REDAZIONALE: 090G0294
+VERSION_DATE: 2026-04-21
+FETCH_VIGENZA: 20261116
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.akn.xml
+OFFICIAL_XML_SHA256: 1c4692163f814f1374e9dcc38aaf98b935b402806a5b82babf5f69ef07bc0a6a
+ARTICLE_SHA256: 2bb3377d58993a4ba5123017a4f494fc0c5f6d0fa5773b02f848085775cdcbc2
+TEXT_CHARS: 920
+LICENCE: CC BY 4.0 (Normattiva OpenData)
+ATTRIBUTION: Fonte: Normattiva, Istituto Poligrafico e Zecca dello Stato
+--- OFFICIAL TEXT ---
+Art. 3. (( (Motivazione del provvedimento) )) 1. Ogni provvedimento amministrativo, compresi quelli concernenti l'organizzazione amministrativa, lo svolgimento dei pubblici concorsi ed il personale, deve essere motivato, salvo che nelle ipotesi previste dal comma 2. La motivazione deve indicare i presupposti di fatto e le ragioni giuridiche che hanno determinato la decisione dell'amministrazione, in relazione alle risultanze dell'istruttoria. 2. La motivazione non e' richiesta per gli atti normativi e per quelli a contenuto generale. 3. Se le ragioni della decisione risultano da altro atto del…

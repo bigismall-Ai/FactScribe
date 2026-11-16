@@ -82,6 +82,14 @@ def cmd_verify_es(args):
     return code
 
 
+def cmd_verify_fr_case(args):
+    from .fr_case_verify import render_fr_case, verify_fr_case
+    findings, stats = verify_fr_case(args.project)
+    text, code = render_fr_case(findings, stats)
+    print(text)
+    return code
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
@@ -122,6 +130,11 @@ def main(argv=None):
     e.add_argument("--date", required=True, help="参考日 YYYY-MM-DD")
     e.set_defaults(func=cmd_verify_es)
 
+    fc = sub.add_parser("verify-fr-case",
+                        help="法国判例专项校验（DILA INCA 官方判决 XML）")
+    fc.add_argument("--project", required=True)
+    fc.set_defaults(func=cmd_verify_fr_case)
+
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
@@ -138,6 +151,8 @@ def main(argv=None):
         return cmd_verify_it(args)
     if args.cmd == "verify-es":
         return cmd_verify_es(args)
+    if args.cmd == "verify-fr-case":
+        return cmd_verify_fr_case(args)
     return cmd_verify(args)
 
 

@@ -6,9 +6,9 @@
    "sha256": "55cfa917dd46d6ab218a686aaab469685155e1d81d5b83f2c7f8e25724d9df40"
   },
   {
-   "bytes": 3998,
+   "bytes": 6262,
    "path": "README.md",
-   "sha256": "0e6596e2235cb05b910015b5021531c2866bba20e7daad902a163e8a1a665096"
+   "sha256": "55cfd5f1facf7110d6fa3f5b5f8b2960db5b61d8702131c18ddb82f6c1c4bfe7"
   },
   {
    "bytes": 878,
@@ -196,6 +196,76 @@
    "sha256": "b823ceba6eabb174fa79e01db75c6fc882f3b1129a548378ce7b29bbf3a9b4ca"
   },
   {
+   "bytes": 1546,
+   "path": "fr-case/ATTRIBUTION.txt",
+   "sha256": "0be56df906a9136d89adc3497aae3c812fba582a3e67bdff5f5d44e211ea666e"
+  },
+  {
+   "bytes": 15162,
+   "path": "fr-case/run-20261116-inca/JURITEXT000006951547.fr-case.card.txt",
+   "sha256": "bea885585fbaa1a1411f31c97edfeab6cb9264e5ab3afdc2fdf8909ae9c42f7f"
+  },
+  {
+   "bytes": 8026,
+   "path": "fr-case/run-20261116-inca/JURITEXT000006953017.fr-case.card.txt",
+   "sha256": "cc55b21afeb852dad00cc20af56c5b20fdddf5e9112f4a6c4440c5165e95d866"
+  },
+  {
+   "bytes": 5396,
+   "path": "fr-case/run-20261116-inca/JURITEXT000007100000.fr-case.card.txt",
+   "sha256": "64360f87695a1a0a0657a5e34397566d271107a6a12c4e5c66ce0c4c36332aac"
+  },
+  {
+   "bytes": 7156,
+   "path": "fr-case/run-20261116-inca/JURITEXT000007471838.fr-case.card.txt",
+   "sha256": "38c36adb8b661c4e1589ec23fd0751be2e9cb5c6f3c2af85ae648facccfbb5eb"
+  },
+  {
+   "bytes": 3725,
+   "path": "fr-case/run-20261116-inca/index.json",
+   "sha256": "eaf0f2816d5d797c51f7fbcb9bf630240c3f69cc27e12a0c6fdca4a694f67ed3"
+  },
+  {
+   "bytes": 14064,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000006951547.txt",
+   "sha256": "84b93cd74718d9a7465132ba60e2b96c433388554d67b6c40be3e83b01e36278"
+  },
+  {
+   "bytes": 14722,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000006951547.xml",
+   "sha256": "dc9d8def61b1026c210e10eec9982dace7ef3b84722d78b38fe58b6b3a05c11a"
+  },
+  {
+   "bytes": 6932,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000006953017.txt",
+   "sha256": "054dc7bb510e298ead89673ddb6e5ca5e699f43fdfd4b72b1591885f32071a57"
+  },
+  {
+   "bytes": 8154,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000006953017.xml",
+   "sha256": "378ca036f1766f8da2f72f04aee28341d0788f37a9fcba7434bf2bdefaa19440"
+  },
+  {
+   "bytes": 4276,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000007100000.txt",
+   "sha256": "b4dd7dfd662d9b93536312ae4fa9c8c1e99e1c72be0ce2450cd2b23f1154c4c9"
+  },
+  {
+   "bytes": 5190,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000007100000.xml",
+   "sha256": "221b00e5ac96d4bfd3d96b0b5df12a366f2022143ddc0bb379654c98619a7f64"
+  },
+  {
+   "bytes": 6033,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000007471838.txt",
+   "sha256": "08ddeabbf9cc5fee4b28e27e51a4fb088ca621efd4d03d1474ada839d29153f9"
+  },
+  {
+   "bytes": 6822,
+   "path": "fr-case/run-20261116-inca/official/JURITEXT000007471838.xml",
+   "sha256": "c66071b175f988aed226732aad832239c246e3b7aa7a2456e8c943928f884bf8"
+  },
+  {
    "bytes": 1294,
    "path": "it/run-20261116-it-1990n241/art_1.it.card.txt",
    "sha256": "04536bc2e0c34b2b75caa0857ef67950b5bfb3904644628a9372ec83d9ac57da"
@@ -256,19 +326,21 @@
    "sha256": "5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492"
   },
   {
-   "bytes": 11432,
+   "bytes": 13868,
    "path": "state/fetch_state.json",
-   "sha256": "de90484460c1e9a7013c59af04af6a0dbd682d37d3c5d3f9e0c932e69a11ddb1"
+   "sha256": "83f345fe1e2ef5f044f7118238e823c132964825161b8d0bcd44cdc6f04ddadb"
   }
  ],
- "generated_at": "2026-11-16T09:51:40Z",
+ "generated_at": "2026-11-16T15:06:58Z",
  "how_to_refetch": {
   "bulk_cn": "python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes",
   "bulk_es": "python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes",
   "bulk_fr": "python3 tools/fetch_corpus.py fetch --source fr --mode bulk --yes (先不带 --yes 看预计请求/体积)",
+  "bulk_fr_case": "python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk --yes",
   "bulk_it": "python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes",
   "note": "state/fetch_state.json 记了已取清单与 sha256；重跑自动跳过已取件。manifest.files 的 sha256 可对账：对不上即该文件与取件时不一致。",
-  "sample": "python3 tools/fetch_corpus.py fetch --source all --mode sample"
+  "sample": "python3 tools/fetch_corpus.py fetch --source all --mode sample",
+  "sample_fr_case": "python3 tools/fetch_corpus.py fetch --source fr-case --mode sample (目录索引 1 次 + Range 前缀 1 次)"
  },
  "manifest_version": 1,
  "politeness": {
@@ -480,6 +552,53 @@
    "notes": {
     "last_run": "2026-11-16T04:56:20Z",
     "pool_asof": "2026-11-15"
+   }
+  },
+  "fr-case": {
+   "items": {
+    "JURITEXT000006951547": {
+     "bytes": 14722,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/JURI/TEXT/00/00/06/95/15/JURITEXT000006951547.xml",
+     "run": "run-20261116-inca",
+     "sha256": "dc9d8def61b1026c210e10eec9982dace7ef3b84722d78b38fe58b6b3a05c11a",
+     "txt_sha256": "84b93cd74718d9a7465132ba60e2b96c433388554d67b6c40be3e83b01e36278",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/JURI/TEXT/00/00/06/95/15/JURITEXT000006951547.xml"
+    },
+    "JURITEXT000006953017": {
+     "bytes": 8154,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/06/95/30/JURITEXT000006953017.xml",
+     "run": "run-20261116-inca",
+     "sha256": "378ca036f1766f8da2f72f04aee28341d0788f37a9fcba7434bf2bdefaa19440",
+     "txt_sha256": "054dc7bb510e298ead89673ddb6e5ca5e699f43fdfd4b72b1591885f32071a57",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/06/95/30/JURITEXT000006953017.xml"
+    },
+    "JURITEXT000007100000": {
+     "bytes": 5190,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml",
+     "run": "run-20261116-inca",
+     "sha256": "221b00e5ac96d4bfd3d96b0b5df12a366f2022143ddc0bb379654c98619a7f64",
+     "txt_sha256": "b4dd7dfd662d9b93536312ae4fa9c8c1e99e1c72be0ce2450cd2b23f1154c4c9",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml"
+    },
+    "JURITEXT000007471838": {
+     "bytes": 6822,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml",
+     "run": "run-20261116-inca",
+     "sha256": "c66071b175f988aed226732aad832239c246e3b7aa7a2456e8c943928f884bf8",
+     "txt_sha256": "08ddeabbf9cc5fee4b28e27e51a4fb088ca621efd4d03d1474ada839d29153f9",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml"
+    }
+   },
+   "notes": {
+    "archive": "Freemium_inca_global_20261108-140000.tar.gz",
+    "last_run": "2026-11-16T14:09:19Z",
+    "runs": [
+     "run-20261116-inca"
+    ]
    }
   },
   "it": {

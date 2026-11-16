@@ -115,6 +115,10 @@ def verify(project_dir, provisions_dir, reference_date, view_path=None):
         if src.endswith(".es.card.txt"):
             # 西班牙证据卡：归西班牙专闸（verify-es）判，这里跳过
             continue
+        if src.endswith(".fr-case.card.txt"):
+            # 法国判例证据卡：归法国判例专闸（verify-fr-case）判，这里跳过
+            # （不加这行，PROV_RE 兜底会把判例卡当成法条卡报 LEGAL_PROV_UNKNOWN 假红）
+            continue
         m = PROV_RE.match(src)
         if not m:
             continue

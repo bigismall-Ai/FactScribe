@@ -209,6 +209,53 @@
     "pool_asof": "2026-11-15"
    }
   },
+  "fr-case": {
+   "items": {
+    "JURITEXT000006951547": {
+     "bytes": 14722,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/JURI/TEXT/00/00/06/95/15/JURITEXT000006951547.xml",
+     "run": "run-20261116-inca",
+     "sha256": "dc9d8def61b1026c210e10eec9982dace7ef3b84722d78b38fe58b6b3a05c11a",
+     "txt_sha256": "84b93cd74718d9a7465132ba60e2b96c433388554d67b6c40be3e83b01e36278",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/JURI/TEXT/00/00/06/95/15/JURITEXT000006951547.xml"
+    },
+    "JURITEXT000006953017": {
+     "bytes": 8154,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/06/95/30/JURITEXT000006953017.xml",
+     "run": "run-20261116-inca",
+     "sha256": "378ca036f1766f8da2f72f04aee28341d0788f37a9fcba7434bf2bdefaa19440",
+     "txt_sha256": "054dc7bb510e298ead89673ddb6e5ca5e699f43fdfd4b72b1591885f32071a57",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/06/95/30/JURITEXT000006953017.xml"
+    },
+    "JURITEXT000007100000": {
+     "bytes": 5190,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml",
+     "run": "run-20261116-inca",
+     "sha256": "221b00e5ac96d4bfd3d96b0b5df12a366f2022143ddc0bb379654c98619a7f64",
+     "txt_sha256": "b4dd7dfd662d9b93536312ae4fa9c8c1e99e1c72be0ce2450cd2b23f1154c4c9",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml"
+    },
+    "JURITEXT000007471838": {
+     "bytes": 6822,
+     "fetched_at": "2026-11-16T14:09:19Z",
+     "member": "inca/global/civile/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml",
+     "run": "run-20261116-inca",
+     "sha256": "c66071b175f988aed226732aad832239c246e3b7aa7a2456e8c943928f884bf8",
+     "txt_sha256": "08ddeabbf9cc5fee4b28e27e51a4fb088ca621efd4d03d1474ada839d29153f9",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml"
+    }
+   },
+   "notes": {
+    "archive": "Freemium_inca_global_20261108-140000.tar.gz",
+    "last_run": "2026-11-16T14:09:19Z",
+    "runs": [
+     "run-20261116-inca"
+    ]
+   }
+  },
   "it": {
    "items": {
     "act:1990/241@20261116": {

@@ -1,0 +1,24 @@
+法国判例语料（INCA 全球判决档案）——许可与署名
+
+许可   : Licence ouverte v2.0（Etalab / DILA，开放许可 2.0）
+发布方 : DILA — Direction de l'Information Légale et Administrative
+档案   : https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz
+下载日期: 2026-11-16T14:09:19Z
+
+署名三件套（Open Licence 2.0 要求）：
+  ① 发布方：DILA（Direction de l'Information Légale et Administrative）
+  ② 源 URL：档案 URL ＋ 档案内路径（逐件列在下面）
+  ③ 下载日期：2026-11-16T14:09:19Z
+
+本目录内的官方字节副本**钉了 sha256**（index.json 与证据卡里都有），
+属 Open Licence 2.0 允许的再分发；改动副本即破坏哈希对账。
+
+逐件源 URL（档案 URL ＋ 档案内路径）：
+  JURITEXT000006951547
+    https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/JURI/TEXT/00/00/06/95/15/JURITEXT000006951547.xml
+  JURITEXT000006953017
+    https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/06/95/30/JURITEXT000006953017.xml
+  JURITEXT000007100000
+    https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/10/00/JURITEXT000007100000.xml
+  JURITEXT000007471838
+    https://echanges.dila.gouv.fr/OPENDATA/INCA/Freemium_inca_global_20261108-140000.tar.gz#inca/global/civile/JURI/TEXT/00/00/07/47/18/JURITEXT000007471838.xml

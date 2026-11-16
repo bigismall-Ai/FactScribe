@@ -35,7 +35,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 本集成把法文数字词解析成整数再比对（`trente-cinq → 35`、`quatre-vingt-dix → 90`、
 `soixante-douze → 72`），所以「引用 35 小时」能自动对上原文。
 
-## 五个闸，五个法域
+## 六个闸，六个法域
 
 | 子命令 | 法域 | 官方件是什么 | 能判到哪一层 |
 |---|---|---|---|
@@ -44,6 +44,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-case` | 中国（人民法院案例库入库案例） | 官方案例正文 + 回执链 | 案号/日期/金额与官方件一致 |
 | `verify-it` | 意大利（Normattiva） | 官方 AKN XML + 条文切片 | 数值真出自官方 AKN 正文 |
 | `verify-es` | 西班牙（BOE 官方公报） | 官方合并文本 XML + 条文切片 | 数值真出自官方 BOE 合并文本正文 |
+| `verify-fr-case` | 法国（判例：Cour de cassation 等） | DILA INCA 官方判决 XML + 纯文本还原件 | 数值/日期真出自官方判决正文、案号与官方元数据一致 |
 
 各闸的错误码（**红 = 必须修，黄 = 不是绿**）：
 
@@ -54,6 +55,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-case` | `CASE_OFFICIAL_MISSING` `CASE_CARD_MISSING` `CASE_OFFICIAL_HASH_MISMATCH` `CASE_NO_MISMATCH` `CASE_DATE_MISMATCH` `CASE_AMOUNT_MISMATCH` `CASE_VALUE_NOT_IN_OFFICIAL` `CASE_CARD_TEXT_DIVERGED` `CASE_CHAIN_BROKEN` | — |
 | `verify-it` | `IT_PROV_UNKNOWN` `IT_CARD_MISSING` `IT_CARD_NO_HASH` `IT_CARD_SHA256_MISMATCH` `IT_SOURCE_HASH_MISMATCH` `IT_ARTICLE_HASH_MISMATCH` `IT_ARTICLE_NOT_IN_SOURCE` `IT_CARD_FIELD_MISMATCH` `IT_QUOTE_MISMATCH` | `IT_VERSION_GAP` |
 | `verify-es` | `ES_PROV_UNKNOWN` `ES_CARD_MISSING` `ES_CARD_NO_HASH` `ES_CARD_SHA256_MISMATCH` `ES_SOURCE_HASH_MISMATCH` `ES_ARTICLE_HASH_MISMATCH` `ES_ARTICLE_NOT_IN_SOURCE` `ES_CARD_FIELD_MISMATCH` `ES_QUOTE_MISMATCH` | `ES_VERSION_GAP` |
+| `verify-fr-case` | `FR_CASE_CARD_MISSING` `FR_CASE_OFFICIAL_MISSING` `FR_CASE_CARD_NO_HASH` `FR_CASE_OFFICIAL_HASH_MISMATCH` `FR_CASE_CARD_SHA256_MISMATCH` `FR_CASE_VALUE_NOT_IN_OFFICIAL` `FR_CASE_NO_MISMATCH` `FR_CASE_DATE_MISMATCH` `FR_CASE_CARD_TEXT_DIVERGED` | — |
 
 **M2 新增三码**（挂槽后材料依赖与冻结锁的 fail-closed 语义；码表只增不改）：
 
@@ -77,6 +79,11 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
   归 es 桶计数，有事项而 `<corpus>/es/index.json` 没拿到 ⇒ 黄 `LEGAL_COVERAGE_GAP`
   fail-closed。此前「ES 卡被 `PROV_RE` 兜底误并进 fr 桶」的边界申明就此修掉
   （回归钉常驻 `tests/test_checks_legal.py` 的 `TestESBucket`）。
+- **法国判例闸（`verify-fr-case`）尚未接进核验槽**（照 ES 批先例：只做
+  `factscribe_legal` 层，不越界动 [checks] 槽）。法国法条闸本身已跳过
+  `.fr-case.card.txt`（不加这行，`PROV_RE` 兜底会把判例卡当成法条卡报
+  `LEGAL_PROV_UNKNOWN` **假红**）。本批也**不加** `\cite{…}` 前缀（判例闸不处理
+  cite，照抄 CN 案例闸的最小面）。
 
 ## 两层证据
 
@@ -104,8 +111,14 @@ runs/run-YYYYMMDD-legal/
   `ARTICLE_TITLE` `VERSION_DATE` `FETCH_DATE` `REFERENCE_DATE` `SOURCE_FILE`
   `SOURCE_URL` `OFFICIAL_XML_SHA256` `ARTICLE_SHA256` `TEXT_CHARS` `TEXT_STATUS`
   `LICENCE` `ATTRIBUTION` `FETCHED_AT`
+- 法国判例：`CASE_ID` `TITRE` `DATE_DEC` `JUDGE_DATE` `JURIDICTION` `CASE_NO`
+  `NUMEROS_AFFAIRES` `FORMATION` `NATURE` `SOLUTION` `OFFICIAL_XML`
+  `OFFICIAL_TXT` `OFFICIAL_XML_BYTES` `OFFICIAL_XML_SHA256` `OFFICIAL_TXT_BYTES`
+  `OFFICIAL_TXT_SHA256` `TEXT_CHARS` `SOURCE_URL` `SOURCE_PATH` `FETCHED_AT`
+  `LICENCE` `ATTRIBUTION`
 
-**归属靠文件名后缀判定**（`.it.card.txt` / `.es.card.txt` / `.cn.card.txt` / `.case.card.txt` / 法国侧的 `.card.txt`），
+**归属靠文件名后缀判定**（`.it.card.txt` / `.es.card.txt` / `.cn.card.txt` / `.case.card.txt` /
+`.fr-case.card.txt` / 法国侧的 `.card.txt`），
 不靠卡内有没有某个标记字段 —— 靠标记猜会让「卡被删 / 卡被篡改」被静默跳过，变成假绿。
 
 ## 核验包注册形态（M2）：`audit [checks]` 单命令双域
@@ -203,11 +216,12 @@ python3 -m factscribe_legal verify \
     --date    2026-11-14 \
     --view    out/legifrance/view_20261114/merged_current.jsonl
 
-# 3) 中国法条 / 中国案例 / 意大利法条 / 西班牙法条
+# 3) 中国法条 / 中国案例 / 意大利法条 / 西班牙法条 / 法国判例
 python3 -m factscribe_legal verify-cn   --project . --catalog out/cn/catalog_full.jsonl.gz --date 2026-11-14
 python3 -m factscribe_legal verify-case --project .
 python3 -m factscribe_legal verify-it   --project . --corpus runs/run-20261115-it --date 2026-11-15
 python3 -m factscribe_legal verify-es   --project . --corpus corpus/es/run-20261116-es-ley39-2015-procedimiento-administrativo --date 2026-11-16
+python3 -m factscribe_legal verify-fr-case --project .
 ```
 
 退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**。
@@ -257,6 +271,7 @@ TOML 读取（`factscribe_legal/_toml.py`）有一处刻意设计：3.11+ 用标
 | 中国案例 | 人民法院案例库入库案例正文 | 官方正文 + 回执 | 官方用户协议（个人查询、建库须走程序） |
 | 意大利 | Normattiva OpenData API（`caricaAKN`） | 官方 AKN XML | CC BY 4.0 |
 | 西班牙 | BOE 开放数据 API（`legislacion-consolidada` by-id） | 官方合并文本 XML | AEBOE 复用条件（2024-06-27 决议；须注明出处） |
+| 法国判例 | DILA INCA 全球判决档案（`echanges.dila.gouv.fr/OPENDATA/INCA/`，stock tar.gz；sample 只取 12MB 前缀） | 官方判决 XML（TEXTE_JURI_JUDI） | licence ouverte v2.0（Etalab；须署发布方＋源 URL＋下载日期） |
 
 取件、钉哈希、建卡、选版（`date_debut <= T < date_fin`）的脚本在各自的工程仓里，
 本包只消费「已经钉好哈希的官方件」。

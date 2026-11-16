@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """核验槽（check slot）：注册表＋[checks] 解析＋发现汇总＋退出码折算。
 
-SPEC-CHECKS-draft（docs/design/SPEC-CHECKS-draft.md）§2.2：core 新增且仅新增
+SPEC-CHECKS（docs/design/SPEC-CHECKS.md，2026-11-16 已批）§2.2：core 新增且仅新增
 一个机构＝核验槽。槽只做四件事——①点名 ②收发现 ③折算退出码 ④出报告；
 一切领域判据都在核验包里，core 不为任何具体领域保留判据代码。
 paper（论文三闸，判据在 audit.py）是第一个注册进槽的核验包；legal（M2）是第二个。
@@ -13,8 +13,10 @@ paper（论文三闸，判据在 audit.py）是第一个注册进槽的核验包
   不产生退出码。
 - **无 `[checks]` 节＝槽不启用**：audit 行为与槽引入前逐字节一致
   （§5.2 兼容承诺；实现模式照 `[budget]`/`[evidence]` 先例：节不出现＝
-  判据不跑、行为与之前完全一致）。节存在但省 `packages` 同无节；
-  显式点名 `packages` 才走槽。
+  判据不跑、行为与之前完全一致）。**`[checks]` 节在场即走槽**（裁定③，
+  2026-11-16）：显式点名 `packages` 按点名；节存在但省 `packages` ⇒
+  默认 `["paper"]` 走槽——与无节的差别只有「输出带 domain 键与
+  by_domain」两处只增键，发现本体逐条相同。
 - **确定性**：同一输入字节 ⇒ 同一 findings 字节；槽不读系统钟、不联网、
   不写盘（零 LLM，沿用 SPEC.md §5 硬性要求）。
 
@@ -269,9 +271,10 @@ def load_integration(domain_id: str) -> None:
 
 
 def resolve_packages(cfg: Config) -> list[CheckPackage]:
-    """按 `[checks]` 配置点名本次要跑的核验包。
+    """按 `[checks]` 配置点名本次要跑的核验包（只在槽路径被调用）。
 
-    - 缺省（无 [checks]，或节存在但省 `packages`）⇒ 只跑 paper（裁定③）；
+    - 节存在但省 `packages`（或缺省构造的 Config）⇒ 默认 `["paper"]`
+      （裁定③，2026-11-16：裸节走槽，cmd_audit 以 checks_defined 判挂槽）；
     - `packages` 点了未注册的 id ⇒ 先按约定路径发现 integrations/ 件
       （M2 起，见 load_integration）；仍无 ⇒ exit 2（CONFIG），点名该 id
       与已注册域清单（§5.2）；

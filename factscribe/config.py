@@ -232,9 +232,10 @@ class Config:
     # fact id」，机器照单钉死。键＝节文件名去扩展名。
     evidence_defined: bool = False
     evidence_sections: dict = field(default_factory=dict)  # {节键: [fact id]}
-    # 核验槽（`[checks]`，可选；SPEC-CHECKS-draft §5）。checks_defined=False
-    # 时槽不启用：audit 行为与槽引入前逐字节一致（宪法保证）。节存在但省
-    # packages 同无节（只跑内建 paper）；显式点名 packages 才走槽。
+    # 核验槽（`[checks]`，可选；SPEC-CHECKS §5）。checks_defined=False（无节）
+    # 时槽不启用：audit 行为与槽引入前逐字节一致（宪法保证）。节在场即走槽
+    #（裁定③，2026-11-16）：省 packages ⇒ 槽侧默认 ["paper"]（输出带域标）；
+    # 显式 packages 按点名。
     checks_defined: bool = False
     checks_packages: list = field(default_factory=list)   # 点名的包 id（去重保序）
     checks_tables: dict = field(default_factory=dict)     # {域: 原始子表}，core 只透传
@@ -459,7 +460,7 @@ def section_evidence(cfg: Config, file: str) -> tuple:
 
 
 # --------------------------------------------------------------------------
-# 核验槽（`[checks]`，可选；SPEC-CHECKS-draft §5）
+# 核验槽（`[checks]`，可选；SPEC-CHECKS §5）
 # --------------------------------------------------------------------------
 
 CHECKS_TABLE = "checks"
@@ -470,8 +471,10 @@ def _parse_checks(data: dict, path: Path,
     """读 `[checks]`：返回 (是否声明, packages 点名, {域: 原始子表})。
 
     没有 `[checks]` ⇒ (False, [], {})——槽不启用，audit 行为与引入前逐字
-    节一致（§5.2 兼容承诺）。节存在但省 `packages` ⇒ 同无节（只跑内建
-    paper，判据不点名）。`packages` 顺序无关：去重保序。
+    节一致（§5.2 兼容承诺）。节存在但省 `packages` ⇒ checks_defined=True、
+    点名空表——cmd_audit 照样挂槽，槽侧默认 ["paper"]（裁定③，2026-11-16：
+    裸节走槽，输出带 domain 键与 by_domain；发现本体与直跑逐条相同）。
+    `packages` 顺序无关：去重保序。
 
     顶层只认 `packages` 一个键；其余顶层键若是表按域节透传给槽（键集由
     该包的卡声明，core 不校验、只透传），非表的值记 CONFIG_UNKNOWN_FIELD

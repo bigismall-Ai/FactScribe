@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""核验槽（factscribe/checks.py）机制测试：注册表＋[checks] 解析＋折算＋对表。
 
-规范：docs/design/SPEC-CHECKS-draft.md（§2.2 槽四件事、§3 包契约、
+规范：docs/design/SPEC-CHECKS.md（§2.2 槽四件事、§3 包契约、
 §5 配置与兼容承诺）。全离线，判据零 LLM。
 
 覆盖：
@@ -9,11 +9,13 @@ r"""核验槽（factscribe/checks.py）机制测试：注册表＋[checks] 解�
 * 注册表：paper 已注册、卡形状、domain_id 形状校验、重复注册拒绝；
 * 点名：缺省只跑 paper（裁定③）、显式 paper、未注册 id＝exit 2 并
   点名已注册清单、[checks.<domain>] 未知键＝告警不阻断；
-* [checks] 解析：无节不启用、省 packages 同无节、字符串归一、去重、
-  非法形状 exit 2、v1/V3 都可挂、V3 顶层已知字段不误告警；
+* [checks] 解析：无节不启用、裸节走槽默认 paper（裁定③，2026-11-16）、
+  字符串归一、去重、非法形状 exit 2、v1/V3 都可挂、V3 顶层已知字段不误告警；
 * 退出码折算：值与旧 _aggregate_exit 逐一相同（值永不变化）、
   单一实现（audit 旧名＝同一函数对象）、闭集整表；
 * 槽路径信封：域标只增键、by_domain 只增键、与直跑内容逐条相同；
+* 端到端三态对表（验收门 f）：无节＝直跑无域标；裸节＝走槽带域标
+  packages=paper；显式点名＝按点名；
 * 每域一把冻结锁：paper 沿用既有锁路径、其他域带域后缀。
 """
 from __future__ import annotations
@@ -368,7 +370,39 @@ class TestEndToEnd(SlotCase):
         payload = json.loads(proc.stdout)
         return proc.returncode, payload
 
+    def test_no_section_direct_run_has_no_domain_stamp(self):
+        # 三态之一（验收门 f）：无 [checks] 节＝直跑——无 domain 键、无 by_domain
+        exit_plain, plain = self._run("e2e-plain", "")
+        self.assertEqual(exit_plain, 1)   # 该项目带红（缺 source）
+        for key in ("findings", "issues", "warnings", "hints"):
+            for item in plain[key]:
+                self.assertNotIn("domain", item)
+        self.assertNotIn("by_domain", plain["summary"])
+
+    def test_bare_checks_section_walks_slot_with_default_paper(self):
+        # 三态之二（验收门 f，裁定③ 2026-11-16）：裸 [checks]（省 packages）
+        # ＝走槽默认 ["paper"]——输出带 domain 键与 by_domain（只增键），
+        # 发现本体与直跑逐条相同、退出码同值。
+        exit_plain, plain = self._run("bare-plain", "")
+        exit_bare, bare = self._run("bare-section", "\n[checks]\n")
+        self.assertEqual(exit_plain, exit_bare)
+        self.assertEqual(exit_bare, 1)
+        for key in ("findings", "issues", "warnings", "hints"):
+            self.assertEqual(strip_domain(plain[key]), strip_domain(bare[key]))
+            for item in bare[key]:
+                self.assertEqual(item.get("domain"), "paper")
+        self.assertNotIn("by_domain", plain["summary"])
+        self.assertEqual(set(bare["summary"]) - set(plain["summary"]),
+                         {"by_domain"})
+        self.assertEqual(bare["summary"]["by_domain"], {"paper": {
+            "red": len(plain["issues"]),
+            "yellow": len(plain["warnings"]),
+            "hints": len(plain["hints"]),
+        }})
+
     def test_explicit_paper_matches_default_modulo_domain_key(self):
+        # 三态之三（验收门 f）：显式点名＝按点名（packages=["paper"] 的槽
+        # 输出与裸节默认完全一致——点名决定跑谁）
         exit_plain, plain = self._run("e2e-plain", "")
         exit_slot, slot = self._run(
             "e2e-slot", '\n[checks]\npackages = ["paper"]\n')
@@ -386,17 +420,6 @@ class TestEndToEnd(SlotCase):
             "yellow": len(plain["warnings"]),
             "hints": len(plain["hints"]),
         }})
-
-    def test_bare_checks_section_is_byte_identical_to_no_section(self):
-        # §5.2：节存在但省 packages ⇒ 同无节（逐字节）
-        exit_plain, plain = self._run("bare-plain", "")
-        root = make_audit_project(self.tmp / "bare-section", "\n[checks]\n")
-        proc = cli("audit", str(root), "--json")
-        exit_bare = proc.returncode
-        self.assertEqual(exit_plain, exit_bare)
-        self.assertEqual(json.dumps(plain, ensure_ascii=False, sort_keys=True),
-                         json.dumps(json.loads(proc.stdout),
-                                    ensure_ascii=False, sort_keys=True))
 
 
 # --------------------------------------------------------------------------

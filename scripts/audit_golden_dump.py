@@ -66,7 +66,11 @@ def collect() -> dict:
         "command": "python3 -m factscribe audit <project> --json",
         "note": ("核验槽 M1 行为锁（SPEC-CHECKS §7 M1）：重构前后同命令同项目 "
                  "findings 与退出码逐字节相同才算过锁。只由 "
-                 "scripts/audit_golden_dump.py 生成。"),
+                 "scripts/audit_golden_dump.py 生成。"
+                 "重冻记录：2026-11-16 用户批准核验槽修约九条建议，裁定③使"
+                 "裸 [checks] 节走槽（默认 [\"paper\"]，输出带 domain 键与 "
+                 "by_domain）——基线重冻；26 个在锁项目均无 [checks] 节，"
+                 "重冻后各项目发现本体与退出码逐条相同。"),
         "projects": projects,
     }
 

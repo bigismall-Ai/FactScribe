@@ -1048,14 +1048,18 @@ def cmd_audit(args) -> int:
     sections = load_sections(cfg)
     strict = getattr(args, "strict", False)
     resolve = getattr(args, "resolve", False)
-    if getattr(cfg, "checks_defined", False) and cfg.checks_packages:
-        # 显式点名 [checks].packages：走核验槽（SPEC-CHECKS §5.2）。
-        # 槽收发现、加域标、折算退出码——退出码值与直跑完全一致。
+    if getattr(cfg, "checks_defined", False):
+        # [checks] 节在场即走核验槽（裁定③，2026-11-16）：显式点名 packages
+        # 按点名跑；节存在但省 packages ⇒ 默认 ["paper"]（仍走槽，输出带
+        # domain 键与 by_domain——只增键，报告其余逐条相同）。
+        # 无 [checks] 节才直跑：宪法承诺「无节＝逐字节不变」（SPEC-CHECKS §5.2）。
         red, yellow, hints, summary, unresolved = run_packages(
             cfg, facts, sections, resolve=resolve)
         code = checks_aggregate_exit(red, yellow, strict,
                                      integrity_first=cfg.is_v3)
-        domains = list(cfg.checks_packages)   # 走到这说明全部已注册
+        # 域序＝点名序（by_domain 按包迭代序插入，dict 保序）；裸节默认
+        # paper 时即 ["paper"]。走到这说明全部已注册（未注册在 resolve 即 exit 2）。
+        domains = list((summary or {}).get("by_domain", {}))
         if any(d != "paper" for d in domains):
             # 多域：人读报告按域分节（paper 节在前，其余域按点名序在后）；
             # 结论行红黄计数是跨域合并数（与折算同口径）。单 paper 点名
@@ -1065,8 +1069,8 @@ def cmd_audit(args) -> int:
         else:
             text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     else:
-        # 缺省（无 [checks]，或节存在但省 packages）：宪法保证——行为与槽
-        # 引入前逐字节一致（SPEC-CHECKS §5.2；[budget]/[evidence] 先例口径）。
+        # 无 [checks] 节：宪法保证——行为与槽引入前逐字节一致（SPEC-CHECKS
+        # §5.2；[budget]/[evidence] 先例口径）。裁定③后裸节不再走此路。
         red, yellow, hints, summary, unresolved = run_audit(
             cfg, facts, sections, resolve=resolve)
         code = _aggregate_exit(red, yellow, strict, integrity_first=cfg.is_v3)

@@ -95,6 +95,9 @@ def build_legal_project(base: Path, extra_toml: str = "") -> Path:
     语料放 results/ 下（paper 的 source 必须在 results/ 或 source_root 内；
     两层证据共用同一份字节：paper 钉卡/文件哈希，legal 钉官方字节哈希）。
     paper 域预期一黄 NO_MANIFEST（合成项目没有人签清单）。
+    extra_toml 追加键**不带表头**：模板末表是 [checks.legal]，裸键落该表——
+    重复 [checks.legal] 表头是非法 TOML（3.11+ tomllib 严判重表，3.10 旧兜底
+    解析器宽容会掩盖）。
     """
     root = Path(base)
     for d in ("sections", "facts", "results/corpus-legal"):
@@ -158,8 +161,9 @@ class TestDiscoveryAndCard(LegalSlotCase):
             checks.resolve_packages(cfg)
 
     def test_known_keys_raise_no_warning_unknown_key_warns(self):
+        # 追加键不带表头（落模板末表 [checks.legal]）——重复表头是非法 TOML。
         root = build_legal_project(
-            self.tmp / "p", '\n[checks.legal]\nview = "out/view.jsonl"\n')
+            self.tmp / "p", '\nview = "out/view.jsonl"\n')
         cfg = load_config(root)
         checks.resolve_packages(cfg)
         legal_warns = [w for w in cfg.warnings
@@ -167,7 +171,7 @@ class TestDiscoveryAndCard(LegalSlotCase):
                            "factscribe.toml [checks.legal]")]
         self.assertEqual(legal_warns, [])
         root2 = build_legal_project(
-            self.tmp / "p2", '\n[checks.legal]\nfoo = "bar"\n')
+            self.tmp / "p2", '\nfoo = "bar"\n')
         cfg2 = load_config(root2)
         checks.resolve_packages(cfg2)
         self.assertTrue(any(

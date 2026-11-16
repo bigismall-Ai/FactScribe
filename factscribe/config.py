@@ -62,6 +62,50 @@ def _strip_toml_comment(line: str) -> str:
     return "".join(out)
 
 
+def _split_top_level(body: str) -> list[str]:
+    """按顶层逗号切：顾引号，也顾 {}/[] 嵌套——内联表不当劈开。"""
+    items: list[str] = []
+    buf: list[str] = []
+    quote: str | None = None
+    depth = 0
+    for c in body:
+        if quote:
+            buf.append(c)
+            if c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+            buf.append(c)
+        elif c in "[{":
+            depth += 1
+            buf.append(c)
+        elif c in "]}":
+            depth -= 1
+            buf.append(c)
+        elif c == "," and depth == 0:
+            items.append("".join(buf))
+            buf = []
+        else:
+            buf.append(c)
+    if "".join(buf).strip():
+        items.append("".join(buf))
+    return items
+
+
+def _mini_toml_inline_table(raw: str) -> dict:
+    """内联表 `{ key = 值, … }`（3.11+ tomllib 本就支持；此处补齐 3.10 同形）。"""
+    out: dict = {}
+    for part in _split_top_level(raw[1:-1]):
+        part = part.strip()
+        if not part:
+            continue
+        key, sep, value = part.partition("=")
+        if not sep:
+            raise ValueError("内联表缺 key=value：%r" % raw)
+        out[key.strip().strip("\"'")] = _mini_toml_value(value)
+    return out
+
+
 def _mini_toml_value(raw: str):
     raw = raw.strip()
     if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2:
@@ -71,24 +115,10 @@ def _mini_toml_value(raw: str):
     if raw in ("true", "false"):
         return raw == "true"
     if raw.startswith("[") and raw.endswith("]"):
-        body = raw[1:-1]
-        items, buf, quote = [], [], None
-        for c in body:
-            if quote:
-                buf.append(c)
-                if c == quote:
-                    quote = None
-            elif c in "\"'":
-                quote = c
-                buf.append(c)
-            elif c == ",":
-                items.append("".join(buf))
-                buf = []
-            else:
-                buf.append(c)
-        if "".join(buf).strip():
-            items.append("".join(buf))
-        return [_mini_toml_value(x) for x in items if x.strip()]
+        return [_mini_toml_value(x)
+                for x in _split_top_level(raw[1:-1]) if x.strip()]
+    if raw.startswith("{") and raw.endswith("}"):
+        return _mini_toml_inline_table(raw)
     try:
         if any(ch in raw for ch in ".eE") and not raw.startswith("0x"):
             return float(raw)

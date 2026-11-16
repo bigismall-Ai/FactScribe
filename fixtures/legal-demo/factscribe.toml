@@ -11,7 +11,8 @@ packages = ["paper", "legal"]
 
 # legal 卡的键集契约（config_keys＝{corpus, date, view}）：
 #   corpus＝语料视图目录（FR 闸读 index.json＋官方 XML；CN 看 catalog.jsonl.gz，
-#   IT 看 it/——本演示只合成 FR 语料）；date＝参考日（不读系统钟）；view＝可选。
+#   IT 看 it/，ES 看 es/——本演示合成 FR＋ES 语料）；date＝参考日（不读系统钟）；
+#   view＝可选。
 # 材料缺失 fail-closed：语料没拿到＝黄 LEGAL_COVERAGE_GAP，不许静默绿。
 [checks.legal]
 corpus = "results/corpus-legal"

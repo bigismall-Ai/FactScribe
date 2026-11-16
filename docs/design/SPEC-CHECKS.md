@@ -92,13 +92,13 @@ core 不再为任何具体领域保留判据代码**（M1 重构后的终态）�
 
 | 项 | 类型 | 约束 | 先例 |
 |---|---|---|---|
-| `domain_id` | string | 全局唯一小写 id（`paper`、`legal`）；即配置节名与码表命名空间的来源 | 法律件四闸已在用 `LEGAL_`/`CN_`/`CASE_`/`IT_` 前缀分域 |
+| `domain_id` | string | 全局唯一小写 id（`paper`、`legal`）；即配置节名与码表命名空间的来源 | 法律件五闸已在用 `LEGAL_`/`CN_`/`CASE_`/`IT_`/`ES_` 前缀分域 |
 | **冻结码表** | 文件 | 本域全部 code ＋ severity ＋ 一句触发条件＋一句边界（「绿不代表……」）；冻结后只增不改名不改义（§4） | SPEC-V3.0 §8、CODES-AND-CHAIN §1 |
 | **config 节名** | `[checks.<domain_id>]` | 键集由包自己的卡声明；未知键走 `CONFIG_UNKNOWN_FIELD` 告警、不改退出码（CONFIG-CONTRACT §4 纪律） | `[budget]`/`[evidence]` 可选节先例 |
 | **出处材料依赖声明** | 清单 | 包声明它消费哪些证据工件（如 legal：`runs/<run>-legal` 语料视图 `index.json`＋官方件＋证据卡＋参考日；paper：facts＋sections＋bib＋manifest/evidence.lock）；**材料缺失必须 fail-closed 出黄/红，不许静默绿**（防「空集伪装全绿」，INTEGRATION-LEGAL §6） | `LEGAL_COVERAGE_GAP`/`IT_VERSION_GAP` 先例 |
 | **`verify(project, facts, evidence) → findings`** | 纯函数 | 输入＝项目只读视图＋冻结事实账＋冻结证据集＋本域配置节；输出＝findings 列表（§3.2）；**不许改账、不许写盘、不许联网、不许读系统钟**（参考日等时间输入一律来自配置或材料，先例：`evidence --unfreeze --at`、legal `--date`） | legal 四闸 verify 的现状函数形 |
 
-一个包可含多个子闸（legal 一包四闸 FR/CN/CASE/IT），但**每个子闸的码前缀都在
+一个包可含多个子闸（legal 一包五闸 FR/CN/CASE/IT/ES），但**每个子闸的码前缀都在
 同一张冻结码表里列明**（§4.3）。
 
 ### 3.2 发现形状（与 core 信封对齐）
@@ -296,6 +296,15 @@ G5–G7 的 audit 侧判据（派生/覆盖/闭包）在 M1 已随 `run_audit` �
 - 配套（同批）：改账函数出核验定位 `ledger_maint`（裁定⑦，commit `ca32252`）、
   每域一把冻结锁落 legal `audit/evidence-legal.lock`（裁定⑨，commit `d1c350b`）、
   legal README 换 factscribe 口径与核验包注册形态文档（commit `a06ebb5`）。
+- **ES 桶升独立分节**（2026-11-16 批，判据与码表零改动）：ES 源批（feat/
+  legal-corpus-es）注册的 `ES_` 十码此前未接槽——`checks_adapter` 的
+  `PROV_RE`／`art-` 兜底把 `.es.card.txt` 卡与 `art-es-` 引用误并进 fr 桶
+  （只到黄项文案与 gates 计数）。本批 legal 包内 es 升为第五桶（gates 行
+  `fr｜cn｜case｜it｜es` 五桶并列，na 语义照旧），ES 判定走 `ES_` 码表
+  独立分节；材料依赖照 fail-closed 表亮 `LEGAL_COVERAGE_GAP`。冻结锁裁决：
+  **不另发 `audit/evidence-es.lock`**——裁定⑨按 domain_id 每域一把，ES 是
+  legal 包内子闸（与 CN/IT 同层）且与 legal 共用同一 corpus 视图
+  （`es/` 子目录，无独立 manifest），材料防篡改由 ES 闸自身三层哈希链兜底。
 
 ### M3　语料视图等器官按第二域实证择机升 core
 

@@ -14,6 +14,10 @@ core 只按 check-package.toml 的声明发现载入（core 不 import integrati
 * 域内正判：合成语料上合法引用零发现、引用缺语料法条 ⇒ LEGAL_PROV_UNKNOWN；
 * 槽内行为：summary 挂在 summary["legal"]、by_domain 归属、退出码走
   aggregate_exit 单一入口；
+* ES 独立桶（2026-11-16 批，TestESBucket）：gates 行五桶并列
+  fr｜cn｜case｜it｜es；ES 事项（.es.card.txt 卡＋art-es- 引用）归 es 桶、
+  不再被 PROV_RE／art- 兜底误并进 fr 桶（反例回归钉）；缺 es/ 语料
+  fail-closed 黄 LEGAL_COVERAGE_GAP；ES 判定走 ES_ 码表独立分节；
 * 冻结锁：audit/evidence-legal.lock 与 paper 的 audit/evidence.lock 互不干扰
   （在 TestLegalEvidenceLock）。
 """
@@ -22,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -127,6 +132,113 @@ def codes_of(items: list[dict]) -> list[str]:
     return [i["code"] for i in items]
 
 
+# --------------------------------------------------------------------------
+# ES 离线合成样例（照 legal-demo／verify-es 形状：<corpus>/es/ 一目录一法，
+# 形状同 integrations/factscribe-legal/tests/test_spain.py 的迷你 BOE 语料；
+# 哈希全部现算，离线确定性）。
+# --------------------------------------------------------------------------
+
+ES_BOE_XML = (
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<response><status><code>200</code><text>ok</text></status><data>\n'
+    '<metadatos><identificador>BOE-A-2015-10565</identificador>'
+    '<titulo>Ley 39/2015</titulo>'
+    '<fecha_actualizacion>20261116T084356Z</fecha_actualizacion></metadatos>\n'
+    '<texto>\n'
+    '<bloque id="a2" tipo="precepto" titulo="Articulo 2">\n'
+    '<version id_norma="BOE-A-2015-10565" fecha_publicacion="20151002" '
+    'fecha_vigencia="20151003">\n'
+    '<p class="articulo">Articulo 2. Ambito de aplicacion.</p>\n'
+    '<p class="parrafo">2. El plazo maximo para dictar resolucion es de '
+    '3 meses.</p>\n'
+    '</version>\n'
+    '</bloque>\n'
+    '</texto>\n'
+    '</data></response>\n'
+).encode("utf-8")
+
+ES_ACT_ID = "BOE-A-2015-10565"
+ES_CARD_REL = "results/corpus-legal/es/a2.es.card.txt"
+
+
+def _sha_bytes(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def build_es_view(root: Path, corpus_rel: str = "results/corpus-legal",
+                  fetch_reference_date: str = "2026-11-14") -> Path:
+    """给项目装上 ES 语料视图（<corpus>/es/：index.json＋官方整件＋切片＋卡）。"""
+    es = root / corpus_rel / "es"
+    off = es / "official"
+    off.mkdir(parents=True, exist_ok=True)
+    (off / "act.xml").write_bytes(ES_BOE_XML)
+    blob = re.search(rb'<bloque id="a2"[^>]*>.*?</bloque>',
+                     ES_BOE_XML, re.S).group(0)
+    (off / "a2.xml").write_bytes(blob)
+    text = re.sub(r"\s+", " ",
+                  re.sub(r"<[^>]+>", " ", blob.decode("utf-8"))).strip()
+    card = "\n".join([
+        "# 西班牙法条证据卡（离线合成；官方 BOE 整件与条文切片哈希钉在这里）",
+        "ACT_ID: %s" % ES_ACT_ID,
+        "ACT_TITLE: Ley 39/2015",
+        "BLOCK_ID: a2",
+        "ARTICLE_NUM: 2",
+        "VERSION_DATE: 2026-11-16",
+        "REFERENCE_DATE: %s" % fetch_reference_date,
+        "SOURCE_FILE: official/act.xml",
+        "OFFICIAL_XML_SHA256: %s" % _sha_bytes(ES_BOE_XML),
+        "ARTICLE_SHA256: %s" % _sha_bytes(blob),
+        "TEXT_CHARS: %d" % len(text),
+        "--- OFFICIAL TEXT ---",
+        text,
+        "",
+    ])
+    (es / "a2.es.card.txt").write_text(card, encoding="utf-8")
+    index = {
+        "act_id": ES_ACT_ID,
+        "act_title": "Ley 39/2015",
+        "source_file": "official/act.xml",
+        "source_sha256": _sha_bytes(ES_BOE_XML),
+        "version_date": "2026-11-16",
+        "fetch_reference_date": fetch_reference_date,
+        "articles": {
+            "a2": {
+                "block_id": "a2", "num": "2",
+                "article_file": "official/a2.xml",
+                "article_sha256": _sha_bytes(blob),
+                "article_bytes": len(blob),
+                "card_file": "a2.es.card.txt",
+                "card_sha256": _sha_bytes(card.encode("utf-8")),
+            },
+        },
+    }
+    (es / "index.json").write_text(
+        json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8")
+    return es
+
+
+def add_es_fact(root: Path, value: str = "3",
+                source: str = ES_CARD_REL) -> None:
+    """加一条指向 ES 证据卡的事实（卡在则钉卡哈希，照两层证据模型）。"""
+    lines = ['[[fact]]',
+             'id = "ES-A2"',
+             'claim = "西班牙行政程序法答复最长期限（合成）"',
+             'value = "%s"' % value,
+             'source = "%s"' % source]
+    card = root / source
+    if card.is_file():
+        lines.append('source_sha256 = "sha256:%s"'
+                     % _sha_bytes(card.read_bytes()))
+    (root / "facts" / "40-es.toml").write_text("\n".join(lines) + "\n",
+                                               encoding="utf-8")
+
+
+def add_es_citation(root: Path, key: str = "art-es-a2") -> None:
+    (root / "sections" / "02_es.tex").write_text(
+        "\\section{ES}\n西班牙侧引用 \\cite{%s}。\n" % key, encoding="utf-8")
+
+
 class LegalSlotCase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -146,7 +258,7 @@ class TestDiscoveryAndCard(LegalSlotCase):
         pkg = checks.get_package("legal")
         self.assertEqual(pkg.domain_id, "legal")
         self.assertEqual(pkg.config_keys, frozenset({"corpus", "date", "view"}))
-        self.assertIn("四闸", pkg.description)
+        self.assertIn("五闸", pkg.description)
         self.assertTrue(callable(pkg.verify))
 
     def test_resolve_names_legal_and_paper_in_order(self):
@@ -305,6 +417,111 @@ class TestSlotBehavior(LegalSlotCase):
 
 
 # --------------------------------------------------------------------------
+# ES 独立桶（2026-11-16 批）：gates 行五桶并列 fr｜cn｜case｜it｜es；
+# ES 事项不再被 _gate_scope 的 PROV_RE／art- 兜底误并进 fr 桶（回归钉）；
+# 缺 es/ 语料 fail-closed；ES 判定走 ES_ 码表独立分节。
+# --------------------------------------------------------------------------
+
+FIVE_BUCKET_LINE = ("gates   : fr 红0/黄0（ran） ｜ cn 红0/黄0（na） ｜ "
+                    "case 红0/黄0（ran） ｜ it 红0/黄0（na） ｜ "
+                    "es 红0/黄0（ran）")
+
+
+class TestESBucket(LegalSlotCase):
+    def _slot(self, root):
+        cfg = load_config(root)
+        red, yellow, _h, summary, _u = checks.run_packages(
+            cfg, load_facts(cfg), load_sections(cfg))
+        return red, yellow, summary
+
+    def test_es_bucket_runs_independent_section(self):
+        """ran 态：ES 视图在、ES 卡被 ES 闸独立判定，gates 行五桶并列。"""
+        root = build_legal_project(self.tmp / "p")
+        build_es_view(root)
+        add_es_fact(root)
+        red, yellow, summary = self._slot(root)
+        gates = summary["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "ran")
+        self.assertEqual(gates["es"]["note"], "1 条事项")
+        self.assertEqual(gates["es"]["red"], 0)   # 合成语料合法引用零发现
+        self.assertEqual(summary["legal"]["lines"][1], FIVE_BUCKET_LINE)
+        # summary 归属：ES 零发现不增 legal 域计数（paper 的 NO_MANIFEST 不计）
+        self.assertEqual(summary["by_domain"]["legal"],
+                         {"red": 0, "yellow": 0, "hints": 0})
+
+    def test_es_items_not_merged_into_fr_bucket(self):
+        """反例回归钉：.es.card.txt 与 art-es- 引用不得进 fr 桶计数。
+
+        修复前：PROV_RE 兜底把 ES 卡并进 fr、art- 前缀把 art-es- 引用并进
+        fr——fr 的「N 条事项」把 ES 事项算进去。本例 FR 1 条＋ES 卡 1 条＋
+        ES 引用 1 条：fr 必须＝1，es 必须＝2。
+        """
+        root = build_legal_project(self.tmp / "p")
+        add_es_fact(root)
+        add_es_citation(root)
+        from factscribe_legal.checks_adapter import _gate_scope
+        scope = _gate_scope(str(root))
+        self.assertEqual(scope["fr"], 1)
+        self.assertEqual(scope["es"], 2)
+        _red, _yellow, summary = self._slot(root)
+        gates = summary["legal"]["gates"]
+        self.assertEqual(gates["fr"]["status"], "ran")
+        self.assertEqual(gates["fr"]["note"], "1 条事项")   # 不含 ES 事项
+        self.assertEqual(gates["es"]["status"], "skipped")
+
+    def test_es_missing_material_fails_closed(self):
+        """有 ES 事项而 es/ 语料没拿到 ⇒ 黄 LEGAL_COVERAGE_GAP，不许静默绿。"""
+        root = build_legal_project(self.tmp / "p")
+        add_es_fact(root)
+        add_es_citation(root)
+        _red, yellow, summary = self._slot(root)
+        legal_y = [i for i in yellow if getattr(i, "domain", "") == "legal"]
+        self.assertTrue(any(i.code == "LEGAL_COVERAGE_GAP"
+                            and "西班牙" in i.message for i in legal_y))
+        gates = summary["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "skipped")
+        self.assertEqual(gates["es"]["note"], "es/ 语料没拿到")
+        from factscribe.checks import aggregate_exit
+        self.assertEqual(aggregate_exit([], legal_y), 3)   # 黄＝3，非绿
+
+    def test_es_quote_mismatch_is_red_in_legal_domain(self):
+        """ES 判定走 ES_ 码表独立分节：值不在条文正文 ⇒ ES_QUOTE_MISMATCH 红。"""
+        root = build_legal_project(self.tmp / "p")
+        build_es_view(root)
+        add_es_fact(root, value="999")   # 条文正文里没有 999
+        red, _yellow, summary = self._slot(root)
+        legal_red = [i for i in red if getattr(i, "domain", "") == "legal"]
+        self.assertIn("ES_QUOTE_MISMATCH", [i.code for i in legal_red])
+        self.assertEqual(summary["by_domain"]["legal"]["red"], 1)
+        gates = summary["legal"]["gates"]
+        self.assertEqual((gates["es"]["status"], gates["es"]["red"]),
+                         ("ran", 1))
+
+    def test_es_gate_skips_when_date_invalid(self):
+        """date 非法 ⇒ LEGAL_DATE_INVALID 红，ES 闸与时效闸一起 skip。"""
+        root = build_legal_project(self.tmp / "p")
+        build_es_view(root)
+        add_es_fact(root)
+        toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+        toml = toml.replace('date = "2026-11-14"', 'date = "20261114"')
+        (root / "factscribe.toml").write_text(toml, encoding="utf-8")
+        red, _yellow, summary = self._slot(root)
+        legal_red = [i for i in red if getattr(i, "domain", "") == "legal"]
+        self.assertIn("LEGAL_DATE_INVALID", [i.code for i in legal_red])
+        gates = summary["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "skipped")
+        self.assertEqual(gates["es"]["note"], "date 未定，时效判据全跳过")
+
+    def test_es_na_when_no_items_and_no_material(self):
+        """na 态：无 ES 事项且无 es/ 材料 ⇒ na「0 事项」（语义照 CN/IT）。"""
+        root = build_legal_project(self.tmp / "p")
+        _red, _yellow, summary = self._slot(root)
+        gates = summary["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "na")
+        self.assertEqual(gates["es"]["note"], "0 事项")
+
+
+# --------------------------------------------------------------------------
 # 端到端（提交在仓的合成演示项目 fixtures/legal-demo）：单命令双域报告
 # --------------------------------------------------------------------------
 
@@ -343,11 +560,33 @@ class TestDualDomainEndToEnd(LegalSlotCase):
                          "ran")
         self.assertEqual(payload["summary"]["legal"]["date"], "2026-11-14")
 
+    def test_demo_es_bucket_ran_and_five_bucket_gates_line(self):
+        """验收门 f（ran 态）：legal 节 gates 行五桶并列，ES 桶 ran。"""
+        payload = json.loads(self._audit(DEMO).stdout)
+        gates = payload["summary"]["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "ran")
+        self.assertEqual(gates["es"]["note"], "1 条事项")
+        self.assertEqual(gates["es"]["red"], 0)
+        self.assertEqual(payload["summary"]["legal"]["lines"][1],
+                         FIVE_BUCKET_LINE)
+
+    def test_demo_without_es_material_es_is_na(self):
+        """验收门 f（na 态）：拆掉 ES 材料＋事项 ⇒ es 桶 na「0 事项」。"""
+        def drop_es(root):
+            shutil.rmtree(root / "results" / "corpus-legal" / "es")
+            (root / "facts" / "40-es.toml").unlink()
+        root = self._variant("no-es", drop_es)
+        payload = json.loads(self._audit(root).stdout)
+        gates = payload["summary"]["legal"]["gates"]
+        self.assertEqual(gates["es"]["status"], "na")
+        self.assertEqual(gates["es"]["note"], "0 事项")
+
     def test_demo_human_report_has_domain_sections_legal_last(self):
         proc = self._audit(DEMO, human=True)
         text = proc.stdout
         self.assertIn("---- 核验域：legal ----", text)
         self.assertIn("gates   : fr 红0/黄0（ran）", text)
+        self.assertIn("es 红0/黄0（ran）", text)   # 五桶并列的人读形状
         self.assertLess(text.index("[黄] 1 处"),
                         text.index("---- 核验域：legal ----"))
         self.assertIn("结论：1 红 / 1 黄 → 红（有违例）（退出码 1）", text)

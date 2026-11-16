@@ -1,0 +1,45 @@
+{
+  "act_eli": "https://www.boe.es/eli/es/l/2015/10/02/39",
+  "act_id": "BOE-A-2015-10565",
+  "act_number": "39/2015",
+  "act_range": "Ley",
+  "act_title": "Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo y de Administración Electrónica.",
+  "articles": {
+    "a1": {
+      "article_bytes": 377,
+      "article_file": "official/a1.xml",
+      "article_sha256": "5c070b5f959f702e684614f66510e35b713456b2cbdb265675efb035df6a9e58",
+      "block_id": "a1",
+      "card_file": "a1.es.card.txt",
+      "card_sha256": "504c43d2d9006d46cbc48c8bd47b4e3cf4374e9081d6743813c700a7fbcdd107",
+      "num": "1",
+      "text_chars": 116,
+      "text_sha256": "1084ec7430cca60f8b164eb8d61378e62354ce6a54307505594589306fd527b5",
+      "title": "Artículo 1"
+    },
+    "a2": {
+      "article_bytes": 453,
+      "article_file": "official/a2.xml",
+      "article_sha256": "24710c8b84d865ec25cbe8c4011c31f7c1271f50c87845354c2c8fbd41923d47",
+      "block_id": "a2",
+      "card_file": "a2.es.card.txt",
+      "card_sha256": "d60b13653bb2a83df22c4b5345e9c9b2bfd9ce7eabb26d8546224414f699944f",
+      "num": "2",
+      "text_chars": 156,
+      "text_sha256": "61eafec10035f10eaf3f731c3e71b7d9ebd2833c32b22e2627cca8038e79f74b",
+      "title": "Artículo 2"
+    }
+  },
+  "estado_consolidacion": "Finalizado",
+  "fecha_disposicion": "20151001",
+  "fecha_publicacion": "20151002",
+  "fecha_vigencia": "20151003",
+  "fetch_reference_date": "2026-11-14",
+  "reference_date": "2026-11-14",
+  "source_bytes": 2173,
+  "source_file": "official/act.xml",
+  "source_sha256": "3f8f6c6756385469719c32233707442c086940d1f2c676aa4d15c2b36d1bc2c8",
+  "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565",
+  "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10565",
+  "version_date": "2026-11-16"
+}

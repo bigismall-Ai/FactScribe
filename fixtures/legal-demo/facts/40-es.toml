@@ -1,0 +1,9 @@
+[[fact]]
+id = "ES-A2"
+claim = "西班牙行政程序法答复最长期限（合成语料演示，非真实条文）"
+value = "3"
+source = "results/corpus-legal/es/a2.es.card.txt"
+source_sha256 = "sha256:d60b13653bb2a83df22c4b5345e9c9b2bfd9ce7eabb26d8546224414f699944f"
+locator = "a2 (BOE-A-2015-10565)"
+confidence = "high"
+derived_from = []

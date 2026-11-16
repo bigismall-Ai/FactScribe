@@ -1,0 +1,22 @@
+# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）
+ACT_ID: BOE-A-2015-10565
+ACT_ELI: https://www.boe.es/eli/es/l/2015/10/02/39
+ACT_TITLE: Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo y de Administración Electrónica.
+ACT_NUMBER: 39/2015
+BLOCK_ID: a2
+ARTICLE_NUM: 2
+ARTICLE_TITLE: Artículo 2
+VERSION_DATE: 2026-11-16
+FETCH_DATE: 2026-11-14
+REFERENCE_DATE: 2026-11-14
+SOURCE_FILE: official/act.xml
+SOURCE_URL: https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565
+OFFICIAL_XML_SHA256: 3f8f6c6756385469719c32233707442c086940d1f2c676aa4d15c2b36d1bc2c8
+ARTICLE_SHA256: 24710c8b84d865ec25cbe8c4011c31f7c1271f50c87845354c2c8fbd41923d47
+TEXT_CHARS: 156
+TEXT_STATUS: texto consolidado de carácter meramente informativo
+LICENCE: Condiciones de reutilización de la AEBOE
+ATTRIBUTION: Fuente de los datos: Agencia Estatal Boletín Oficial del Estado
+FETCHED_AT: 2026-11-16T09:00:00Z
+--- OFFICIAL TEXT ---
+Artículo 2. Ámbito de aplicación. 1. La presente Ley se aplica a la actuación de la Administración. 2. El plazo máximo para dictar resolución es de 3 meses.

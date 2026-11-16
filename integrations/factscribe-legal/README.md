@@ -35,7 +35,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 本集成把法文数字词解析成整数再比对（`trente-cinq → 35`、`quatre-vingt-dix → 90`、
 `soixante-douze → 72`），所以「引用 35 小时」能自动对上原文。
 
-## 四个闸，四个法域
+## 五个闸，五个法域
 
 | 子命令 | 法域 | 官方件是什么 | 能判到哪一层 |
 |---|---|---|---|
@@ -70,12 +70,13 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 - 案例库存的是**要旨体例案例稿**，不是判决书原文 ⇒ `verify-case` 核的是「这份案例稿与官方件一致」。
 - `verify-it` 判的是「数值出自官方 AKN 条文」；`IT_VERSION_GAP` 只说明**参考日**的版本没拿到，
   是黄不是红。
-- **西班牙闸尚未接进核验槽**（本批只做 `factscribe_legal` 层，不越界动 [checks] 槽）：
-  槽内「材料依赖 fail-closed」的计数按卡后缀分桶，`checks_adapter.py` 的 `PROV_RE`
-  兜底会把 `.es.card.txt` 并进 `fr` 桶、`\cite{art-es-…}` 也会并进 `fr` 桶。后果**只到
-  黄项文案**（「有 N 条法国事项」把 ES 事项算进去），不误红、不假绿——法国闸本身已跳过
-  `.es.card.txt` 与 `art-es-` 引用。ES 进槽须另开一批（改 `GATE_ORDER`、加 es 桶与
-  材料依赖声明）。
+- `verify-es` 判的是「数值出自官方 BOE 合并文本条文」；`ES_VERSION_GAP` 只说明**参考日**
+  的版本没拿到，是黄不是红（口径与 `IT_VERSION_GAP` 相同）。
+- **ES 桶已升独立分节**（2026-11-16 批）：槽内 gates 行五桶并列
+  `fr｜cn｜case｜it｜es`，ES 事项（`.es.card.txt` 卡与 `\cite{art-es-…}` 引用）
+  归 es 桶计数，有事项而 `<corpus>/es/index.json` 没拿到 ⇒ 黄 `LEGAL_COVERAGE_GAP`
+  fail-closed。此前「ES 卡被 `PROV_RE` 兜底误并进 fr 桶」的边界申明就此修掉
+  （回归钉常驻 `tests/test_checks_legal.py` 的 `TestESBucket`）。
 
 ## 两层证据
 
@@ -124,7 +125,8 @@ packages = ["paper", "legal"]     # 缺省（无 [checks] 节）＝只跑 paper�
 
 [checks.legal]
 corpus = "results/corpus-legal"   # 语料视图目录（FR 读 index.json＋官方 XML；
-                                  # CN 看 <corpus>/catalog.jsonl.gz；IT 看 <corpus>/it/）
+                                  # CN 看 <corpus>/catalog.jsonl.gz；IT 看 <corpus>/it/；
+                                  # ES 看 <corpus>/es/——一目录一法，照 IT 同款约定）
 date   = "2026-11-14"             # 参考日（不读系统钟）
 view   = "out/…/merged_current.jsonl"   # 可选：现行视图，交叉验证生效状态
 ```
@@ -143,15 +145,20 @@ core 按约定路径发现 `integrations/*/check-package.toml`（本目录下这
 | `corpus` 未声明／目录不存在／缺 index.json | 黄 `LEGAL_COVERAGE_GAP`（法律域 0 覆盖，报告里亮出），FR 闸不跑 |
 | 有中国事项而 `<corpus>/catalog.jsonl.gz` 没拿到 | 黄 `LEGAL_COVERAGE_GAP`，CN 闸不跑 |
 | 有意大利事项而 `<corpus>/it/index.json` 没拿到 | 黄 `LEGAL_COVERAGE_GAP`，IT 闸不跑 |
-| `date` 缺失或非 YYYY-MM-DD | 红 `LEGAL_DATE_INVALID`，时效类三闸全跳过 |
-| 无 CN／IT 事项且材料没配 | 正常跳过（0 事项，报告 gates 行可见 `na`） |
+| 有西班牙事项而 `<corpus>/es/index.json` 没拿到 | 黄 `LEGAL_COVERAGE_GAP`，ES 闸不跑 |
+| `date` 缺失或非 YYYY-MM-DD | 红 `LEGAL_DATE_INVALID`，时效类四闸全跳过 |
+| 无 CN／IT／ES 事项且材料没配 | 正常跳过（0 事项，报告 gates 行可见 `na`） |
 | CASE 闸 | 材料全在项目内（`runs/<run>/`），永远可跑 |
 
 **每域冻结锁**：legal 维的锁件是 `audit/evidence-legal.lock`（paper 的
 `audit/evidence.lock` 互不干扰）。锁的是「语料视图路径＋参考日＋现行视图
 路径＋语料索引哈希」四键；冻结后换了语料或参考日 ⇒ 红 `LEGAL_EVIDENCE_CHANGED`；
 解冻必须走只加流水账 `audit/evidence-legal-log.ndjson`，已解冻未重冻 ⇒ 黄
-`LEGAL_EVIDENCE_UNFROZEN`。冻结／解冻入口（库函数，不写盘于核验路径）：
+`LEGAL_EVIDENCE_UNFROZEN`。ES 与 CN／IT 同口径：**共用 legal 这一把锁**
+（ES 不是独立域、没有独立 manifest，不发 `audit/evidence-es.lock`——裁定⑨
+每域一把锁按 domain_id 计，`ES_` 只是 legal 码表里的子闸前缀）；ES 材料的
+防篡改由 ES 闸自己的「整件／切片／卡」三层哈希链每跑现算兜底。
+冻结／解冻入口（库函数，不写盘于核验路径）：
 
 ```python
 from factscribe_legal.checks_adapter import write_evidence_lock, unfreeze_evidence_lock

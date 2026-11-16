@@ -318,3 +318,7 @@ the red/yellow/binding judgement itself.
 - 46 tests and `examples/minimal/` acceptance sample (3 facts, 2 sections, one
   fabricated number and one fake citation that must be caught).
 - `SPEC.md` / `IMPLEMENTATION.md`.
+
+### Added
+
+- docs: 法律域接管清单（docs/implementation/LEGAL-TAKEOVER.md）——fork 资产清点、松尾账与维护口径

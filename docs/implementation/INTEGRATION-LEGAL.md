@@ -1,9 +1,9 @@
 # INTEGRATION-LEGAL｜第三方集成件：法律维度（法国 / 中国 / 中国案例 / 意大利）
 
-> 日期：2026-11-15
-> 对应规范：`docs/design/SPEC-V1.md` §2.3（paperkit 的诚实边界：只核「账本一致」，不核「科学为真」）
-> 对应集成件：`integrations/factscribe-legal/`（**第三方件，不进 `factscribe/` 包**）
-> 纪律：**上游 `factscribe/` 一行未改** —— 行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动。
+> 日期：2026-11-15（M2 挂槽更新：2026-11-16）
+> 对应规范：`docs/design/SPEC-V1.md` §2.3（factscribe 的诚实边界：只核「账本一致」，不核「科学为真」）；`docs/design/SPEC-CHECKS-draft.md` §3（核验包契约）、§7 M2
+> 对应集成件：`integrations/factscribe-legal/`（**第三方件，不进 `factscribe/` 包**；M2 起兼任**核验槽第二个核验包**）
+> 纪律：**上游 `factscribe/` 判据一行未改** —— 行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动（M1 核验槽机构与 M2 适配器挂载是修约批的既定增量）。
 > 本文件只记「这个集成件在哪、判什么、边界在哪、读数是多少」。
 
 ## 0. 结论（先看这里）
@@ -11,12 +11,15 @@
 | 事项 | 结果 |
 |---|---|
 | 进不进上游包 | **不进**。放 `integrations/factscribe-legal/`，沿用 `integrations/minifactscribe/` 的先例；`pyproject.toml` 的 `packages = ["factscribe"]` 不变 |
-| 上游核心改动 | **零**。`factscribe/`、`SPEC-*`、`README*.md` 的码表、退出码契约均未动 |
+| 上游核心改动 | 判据**零**。M2 挂槽批（四步走之④）按 SPEC-CHECKS-draft 新增：core `factscribe/checks.py`（M1 已交付的核验槽机构上，加 `load_integration` 约定路径发现＋多包 summary 合并）、`report.py`／`cli.py`（多域分节渲染）；适配器居本件 `checks_adapter.py`，core 不 import integrations |
+| M2 挂槽形态 | `[checks] packages = ["paper", "legal"]` → `factscribe audit` 单命令双域报告（legal 节在后、`summary.by_domain` 域计数、退出码 aggregate_exit 单一入口折算）；发现注册＝约定路径 `check-package.toml`（domain＋adapter 两字段），整目录删掉＝legal 回到未注册（点名即 exit 2），「integrations 独立、可卸载」先例不破 |
+| M2 新增码 | `LEGAL_DATE_INVALID`（红，date 缺/非法）／`LEGAL_EVIDENCE_CHANGED`（红，`audit/evidence-legal.lock` 与现算不符或锁件坏）／`LEGAL_EVIDENCE_UNFROZEN`（黄，已解冻未重冻）——码表只增 |
+| 每域冻结锁 | legal 维锁件＝`audit/evidence-legal.lock`（与 paper 的 `audit/evidence.lock` 互不干扰）；canonical 四键＝语料视图路径＋参考日＋现行视图路径＋语料索引哈希；解冻走只加流水账 `audit/evidence-legal-log.ndjson` |
 | 新增依赖 | **零**。纯标准库，无网络调用，无 `eval` |
 | Python 版本 | **≥ 3.10**（CI 矩阵 3.10–3.14 全跑；3.10 走自带 TOML 兜底解析器） |
-| 退出码 | 沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**（`verify`/`verify-cn`/`verify-case`/`verify-it` 四个子命令一致） |
-| 集成件自测 | **50 例全绿**（离线）；上游自身测试 **1356 例全绿**（加了集成件目录后不变） |
-| 真实项目读数 | 法国 **0 红 / 1 黄**（`LEGAL_COVERAGE_GAP`）｜中国法条 **0 红 / 0 黄**｜中国案例 **0 红 / 0 黄**｜意大利 **0 红 / 0 黄**（参考日取 2026-11-14；改用 2026-11-15 则报 `IT_VERSION_GAP` 黄） |
+| 退出码 | 独立子命令沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**；槽内退出码由 `checks.aggregate_exit` 单一入口折算（同一套语义） |
+| 集成件自测 | **50 例全绿**（离线，不依赖上游）；仓侧新增：`tests/test_checks_legal.py` 25 例＋`tests/test_legal_maint.py` 5 例＋`tests/test_legal.py` …（M2 守锁面，跑在 core 测试套里） |
+| 真实项目读数 | 法国 **0 红 / 1 黄**（`LEGAL_COVERAGE_GAP`）｜中国法条 **0 红 / 0 黄**｜中国案例 **0 红 / 0 黄**｜意大利 **0 红 / 0 黄**（参考日取 2026-11-14；改用 2026-11-15 则报 `IT_VERSION_GAP` 黄）。**P-100：抓取脚本丢失后真语料跑不通**，M2 行为锁改用离线合成替身 `fixtures/legal-demo`（槽内与独立子命令同项目同读数） |
 | 事实账规模（真实项目） | 法国 15 条｜中国法条 16 条｜中国案例 7 条｜意大利 9 条｜管道 13 条（合计 60 条） |
 | 篡改检出 | 法国官方 XML 被改 → 上游是绿的、法律闸是红的（两层不重叠）；CN/IT 篡改演示各 5/5 命中 |
 
@@ -30,7 +33,10 @@
 | `integrations/factscribe-legal/factscribe_legal/cn_verify.py` | 中国法条闸：法规现行有效、条文号存在、官方件未变、卡片链完整 |
 | `integrations/factscribe-legal/factscribe_legal/case_verify.py` | 中国案例闸：案号/日期/金额与官方件一致、卡片正文未分叉、回执链完整 |
 | `integrations/factscribe-legal/factscribe_legal/it_verify.py` | 意大利闸：条文存在、官方 AKN 哈希、条文切片哈希、卡片字段一致、值出自 AKN 正文、参考日版本差 |
-| `integrations/factscribe-legal/factscribe_legal/facts_ledger.py` | 事实账同值检测与 `dup_ok` 标注（上游 R-04 的 `DUPLICATE_VALUE` 需要显式承认同值） |
+| `integrations/factscribe-legal/factscribe_legal/facts_ledger.py` | 事实账同值检测（只读；上游 R-04 的 `DUPLICATE_VALUE` 需要显式承认同值） |
+| `integrations/factscribe-legal/factscribe_legal/ledger_maint.py` | 事实账维护（写径）：`mark_dup_ok` 补 `dup_ok = true`（幂等）。P-100 松尾账①从 `facts_ledger.py` 移出——改账不是核验，不进 `verify()` |
+| `integrations/factscribe-legal/factscribe_legal/checks_adapter.py` | **M2**：legal 核验包适配器（核验包卡＋四闸组装＋材料 fail-closed＋域级冻结锁）；本件唯一 import 上游 `factscribe` 的模块，且只在槽点名 legal 时被载入 |
+| `integrations/factscribe-legal/check-package.toml` | **M2**：核验槽注册指针（domain＝legal ＋ adapter 模块名；core 按约定路径发现） |
 | `integrations/factscribe-legal/factscribe_legal/_toml.py` | TOML 读取层：3.11+ 用 `tomllib`，3.10 用自带兜底解析器 |
 | `integrations/factscribe-legal/factscribe_legal/cli.py` | `fetch` / `verify` / `verify-cn` / `verify-case` / `verify-it` |
 | `integrations/factscribe-legal/tests/` | 50 例离线测试（含双向、跨版本、假绿回归） |
@@ -142,10 +148,13 @@ runs/<run>-legal/
 ## 6. 自测
 
 ```bash
-python3 -m unittest discover -s integrations/factscribe-legal/tests -v   # 50 例
+python3 -m unittest discover -s integrations/factscribe-legal/tests -v   # 50 例（不依赖上游）
+env PYTHONPATH=. python3 -m unittest tests.test_checks_legal tests.test_legal_maint -v
+# ↑ M2 仓侧守锁面（跑在 core 测试套）：发现注册／fail-closed／双域报告／
+#   每域冻结锁／挂槽与独立子命令同读数（离线合成替身）／mark_dup_ok 幂等
 ```
 
-三类回归：
+集成件自身三类回归：
 
 - **双向**：每条红码都有「必须触发」与「不该触发」两个用例（上游 CONTRIBUTING §5 的做法）。
 - **防假绿**：多级 source 路径曾整批被跳过（假绿）；空集不许伪装成全绿。

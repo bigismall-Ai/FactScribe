@@ -1,12 +1,15 @@
-# factscribe-legal —— 给 paperkit 接上「法律」这一维（第三方集成）
+# factscribe-legal —— 给 factscribe 接上「法律」这一维（核验包）
 
-> 这是**第三方集成件**，不是 paperkit 的一部分。
+> 这是**第三方集成件**，不是 factscribe 核心的一部分。
 > 它不进 `factscribe/` 包，不改上游任何行为、退出码或违规码；
 > 沿用 `integrations/minifactscribe/` 的先例。
+> **M2 起它是核验槽的第二个核验包**（`[checks]` 点名 `legal`，见下
+> 「核验包注册形态」）；五条子命令保留作调试／单域入口，正式报告走
+> `factscribe audit` 单命令双域。
 
 ## 它补的是哪一维
 
-paperkit 判的是：**正文里的数字，能不能回到一份签过字、算过哈希的原始材料**。
+factscribe 判的是：**正文里的数字，能不能回到一份签过字、算过哈希的原始材料**。
 
 它不判「这份材料是不是法条」「这条法条今天还有效」「这个数字是不是真的出自这条法条」。
 这三条正是法律写作里最容易翻车的地方：
@@ -50,6 +53,14 @@ paperkit 判的是：**正文里的数字，能不能回到一份签过字、算
 | `verify-case` | `CASE_OFFICIAL_MISSING` `CASE_CARD_MISSING` `CASE_OFFICIAL_HASH_MISMATCH` `CASE_NO_MISMATCH` `CASE_DATE_MISMATCH` `CASE_AMOUNT_MISMATCH` `CASE_VALUE_NOT_IN_OFFICIAL` `CASE_CARD_TEXT_DIVERGED` `CASE_CHAIN_BROKEN` | — |
 | `verify-it` | `IT_PROV_UNKNOWN` `IT_CARD_MISSING` `IT_CARD_NO_HASH` `IT_CARD_SHA256_MISMATCH` `IT_SOURCE_HASH_MISMATCH` `IT_ARTICLE_HASH_MISMATCH` `IT_ARTICLE_NOT_IN_SOURCE` `IT_CARD_FIELD_MISMATCH` `IT_QUOTE_MISMATCH` | `IT_VERSION_GAP` |
 
+**M2 新增三码**（挂槽后材料依赖与冻结锁的 fail-closed 语义；码表只增不改）：
+
+| 码 | 严重度 | 判什么 |
+|---|---|---|
+| `LEGAL_DATE_INVALID` | 红 | `[checks.legal]` 的 `date` 缺失或不是 YYYY-MM-DD——参考日是时效判据的根基，缺它不许跑也不许只给建议 |
+| `LEGAL_EVIDENCE_CHANGED` | 红 | `audit/evidence-legal.lock` 在，而语料索引／参考日／现行视图路径与冻结时不符（要换先解冻再重冻）；锁件坏了也是此码（不许静默当成没冻结） |
+| `LEGAL_EVIDENCE_UNFROZEN` | 黄 | 冻结处在「已解冻、未重冻」状态（`audit/evidence-legal-log.ndjson` 最后一条是 unfreeze），或流水账不可读 |
+
 **各闸的判据边界（很重要，不要越界引用）**：
 
 - 中国侧官方件**不含条文正文** ⇒ `verify-cn` 能核「法规现行有效」「条文号存在」「官方件未变」，
@@ -84,7 +95,80 @@ runs/run-YYYYMMDD-legal/
 **归属靠文件名后缀判定**（`.it.card.txt` / `.cn.card.txt` / `.case.card.txt` / 法国侧的 `.card.txt`），
 不靠卡内有没有某个标记字段 —— 靠标记猜会让「卡被删 / 卡被篡改」被静默跳过，变成假绿。
 
-## 用法
+## 核验包注册形态（M2）：`audit [checks]` 单命令双域
+
+factscribe 核心有一个**核验槽**（`factscribe/checks.py`，SPEC-CHECKS §3）：
+每个领域交一张「核验包卡」（domain_id、冻结码表、config 键集、材料依赖声明、
+纯函数 `verify`），`factscribe audit` 按项目 `factscribe.toml` 的 `[checks]`
+节点名一次跑多个域、一份报告（按域分节，legal 节在后）、一套退出码
+（任一域红＝1，仅黄＝3，与既有折算完全同口径）。
+
+本件的卡在 `factscribe_legal/checks_adapter.py`：`domain_id = "legal"`、
+`config_keys = {corpus, date, view}`。项目里这样点名：
+
+```toml
+[checks]
+packages = ["paper", "legal"]     # 缺省（无 [checks] 节）＝只跑 paper，行为不变
+
+[checks.legal]
+corpus = "results/corpus-legal"   # 语料视图目录（FR 读 index.json＋官方 XML；
+                                  # CN 看 <corpus>/catalog.jsonl.gz；IT 看 <corpus>/it/）
+date   = "2026-11-14"             # 参考日（不读系统钟）
+view   = "out/…/merged_current.jsonl"   # 可选：现行视图，交叉验证生效状态
+```
+
+**注册机制**：core 不 import 本件。`[checks]` 点名 `legal` 而槽内未注册时，
+core 按约定路径发现 `integrations/*/check-package.toml`（本目录下这枚指针
+声明 `domain = "legal"`、`adapter = "factscribe_legal.checks_adapter"`），
+载入适配器，适配器调 `register_package` 挂卡——载入方向是本件 import 宿主，
+`integrations/` 整目录删掉＝legal 回到未注册（点名即 exit 2），先例不破。
+判据模块与五子命令依旧零上游依赖、可单独拷走单跑。
+
+**材料依赖 fail-closed 表**（空集不许伪装成全绿）：
+
+| 情形 | 行为 |
+|---|---|
+| `corpus` 未声明／目录不存在／缺 index.json | 黄 `LEGAL_COVERAGE_GAP`（法律域 0 覆盖，报告里亮出），FR 闸不跑 |
+| 有中国事项而 `<corpus>/catalog.jsonl.gz` 没拿到 | 黄 `LEGAL_COVERAGE_GAP`，CN 闸不跑 |
+| 有意大利事项而 `<corpus>/it/index.json` 没拿到 | 黄 `LEGAL_COVERAGE_GAP`，IT 闸不跑 |
+| `date` 缺失或非 YYYY-MM-DD | 红 `LEGAL_DATE_INVALID`，时效类三闸全跳过 |
+| 无 CN／IT 事项且材料没配 | 正常跳过（0 事项，报告 gates 行可见 `na`） |
+| CASE 闸 | 材料全在项目内（`runs/<run>/`），永远可跑 |
+
+**每域冻结锁**：legal 维的锁件是 `audit/evidence-legal.lock`（paper 的
+`audit/evidence.lock` 互不干扰）。锁的是「语料视图路径＋参考日＋现行视图
+路径＋语料索引哈希」四键；冻结后换了语料或参考日 ⇒ 红 `LEGAL_EVIDENCE_CHANGED`；
+解冻必须走只加流水账 `audit/evidence-legal-log.ndjson`，已解冻未重冻 ⇒ 黄
+`LEGAL_EVIDENCE_UNFROZEN`。冻结／解冻入口（库函数，不写盘于核验路径）：
+
+```python
+from factscribe_legal.checks_adapter import write_evidence_lock, unfreeze_evidence_lock
+write_evidence_lock(".", corpus="results/corpus-legal", date="2026-11-14", view="")
+unfreeze_evidence_lock(".", reason="换语料", at="2026-11-16")   # 不碰系统钟，at 由人给
+```
+
+单命令双域演示（离线合成，无需真语料）：
+
+```bash
+python -m factscribe audit fixtures/legal-demo            # paper＋legal 两节报告
+python -m factscribe audit fixtures/legal-demo --json     # summary.by_domain 域计数
+```
+
+## 事实账维护工具：`ledger_maint`（dup_ok 标注）
+
+上游 R-04 规则：同一个值挂在不同 claim 上会报 `DUPLICATE_VALUE`（黄），
+确属同一个数要显式写 `dup_ok = true` 承认同值。**改账是写径不是核验**
+（SPEC-CHECKS §9.7），所以标注工具是独立维护模块 `factscribe_legal/ledger_maint.py`，
+与核验（只读）分家——`facts_ledger.py` 只留只读检测 `scan_dupes`：
+
+```python
+from factscribe_legal.ledger_maint import mark_dup_ok
+mark_dup_ok(project_dir)   # 给「同值且 claim 不同」的事实补 dup_ok = true（幂等）
+```
+
+幂等语义：已标的不动，重跑零字节变化（`tests/test_legal_maint.py` 守锁）。
+
+## 用法（独立 CLI：调试／单域入口）
 
 ```bash
 # 1) 把要引用的法条物化进项目（官方 XML + 证据卡 + 哈希）
@@ -108,10 +192,14 @@ python3 -m factscribe_legal verify-it   --project . --corpus runs/run-20261115-i
 
 退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**。
 
+> 核验槽时代（M2 起），这五条子命令作为**调试／单域入口保留**（不删功能、
+> 废弃窗口不限期）；正式的跨域报告走 `factscribe audit [checks]`——一份
+> 信封、一套退出码、legal 节并排在 paper 之后。
+
 ## 与上游核心的关系
 
 - 上游 `factscribe/` **一行未改**：行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动。
-- 本包**不 import 上游 `factscribe`**（只 import 标准库）⇒ 可以单独拷走单跑，也可以放进上游仓里共存。
+- 本包判据与五子命令**不 import 上游 `factscribe`**（只 import 标准库）⇒ 可以单独拷走单跑，也可以放进上游仓里共存。唯一例外＝`checks_adapter.py`（核验槽适配器）：它 import 宿主的 `factscribe.checks`／`factscribe.audit`，且只在 `[checks]` 点名 legal 时才被核验槽载入（见「核验包注册形态」）。
 - 事实账的字段用上游已有的那套（`id` / `claim` / `value` / `source` / `source_sha256` /
   `locator` / `confidence` / `derived_from`），**不新增 schema**。
 

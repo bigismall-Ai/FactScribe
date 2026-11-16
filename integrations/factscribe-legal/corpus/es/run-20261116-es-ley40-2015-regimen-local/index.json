@@ -1,0 +1,57 @@
+{
+ "act_eli": "https://www.boe.es/eli/es/l/2015/10/01/40",
+ "act_id": "BOE-A-2015-10566",
+ "act_number": "40/2015",
+ "act_range": "Ley",
+ "act_title": "Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.",
+ "articles": {
+  "a1": {
+   "article_bytes": 655,
+   "article_file": "official/a1.xml",
+   "article_sha256": "41d67622c82df49082262179047af48cbd44ad400ce668c02ba70ff4a7db9ef7",
+   "block_id": "a1",
+   "card_file": "a1.es.card.txt",
+   "card_sha256": "1454b8515b9927dfef26e000f6fb5eb3f07d919e504edd1d4e03fb6ffef8344d",
+   "num": "1",
+   "text_chars": 387,
+   "text_sha256": "822067a1c5955fb3f89225ed2f6cf14be99508185501760e23f0be965aeec165",
+   "title": "Artículo 1"
+  },
+  "a2": {
+   "article_bytes": 1801,
+   "article_file": "official/a2.xml",
+   "article_sha256": "2f14864fc97f4fea3a49d88201e23db7350ddb34fa34a2212361f7ec8d289117",
+   "block_id": "a2",
+   "card_file": "a2.es.card.txt",
+   "card_sha256": "b332e6ab7404bb9c9f9d6984f62b724edb86cfdc5f4788375733423005aa444c",
+   "num": "2",
+   "text_chars": 1209,
+   "text_sha256": "7d15def0f200ef83630b7717ae5d2e70cc043b9924b445e6d1a3128410a5a871",
+   "title": "Artículo 2"
+  },
+  "a3": {
+   "article_bytes": 2861,
+   "article_file": "official/a3.xml",
+   "article_sha256": "421344610970191e32ef13b45a5ddb66409714db6df777ee27a5e340aff8d030",
+   "block_id": "a3",
+   "card_file": "a3.es.card.txt",
+   "card_sha256": "8cabb1850d0fa4314aee7a6af22b96e985c663df96caaf3841cd170a8996bae1",
+   "num": "3",
+   "text_chars": 2045,
+   "text_sha256": "bd233be51319af754cfdc7696059a48a758f420e5715f88300adc86acedf344d",
+   "title": "Artículo 3"
+  }
+ },
+ "estado_consolidacion": "Finalizado",
+ "fecha_disposicion": "20151001",
+ "fecha_publicacion": "20151002",
+ "fecha_vigencia": "20161002",
+ "fetch_reference_date": "2026-11-16",
+ "reference_date": "2026-11-16",
+ "source_bytes": 843327,
+ "source_file": "official/act.xml",
+ "source_sha256": "917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a",
+ "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566",
+ "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10566",
+ "version_date": "2026-11-10"
+}

@@ -1,12 +1,13 @@
-# corpus/ —— 法律四闸消费的语料与防再丢清单
+# corpus/ —— 法律五闸消费的语料与防再丢清单
 
-本目录是 `tools/fetch_corpus.py` 的产物＋对账清单。四闸 reader 直接吃这里的数据：
+本目录是 `tools/fetch_corpus.py` 的产物＋对账清单。五闸 reader 直接吃这里的数据：
 
 | 子目录 | reader | 内容 |
 |---|---|---|
 | `fr/` | `provisions.py`（verify 闸） | `index.json`＋官方条文 XML＋证据卡＋`view_current.jsonl` 小视图 |
 | `cn/` | `cn_corpus.py`（verify-cn 闸） | `catalog.jsonl.gz`＋证据卡＋详情 JSON 原始字节 |
 | `it/run-<vigenza>-it-<anno>n<numero>/` | `it_verify.py`（verify-it 闸） | `index.json`＋官方 AKN 整件＋条文切片＋证据卡 |
+| `es/run-<YYYYMMDD>-es-<slug>/` | `es_verify.py`（verify-es 闸） | `index.json`＋官方 BOE 合并文本整件＋条文切片＋证据卡 |
 | `case/` | `case_verify.py`（verify-case 闸） | **本批为空**：检索接口需登录（见下） |
 | `manifest.json` | —— | 防再丢清单：每文件 sha256＋取数时间＋来源 URL |
 | `state/fetch_state.json` | —— | 增量续抓状态（已取清单＋sha），重跑自动跳过 |
@@ -23,6 +24,7 @@ python3 tools/fetch_corpus.py fetch --source all --mode sample
 python3 tools/fetch_corpus.py fetch --source fr --mode bulk            # Freemium 全量包 ≈1.2GB
 python3 tools/fetch_corpus.py fetch --source cn --mode bulk            # 全库翻页＋逐部详情
 python3 tools/fetch_corpus.py fetch --source it --mode bulk            # 样单内每法 3 请求
+python3 tools/fetch_corpus.py fetch --source es --mode bulk            # 样单内每法 1 请求（by-id 整件）
 
 # 把语料物化成合成小项目（事实账＋证据卡＋paper.tex，四闸直接跑）
 python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -49,6 +51,11 @@ python3 tools/fetch_corpus.py manifest
 - **中国案例** 人民法院案例库 `rmfyalk.court.gov.cn`：检索接口要求登录，
   **匿名通道不抓**。要补数据：注册个人账号后人工检索需要的入库案例、导出正文
   放 `case/official/<slug>.txt`，再跑 `materialize`（脚本会补卡与回执链）。
+- **西班牙** BOE 开放数据 `www.boe.es/datosabiertos/api/legislacion-consolidada`
+  （`by-id`，官方标识形如 `BOE-A-2015-10565`）：⚠️ 必须带 `Accept: application/xml`
+  （官方对别的 mime 头回 400「No soportado ningún mime type…」）；⚠️ 域名是
+  `www.boe.es`，`api.boe.es` **不存在**（DNS NXDOMAIN）。整件＝合并文本 XML，
+  条文＝`<bloque id="a7" tipo="precepto">` 块。复用须注明出处（AEBOE 复用条件）。
 
 ## TLS 注意
 
@@ -65,4 +72,7 @@ GlobalSign Root R46，`api.normattiva.it` 2025-10 起的新链验不过），放
   （98 条树，sxx=3）
 - IT 2 法 4 切片：Legge 190/2012（现行版仅余 art.1–2，取 art.2）、
   Legge 241/1990（art.1–3）
+- ES 3 法 9 切片：Ley 39/2015（BOE-A-2015-10565，art.1–3）、
+  Ley 40/2015（BOE-A-2015-10566，art.1–3）、
+  Constitución Española（BOE-A-1978-31229，art.1–3）
 - CASE：无（需登录，见上）

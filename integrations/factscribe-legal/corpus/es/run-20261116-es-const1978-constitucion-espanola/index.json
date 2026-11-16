@@ -1,0 +1,57 @@
+{
+ "act_eli": "https://www.boe.es/eli/es/c/1978/12/27/(1)",
+ "act_id": "BOE-A-1978-31229",
+ "act_number": "",
+ "act_range": "Constitución",
+ "act_title": "Constitución Española.",
+ "articles": {
+  "a1": {
+   "article_bytes": 706,
+   "article_file": "official/a1.xml",
+   "article_sha256": "50e233175a3dba6cd1d918973bd0f39e41d52c844a48b56f36a5a1f768d3db9d",
+   "block_id": "a1",
+   "card_file": "a1.es.card.txt",
+   "card_sha256": "39ba0a9181888e8eec033ab60a126213773be7d49493e96c59b848e8f4de9347",
+   "num": "1",
+   "text_chars": 373,
+   "text_sha256": "57e26d7ff4f1896e9c84731d0f9a7f151d7338613ea5c39589c329a7b8f7678a",
+   "title": "Artículo 1"
+  },
+  "a2": {
+   "article_bytes": 537,
+   "article_file": "official/a2.xml",
+   "article_sha256": "3cf40c774b6e166c18dab20362bef0a7fc1e7e1f0ed8ac85dbd5bc2d97b4d60b",
+   "block_id": "a2",
+   "card_file": "a2.es.card.txt",
+   "card_sha256": "ddf5ca2a67e95f07c27e9b940c06ceec5a13bc6be7f7d5929ba60614c3ef28f2",
+   "num": "2",
+   "text_chars": 273,
+   "text_sha256": "65ebaa9b569d02165345ba8381d166f13d52eea675e041bdd6f9bd77de7e4c47",
+   "title": "Artículo 2"
+  },
+  "a3": {
+   "article_bytes": 745,
+   "article_file": "official/a3.xml",
+   "article_sha256": "c1b451c3e099c6602dd2cdd796868a4ec817504935699a797ca01db362626634",
+   "block_id": "a3",
+   "card_file": "a3.es.card.txt",
+   "card_sha256": "b516c9cd12c613f6736466bdcb91c97f49e3ef5da9e833c9965f38488853822a",
+   "num": "3",
+   "text_chars": 409,
+   "text_sha256": "397f61be551d6a749b7a1665f39464062bf95f0ca9860388ef43874856309aa4",
+   "title": "Artículo 3"
+  }
+ },
+ "estado_consolidacion": "Finalizado",
+ "fecha_disposicion": "19781227",
+ "fecha_publicacion": "19781229",
+ "fecha_vigencia": "19781229",
+ "fetch_reference_date": "2026-11-16",
+ "reference_date": "2026-11-16",
+ "source_bytes": 213512,
+ "source_file": "official/act.xml",
+ "source_sha256": "cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e",
+ "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229",
+ "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229",
+ "version_date": "2026-11-04"
+}

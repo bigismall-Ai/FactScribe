@@ -1,0 +1,22 @@
+# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）
+ACT_ID: BOE-A-2015-10565
+ACT_ELI: https://www.boe.es/eli/es/l/2015/10/01/39
+ACT_TITLE: Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas.
+ACT_NUMBER: 39/2015
+BLOCK_ID: a1
+ARTICLE_NUM: 1
+ARTICLE_TITLE: Artículo 1
+VERSION_DATE: 2026-11-16
+FETCH_DATE: 2026-11-16
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.xml
+SOURCE_URL: https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565
+OFFICIAL_XML_SHA256: affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57
+ARTICLE_SHA256: a751654b5f3250412d07ddea5bd8f16b5c4980caaf35b1343d1b30b1ef514c0b
+TEXT_CHARS: 919
+TEXT_STATUS: texto consolidado de carácter meramente informativo
+LICENCE: Condiciones de reutilización de la AEBOE (Resolución de la Agencia de 27 de junio de 2024)
+ATTRIBUTION: Fuente de los datos: Agencia Estatal Boletín Oficial del Estado (https://www.boe.es/)
+FETCHED_AT: 2026-11-16T09:51:29Z
+--- OFFICIAL TEXT ---
+Artículo 1. Objeto de la Ley. 1. La presente Ley tiene por objeto regular los requisitos de validez y eficacia de los actos administrativos, el procedimiento administrativo común a todas las Administraciones Públicas, incluyendo el sancionador y el de reclamación de responsabilidad de las Administraciones Públicas, así como los principios a los que se ha de ajustar el ejercicio de la iniciativa legislativa y la potestad reglamentaria. 2. Solo mediante ley, cuando resulte eficaz, proporcionado y necesario para la consecución de los fines propios del procedimiento, y de manera motivada, podrán i…

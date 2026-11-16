@@ -36,6 +36,126 @@
    "sha256": "29db8ce9401d2e76efb1c47b5bb432b14ee84ef56e60fe31bf84b8b0368f2368"
   },
   {
+   "bytes": 1376,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/a1.es.card.txt",
+   "sha256": "39ba0a9181888e8eec033ab60a126213773be7d49493e96c59b848e8f4de9347"
+  },
+  {
+   "bytes": 1273,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/a2.es.card.txt",
+   "sha256": "ddf5ca2a67e95f07c27e9b940c06ceec5a13bc6be7f7d5929ba60614c3ef28f2"
+  },
+  {
+   "bytes": 1415,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/a3.es.card.txt",
+   "sha256": "b516c9cd12c613f6736466bdcb91c97f49e3ef5da9e833c9965f38488853822a"
+  },
+  {
+   "bytes": 2142,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/index.json",
+   "sha256": "42ba63ad4606b88470fa1874abbf5784469fdcf20f950faaa1271ca44de73456"
+  },
+  {
+   "bytes": 706,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/official/a1.xml",
+   "sha256": "50e233175a3dba6cd1d918973bd0f39e41d52c844a48b56f36a5a1f768d3db9d"
+  },
+  {
+   "bytes": 537,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/official/a2.xml",
+   "sha256": "3cf40c774b6e166c18dab20362bef0a7fc1e7e1f0ed8ac85dbd5bc2d97b4d60b"
+  },
+  {
+   "bytes": 745,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/official/a3.xml",
+   "sha256": "c1b451c3e099c6602dd2cdd796868a4ec817504935699a797ca01db362626634"
+  },
+  {
+   "bytes": 213512,
+   "path": "es/run-20261116-es-const1978-constitucion-espanola/official/act.xml",
+   "sha256": "cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e"
+  },
+  {
+   "bytes": 1691,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/a1.es.card.txt",
+   "sha256": "180f203d7b0851c469645ad183133113a9c427d826575b2c3cb67cedbeebd439"
+  },
+  {
+   "bytes": 1698,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/a2.es.card.txt",
+   "sha256": "44656da0ed57670fa459d345087ea36677d84a0473dbf51ec22ab079a5b2e026"
+  },
+  {
+   "bytes": 1694,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/a3.es.card.txt",
+   "sha256": "c74f3e71b4073ca4b1061ee00182a124fa21c3f8c2b7241fd83587bac260b3ce"
+  },
+  {
+   "bytes": 2225,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/index.json",
+   "sha256": "5bc098f5cb85e4d23c261082369f0df71357668e64ab9acdde78156aff5426ba"
+  },
+  {
+   "bytes": 1226,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/official/a1.xml",
+   "sha256": "a751654b5f3250412d07ddea5bd8f16b5c4980caaf35b1343d1b30b1ef514c0b"
+  },
+  {
+   "bytes": 2041,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/official/a2.xml",
+   "sha256": "8a530801827076fd42bd0751c5a344db2033dce6b7929e9ce182d792f67b4afd"
+  },
+  {
+   "bytes": 1176,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/official/a3.xml",
+   "sha256": "ab76c2102574d35b45e2432c3377f9a8f1310ed2ff09324f6f1945ce0a251e13"
+  },
+  {
+   "bytes": 484176,
+   "path": "es/run-20261116-es-ley39-2015-procedimiento-administrativo/official/act.xml",
+   "sha256": "affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57"
+  },
+  {
+   "bytes": 1444,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/a1.es.card.txt",
+   "sha256": "1454b8515b9927dfef26e000f6fb5eb3f07d919e504edd1d4e03fb6ffef8344d"
+  },
+  {
+   "bytes": 1665,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/a2.es.card.txt",
+   "sha256": "b332e6ab7404bb9c9f9d6984f62b724edb86cfdc5f4788375733423005aa444c"
+  },
+  {
+   "bytes": 1665,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/a3.es.card.txt",
+   "sha256": "8cabb1850d0fa4314aee7a6af22b96e985c663df96caaf3841cd170a8996bae1"
+  },
+  {
+   "bytes": 2193,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/index.json",
+   "sha256": "5d60f5fd8e421a5cbdf42faa0ba6c98a816203392a7b934f595c3653fe6dba32"
+  },
+  {
+   "bytes": 655,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/official/a1.xml",
+   "sha256": "41d67622c82df49082262179047af48cbd44ad400ce668c02ba70ff4a7db9ef7"
+  },
+  {
+   "bytes": 1801,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/official/a2.xml",
+   "sha256": "2f14864fc97f4fea3a49d88201e23db7350ddb34fa34a2212361f7ec8d289117"
+  },
+  {
+   "bytes": 2861,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/official/a3.xml",
+   "sha256": "421344610970191e32ef13b45a5ddb66409714db6df777ee27a5e340aff8d030"
+  },
+  {
+   "bytes": 843327,
+   "path": "es/run-20261116-es-ley40-2015-regimen-local/official/act.xml",
+   "sha256": "917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a"
+  },
+  {
    "bytes": 522,
    "path": "fr/D641-10-1.card.txt",
    "sha256": "fca8182f7fbd8866a5bb2e9160ccd867eb02980e4616c8015bca83ba71d63a7b"
@@ -136,14 +256,15 @@
    "sha256": "5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492"
   },
   {
-   "bytes": 6031,
+   "bytes": 11432,
    "path": "state/fetch_state.json",
-   "sha256": "34d914d568d564a4416ebf8309c9eec393aa64d576ee4f1f4f64498cd91b9d93"
+   "sha256": "de90484460c1e9a7013c59af04af6a0dbd682d37d3c5d3f9e0c932e69a11ddb1"
   }
  ],
- "generated_at": "2026-11-16T05:29:18Z",
+ "generated_at": "2026-11-16T09:51:40Z",
  "how_to_refetch": {
   "bulk_cn": "python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes",
+  "bulk_es": "python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes",
   "bulk_fr": "python3 tools/fetch_corpus.py fetch --source fr --mode bulk --yes (先不带 --yes 看预计请求/体积)",
   "bulk_it": "python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes",
   "note": "state/fetch_state.json 记了已取清单与 sha256；重跑自动跳过已取件。manifest.files 的 sha256 可对账：对不上即该文件与取件时不一致。",
@@ -201,6 +322,120 @@
    "notes": {
     "catalog": "catalog.jsonl.gz",
     "last_run": "2026-11-16T04:58:16Z"
+   }
+  },
+  "es": {
+   "items": {
+    "act:BOE-A-1978-31229@2026-11-16": {
+     "act_id": "BOE-A-1978-31229",
+     "act_title": "Constitución Española.",
+     "bytes": 213512,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229",
+     "version_date": "2026-11-04"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 706,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "50e233175a3dba6cd1d918973bd0f39e41d52c844a48b56f36a5a1f768d3db9d",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a1"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 537,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "3cf40c774b6e166c18dab20362bef0a7fc1e7e1f0ed8ac85dbd5bc2d97b4d60b",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a2"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 745,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "c1b451c3e099c6602dd2cdd796868a4ec817504935699a797ca01db362626634",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a3"
+    },
+    "act:BOE-A-2015-10565@2026-11-16": {
+     "act_id": "BOE-A-2015-10565",
+     "act_title": "Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas.",
+     "bytes": 484176,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565",
+     "version_date": "2026-11-16"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 1226,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "a751654b5f3250412d07ddea5bd8f16b5c4980caaf35b1343d1b30b1ef514c0b",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a1"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 2041,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "8a530801827076fd42bd0751c5a344db2033dce6b7929e9ce182d792f67b4afd",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a2"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 1176,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "ab76c2102574d35b45e2432c3377f9a8f1310ed2ff09324f6f1945ce0a251e13",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a3"
+    },
+    "act:BOE-A-2015-10566@2026-11-16": {
+     "act_id": "BOE-A-2015-10566",
+     "act_title": "Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.",
+     "bytes": 843327,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566",
+     "version_date": "2026-11-10"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 655,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "41d67622c82df49082262179047af48cbd44ad400ce668c02ba70ff4a7db9ef7",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a1"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 1801,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "2f14864fc97f4fea3a49d88201e23db7350ddb34fa34a2212361f7ec8d289117",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a2"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 2861,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "421344610970191e32ef13b45a5ddb66409714db6df777ee27a5e340aff8d030",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a3"
+    }
+   },
+   "notes": {
+    "last_run": "2026-11-16T09:51:40Z",
+    "runs": [
+     "run-20261116-es-const1978-constitucion-espanola",
+     "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "run-20261116-es-ley40-2015-regimen-local"
+    ]
    }
   },
   "fr": {

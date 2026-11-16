@@ -7,8 +7,7 @@ SPEC-CHECKS（docs/design/SPEC-CHECKS.md，2026-11-16 已批）§2.2：core 新�
 paper（论文三闸，判据在 audit.py）是第一个注册进槽的核验包；legal（M2）是
 第二个；style 与 pdf（文风闸＋PDF 回检层，M1.5 第二批，裁定⑤）是 core 自带的
 第三、四个——只被 [checks].packages 显式点名时才跑，缺省（无节／裸节）不跑，
-缺省行为逐字节不变。本批先落 style 包，pdf 包随后（两包判据物理位置都不动，
-卡＋注册＋路径接槽，最小搬动）。
+缺省行为逐字节不变。两包判据物理位置都不动，卡＋注册＋路径接槽，最小搬动。
 
 宪法纪律（本模块是宪法面，改动＝修约）：
 
@@ -195,8 +194,14 @@ def register_builtins() -> None:
       证据钢印红（exit 1）；判据物理位置仍在 style.py 不动（4092 行不搬家），
       卡＋verify 接槽。码为存量无前缀码，按 SPEC-CHECKS §4.3「core 存量码
       一字不改」祖父条款照旧发射，不补前缀不改名。
+    - pdf（M1.5 第二批，裁定⑤）：PDF 回检层——文本层／栅格化／双向数字
+      多重集／stamp 信任链；判据物理位置仍在 pdfgate.py 不动，verify 指向
+      verify_pdf。材料依赖＝main.pdf（cfg.output）与编译产物
+      （audit/report.json、audit/stamp.json）——材料缺失按 pdfgate 现行
+      语义 fail-closed（PDF_TOOL_MISSING=8／REPORT_SCHEMA_INVALID），不许
+      静默绿。码 PDF_*/STAMP_* 系同为存量码，照旧发射。
 
-    新包缺省都不改变行为：只有 [checks].packages 显式点名 style 才跑
+    新包缺省都不改变行为：只有 [checks].packages 显式点名 style／pdf 才跑
     （裁定③不变——无节直跑、裸节默认只跑 paper）。
     legal 等外来域走 integrations/ 约定路径发现（load_integration）。
     """
@@ -216,6 +221,14 @@ def register_builtins() -> None:
         config_keys=STYLE_CONFIG_KEYS,
         description="文风闸：公式化写作特征黄牌＋证据钢印红"
                     "（M1.5 第二批，裁定⑤；判据在 style.analyze）",
+    ))
+    register_package(CheckPackage(
+        domain_id=PDF_DOMAIN,
+        verify=_pdf_verify,
+        config_keys=PDF_CONFIG_KEYS,
+        description="PDF 回检：文本层/栅格化/双向数字多重集/stamp 信任链"
+                    "（M1.5 第二批，裁定⑤；判据在 pdfgate.verify_pdf，"
+                    "材料缺失 fail-closed 不静默绿）",
     ))
     _BUILTINS_DONE = True
 
@@ -303,6 +316,79 @@ def _style_verify(cfg: Config, facts, sections, resolve: bool = False):
             result.summary.get("red", 0)),
     ]
     return red, yellow, hints, summary, []
+
+
+# --------------------------------------------------------------------------
+# pdf 包（M1.5 第二批，裁定⑤）：PDF 回检层接槽
+#
+# 判据零改动：verify 指向 pdfgate.verify_pdf（P-08 信任链先于页面判定的
+# 写死顺序原样保留）。材料依赖（卡上声明）与缺省路径：
+#   main.pdf        ← cfg.output（[project]/output，默认 main.pdf）
+#   audit/report.json ← 编译产物（被签的那一份审计报告）
+#   audit/stamp.json  ← 有则必须先验信任链（verify_pdf 自跳不存在的 stamp）
+#   keys            ← [checks.pdf] keys＝项目外公钥登记（appover 登记不在
+#                     项目内是信任根的语义要求；缺省不配，有 stamp 没 keys
+#                     ＝ STAMP_KEY_UNTRUSTED 红，fail-closed）
+# 材料缺失按 pdfgate 现行语义走（不许静默绿）：PDF 缺／读不了＝
+# PDF_TOOL_MISSING（exit 8）；report 缺／坏＝REPORT_SCHEMA_INVALID（exit 2）。
+# 折算边界：槽折算只认 aggregate_exit 单一入口——8/5/7 三值语义不变
+# （STAMP_PDF_MISMATCH=7、PDF_STALE=5、PDF_TOOL_MISSING=8）；exit 2 类红
+# （REPORT_SCHEMA_INVALID）在槽内按全局红折 1，与 verify-pdf 独立命令的 2
+# 不同——这是槽折算的既有口径（M1 起），不是本批新规则。
+# --------------------------------------------------------------------------
+
+PDF_DOMAIN = "pdf"
+PDF_CONFIG_KEYS = frozenset({"pdf", "report", "stamp", "keys"})
+_PDF_DEFAULTS = (("pdf", ""), ("report", "audit/report.json"),
+                 ("stamp", "audit/stamp.json"), ("keys", ""))
+
+
+def _pdf_verify(cfg: Config, facts, sections, resolve: bool = False):
+    from .pdfgate import verify_pdf
+    del facts, sections, resolve   # PDF 回检只认盘上字节与报告，不看账
+    table = dict((cfg.checks_tables or {}).get(PDF_DOMAIN) or {})
+    for key, _default in _PDF_DEFAULTS:
+        value = table.get(key)
+        if value is not None and (
+                not isinstance(value, str) or not value.strip()):
+            raise ConfigError(
+                "[checks.pdf] 的 %s 必须是非空路径字符串，现在是 %r"
+                % (key, value))
+    rel = {key: str(table.get(key) if table.get(key) is not None
+                    else default).strip()
+           for key, default in _PDF_DEFAULTS}
+    if not rel["pdf"]:
+        rel["pdf"] = cfg.output        # [project]/output，默认 main.pdf
+
+    root = cfg.root
+    pdf_path = root / rel["pdf"]
+    report_path = root / rel["report"]
+    stamp_path = root / rel["stamp"] if rel["stamp"] else None
+    keys_path = root / rel["keys"] if rel["keys"] else None
+    issues, warnings, gate_exit = verify_pdf(
+        pdf_path, report_path, stamp_path, keys_path)
+    # verify_pdf 的契约：issues＝红（阻断），warnings＝黄（advisory）——
+    # 码与严重度零改动，槽只按信封收拢。
+    red, yellow = list(issues), list(warnings)
+    summary = {
+        "domain": PDF_DOMAIN,
+        "checked": True,
+        "pdf": rel["pdf"],
+        "report": rel["report"],
+        "stamp": "有" if stamp_path is not None and stamp_path.is_file() else "无",
+        "keys": rel["keys"] or "（未配）",
+        "red": len(red),
+        "yellow": len(yellow),
+        "gate_exit": gate_exit,
+        "lines": [
+            "pdf     : %s    report: %s" % (rel["pdf"], rel["report"]),
+            "stamp   : %s    keys: %s" % (
+                "有（先验信任链）" if stamp_path is not None
+                and stamp_path.is_file() else "无",
+                rel["keys"] or "（未配）"),
+        ],
+    }
+    return red, yellow, [], summary, []
 
 
 

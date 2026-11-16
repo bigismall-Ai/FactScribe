@@ -142,11 +142,13 @@ class TestResolve(SlotCase):
         self.assertEqual([p.domain_id for p in packages], ["paper"])
 
     def test_unknown_package_is_config_error_naming_registry(self):
-        cfg = bare_config(checks_packages=["legal"])
+        # "astro"＝没有任何集成件声明的 id（M2 起 legal 经约定路径发现会注册，
+        # 负例必须用真正无主的 id；exit 2 点名已注册清单的承诺不变）
+        cfg = bare_config(checks_packages=["astro"])
         with self.assertRaises(ConfigError) as ctx:
             checks.resolve_packages(cfg)
         self.assertEqual(ctx.exception.code, "CONFIG_INVALID")
-        self.assertIn("legal", str(ctx.exception))
+        self.assertIn("astro", str(ctx.exception))
         self.assertIn("paper", str(ctx.exception))   # 点名已注册清单
 
     def test_unknown_key_in_domain_section_warns_but_resolves(self):
@@ -158,13 +160,14 @@ class TestResolve(SlotCase):
         self.assertIn("CONFIG_UNKNOWN_FIELD", codes)
 
     def test_unregistered_domain_section_warns_and_is_ignored(self):
+        # "astro"＝无主 id（legal 自 M2 起可被发现注册，不能再用它当负例）
         cfg = bare_config(checks_packages=["paper"],
-                          checks_tables={"legal": {"corpus": "runs/x"}})
+                          checks_tables={"astro": {"corpus": "runs/x"}})
         packages = checks.resolve_packages(cfg)
         self.assertEqual([p.domain_id for p in packages], ["paper"])
         hit = [w for w in cfg.warnings
                if w["code"] == "CONFIG_UNKNOWN_FIELD"
-               and "legal" in w["message"]]
+               and "astro" in w["message"]]
         self.assertEqual(len(hit), 1)
 
 

@@ -27,8 +27,11 @@ M1 的包结果协议 v1：`verify(cfg, facts, sections, resolve=False) →
 返回形一致；M2 的 legal 挂槽时按同一协议收敛（判据与码表零改动）。
 
 注册形态（裁定⑧「核验包入仓注册形态」）：core 自带域的卡在本模块
-`register_builtins()`；外来域包走 `integrations/<pkg>/` 入仓注册、
-调 `register_package()` 挂卡（先例：minifactscribe、factscribe-legal）。
+`register_builtins()`；外来域包走 `integrations/<pkg>/` 入仓注册——件内
+放一枚 `check-package.toml`（domain＋adapter 两个字段），`[checks]` 点名
+而槽内未注册时 `load_integration()` 按约定路径延迟载入适配器，适配器调
+`register_package()` 挂卡（M2 起；先例：factscribe-legal）。core 不
+import 任何集成件，载入方向＝扩展件 import 宿主。
 
 冻结锁（裁定⑨「每域一把冻结锁」）：`evidence_lock_path()`——内建 paper
 域沿用既有 `audit/evidence.lock`（既有冻结件字节不破坏，canonical 形态
@@ -36,11 +39,12 @@ M1 的包结果协议 v1：`verify(cfg, facts, sections, resolve=False) →
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .config import Config, ConfigError, _config_warn
+from .config import Config, ConfigError, _config_warn, load_toml
 
 # --------------------------------------------------------------------------
 # 退出码全闭集（裁定②：全闭集入宪表述；值↔语义配对以 SPEC-V3.0 §2.5
@@ -126,11 +130,13 @@ class DomainIssue:
 class CheckPackage:
     """核验包注册卡（SPEC-CHECKS §3.1 一张卡写死五样的代码面）。
 
-    verify 的 M1 协议（包结果协议 v1）：
+    verify 的包结果协议 v1：
         verify(cfg, facts, sections, resolve=False)
             -> (red, yellow, hints, summary, unresolved)
-    summary 是该包的信封 summary（dict）；槽只在单包时原样采用并追加
-    `by_domain`（多包 summary 的合并语义是 M2 的卡上契约，本批不定义）。
+    summary 是该包的信封 summary（dict）；单包时槽原样采用并追加
+    `by_domain`。多包合并语义（M2 卡上契约）：非首包的 summary 挂在
+    自己的 domain_id 键下（只增键），首包（惯例＝内建 paper）的 summary
+    仍是信封基座——见 run_packages。
     """
 
     domain_id: str
@@ -200,6 +206,64 @@ def _paper_verify(cfg: Config, facts, sections, resolve: bool = False):
 
 
 # --------------------------------------------------------------------------
+# 外来域包的约定路径发现（裁定⑧「核验包入仓注册形态」的代码面，M2 起）：
+# integrations/<dir>/check-package.toml 声明 domain＋adapter；[checks] 点名
+# 未注册 id 时按本机制延迟载入适配器。core 不 import integrations——载入
+# 方向＝扩展件 import 宿主的 factscribe.checks 并调 register_package()；
+# integrations/ 整目录删掉＝对应 id 回到「未注册」（点名即 exit 2），
+# 「integrations 独立、可卸载」先例不破。
+# --------------------------------------------------------------------------
+
+_INTEGRATIONS_TRIED: set[str] = set()
+
+
+def _integration_marker(domain_id: str):
+    """在 <仓根>/integrations/*/check-package.toml 里找 domain==domain_id 的声明。"""
+    base = Path(__file__).resolve().parent.parent / "integrations"
+    if not base.is_dir():
+        return None
+    for d in sorted(base.iterdir()):
+        marker = d / "check-package.toml"
+        if not marker.is_file():
+            continue
+        try:
+            meta = load_toml(marker)
+        except Exception:
+            continue   # 坏声明不当致命：这个件本批不可发现，点名即未注册
+        if str(meta.get("domain") or "").strip() == domain_id:
+            return d, str(meta.get("adapter") or "").strip()
+    return None
+
+
+def load_integration(domain_id: str) -> None:
+    """按约定路径载入外来核验包（幂等；只对点名而未注册的 id 调用）。
+
+    载入＝把集成件目录挂上 sys.path 后 import 声明的适配器模块，适配器
+    自己调 register_package 挂卡。声明存在但载入失败＝配置错（exit 2）；
+    没有声明＝静默返回，调用方按「未注册」处理。
+    """
+    if domain_id in _INTEGRATIONS_TRIED:
+        return
+    _INTEGRATIONS_TRIED.add(domain_id)
+    hit = _integration_marker(domain_id)
+    if hit is None:
+        return
+    d, module = hit
+    if not module:
+        raise ConfigError(
+            "integrations/%s/check-package.toml 缺 adapter 字段——"
+            "无法载入核验包 %r" % (d.name, domain_id))
+    import importlib
+    sys.path.insert(0, str(d))
+    try:
+        importlib.import_module(module)
+    except ImportError as exc:
+        raise ConfigError(
+            "核验包 %r 的适配器 %s 载入失败（%s）——集成件不完整或依赖缺失"
+            % (domain_id, module, exc)) from exc
+
+
+# --------------------------------------------------------------------------
 # 点名（槽第 1 件事）＋域节键集校验
 # --------------------------------------------------------------------------
 
@@ -208,8 +272,9 @@ def resolve_packages(cfg: Config) -> list[CheckPackage]:
     """按 `[checks]` 配置点名本次要跑的核验包。
 
     - 缺省（无 [checks]，或节存在但省 `packages`）⇒ 只跑 paper（裁定③）；
-    - `packages` 点了未注册的 id ⇒ exit 2（CONFIG），点名该 id 与已注册域
-      清单（§5.2）；
+    - `packages` 点了未注册的 id ⇒ 先按约定路径发现 integrations/ 件
+      （M2 起，见 load_integration）；仍无 ⇒ exit 2（CONFIG），点名该 id
+      与已注册域清单（§5.2）；
     - `[checks.<domain>]` 键集错误 ⇒ CONFIG_UNKNOWN_FIELD 告警（info），
       不改退出码；未注册域的节同样告警并忽略（§5.2）。
     """
@@ -219,6 +284,9 @@ def resolve_packages(cfg: Config) -> list[CheckPackage]:
     packages: list[CheckPackage] = []
     for pid in wanted:
         pkg = _REGISTRY.get(pid)
+        if pkg is None:
+            load_integration(pid)   # 约定路径延迟载入（幂等；失败即配置错）
+            pkg = _REGISTRY.get(pid)
         if pkg is None:
             raise ConfigError(
                 "[checks].packages 点名的核验包 %r 未注册（已注册：%s）——"
@@ -274,7 +342,11 @@ def run_packages(cfg: Config, facts, sections, resolve: bool = False):
                                     "hints": len(p_hints)}
         if summary is None:
             summary = dict(p_summary)
-        # 多包时其余包的 summary 合并语义是 M2 的卡上契约（M1 只有单包）。
+        elif p_summary is not None:
+            # 多包合并（M2 卡上契约，§3.2 只增键）：非首包的 summary 挂在
+            # 自己的 domain_id 键下，键不与信封基座冲突由各包自己保证
+            #（域内键归域）。首包（惯例＝内建 paper）的 summary 仍是基座。
+            summary[pkg.domain_id] = dict(p_summary)
     if summary is not None:
         summary["by_domain"] = by_domain
     return red, yellow, hints, summary or {}, unresolved

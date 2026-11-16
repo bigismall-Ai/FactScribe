@@ -1,0 +1,45 @@
+{
+ "fetch_reference_date": "2026-11-16",
+ "generator": "tools/fetch_corpus.py",
+ "judgments": {
+  "ECLI-IT-COST-1956-1": {
+   "anno": "1956",
+   "card_file": "ECLI-IT-COST-1956-1.itcase.card.txt",
+   "card_sha256": "8f7a369e1d21952aa8cad815c48bf4013bf0ef3e39cdc9eeaaf719099fd89439",
+   "data_decisione": "05/06/1956",
+   "data_deposito": "14/06/1956",
+   "ecli": "ECLI:IT:COST:1956:1",
+   "numero": "1",
+   "presidente": "DE NICOLA",
+   "relatore": "Gaetano Azzariti",
+   "slice_bytes": 37176,
+   "slice_file": "official/ECLI-IT-COST-1956-1.xml",
+   "slice_sha256": "1b014aa29ce05def5c2f054a9caddb0307739fcf6803668f18b704446df86141",
+   "text_chars": 28079,
+   "text_sha256": "1cf51e579b95fa882c5ea506e02160ebf939e0cc53135d0127d3692c94c9c402",
+   "tipologia": "S"
+  },
+  "ECLI-IT-COST-1956-2": {
+   "anno": "1956",
+   "card_file": "ECLI-IT-COST-1956-2.itcase.card.txt",
+   "card_sha256": "f501dce8d62aaeb0cf705414f1cc67350edd584ca4a21d6ef7d91247b1c95a57",
+   "data_decisione": "14/06/1956",
+   "data_deposito": "23/06/1956",
+   "ecli": "ECLI:IT:COST:1956:2",
+   "numero": "2",
+   "presidente": "DE NICOLA",
+   "relatore": "Giuseppe Cappi",
+   "slice_bytes": 23915,
+   "slice_file": "official/ECLI-IT-COST-1956-2.xml",
+   "slice_sha256": "5b882166e27cff9c4d2ec74dabf1d7367fc099953c538fa8c50b20c7f770f773",
+   "text_chars": 17689,
+   "text_sha256": "f9f09b316cee05b8873ffa1f66714543c47d4cf7f2ae5c15c89c85d564745c10",
+   "tipologia": "S"
+  }
+ },
+ "source_url": "https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip",
+ "source_zip_bytes": 14887390,
+ "source_zip_last_modified": "Mon, 16 Nov 2026 04:11:54 GMT",
+ "source_zip_sha256": "8e9319be3ca4077e620d4c5b19a304ffc5b6dc18b97ff47702b9e38d8471439b",
+ "tier": "1956_1980"
+}

@@ -1,0 +1,20 @@
+# 意大利宪法法院判例证据卡（派生件；官方判决切片哈希钉在这里）
+ECLI: ECLI:IT:COST:1956:1
+ANNO_PRONUNCIA: 1956
+NUMERO_PRONUNCIA: 1
+TIPOLOGIA: S
+PRESIDENTE: DE NICOLA
+RELATORE: Gaetano Azzariti
+DATA_DECISIONE: 05/06/1956
+DATA_DECISIONE_ISO: 1956-06-05
+DATA_DEPOSITO: 14/06/1956
+SOURCE_FILE: official/ECLI-IT-COST-1956-1.xml
+SOURCE_URL: https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip#ECLI-IT-COST-1956-1
+OFFICIAL_XML_SHA256: 1b014aa29ce05def5c2f054a9caddb0307739fcf6803668f18b704446df86141
+TEXT_SHA256: 1cf51e579b95fa882c5ea506e02160ebf939e0cc53135d0127d3692c94c9c402
+TEXT_CHARS: 28079
+LICENCE: Creative Commons CC BY-SA 3.0 (Corte costituzionale, dati aperti)
+ATTRIBUTION: Fonte: Corte costituzionale della Repubblica italiana, dati aperti (https://dati.cortecostituzionale.it/)
+FETCHED_AT: 2026-11-16T14:19:43Z
+--- OFFICIAL TEXT ---
+19561ECLI:IT:COST:1956:1SDE NICOLAGaetano Azzariti05/06/195614/06/1956LA CORTE COSTITUZIONALEcomposta dai signori: Avv. ENRICO DE NICOLA, Presidente - Dott. GAETANO AZZARITI - Avv. GIUSEPPE CAPPI - Prof. TOMASO PERASSI - Prof. GASPARE AMBROSINI - Prof. FRANCESCO PANTALEO GABRIELI - Prof. ERNESTO BATTAGLINI - Dott. MARIO COSATTI - Prof. GIUSEPPE CASTELLI AVOLIO - Prof. ANTONINO PAPALDO - Prof. MARIO BRACCI - Prof. NICOLA JAEGER - Prof. GIOVANNI CASSANDRO, Giudici,ha pronunciato la seguenteSENTENZAnei giudizi riuniti di legittimità costituzionale dell'art. 113 T.U. delle leggi di p.s. approvato …

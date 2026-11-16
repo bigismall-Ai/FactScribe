@@ -6,9 +6,9 @@
    "sha256": "55cfa917dd46d6ab218a686aaab469685155e1d81d5b83f2c7f8e25724d9df40"
   },
   {
-   "bytes": 6262,
+   "bytes": 7571,
    "path": "README.md",
-   "sha256": "55cfd5f1facf7110d6fa3f5b5f8b2960db5b61d8702131c18ddb82f6c1c4bfe7"
+   "sha256": "fd2392b577af8bb7328c5e09bbad3d8c4a3bca0e09e3de5b5e67afba14beaddb"
   },
   {
    "bytes": 878,
@@ -326,12 +326,42 @@
    "sha256": "5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492"
   },
   {
-   "bytes": 13868,
+   "bytes": 3586,
+   "path": "it-case/ATTRIBUTION.md",
+   "sha256": "3fd3ac5595e86669a86303f89e9ffa3caad36e770f21903357506ff235200453"
+  },
+  {
+   "bytes": 1509,
+   "path": "it-case/run-20261116-itcase-1956_1980/ECLI-IT-COST-1956-1.itcase.card.txt",
+   "sha256": "8f7a369e1d21952aa8cad815c48bf4013bf0ef3e39cdc9eeaaf719099fd89439"
+  },
+  {
+   "bytes": 1507,
+   "path": "it-case/run-20261116-itcase-1956_1980/ECLI-IT-COST-1956-2.itcase.card.txt",
+   "sha256": "f501dce8d62aaeb0cf705414f1cc67350edd584ca4a21d6ef7d91247b1c95a57"
+  },
+  {
+   "bytes": 1756,
+   "path": "it-case/run-20261116-itcase-1956_1980/index.json",
+   "sha256": "6730e71f96972a2b0661bf830d8807add4f8c5e49d133c3478bbc33377aa1a64"
+  },
+  {
+   "bytes": 37176,
+   "path": "it-case/run-20261116-itcase-1956_1980/official/ECLI-IT-COST-1956-1.xml",
+   "sha256": "1b014aa29ce05def5c2f054a9caddb0307739fcf6803668f18b704446df86141"
+  },
+  {
+   "bytes": 23915,
+   "path": "it-case/run-20261116-itcase-1956_1980/official/ECLI-IT-COST-1956-2.xml",
+   "sha256": "5b882166e27cff9c4d2ec74dabf1d7367fc099953c538fa8c50b20c7f770f773"
+  },
+  {
+   "bytes": 21042,
    "path": "state/fetch_state.json",
-   "sha256": "83f345fe1e2ef5f044f7118238e823c132964825161b8d0bcd44cdc6f04ddadb"
+   "sha256": "5479cf7ab3a0cd5aae2faa28c37e8285eb2d62cbf064b9451d7ca4a99ceccc13"
   }
  ],
- "generated_at": "2026-11-16T15:06:58Z",
+ "generated_at": "2026-11-16T19:29:22Z",
  "how_to_refetch": {
   "bulk_cn": "python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes",
   "bulk_es": "python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes",
@@ -348,7 +378,7 @@
   "interval": "uniform 2.0-6.0s (floor 2.0s locked)",
   "user_agent": "factscribe-legal-corpus/0.1 (legal-citation verification research; contact: repo issues)"
  },
- "reference_date": "2026-11-16",
+ "reference_date": "2026-11-17",
  "sources": {
   "case": {
    "items": {
@@ -663,6 +693,187 @@
     "runs": [
      "run-20261116-it-1990n241",
      "run-20261116-it-2012n190"
+    ]
+   }
+  },
+  "it-case": {
+   "items": {
+    "1956_1980:ECLI-IT-COST-1956-1": {
+     "bytes": 37542,
+     "corpus_bytes": 37176,
+     "corpus_normalization": "探查期取样的单件判决文件：物理行尾 CRLF→LF 归一＋<elenco_pronunce> 包装；纯文本 text_sha256 与网络取回的原样切片逐字节相同",
+     "corpus_sha256": "1b014aa29ce05def5c2f054a9caddb0307739fcf6803668f18b704446df86141",
+     "fetched_at": "2026-11-16T15:12:23Z",
+     "run": "run-20261116-itcase-1956_1980",
+     "sha256": "613ed54e1b88ffead20d9d9fdfe0cfc456ad8d74f68179df7cd2dba14ab51808",
+     "slice_file": "official/ECLI-IT-COST-1956-1.xml",
+     "url": "https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip#ECLI-IT-COST-1956-1"
+    },
+    "1956_1980:ECLI-IT-COST-1956-2": {
+     "bytes": 24115,
+     "corpus_bytes": 23915,
+     "corpus_normalization": "探查期取样的单件判决文件：物理行尾 CRLF→LF 归一＋<elenco_pronunce> 包装；纯文本 text_sha256 与网络取回的原样切片逐字节相同",
+     "corpus_sha256": "5b882166e27cff9c4d2ec74dabf1d7367fc099953c538fa8c50b20c7f770f773",
+     "fetched_at": "2026-11-16T15:12:23Z",
+     "run": "run-20261116-itcase-1956_1980",
+     "sha256": "c10d1e385c02004c3188a92e892362447359d9a47789ab9f4115fbdec0478d28",
+     "slice_file": "official/ECLI-IT-COST-1956-2.xml",
+     "url": "https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip#ECLI-IT-COST-1956-2"
+    },
+    "tier:1956_1980": {
+     "bytes": 14887390,
+     "content_length": 14887390,
+     "fetched_at": "2026-11-16T15:12:22Z",
+     "last_modified": "Mon, 16 Nov 2026 04:11:54 GMT",
+     "run": "run-20261116-itcase-1956_1980",
+     "sha256": "8e9319be3ca4077e620d4c5b19a304ffc5b6dc18b97ff47702b9e38d8471439b",
+     "tier": "1956_1980",
+     "url": "https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip"
+    }
+   },
+   "notes": {
+    "archive:1956_1980": [
+     {
+      "bytes": 628022,
+      "file": "Cc_Opendata_Pronunce_1956.xml",
+      "sha256": "387da267869d926c66dadd01324fc82d8dbcdc7fd72fcbec519a950b4e4c2b95"
+     },
+     {
+      "bytes": 2672958,
+      "file": "Cc_Opendata_Pronunce_1957.xml",
+      "sha256": "6b256b87a799c2032aeb27ce5c415406ff0a507412a5e106262b077b356fce00"
+     },
+     {
+      "bytes": 1440042,
+      "file": "Cc_Opendata_Pronunce_1958.xml",
+      "sha256": "252db98db0de0c43283e0e721ffc630bcd3a207565a730ee0006e5ad6e025c8d"
+     },
+     {
+      "bytes": 1450156,
+      "file": "Cc_Opendata_Pronunce_1959.xml",
+      "sha256": "f96fc798688abc4614c57b3c6ccdec7f21eae48bb2ed716955acd105fb8612b1"
+     },
+     {
+      "bytes": 1799183,
+      "file": "Cc_Opendata_Pronunce_1960.xml",
+      "sha256": "b6f2ec56bb6b071a52d9a5e6fef4615dda0873edc6cb648bf5939ca7e7501e33"
+     },
+     {
+      "bytes": 1867399,
+      "file": "Cc_Opendata_Pronunce_1961.xml",
+      "sha256": "f5a95048b6fab592b315b17d140c7cd331bd3a35ea7b8043549dc26e36fec404"
+     },
+     {
+      "bytes": 2080462,
+      "file": "Cc_Opendata_Pronunce_1962.xml",
+      "sha256": "39d529fc7ad66b166822a651194e1ea5029474e13a9024afcd2310c6741508ea"
+     },
+     {
+      "bytes": 2395793,
+      "file": "Cc_Opendata_Pronunce_1963.xml",
+      "sha256": "6f844e2fc18546ed502629c90064518c953211e38d068d465641e4ee72357568"
+     },
+     {
+      "bytes": 1802987,
+      "file": "Cc_Opendata_Pronunce_1964.xml",
+      "sha256": "e511ba86b6255d8b80bbcf71ca5e4ac69dbdfcda65d7b48abcbf1ee48e8aa4ab"
+     },
+     {
+      "bytes": 1683259,
+      "file": "Cc_Opendata_Pronunce_1965.xml",
+      "sha256": "68d945dd39a3959af3d9adeb475e92f5baad1dabcb51f07cf1ab7ca184b72982"
+     },
+     {
+      "bytes": 2079810,
+      "file": "Cc_Opendata_Pronunce_1966.xml",
+      "sha256": "c2e06d8f5538da06f0e1cfec8aad2c1eb29c948fca7f21c10bc548c4b673eb47"
+     },
+     {
+      "bytes": 2323409,
+      "file": "Cc_Opendata_Pronunce_1967.xml",
+      "sha256": "1d1c0f064c6bc125bcffac1bcd91750e6aa4c542b3b2c57b293eb4c1fb9cab09"
+     },
+     {
+      "bytes": 2569567,
+      "file": "Cc_Opendata_Pronunce_1968.xml",
+      "sha256": "c37a9d140e7be47d52c53645f5afd3718897ab4fb7a7985870cee8fcb034a014"
+     },
+     {
+      "bytes": 3051666,
+      "file": "Cc_Opendata_Pronunce_1969.xml",
+      "sha256": "e65d688d0b1706a19ee60840a27b15f77c68b76b8b76657892614b509144126f"
+     },
+     {
+      "bytes": 2898883,
+      "file": "Cc_Opendata_Pronunce_1970.xml",
+      "sha256": "350eabb92417d2c240836ec35b67d17f1a5c694c1664802e3c46f570439f0dfe"
+     },
+     {
+      "bytes": 2802854,
+      "file": "Cc_Opendata_Pronunce_1971.xml",
+      "sha256": "c9ba07747bb919f3d503a4085d429ae05795252f243b6f0253fcc281cf1c1c6d"
+     },
+     {
+      "bytes": 3621966,
+      "file": "Cc_Opendata_Pronunce_1972.xml",
+      "sha256": "cb6684630eb2e1911880453f1ec2b1de8ae7a7cbba06c54c585b84f53630a6e6"
+     },
+     {
+      "bytes": 3071008,
+      "file": "Cc_Opendata_Pronunce_1973.xml",
+      "sha256": "a928ec012096ad031a7cdc5033f5b782b950bd041282c38e2f7df5e01d21531b"
+     },
+     {
+      "bytes": 3854589,
+      "file": "Cc_Opendata_Pronunce_1974.xml",
+      "sha256": "c1f992da5b4d81377f11b44d489b2c6e6f7a33c7b6440447f80d33d49681ceb7"
+     },
+     {
+      "bytes": 3481658,
+      "file": "Cc_Opendata_Pronunce_1975.xml",
+      "sha256": "9e425aff0371cbe125e7a3da0b032a781c9e34130656ff288becf7705a521d51"
+     },
+     {
+      "bytes": 4059374,
+      "file": "Cc_Opendata_Pronunce_1976.xml",
+      "sha256": "e6473e52106352d61828594527623658ae2dae673eafa32e8d0d65a29b9b531e"
+     },
+     {
+      "bytes": 2375216,
+      "file": "Cc_Opendata_Pronunce_1977.xml",
+      "sha256": "2ce5cfbf5ec44bc654f0d8a6ca553688b795091248cf295ed0f40005a1463d9c"
+     },
+     {
+      "bytes": 1059894,
+      "file": "Cc_Opendata_Pronunce_1978.xml",
+      "sha256": "73d76fb4a1b7e30ca1e7857cac87742d8db8aa70b88e3a468228ab62cac2c4ab"
+     },
+     {
+      "bytes": 2186900,
+      "file": "Cc_Opendata_Pronunce_1979.xml",
+      "sha256": "ae39d187dfa46adbef17047c560f8a6ea643a0005b92db7ff62063f31fe991c3"
+     },
+     {
+      "bytes": 3234899,
+      "file": "Cc_Opendata_Pronunce_1980.xml",
+      "sha256": "34f616d14c0341d2e3bd4af360c27797e51891c629595cd3c03a77f5a41441a3"
+     }
+    ],
+    "fixture_normalization": {
+     "corpus_slice_sha256": {
+      "ECLI-IT-COST-1956-1": "1b014aa29ce05def5c2f054a9caddb0307739fcf6803668f18b704446df86141",
+      "ECLI-IT-COST-1956-2": "5b882166e27cff9c4d2ec74dabf1d7367fc099953c538fa8c50b20c7f770f773"
+     },
+     "fetched_slice_sha256": {
+      "ECLI-IT-COST-1956-1": "613ed54e1b88ffead20d9d9fdfe0cfc456ad8d74f68179df7cd2dba14ab51808",
+      "ECLI-IT-COST-1956-2": "c10d1e385c02004c3188a92e892362447359d9a47789ab9f4115fbdec0478d28"
+     },
+     "note": "run-20261116-itcase-1956_1980 目录里的 official/*.xml 是 §4 指定的 fixture（探查期取回的单件判决样例，原字节拷贝）；抓取器真跑产出的是档案字节的原样切片（物理 CRLF 行尾＋无包装）。两者纯文本 text_sha256 完全相同，可互为确定性锁。",
+     "text_sha256_equal": true
+    },
+    "last_run": "2026-11-16T15:12:23Z",
+    "runs": [
+     "run-20261116-itcase-1956_1980"
     ]
    }
   }

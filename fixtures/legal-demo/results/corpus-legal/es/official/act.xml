@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<response>
+  <status>
+    <code>200</code>
+    <text>ok</text>
+  </status>
+  <data>
+    <metadatos>
+      <fecha_actualizacion>20261116T084356Z</fecha_actualizacion>
+      <identificador>BOE-A-2015-10565</identificador>
+      <ambito codigo="1">Estatal</ambito>
+      <rango codigo="1311">Ley</rango>
+      <fecha_disposicion>20151001</fecha_disposicion>
+      <numero_oficial>39/2015</numero_oficial>
+      <titulo>Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo y de Administración Electrónica.</titulo>
+      <diario>Boletín Oficial del Estado</diario>
+      <fecha_publicacion>20151002</fecha_publicacion>
+      <fecha_vigencia>20151003</fecha_vigencia>
+      <estado_consolidacion codigo="3">Finalizado</estado_consolidacion>
+      <url_eli>https://www.boe.es/eli/es/l/2015/10/02/39</url_eli>
+      <url_html_consolidada>https://www.boe.es/buscar/act.php?id=BOE-A-2015-10565</url_html_consolidada>
+    </metadatos>
+    <texto>
+      <bloque id="preambulo" tipo="preambulo">
+        <version id_norma="BOE-A-2015-10565" fecha_publicacion="20151002" fecha_vigencia="20151003">
+          <p class="parrafo_2">La presente Ley establece el régimen jurídico de la actividad de la Administración.</p>
+        </version>
+      </bloque>
+      <bloque id="a1" tipo="precepto" titulo="Artículo 1">
+        <version id_norma="BOE-A-2015-10565" fecha_publicacion="20151002" fecha_vigencia="20151003">
+          <p class="articulo">Artículo 1. Objeto de la Ley.</p>
+          <p class="parrafo">1. La presente Ley establece el régimen jurídico de la actividad de la Administración.</p>
+        </version>
+      </bloque>
+      <bloque id="a2" tipo="precepto" titulo="Artículo 2">
+        <version id_norma="BOE-A-2015-10565" fecha_publicacion="20151002" fecha_vigencia="20151003">
+          <p class="articulo">Artículo 2. Ámbito de aplicación.</p>
+          <p class="parrafo">1. La presente Ley se aplica a la actuación de la Administración.</p>
+          <p class="parrafo">2. El plazo máximo para dictar resolución es de 3 meses.</p>
+        </version>
+      </bloque>
+    </texto>
+  </data>
+</response>

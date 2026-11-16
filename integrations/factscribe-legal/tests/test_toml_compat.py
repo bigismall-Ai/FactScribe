@@ -144,7 +144,10 @@ class TestLoaderDispatch(unittest.TestCase):
             from factscribe.config import load_toml as upstream
         except Exception:
             self.skipTest("当前环境拿不到 factscribe（独立运行），跳过")
-        import tomllib
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            self.skipTest("本解释器没有 tomllib（3.10），跳过对照")
         text = SAMPLE.read_text(encoding="utf-8")
         # 只取我们事实账真正写出的形态：字符串 + 空数组 + 布尔 + 数字
         subset = (

@@ -32,6 +32,7 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   python3 tools/fetch_corpus.py fetch --source it --mode sample
   python3 tools/fetch_corpus.py fetch --source es --mode sample
   python3 tools/fetch_corpus.py fetch --source fr-case --mode sample
+  python3 tools/fetch_corpus.py fetch --source it-case --mode sample
 
   # 全量（以后真要时照此跑；会先打印预计请求数）
   python3 tools/fetch_corpus.py fetch --source fr --mode bulk          # 只出计划
@@ -40,6 +41,7 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes
   python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes
   python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk --yes
+  python3 tools/fetch_corpus.py fetch --source it-case --mode bulk --yes
 
   # 把语料物化成一个合成小项目（事实账＋证据卡＋paper.tex，供四闸跑读数）
   python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -82,6 +84,12 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
       official/<ID>.txt           确定性纯文本还原件（哈希入 index 与卡）
       <ID>.fr-case.card.txt       证据卡（含 OFFICIAL_XML_SHA256/OFFICIAL_TXT_SHA256）
       ATTRIBUTION.txt             许可署名（licence ouverte v2.0 三件套）
+    it-case/run-<YYYYMMDD>-itcase-<tier>/  it_case_verify reader 直接吃的形状：
+      index.json                  {"tier", "source_url", "source_zip_sha256",
+                                    "source_zip_bytes", "source_zip_last_modified",
+                                    "fetch_reference_date", "generator", "judgments"...}
+      official/<slug>.xml          判决切片（档案字节的原样子串）
+      <slug>.itcase.card.txt       证据卡（含 ECLI／裁判日／正文哈希）
 
 官方通道（均为开放数据接口，非爬页面；出处 README「语料从哪来」节）
 ------------------------------------------------------------------
@@ -96,6 +104,10 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
       https://echanges.dila.gouv.fr/OPENDATA/INCA/
       （stock tar.gz 约 664MB；sample 只取 12MB **前缀**（HTTP Range 206），
         流式解到够数即停）  licence ouverte v2.0（Etalab）
+  IT-CASE 意大利宪法法院开放数据
+      https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_*.zip
+      （判决档案 ZIP 套 ZIP；⚠️ 主站 www.cortecostituzione.it 有 WAF 403，
+        开放数据子域匿名直链可下）  CC BY-SA 3.0（须署名＋相同方式共享）
 
 退出码：0 全部成功 / 2 用法错或 bulk 未确认 / 3 部分源失败（详见日志）
 Python ≥ 3.10，纯标准库。
@@ -125,6 +137,7 @@ import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+import zipfile
 from datetime import date as _date
 from datetime import datetime, timezone
 
@@ -175,6 +188,34 @@ ES_SAMPLE_ACTS = [
     ("BOE-A-2015-10566", "ley40-2015-regimen-local"),
     ("BOE-A-1978-31229", "const1978-constitucion-espanola"),
 ]
+# IT-CASE（意大利宪法法院判例）——Corte costituzionale 开放数据站
+# dati.cortecostituzionale.it 的判决档案 ZIP（三档；ZIP 套 ZIP）。
+# ⚠️ 主站 www.cortecostituzione.it 有 WAF 403；开放数据子域匿名直链可下。
+IT_CASE_TIERS = (
+    ("1956_1980",
+     "https://dati.cortecostituzionale.it/opendata/distribuzione/"
+     "CC_OpenPronunce_1956_1980.zip"),
+    ("1981_2000",
+     "https://dati.cortecostituzionale.it/opendata/distribuzione/"
+     "CC_OpenPronunce_1981_2000.zip"),
+    ("2001_oggi",
+     "https://dati.cortecostituzionale.it/opendata/distribuzione/"
+     "CC_OpenPronunce_2001_oggi.zip"),
+)
+# sample 只取第一档（最小）；bulk 三档全量。
+IT_CASE_SAMPLE_TIER = "1956_1980"
+IT_CASE_LICENCE = "Creative Commons CC BY-SA 3.0 (Corte costituzionale, dati aperti)"
+IT_CASE_ATTRIBUTION = ("Fonte: Corte costituzionale della Repubblica italiana, "
+                       "dati aperti (https://dati.cortecostituzionale.it/)")
+# 各档 ZIP 的实测体积（探查时 HEAD 到的 Content-Length；用于 bulk 计划行）
+IT_CASE_TIER_BYTES = {
+    "1956_1980": 14887390,
+    "1981_2000": 36154053,
+    "2001_oggi": 57545646,
+}
+# 实测该站下行只有约 18KB/s，14.9MB 的档要十几分钟——单发超时必须放宽
+#（礼貌机制不打折：串行、间隔、退避照旧，只是别把慢传输当成失败）。
+IT_CASE_DOWNLOAD_TIMEOUT_S = 2400
 
 ART_CN_RE = re.compile(r"^第[一二三四五六七八九十百千零〇两]+条$")
 ES_BLOQUE_RE = re.compile(rb'<bloque id="([^"]+)"([^>]*)>(.*?)</bloque>', re.S)
@@ -193,6 +234,10 @@ FR_CASE_SAMPLE_MAX = 4                    # sample：最多取 4 件判决
 FR_CASE_LICENCE = "Licence ouverte v2.0 (DILA / Etalab)"
 FR_CASE_ATTRIBUTION = ("Source : DILA (Direction de l'Information Légale et "
                        "Administrative) — données ouvertes INCA")
+# IT-CASE：判决档案 XML 里每件判决是一个 <pronuncia> 元素；切片＝原样子串。
+IT_CASE_PRONUNCIA_RE = re.compile(rb'<pronuncia>.*?</pronuncia>', re.S)
+IT_CASE_XML_RE = re.compile(r"\.xml$", re.I)
+IT_CASE_ZIP_RE = re.compile(r"\.zip$", re.I)
 
 
 class FetchError(RuntimeError):
@@ -399,8 +444,8 @@ class PoliteHttp:
                                   **(headers or {})})
         return json.loads(r["body"].decode("utf-8"))
 
-    def download(self, url, dest_path, headers=None):
-        r = self.request(url, headers=headers or {})
+    def download(self, url, dest_path, headers=None, timeout=90):
+        r = self.request(url, headers=headers or {}, timeout=timeout)
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "wb") as fh:
             fh.write(r["body"])
@@ -1670,6 +1715,367 @@ def fetch_fr_case(http, corpus_root, state, max_items, mode, reference_date, yes
     return 0
 
 
+
+# ---------------------------------------------------------------------------
+# IT-CASE —— 意大利宪法法院判例（Corte costituzionale 开放数据）
+# ---------------------------------------------------------------------------
+# 官方通道：dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_*.zip
+#   ⚠️ 主站 www.cortecostituzione.it 有 WAF（403）；开放数据子域匿名直链可下。
+#   ⚠️ ZIP 套 ZIP：外层 ZIP 里放的是内层 ZIP，内层才是判决档案 XML
+#      （根标签 <elenco_pronunce>，每件判决一个 <pronuncia> 元素）。
+# 切片＝档案字节的原样子串（正则 <pronuncia>.*?</pronuncia>，re.S 非贪婪）。
+# 纯文本抽取是**确定性**的（闸模块内联同款算法；同输入同字节，sha256 可复现）。
+def _itcase_plain(data):
+    """判决切片字节 → 确定性纯文本（闸模块 it_case_verify._itcase_plain 同款算法）。
+
+    解码 → 去 XML 声明（str 解析器不认声明里的 encoding）→ ElementTree 解析
+    → `"".join(root.itertext())`（文档序；实体已被解析器解掉，&#13; 变 CR）
+    → NBSP→空格 → 所有空白串（含 CR/LF/TAB）折叠成单空格 → strip。
+    """
+    if isinstance(data, bytes):
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = data.decode("utf-8", "replace")
+    else:
+        text = data
+    stripped = re.sub(r"^﻿?\s*<\?xml[^>]*\?>", "", text, count=1)
+    try:
+        root = ET.fromstring(stripped)
+    except ET.ParseError:
+        root = ET.fromstring(data)   # 兜底：按字节解析（ET 自认声明里的编码）
+    s = "".join(root.itertext())
+    s = s.replace("\xa0", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+def _itcase_testata(data):
+    """切片字节 → testata 字段字典（根可能是 pronuncia，也可能是 elenco_pronunce 包装）。"""
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return None
+    node = root if root.tag == "pronuncia" else root.find("pronuncia")
+    if node is None:
+        node = root.find(".//pronuncia")
+    if node is None:
+        return None
+    tt = node.find("pronuncia_testata")
+    if tt is None:
+        return None
+
+    def g(tag):
+        el = tt.find(tag)
+        return (el.text or "").strip() if el is not None else ""
+
+    return {
+        "ecli": g("ecli"),
+        "anno": g("anno_pronuncia"),
+        "numero": g("numero_pronuncia"),
+        "tipologia": g("tipologia_pronuncia"),
+        "presidente": g("presidente"),
+        "relatore": g("relatore_pronuncia"),
+        "data_decisione": g("data_decisione"),
+        "data_deposito": g("data_deposito"),
+    }
+
+
+def _itcase_iso_date(value):
+    """意式 gg/mm/aaaa → YYYY-MM-DD（认不出回空串）。"""
+    m = re.match(r"^\s*(\d{1,2})/(\d{1,2})/(\d{4})\s*$", value or "")
+    if not m:
+        return ""
+    return "%04d-%02d-%02d" % (int(m.group(3)), int(m.group(2)), int(m.group(1)))
+
+
+def _itcase_card(slug, meta, slice_bytes, text, source_url, fetched_at):
+    """证据卡（字段序照任务书 §3.1 字段表；派生件，钉官方切片与正文哈希）。"""
+    return "\n".join([
+        "# 意大利宪法法院判例证据卡（派生件；官方判决切片哈希钉在这里）",
+        "ECLI: %s" % meta.get("ecli", ""),
+        "ANNO_PRONUNCIA: %s" % meta.get("anno", ""),
+        "NUMERO_PRONUNCIA: %s" % meta.get("numero", ""),
+        "TIPOLOGIA: %s" % meta.get("tipologia", ""),
+        "PRESIDENTE: %s" % meta.get("presidente", ""),
+        "RELATORE: %s" % meta.get("relatore", ""),
+        "DATA_DECISIONE: %s" % meta.get("data_decisione", ""),
+        "DATA_DECISIONE_ISO: %s" % _itcase_iso_date(meta.get("data_decisione", "")),
+        "DATA_DEPOSITO: %s" % meta.get("data_deposito", ""),
+        "SOURCE_FILE: official/%s.xml" % slug,
+        "SOURCE_URL: %s#%s" % (source_url, slug),
+        "OFFICIAL_XML_SHA256: %s" % sha256_bytes(slice_bytes),
+        "TEXT_SHA256: %s" % sha256_bytes(text.encode("utf-8")),
+        "TEXT_CHARS: %d" % len(text),
+        "LICENCE: %s" % IT_CASE_LICENCE,
+        "ATTRIBUTION: %s" % IT_CASE_ATTRIBUTION,
+        "FETCHED_AT: %s" % fetched_at,
+        "--- OFFICIAL TEXT ---",
+        text[:600] + ("…" if len(text) > 600 else ""),
+        "",
+    ])
+
+
+def _safe_extract_zip(zip_path, dest):
+    """ZIP 解包到 dest（新空目录）；成员路径逐个校验防越界（照 tar 版 _safe_extract）。"""
+    if os.path.exists(dest):
+        shutil.rmtree(dest)
+    os.makedirs(dest)
+    dest_abs = os.path.abspath(dest)
+    with zipfile.ZipFile(zip_path) as zf:
+        for member in zf.infolist():
+            if member.is_dir():
+                continue
+            target = os.path.abspath(os.path.join(dest, member.filename))
+            if not target.startswith(dest_abs + os.sep):
+                raise FetchError("zip 成员越界：%s" % member.filename)
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with zf.open(member) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+    return dest
+
+
+def _zip_ok(path):
+    """本地 ZIP 完整性可过？（zipfile 能打开且至少有一个成员；截断件会在这里挂掉）。"""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return len(zf.infolist()) > 0
+    except (zipfile.BadZipFile, OSError, EOFError):
+        return False
+
+
+def _itcase_root_tag(data):
+    """XML 字节的根标签（只读头几百字节，不整份解析）。"""
+    m = re.search(rb"<([A-Za-z_][\w.:-]*)", data[:2048])
+    return m.group(1).decode("utf-8", "replace") if m else ""
+
+
+def _itcase_archives(zip_path, work_dir):
+    """双层解包 → [(成员名, 档案 XML 字节)]（根标签为 elenco_pronunce 的那些）。
+
+    外层 ZIP 里放的是内层 ZIP，内层才是判决档案 XML；逐层解到根标签对上为止。
+    """
+    out = []
+    stack = [(zip_path, 0)]
+    seq = 0
+    while stack:
+        cur, depth = stack.pop(0)
+        if depth > 4:
+            raise FetchError("IT-CASE 解包层数超限（%s）" % cur)
+        try:
+            zf = zipfile.ZipFile(cur)
+        except (zipfile.BadZipFile, OSError) as e:
+            raise FetchError("zip 打不开（%s）：%s" % (cur, e))
+        with zf:
+            for member in zf.infolist():
+                if member.is_dir():
+                    continue
+                name = member.filename
+                data = zf.read(member)
+                if IT_CASE_ZIP_RE.search(name):
+                    seq += 1
+                    inner = os.path.join(work_dir, "layer%d_%d.zip" % (depth + 1, seq))
+                    os.makedirs(work_dir, exist_ok=True)
+                    with open(inner, "wb") as fh:
+                        fh.write(data)
+                    stack.append((inner, depth + 1))
+                    continue
+                if not IT_CASE_XML_RE.search(name):
+                    continue
+                if _itcase_root_tag(data) != "elenco_pronunce":
+                    continue
+                out.append((name, data))
+    return out
+
+
+def fetch_itcase(http, corpus_root, state, max_items, mode, reference_date, yes):
+    root_dir = os.path.join(corpus_root, "it-case")
+    raw_dir = os.path.join(root_dir, "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    tiers = [t for t in IT_CASE_TIERS
+             if mode == "bulk" or t[0] == IT_CASE_SAMPLE_TIER]
+    if mode == "bulk":
+        log("[plan]  IT-CASE bulk：意大利宪法法院判决档案三档全量")
+        for name, url in tiers:
+            log("[plan]   档 %-11s %s（%s bytes）"
+                % (name, url, IT_CASE_TIER_BYTES.get(name, "?")))
+        log("[plan]  预计请求：每档 1 次 HEAD ＋ 1 次 GET ＝ %d 次"
+            "（本地 raw 已有且 zip 完整则跳过下载）" % (2 * len(tiers)))
+        if not yes:
+            if sys.stdin.isatty():
+                if input("确认开跑？[y/N] ").strip().lower() not in ("y", "yes"):
+                    log("[abort] 未确认，停止（--yes 可跳过询问）")
+                    return 3
+            else:
+                log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
+                return 2
+
+    for tier, url in tiers:
+        run_id = "run-%s-itcase-%s" % (reference_date.replace("-", ""), tier)
+        run_dir = os.path.join(root_dir, run_id)
+        idx_path = os.path.join(run_dir, "index.json")
+        item_id = "tier:%s" % tier
+
+        # ---- 1) 礼貌 HEAD：拿 Last-Modified（决定要不要重取） ----
+        last_modified = ""
+        content_length = IT_CASE_TIER_BYTES.get(tier)
+        try:
+            r = http.request(url, method="HEAD")
+            headers = r["headers"]
+            last_modified = (headers.get("Last-Modified") or "").strip()
+            cl = (headers.get("Content-Length") or "").strip()
+            if cl.isdigit():
+                content_length = int(cl)
+        except FetchError as e:
+            log("[warn]  HEAD %s 失败（%s）；继续（本地 raw 完整则直接复用）" % (tier, e))
+
+        # ---- 2) state 命中且 run 目录在 → skip ----
+        prev = state.fetched("it-case", item_id)
+        if prev and prev.get("last_modified") == last_modified and \
+                os.path.exists(idx_path):
+            log("[skip]  it-case:%s 已取过（state 命中）：%s" % (item_id, run_id))
+            continue
+
+        # ---- 3) 本地复用优先（网络慢且常被重置，不靠每次现下） ----
+        zip_path = os.path.join(raw_dir, "CC_OpenPronunce_%s.zip" % tier)
+        if os.path.exists(zip_path):
+            if _zip_ok(zip_path):
+                log("[reuse] it-case:%s 复用本地 raw（不发请求）：%s（%d bytes）"
+                    % (tier, zip_path, os.path.getsize(zip_path)))
+            else:
+                log("[warn]  本地 raw 损坏（zip 打不开），重下：%s" % zip_path)
+                os.remove(zip_path)
+        if not os.path.exists(zip_path):
+            log("[get]   it-case:%s 下载 %s（超时上限 %ds）"
+                % (tier, url, IT_CASE_DOWNLOAD_TIMEOUT_S))
+            http.download(url, zip_path, timeout=IT_CASE_DOWNLOAD_TIMEOUT_S)
+        zip_sha = sha256_file(zip_path)
+        zip_bytes = os.path.getsize(zip_path)
+        state.mark("it-case", item_id, url=url, sha256=zip_sha, bytes_=zip_bytes,
+                   last_modified=last_modified, tier=tier, run=run_id,
+                   content_length=content_length)
+
+        # ---- 4) 双层解包 → 判决档案 XML ----
+        # ⚠️ 一档 ZIP 里是**逐年**的档案 XML（1956_1980 档＝1956.xml…1980.xml），
+        #    不是一整份：必须把档内所有档案都切片，再按 (anno, numero) 升序选样。
+        work_dir = os.path.join(raw_dir, "_work_%s" % tier)
+        archives = _itcase_archives(zip_path, work_dir)
+        if not archives:
+            raise FetchError("IT-CASE %s 解包后没找到根为 elenco_pronunce 的档案 XML"
+                             % tier)
+        archives.sort(key=lambda kv: kv[0])
+        state.note("it-case", "archive:%s" % tier,
+                   [{"file": n, "bytes": len(b), "sha256": sha256_bytes(b)}
+                    for n, b in archives])
+        log("[zip]   it-case:%s 档案 %d 份（%s …），合计 %d bytes"
+            % (tier, len(archives), archives[0][0], sum(len(b) for _, b in archives)))
+
+        # ---- 5) 切片＋解析 testata（解析失败跳过并计数） ----
+        parsed = []
+        failed = 0
+        archive_bytes_total = sum(len(b) for _, b in archives)
+        for _archive_name, archive_bytes in archives:
+            for blob in IT_CASE_PRONUNCIA_RE.findall(archive_bytes):
+                tt = _itcase_testata(blob)
+                if tt is None or not tt.get("ecli"):
+                    failed += 1
+                    continue
+                text = _itcase_plain(blob)
+                if not text:
+                    failed += 1
+                    continue
+                parsed.append((tt, blob, text))
+        if failed:
+            log("[warn]  it-case:%s 有 %d 件判决切片解析失败，已跳过" % (tier, failed))
+        if not parsed:
+            raise FetchError("IT-CASE %s 档案里没解析出任何判决" % tier)
+
+        def _sort_key(item):
+            tt = item[0]
+            try:
+                a = int(tt.get("anno") or 0)
+            except ValueError:
+                a = 0
+            try:
+                n = int(tt.get("numero") or 0)
+            except ValueError:
+                n = 0
+            return (a, n)
+
+        parsed.sort(key=_sort_key)
+        picked = parsed if mode == "bulk" else \
+            [x for x in parsed if x[2]][:max_items]
+
+        # ---- 6) 落位：run 目录＋切片＋证据卡＋索引 ----
+        off_dir = os.path.join(run_dir, "official")
+        os.makedirs(off_dir, exist_ok=True)
+        # run 目录只留本次取到的件（重跑时清掉上一轮的残留切片/卡，
+        # 否则目录里会躺着不属于本次索引的旧件，manifest 也会把它们入账）
+        keep = {tt["ecli"].replace(":", "-") for tt, _blob, _text in picked}
+        for name in sorted(os.listdir(off_dir)):
+            if name.endswith(".xml") and name[:-4] not in keep:
+                os.remove(os.path.join(off_dir, name))
+        for name in sorted(os.listdir(run_dir)):
+            if name.endswith(".itcase.card.txt") and name[:-len(".itcase.card.txt")] \
+                    not in keep:
+                os.remove(os.path.join(run_dir, name))
+        judgments = {}
+        for tt, blob, text in picked:
+            slug = tt["ecli"].replace(":", "-")
+            slice_rel = "official/%s.xml" % slug
+            with open(os.path.join(run_dir, slice_rel), "wb") as fh:
+                fh.write(blob)
+            card = _itcase_card(slug, tt, blob, text, url, now_iso())
+            card_rel = "%s.itcase.card.txt" % slug
+            card_path = os.path.join(run_dir, card_rel)
+            with open(card_path, "w", encoding="utf-8") as fh:
+                fh.write(card)
+            judgments[slug] = {
+                "ecli": tt["ecli"],
+                "anno": tt["anno"],
+                "numero": tt["numero"],
+                "tipologia": tt["tipologia"],
+                "presidente": tt["presidente"],
+                "relatore": tt["relatore"],
+                "data_decisione": tt["data_decisione"],
+                "data_deposito": tt["data_deposito"],
+                "slice_file": slice_rel,
+                "slice_sha256": sha256_bytes(blob),
+                "slice_bytes": len(blob),
+                "text_sha256": sha256_bytes(text.encode("utf-8")),
+                "text_chars": len(text),
+                "card_file": card_rel,
+                "card_sha256": sha256_file(card_path),
+            }
+            state.mark("it-case", "%s:%s" % (tier, slug), url=url + "#" + slug,
+                       sha256=sha256_bytes(blob), bytes_=len(blob), run=run_id,
+                       slice_file=slice_rel)
+            log("[ok]    it-case:%s %s（%d chars）"
+                % (tier, tt["ecli"], len(text)))
+
+        index = {
+            "tier": tier,
+            "source_url": url,
+            "source_zip_sha256": zip_sha,
+            "source_zip_bytes": zip_bytes,
+            "source_zip_last_modified": last_modified,
+            "fetch_reference_date": reference_date,
+            "generator": "tools/fetch_corpus.py",
+            "judgments": judgments,
+        }
+        with open(idx_path, "w", encoding="utf-8") as fh:
+            json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
+            fh.write("\n")
+        log("[done]  IT-CASE：%s 判决 %d 件（档案 %d 字节），run %s"
+            % (tier, len(judgments), archive_bytes_total, run_id))
+
+    state.note("it-case", "last_run", now_iso())
+    state.note("it-case", "runs", sorted(
+        d for d in os.listdir(root_dir) if d.startswith("run-")))
+    return 0
+
+
+
 # ---------------------------------------------------------------------------
 # CASE —— 人民法院案例库：匿名通道不可用，如实报备（不硬闯）
 # ---------------------------------------------------------------------------
@@ -1745,7 +2151,7 @@ def _pick_number(text, minimum=10):
 def materialize(corpus_root, project_dir):
     os.makedirs(os.path.join(project_dir, "facts"), exist_ok=True)
     os.makedirs(os.path.join(project_dir, "cards"), exist_ok=True)
-    facts_fr, facts_cn, facts_it, facts_es, facts_fr_case = [], [], [], [], []
+    facts_fr, facts_cn, facts_it, facts_es, facts_fr_case, facts_itcase = [], [], [], [], [], []
     tex_lines = ["% 合成小项目：由 tools/fetch_corpus.py materialize 生成",
                  "% 事实账引用的是真官方件的钉哈希证据卡（两层证据模型）", ""]
 
@@ -2027,6 +2433,75 @@ def materialize(corpus_root, project_dir):
             fh.write('schema = "paperkit-fact/3.0"\n\n'
                      + "\n".join("\n".join(b) for b in facts_fr_case))
 
+    # ---- IT-CASE（意大利宪法法院判例）----
+    # verify-it-case 一目录一档；多档语料时取「判决卡最多」的那个 run 物化
+    # （确定性：同数取名字序），其余 run 留在语料里可单独 --corpus 验证。
+    itc_root = os.path.join(corpus_root, "it-case")
+    if os.path.isdir(itc_root):
+        candidates = []
+        for name in sorted(d for d in os.listdir(itc_root) if d.startswith("run-")):
+            idx = os.path.join(itc_root, name, "index.json")
+            if os.path.exists(idx):
+                with open(idx, encoding="utf-8") as fh:
+                    d = json.load(fh)
+                candidates.append((-len(d.get("judgments") or {}), name))
+        if candidates:
+            candidates.sort()
+            run_name = candidates[0][1]
+            run_dir = os.path.join(itc_root, run_name)
+            with open(os.path.join(run_dir, "index.json"), encoding="utf-8") as fh:
+                index = json.load(fh)
+            log("[pick]  IT-CASE run for facts: %s" % run_name)
+            for slug in sorted(index.get("judgments", {})):
+                meta = index["judgments"][slug]
+                slice_rel = meta.get("slice_file") or ("official/%s.xml" % slug)
+                slice_path = os.path.join(run_dir, slice_rel)
+                card_rel = meta.get("card_file") or ("%s.itcase.card.txt" % slug)
+                card_src = os.path.join(run_dir, card_rel)
+                if not os.path.exists(slice_path) or not os.path.exists(card_src):
+                    continue
+                card_dst = os.path.join(project_dir, "cards", os.path.basename(card_src))
+                shutil.copyfile(card_src, card_dst)
+                ecli = meta.get("ecli") or slug
+                anno = meta.get("anno") or ""
+                numero = meta.get("numero") or ""
+                base_id = "ITCASE-%s-%s" % (anno, numero)
+                # (a) ECLI 字面 fact（走字面分支）
+                facts_itcase.append([
+                    "[[fact]]",
+                    'id = "%s-ECLI"' % base_id,
+                    'claim = "意大利宪法法院判决 ECLI（官方件引用示例）"',
+                    'value = "%s"' % ecli,
+                    'source = "%s"' % rel(card_dst),
+                    'source_sha256 = "sha256:%s"' % sha256_file(card_dst),
+                    'locator = "%s (%s 档)"' % (ecli, index.get("tier") or ""),
+                    'confidence = "high"',
+                    "derived_from = []",
+                    "",
+                ])
+                # (b) 裁判日 fact（走日期归一分支；ISO 形）
+                iso = meta.get("data_decisione_iso") or \
+                    _itcase_iso_date(meta.get("data_decisione") or "")
+                if iso:
+                    facts_itcase.append([
+                        "[[fact]]",
+                        'id = "%s-DATE"' % base_id,
+                        'claim = "意大利宪法法院判决裁判日（官方件引用示例）"',
+                        'value = "%s"' % iso,
+                        'source = "%s"' % rel(card_dst),
+                        'source_sha256 = "sha256:%s"' % sha256_file(card_dst),
+                        'locator = "%s (%s 档)"' % (ecli, index.get("tier") or ""),
+                        'confidence = "high"',
+                        "derived_from = []",
+                        "",
+                    ])
+                tex_lines.append(r"意大利宪法法院判例侧引用示例：%s。" % ecli)
+    if facts_itcase:
+        with open(os.path.join(project_dir, "facts", "50-itcase.toml"),
+                  "w", encoding="utf-8") as fh:
+            fh.write('schema = "paperkit-fact/3.0"\n\n'
+                     + "\n".join("\n".join(b) for b in facts_itcase))
+
     # ---- CASE（有真实官方正文才物化）----
     case_off = os.path.join(corpus_root, "case", "official")
     if os.path.isdir(case_off):
@@ -2098,10 +2573,10 @@ def materialize(corpus_root, project_dir):
     def _count(blocks):
         return sum(b.count("[[fact]]") for b in blocks)
     log("[done]  materialize：%s" % project_dir)
-    log("        facts: FR %d + CN %d + IT %d + ES %d + FR-CASE %d 条；paper.tex 引用 %d 行"
+    log("        facts: FR %d + CN %d + IT %d + ES %d + FR-CASE %d + IT-CASE %d 条；paper.tex 引用 %d 行"
         % (_count(facts_fr), _count(facts_cn), _count(facts_it), _count(facts_es),
-           _count(facts_fr_case), len(tex_lines) - 3))
-    log("        六闸验证命令：")
+           _count(facts_fr_case), _count(facts_itcase), len(tex_lines) - 3))
+    log("        七闸验证命令：")
     log("          PYTHONPATH=<integrations/factscribe-legal> python3 -m factscribe_legal verify "
         "--project %s --corpus <corpus>/fr --date <参考日> --view <corpus>/fr/view_current.jsonl"
         % project_dir)
@@ -2113,6 +2588,8 @@ def materialize(corpus_root, project_dir):
         % project_dir)
     log("          ... verify-case --project %s" % project_dir)
     log("          ... verify-fr-case --project %s" % project_dir)
+    log("          ... verify-it-case --project %s --corpus <corpus>/it-case/<run>"
+        % project_dir)
     return 0
 
 
@@ -2127,7 +2604,7 @@ def main(argv=None):
 
     f = sub.add_parser("fetch", help="抓语料（默认 sample 小样例）")
     f.add_argument("--source", required=True,
-                   choices=["fr", "cn", "it", "es", "fr-case", "case", "all"])
+                   choices=["fr", "cn", "it", "es", "fr-case", "it-case", "case", "all"])
     f.add_argument("--mode", default="sample", choices=["sample", "bulk"])
     f.add_argument("--max-per-source", type=int, default=10,
                    help="sample 模式每源最多取几件（默认 10）")
@@ -2180,10 +2657,11 @@ def main(argv=None):
         % (http.interval_min, http.interval_max, MIN_INTERVAL_S,
            BACKOFF_START_S, BACKOFF_FACTOR, BACKOFF_CAP_S))
 
-    sources = ["fr", "cn", "it", "es", "fr-case", "case"] if args.source == "all" \
+    sources = ["fr", "cn", "it", "es", "fr-case", "it-case", "case"] if args.source == "all" \
         else [args.source]
     runners = {"fr": fetch_fr, "cn": fetch_cn, "it": fetch_it, "es": fetch_es,
-               "fr-case": fetch_fr_case, "case": fetch_case_probe}
+               "fr-case": fetch_fr_case, "it-case": fetch_itcase,
+               "case": fetch_case_probe}
     failures = []
     for src in sources:
         log("---- source: %s ----" % src)

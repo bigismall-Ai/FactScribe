@@ -1,0 +1,20 @@
+# 意大利宪法法院判例证据卡（派生件；官方判决切片哈希钉在这里）
+ECLI: ECLI:IT:COST:1956:2
+ANNO_PRONUNCIA: 1956
+NUMERO_PRONUNCIA: 2
+TIPOLOGIA: S
+PRESIDENTE: DE NICOLA
+RELATORE: Giuseppe Cappi
+DATA_DECISIONE: 14/06/1956
+DATA_DECISIONE_ISO: 1956-06-14
+DATA_DEPOSITO: 23/06/1956
+SOURCE_FILE: official/ECLI-IT-COST-1956-2.xml
+SOURCE_URL: https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip#ECLI-IT-COST-1956-2
+OFFICIAL_XML_SHA256: 5b882166e27cff9c4d2ec74dabf1d7367fc099953c538fa8c50b20c7f770f773
+TEXT_SHA256: f9f09b316cee05b8873ffa1f66714543c47d4cf7f2ae5c15c89c85d564745c10
+TEXT_CHARS: 17689
+LICENCE: Creative Commons CC BY-SA 3.0 (Corte costituzionale, dati aperti)
+ATTRIBUTION: Fonte: Corte costituzionale della Repubblica italiana, dati aperti (https://dati.cortecostituzionale.it/)
+FETCHED_AT: 2026-11-16T14:19:43Z
+--- OFFICIAL TEXT ---
+19562ECLI:IT:COST:1956:2SDE NICOLAGiuseppe Cappi14/06/195623/06/1956LA CORTE COSTITUZIONALEcomposta dai signori: Avv. ENRICO DE NICOLA, Presidente - Dott. GAETANO AZZARITI - Avv. GIUSEPPE CAPPI - Prof. TOMASO PERASSI - Prof. GASPARE AMBROSINI - Prof. ERNESTO BATTAGLINI - Dott. MARIO COSATTI - Prof. FRANCESCO PANTALEO GABRIELI - Prof. GIUSEPPE CASTELLI AVOLIO - Prof. ANTONINO PAPALDO - Prof. MARIO BRACCI - Prof. NICOLA JAEGER - Prof. GIOVANNI CASSANDRO, Giudici,ha pronunciato la seguenteSENTENZAnei giudizi riuniti di legittimità costituzionale dell'art. 157 Testo unico delle leggi di pubblica s…

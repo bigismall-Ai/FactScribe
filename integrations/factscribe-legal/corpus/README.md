@@ -9,6 +9,7 @@
 | `it/run-<vigenza>-it-<anno>n<numero>/` | `it_verify.py`（verify-it 闸） | `index.json`＋官方 AKN 整件＋条文切片＋证据卡 |
 | `es/run-<YYYYMMDD>-es-<slug>/` | `es_verify.py`（verify-es 闸） | `index.json`＋官方 BOE 合并文本整件＋条文切片＋证据卡 |
 | `fr-case/run-<YYYYMMDD>-inca/` | `fr_case_verify.py`（verify-fr-case 闸） | `index.json`＋官方判决 XML＋纯文本还原件＋证据卡＋`ATTRIBUTION.txt`（许可署名） |
+| `it-case/run-<YYYYMMDD>-itcase-<tier>/` | `it_case_verify.py`（verify-it-case 闸） | `index.json`＋官方判决切片＋`.itcase.card.txt` 证据卡（Attribution 见 `it-case/ATTRIBUTION.md`） |
 | `case/` | `case_verify.py`（verify-case 闸） | **本批为空**：检索接口需登录（见下） |
 | `manifest.json` | —— | 防再丢清单：每文件 sha256＋取数时间＋来源 URL |
 | `state/fetch_state.json` | —— | 增量续抓状态（已取清单＋sha），重跑自动跳过 |
@@ -27,6 +28,7 @@ python3 tools/fetch_corpus.py fetch --source cn --mode bulk            # 全库�
 python3 tools/fetch_corpus.py fetch --source it --mode bulk            # 样单内每法 3 请求
 python3 tools/fetch_corpus.py fetch --source es --mode bulk            # 样单内每法 1 请求（by-id 整件）
 python3 tools/fetch_corpus.py fetch --source fr-case --mode bulk       # INCA 全球判决全量档案 ≈664MB
+python3 tools/fetch_corpus.py fetch --source it-case --mode bulk        # 判决档案三档（每档 1 HEAD＋1 GET）
 
 # 把语料物化成合成小项目（事实账＋证据卡＋paper.tex，四闸直接跑）
 python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -65,6 +67,14 @@ python3 tools/fetch_corpus.py manifest
   每件判决一个 XML（`TEXTE_JURI_JUDI` ＋ LEGIFRANCE DTD），正文完整。
   许可：**licence ouverte v2.0**（Etalab/DILA）⇒ 署名三件套＝发布方 DILA ＋
   源 URL（档案 URL＋档案内路径）＋下载日期，见 `fr-case/ATTRIBUTION.txt`。
+- **意大利宪法法院判例** Corte costituzionale 开放数据
+  `dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_*.zip`
+  （三档：1956–1980／1981–2000／2001–oggi；ZIP 套 ZIP，档内是**逐年**的判决档案
+  XML，根标签 `elenco_pronunce`，每件判决一个 `<pronuncia>`）：⚠️ 主站
+  `www.cortecostituzione.it` 有 WAF 403，开放数据子域匿名直链可下；⚠️ 该服务器
+  **虽回 `Accept-Ranges` 但忽略 Range 头**（断点续传无效，实测下行约 18KB/s，
+  单发超时须放宽）；抓取器有本地复用逻辑（`raw/` 里 zip 完整即不发请求）。
+  CC BY-SA 3.0（署名＋相同方式共享；见 `it-case/ATTRIBUTION.md`）。
 
 ## TLS 注意
 
@@ -90,4 +100,7 @@ GlobalSign Root R46，`api.normattiva.it` 2025-10 起的新链验不过），放
   （JURITEXT000007100000）、2004-09-29（JURITEXT000007471838，正文含
   «3 500 euros»）、Tribunal de grande instance de Paris 2006-12-15
   （JURITEXT000006951547，正文含 «300.000 euros»＝30 万）
+- IT-CASE 2 判决（1956_1980 档）：`ECLI:IT:COST:1956:1`（裁判日 05/06/1956）、
+  `ECLI:IT:COST:1956:2`（裁判日 14/06/1956）——真判决原字节切片＋两张
+  `.itcase.card.txt` 证据卡；来源包 sha256 见 `it-case/ATTRIBUTION.md`
 - CASE：无（需登录，见上）

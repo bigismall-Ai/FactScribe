@@ -1,6 +1,6 @@
 {
   "command": "python3 -m factscribe audit <project> --json",
-  "note": "核验槽 M1 行为锁（SPEC-CHECKS §7 M1）：重构前后同命令同项目 findings 与退出码逐字节相同才算过锁。只由 scripts/audit_golden_dump.py 生成。重冻记录：2026-11-16 用户批准核验槽修约九条建议，裁定③使裸 [checks] 节走槽（默认 [\"paper\"]，输出带 domain 键与 by_domain）——基线重冻；26 个在锁项目均无 [checks] 节，重冻后各项目发现本体与退出码逐条相同。",
+  "note": "核验槽 M1 行为锁（SPEC-CHECKS §7 M1）：重构前后同命令同项目 findings 与退出码逐字节相同才算过锁。只由 scripts/audit_golden_dump.py 生成。重冻记录：2026-11-16 用户批准核验槽修约九条建议，裁定③使裸 [checks] 节走槽（默认 [\"paper\"]，输出带 domain 键与 by_domain）——基线重冻；26 个在锁项目均无 [checks] 节，重冻后各项目发现本体与退出码逐条相同。重冻记录：2026-11-17 CI 矩阵 3.11+ 独红——基线冻在 3.10 兜底解析器 _mini_toml 的误解析形（不支持内联表、数组切分不顾花括号，R2-ROUNDTO 的 display 被按逗号劈成两条裸串）；修 _mini_toml（补内联表解析＋深度感知切分）后重冻，R2-ROUNDTO 的 2 条误解析发现并成 1 条正确 DISPLAY_INCONSISTENT（退出码仍 1），26 个在锁项目与退出码在 Python 3.10–3.14 全矩阵逐字节相同。",
   "projects": {
     "examples/minimal": {
       "exit": 1,
@@ -624,14 +624,7 @@
         {
           "code": "DISPLAY_INCONSISTENT",
           "location": "facts/ledger.toml:2",
-          "message": "fact 'A2'：display '{ text = \"0.9\"' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
-          "severity": "red",
-          "token": "A2"
-        },
-        {
-          "code": "DISPLAY_INCONSISTENT",
-          "location": "facts/ledger.toml:2",
-          "message": "fact 'A2'：display 'round_to = 1 }' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "message": "fact 'A2'：display '0.9' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
           "severity": "red",
           "token": "A2"
         }
@@ -641,14 +634,7 @@
         {
           "code": "DISPLAY_INCONSISTENT",
           "location": "facts/ledger.toml:2",
-          "message": "fact 'A2'：display '{ text = \"0.9\"' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
-          "severity": "red",
-          "token": "A2"
-        },
-        {
-          "code": "DISPLAY_INCONSISTENT",
-          "location": "facts/ledger.toml:2",
-          "message": "fact 'A2'：display 'round_to = 1 }' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
+          "message": "fact 'A2'：display '0.9' 与 value '0.91' 不等价（严格 canon 比较，不再有 round_to 容差）",
           "severity": "red",
           "token": "A2"
         }

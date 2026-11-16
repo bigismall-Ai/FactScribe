@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-"""legal 核验包：把四闸（FR／CN／CASE／IT）组装成核验槽的一个包（M2）。
+"""legal 核验包：把五闸（FR／CN／CASE／IT／ES）组装成核验槽的一个包（M2）。
 
 本模块是「legal 卡」的代码面（SPEC-CHECKS §3.1 一张卡写死五样）：
 
 * ``domain_id = "legal"``（全局唯一；配置节 ``[checks.legal]``）；
-* 冻结码表＝本包 README「码表（冻结）」节（``LEGAL_/CN_/CASE_/IT_`` 前缀，
-  只增不改名不改义不改 severity）。本批新增三码（§4.4 minor，出处材料
-  依赖的 fail-closed 语义）：``LEGAL_DATE_INVALID``（红）、
+* 冻结码表＝本包 README「码表（冻结）」节（``LEGAL_/CN_/CASE_/IT_/ES_``
+  前缀，只增不改名不改义不改 severity）。M2 挂槽批新增三码（§4.4 minor，
+  出处材料依赖的 fail-closed 语义）：``LEGAL_DATE_INVALID``（红）、
   ``LEGAL_EVIDENCE_CHANGED``（红）、``LEGAL_EVIDENCE_UNFROZEN``（黄）；
+  ES 桶升独立分节批（2026-11-16）：码表零新增——``ES_`` 十码已随 ES 源
+  批注册进本包码表（README），本批只把它们从「fr 桶误并」改成独立分节；
 * ``config_keys = {corpus, date, view}``；
 * 材料依赖声明（**fail-closed 表**：材料缺失必须亮黄/红，禁止静默绿）：
 
@@ -21,6 +23,8 @@
   catalog 没拿到      CN 闸不跑
   有 IT 事项而        黄 ``LEGAL_COVERAGE_GAP``（同上）；IT 闸不跑
   it/ 语料没拿到
+  有 ES 事项而        黄 ``LEGAL_COVERAGE_GAP``（同上）；ES 闸不跑
+  es/ 语料没拿到
   date 缺失或非       红 ``LEGAL_DATE_INVALID``（时效类判据全跳过；
   YYYY-MM-DD          参考日是法律域判据的根基，缺它不许「仅建议」）
   CASE 闸             材料全在项目内（runs/<run>/），永远可跑
@@ -39,6 +43,9 @@
       catalog.jsonl.gz|.jsonl     # CN 全库目录（可选；有中国事项才必需）
       it/                         # IT 语料（可选；有意大利事项才必需）
         index.json                #   articles+source_file+哈希（verify-it 现状形状）
+      es/                         # ES 语料（可选；有西班牙事项才必需）
+        index.json                #   articles+source_file+哈希（verify-es 现状形状，
+                                  #   一目录一法＝一个 run 一部法，照 IT 同款约定）
 
 import 方向（裁定，M2）：**本模块是 factscribe_legal 里唯一 import 上游
 factscribe 的模块**，且只在核验槽点名 legal 时才经 ``checks.load_integration()``
@@ -57,6 +64,7 @@ from factscribe.audit import Issue
 from ._toml import load_toml
 from .case_verify import verify_case
 from .cn_verify import verify_cn
+from .es_verify import verify_es
 from .it_verify import verify_it
 from .verify import PROV_RE, load_citations, load_facts
 from .verify import verify as verify_fr
@@ -64,7 +72,9 @@ from .verify import verify as verify_fr
 DOMAIN_ID = "legal"
 CONFIG_KEYS = frozenset({"corpus", "date", "view"})
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}\Z")
-GATE_ORDER = ("fr", "cn", "case", "it")
+# 五桶并列（fr｜cn｜case｜it｜es；es 桶 2026-11-16 升独立分节——此前 ES 卡
+# 被 PROV_RE 兜底误并进 fr 桶，后果只到黄项文案与 gates 计数）。
+GATE_ORDER = ("fr", "cn", "case", "it", "es")
 
 
 def _issue(code, severity, message, location="", token="", context=""):
@@ -94,10 +104,13 @@ def _convert(findings):
 def _gate_scope(project_dir):
     """按各闸既有归属规则数「事项」：事实账指向各域卡的 source 数＋正文引用数。
 
-    与四闸自身的归属判据同一套（INTEGRATION-LEGAL §5.1：靠文件名后缀，
+    与五闸自身的归属判据同一套（INTEGRATION-LEGAL §5.1：靠文件名后缀，
     不靠卡内标记），只用于「材料没拿到时该不该 fail-closed」的计数。
+    ES 事项（``.es.card.txt`` 卡与 ``art-es-`` 引用）归 es 桶——必须在
+    ``PROV_RE``／``art-`` 兜底**之前**分流，否则会被误并进 fr 桶
+    （2026-11-16 修掉的回归钉，tests/test_checks_legal.py 有反例常驻）。
     """
-    scope = {"fr": 0, "cn": 0, "case": 0, "it": 0}
+    scope = {"fr": 0, "cn": 0, "case": 0, "it": 0, "es": 0}
     for fact in load_facts(project_dir):
         src = str(fact.get("source") or "")
         if src.endswith(".cn.card.txt"):
@@ -106,6 +119,8 @@ def _gate_scope(project_dir):
             scope["case"] += 1
         elif src.endswith(".it.card.txt"):
             scope["it"] += 1
+        elif src.endswith(".es.card.txt"):
+            scope["es"] += 1
         elif PROV_RE.match(src):
             scope["fr"] += 1
     for key, _rel, _line in load_citations(project_dir):
@@ -113,13 +128,15 @@ def _gate_scope(project_dir):
             scope["cn"] += 1
         elif key.startswith("art-it-"):
             scope["it"] += 1
+        elif key.startswith("art-es-"):
+            scope["es"] += 1
         elif key.startswith("art:") or key.startswith("art-"):
             scope["fr"] += 1
     return scope
 
 
 def verify_legal(cfg, facts, sections, resolve: bool = False):
-    """legal 核验包的 verify（协议 v1）：跑四闸，fail-closed 收材料缺口。"""
+    """legal 核验包的 verify（协议 v1）：跑五闸，fail-closed 收材料缺口。"""
     del facts, sections, resolve          # 闸自己按项目约定读账与正文
     table = dict((getattr(cfg, "checks_tables", {}) or {}).get(DOMAIN_ID)
                  or {})
@@ -145,7 +162,7 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
     # ---- 语料视图（fail-closed：缺＝黄，0 覆盖亮出）----
     corpus_dir = ""
     cn_catalog = ""
-    it_material_ok = cn_material_ok = False
+    it_material_ok = cn_material_ok = es_material_ok = False
     if not corpus_rel:
         yellow.append(_coverage_gap(
             "[checks.legal] 没有声明 corpus——法律域 0 覆盖（fail-closed："
@@ -160,6 +177,8 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
         corpus_dir = os.path.join(project_dir, corpus_rel)
         it_material_ok = os.path.exists(
             os.path.join(corpus_dir, "it", "index.json"))
+        es_material_ok = os.path.exists(
+            os.path.join(corpus_dir, "es", "index.json"))
         for ext in (".jsonl.gz", ".jsonl"):
             cand = os.path.join(corpus_dir, "catalog" + ext)
             if os.path.exists(cand):
@@ -233,6 +252,26 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
         gates["it"] = _gate_note(
             "skipped" if it_material_ok else "na", 0, 0,
             "date 未定，时效判据全跳过" if it_material_ok else "0 事项")
+
+    # ---- ES 闸（西班牙 BOE：官方整件哈希／条文切片哈希／值出自条文）----
+    # 独立分节（2026-11-16）：ES_ 码表走自己的桶，不再被 fr 桶兜底误并。
+    if es_material_ok and date:
+        es_findings, _index = verify_es(project_dir,
+                                        os.path.join(corpus_dir, "es"), date)
+        r, y = _convert(es_findings)
+        red += r
+        yellow += y
+        gates["es"] = _gate_note("ran", len(r), len(y), "%d 条事项" % scope["es"])
+    elif not es_material_ok and scope["es"] > 0:
+        yellow.append(_coverage_gap(
+            "事实账/正文有 %d 条西班牙事项，但语料视图里没有 es/ 语料"
+            "（<corpus>/es/index.json）——西班牙闸 0 覆盖（fail-closed）"
+            % scope["es"]))
+        gates["es"] = _gate_note("skipped", 0, 0, "es/ 语料没拿到")
+    else:
+        gates["es"] = _gate_note(
+            "skipped" if es_material_ok else "na", 0, 0,
+            "date 未定，时效判据全跳过" if es_material_ok else "0 事项")
 
     # ---- CASE 闸（中国案例：案号/日期/金额与官方件一致；材料全在项目内）----
     r, y = _convert(verify_case(project_dir))
@@ -419,7 +458,7 @@ _CARD = checks.CheckPackage(
     domain_id=DOMAIN_ID,
     verify=verify_legal,
     config_keys=CONFIG_KEYS,
-    description="法律四闸 FR/CN/CASE/IT：法条存在、参考日生效、官方字节未改、"
+    description="法律五闸 FR/CN/CASE/IT/ES：法条存在、参考日生效、官方字节未改、"
                 "值真出自法条（integrations/factscribe-legal；材料缺失 fail-closed）",
 )
 

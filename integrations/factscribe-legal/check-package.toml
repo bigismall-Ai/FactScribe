@@ -1,8 +1,8 @@
 # 核验槽注册指针（裁定⑧「核验包入仓注册形态」；SPEC-CHECKS §3.1）。
 #
 # [checks] 点名 legal 且槽内未注册时，core 的 checks.load_integration()
-# 按本件把适配器载入；适配器（factscribe_legal.checks_adapter）把四闸
-# FR/CN/CASE/IT 组装成 legal 核验包并调 register_package 挂卡。
+# 按本件把适配器载入；适配器（factscribe_legal.checks_adapter）把五闸
+# FR/CN/CASE/IT/ES 组装成 legal 核验包并调 register_package 挂卡。
 #
 # 本目录整个删掉＝legal 回到「未注册」（点名即 exit 2）——
 # integrations 独立、可卸载的先例不破；core 不 import 本件，

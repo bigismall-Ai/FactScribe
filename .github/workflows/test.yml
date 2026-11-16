@@ -54,6 +54,13 @@ jobs:
       - name: Unit tests (offline)
         run: python -m unittest discover -s tests -v
 
+      # 第三方集成件（integrations/factscribe-legal）的测试：纯标准库、离线。
+      # 放进主矩阵是有意的：它的 TOML 读取层在 3.10 走自带兜底解析器、
+      # 在 3.11+ 走标准库 tomllib —— 两边必须读出同一份事实账，
+      # 所以这个矩阵（含 3.10）就是它的回归线。
+      - name: Integration tests (offline, integrations/factscribe-legal)
+        run: python -m unittest discover -s integrations/factscribe-legal/tests -v
+
       # Acceptance sample must stay red for exactly the reasons we document:
       # exit 1 = violations found (not 0 = false green, not 2 = broken config).
       - name: Acceptance sample fails as documented

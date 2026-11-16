@@ -1,0 +1,28 @@
+# 事实账样本：覆盖本集成实际会写出的 TOML 子集。
+# 用来交叉校验「自带极简解析器」与「标准库 tomllib」对同一文件给出完全相同的结果。
+schema = "paperkit-fact/3.0"
+
+[[fact]]
+id = "LBR-GBRQ"
+claim = "《中华人民共和国劳动法》公布日期"
+value = "2018-12-29"
+source = "runs/run-20261114-cn/中华人民共和国劳动法_46d15a.cn.card.txt"
+source_sha256 = "sha256:c58687bc12ac42749f359420368f850c66fc3d6e68154da76ea6bd779a03e4bc"
+locator = "中华人民共和国劳动法（LEGISBBBS ff8080816f135f46016f20f16ee11737）"
+confidence = "high"
+derived_from = []
+note = "官方详情 gbrq"
+dup_ok = true
+
+[[fact]]
+id = "LBR-N"
+claim = "《中华人民共和国劳动法》条文条数"
+value = "109"
+source = "runs/run-20261114-cn/中华人民共和国劳动法_46d15a.cn.card.txt"
+confidence = "high"
+derived_from = []
+count = 109
+ratio = 0.5
+flag = false
+tags = ["a", "b"]
+nested = [["x"], ["y", "z"]]

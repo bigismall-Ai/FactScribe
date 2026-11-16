@@ -1,0 +1,165 @@
+{
+ "politeness": {
+  "backoff": "start 30s x2.0 cap 1800s, Retry-After respected",
+  "interval": "uniform 2.0-6.0s (floor 2.0s locked)",
+  "user_agent": "factscribe-legal-corpus/0.1 (legal-citation verification research; contact: repo issues)"
+ },
+ "sources": {
+  "case": {
+   "items": {
+    "reachability": {
+     "bytes": 8555,
+     "fetched_at": "2026-11-16T05:25:35Z",
+     "sha256": "e6cd8f9ab0f0a450b780f4e45984439bea7b8e98870ef276dbfb5a1c7929b718",
+     "url": "https://rmfyalk.court.gov.cn/",
+     "verdict": "reachable"
+    }
+   },
+   "notes": {
+    "last_run": "2026-11-16T05:25:35Z"
+   }
+  },
+  "cn": {
+   "items": {
+    "2c909fdd678bf17901678bf74d7106b3": {
+     "bytes": 17108,
+     "card_file": "中华人民共和国劳动合同法_2c909f.cn.card.txt",
+     "fetched_at": "2026-11-16T04:58:16Z",
+     "gbrq": "2012-12-28",
+     "n_articles": 98,
+     "sha256": "b1c63b374ca0f66a2d7bde0407cb75812eb9942393443e16a039d6776716afe6",
+     "sxrq": "2013-07-01",
+     "sxx": 3,
+     "title": "中华人民共和国劳动合同法",
+     "url": "https://flk.npc.gov.cn/law-search/search/flfgDetails?bbbs=2c909fdd678bf17901678bf74d7106b3"
+    },
+    "ff8080816f135f46016f20f16ee11737": {
+     "bytes": 19016,
+     "card_file": "中华人民共和国劳动法_ff8080.cn.card.txt",
+     "fetched_at": "2026-11-16T04:58:11Z",
+     "gbrq": "2018-12-29",
+     "n_articles": 107,
+     "sha256": "29db8ce9401d2e76efb1c47b5bb432b14ee84ef56e60fe31bf84b8b0368f2368",
+     "sxrq": "2018-12-29",
+     "sxx": 3,
+     "title": "中华人民共和国劳动法",
+     "url": "https://flk.npc.gov.cn/law-search/search/flfgDetails?bbbs=ff8080816f135f46016f20f16ee11737"
+    }
+   },
+   "notes": {
+    "catalog": "catalog.jsonl.gz",
+    "last_run": "2026-11-16T04:58:16Z"
+   }
+  },
+  "fr": {
+   "items": {
+    "D641-10-1": {
+     "bytes": 4361,
+     "date_debut": "2017-05-07",
+     "date_fin": "2999-01-01",
+     "etat": "VIGUEUR",
+     "fetched_at": "2026-11-16T04:56:20Z",
+     "legiarti": "LEGIARTI000034616245",
+     "sha256": "19f51c1ce269eab2848521ced0fc1c7d51ebccb44506512004431debd9bbb90b",
+     "url": "dila://increment/2026-11-15#LEGIARTI000034616245"
+    },
+    "L594-8": {
+     "bytes": 3286,
+     "date_debut": "2012-01-07",
+     "date_fin": "2999-01-01",
+     "etat": "VIGUEUR",
+     "fetched_at": "2026-11-16T04:56:20Z",
+     "legiarti": "LEGIARTI000025110353",
+     "sha256": "bf4fef200d935d11fcc0af760f33e17260991ee2cf07aae00faadbbe7deaf883",
+     "url": "dila://increment/2026-11-15#LEGIARTI000025110353"
+    },
+    "R557-6-14-1": {
+     "bytes": 3020,
+     "date_debut": "2021-12-20",
+     "date_fin": "2999-01-01",
+     "etat": "VIGUEUR",
+     "fetched_at": "2026-11-16T04:56:20Z",
+     "legiarti": "LEGIARTI000044521842",
+     "sha256": "b122036c5474bd86f6c9fdd97d96b43916e885ed8453cdeea637243fcf31f295",
+     "url": "dila://increment/2026-11-15#LEGIARTI000044521842"
+    },
+    "increment:LEGI_20261115-205552.tar.gz": {
+     "bytes": 1814064,
+     "fetched_at": "2026-11-16T04:56:20Z",
+     "sha256": "c00eb0c3fccca6779fb66b2e6f91fc25032c04892b37d4e71fd82b8a903e5686",
+     "url": "https://echanges.dila.gouv.fr/OPENDATA/LEGI/LEGI_20261115-205552.tar.gz"
+    }
+   },
+   "notes": {
+    "last_run": "2026-11-16T04:56:20Z",
+    "pool_asof": "2026-11-15"
+   }
+  },
+  "it": {
+   "items": {
+    "act:1990/241@20261116": {
+     "act_title": "LEGGE",
+     "act_urn": "urn:nir:stato:legge:1990-08-07;241",
+     "bytes": 253630,
+     "codice_redazionale": "090G0294",
+     "data_gu": "1990-08-18",
+     "fetched_at": "2026-11-16T05:24:25Z",
+     "run": "run-20261116-it-1990n241",
+     "sha256": "1c4692163f814f1374e9dcc38aaf98b935b402806a5b82babf5f69ef07bc0a6a",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=19900818&codiceRedaz=090G0294&dataVigenza=20261116"
+    },
+    "act:1990/241@20261116:art_1": {
+     "article_file": "official/art_1.xml",
+     "bytes": 2360,
+     "fetched_at": "2026-11-16T05:24:25Z",
+     "run": "run-20261116-it-1990n241",
+     "sha256": "d5acc44120b846dee681f03b2793d1a2d675235261d97995835b1f3f9a9623c5",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=19900818&codiceRedaz=090G0294&dataVigenza=20261116#art_1"
+    },
+    "act:1990/241@20261116:art_2": {
+     "article_file": "official/art_2.xml",
+     "bytes": 13045,
+     "fetched_at": "2026-11-16T05:24:25Z",
+     "run": "run-20261116-it-1990n241",
+     "sha256": "aa278839143c70244530458c6cdc08f7a303de6d2d2cd662ee4f0a7f786e7764",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=19900818&codiceRedaz=090G0294&dataVigenza=20261116#art_2"
+    },
+    "act:1990/241@20261116:art_3": {
+     "article_file": "official/art_3.xml",
+     "bytes": 2012,
+     "fetched_at": "2026-11-16T05:24:25Z",
+     "run": "run-20261116-it-1990n241",
+     "sha256": "2bb3377d58993a4ba5123017a4f494fc0c5f6d0fa5773b02f848085775cdcbc2",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=19900818&codiceRedaz=090G0294&dataVigenza=20261116#art_3"
+    },
+    "act:2012/190@20261116": {
+     "act_title": "LEGGE",
+     "act_urn": "urn:nir:stato:legge:2012-11-06;190",
+     "bytes": 168942,
+     "codice_redazionale": "012G0213",
+     "data_gu": "2012-11-13",
+     "fetched_at": "2026-11-16T05:23:17Z",
+     "run": "run-20261116-it-2012n190",
+     "sha256": "c932b66dcf46f33ca146c9e31f0187ca79a1e90ef668d38479650e91b6bcbc21",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=20121113&codiceRedaz=012G0213&dataVigenza=20261116"
+    },
+    "act:2012/190@20261116:art_2": {
+     "article_file": "official/art_2.xml",
+     "bytes": 850,
+     "fetched_at": "2026-11-16T05:23:17Z",
+     "run": "run-20261116-it-2012n190",
+     "sha256": "5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492",
+     "url": "https://www.normattiva.it/do/atto/caricaAKN?dataGU=20121113&codiceRedaz=012G0213&dataVigenza=20261116#art_2"
+    }
+   },
+   "notes": {
+    "last_run": "2026-11-16T05:24:25Z",
+    "runs": [
+     "run-20261116-it-1990n241",
+     "run-20261116-it-2012n190"
+    ]
+   }
+  }
+ },
+ "version": 1
+}

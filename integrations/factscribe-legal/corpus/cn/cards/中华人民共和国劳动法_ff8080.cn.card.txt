@@ -1,0 +1,11 @@
+# 中国法规证据卡（派生件；官方详情 JSON 原字节哈希钉在这里）
+TITLE: 中华人民共和国劳动法
+BBBS: ff8080816f135f46016f20f16ee11737
+OFFICIAL_DETAIL_SHA256: 29db8ce9401d2e76efb1c47b5bb432b14ee84ef56e60fe31bf84b8b0368f2368
+SXX: 3
+GBRQ: 2018-12-29
+SXRQ: 2018-12-29
+FLXZ: 法律
+ZDJG: 全国人民代表大会常务委员会
+DETAIL_BYTES: 19016
+SOURCE_URL: https://flk.npc.gov.cn/law-search/search/flfgDetails?bbbs=ff8080816f135f46016f20f16ee11737

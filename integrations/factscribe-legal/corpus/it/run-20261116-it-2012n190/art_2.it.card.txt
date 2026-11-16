@@ -1,0 +1,17 @@
+# 意大利法条证据卡（派生件；官方 AKN 整件与条文切片哈希钉在这里）
+ACT_URN: urn:nir:stato:legge:2012-11-06;190
+ACT_ELI: eli/id/2012/11/13/012G0213/CONSOLIDATED/20260826
+ARTICLE_EID: art_2
+ARTICLE_NUM: 2
+CODICE_REDAZIONALE: 012G0213
+VERSION_DATE: 2026-08-26
+FETCH_VIGENZA: 20261116
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.akn.xml
+OFFICIAL_XML_SHA256: c932b66dcf46f33ca146c9e31f0187ca79a1e90ef668d38479650e91b6bcbc21
+ARTICLE_SHA256: 5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492
+TEXT_CHARS: 337
+LICENCE: CC BY 4.0 (Normattiva OpenData)
+ATTRIBUTION: Fonte: Normattiva, Istituto Poligrafico e Zecca dello Stato
+--- OFFICIAL TEXT ---
+Art. 2. Clausola di invarianza 1. Dall'attuazione della presente legge non devono derivare nuovi o maggiori oneri a carico della finanza pubblica. 2. Le amministrazioni competenti provvedono allo svolgimento delle attivita' previste dalla presente legge con le risorse umane, strumentali e finanziarie disponibili a legislazione vigente.

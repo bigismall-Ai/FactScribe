@@ -1,0 +1,28 @@
+{
+ "act_eli": "eli/id/2012/11/13/012G0213/CONSOLIDATED/20260826",
+ "act_key": "2012/190",
+ "act_title": "LEGGE",
+ "act_urn": "urn:nir:stato:legge:2012-11-06;190",
+ "articles": {
+  "art_2": {
+   "article_bytes": 850,
+   "article_file": "official/art_2.xml",
+   "article_sha256": "5ea8affae6c2e0105b8dc2e0dd0960b0338e459c625cc3be184ca433187e4492",
+   "card_file": "art_2.it.card.txt",
+   "card_sha256": "a1bdcbde30a5857ca22aa88fa8955f740c2e8d1bd2b746f4dc627f682c46ee35",
+   "eid": "art_2",
+   "num": "2",
+   "text_chars": 337,
+   "text_sha256": "fbd54a519870c7ad9e937cf43c9f000b1a3d70cb1a95db8941c3b18efd6f83eb"
+  }
+ },
+ "codice_redazionale": "012G0213",
+ "data_gu": "2012-11-13",
+ "fetch_reference_date": "2026-11-16",
+ "fetch_vigenza": "20261116",
+ "reference_date": "2026-11-16",
+ "source_bytes": 168942,
+ "source_file": "official/act.akn.xml",
+ "source_sha256": "c932b66dcf46f33ca146c9e31f0187ca79a1e90ef668d38479650e91b6bcbc21",
+ "version_date": "2026-08-26"
+}

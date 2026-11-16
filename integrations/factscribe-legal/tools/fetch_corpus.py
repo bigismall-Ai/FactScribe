@@ -4,7 +4,7 @@
 
 为什么存在
 ----------
-法律四闸（verify / verify-cn / verify-case / verify-it）只消费「已钉哈希的官方件」，
+法律五闸（verify / verify-cn / verify-case / verify-it / verify-es）只消费「已钉哈希的官方件」，
 原先「取件、钉哈希、建卡、选版」的脚本随预研代理销毁（见 docs/implementation/
 LEGAL-TAKEOVER.md 松尾账 2.2）。本件把再取方法收编进仓，消除单点丢失。
 
@@ -30,12 +30,14 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   python3 tools/fetch_corpus.py fetch --source fr --mode sample
   python3 tools/fetch_corpus.py fetch --source cn --mode sample
   python3 tools/fetch_corpus.py fetch --source it --mode sample
+  python3 tools/fetch_corpus.py fetch --source es --mode sample
 
   # 全量（以后真要时照此跑；会先打印预计请求数）
   python3 tools/fetch_corpus.py fetch --source fr --mode bulk          # 只出计划
   python3 tools/fetch_corpus.py fetch --source fr --mode bulk --yes    # 确认后开跑
   python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes
   python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes
+  python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes
 
   # 把语料物化成一个合成小项目（事实账＋证据卡＋paper.tex，供四闸跑读数）
   python3 tools/fetch_corpus.py materialize --project /tmp/fs-legal-demo
@@ -64,6 +66,11 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
       official/act.akn.xml        官方 AKN 整件（权威层）
       official/<eid>.xml          条文切片（与整件字节一致的子串）
       <eid>.it.card.txt           证据卡
+    es/run-<YYYYMMDD>-es-<slug>/  es_verify reader 直接吃的形状：
+      index.json                  {"act_id", "source_file", "source_sha256", "articles"...}
+      official/act.xml            官方 BOE 合并文本整件（权威层）
+      official/<block_id>.xml      条文切片（与整件字节一致的子串）
+      <block_id>.es.card.txt      证据卡
     case/                        案例库（人民法院案例库）——检索接口需登录，
                                   匿名通道拒绝抓取（见 fetch_case_probe），本批为空。
 
@@ -73,6 +80,8 @@ TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺
   CN  国家法律法规数据库 https://flk.npc.gov.cn/（law-search/search/*）    官方公开接口
   IT  Normattiva OpenData https://www.normattiva.it/do/atto/caricaAKN     CC BY 4.0
       （检索经 https://api.normattiva.it/t/normattiva.api 正式 API）
+  ES  BOE 开放数据 https://www.boe.es/datosabiertos/api/legislacion-consolidada
+      （合并文本 by-id；AEBOE 复用条件，须注明出处）  BOE 复用条款（2024-06-27 决议）
   CN案例 人民法院案例库 https://rmfyalk.court.gov.cn/（需登录，匿名不抓）
 
 退出码：0 全部成功 / 2 用法错或 bulk 未确认 / 3 部分源失败（详见日志）
@@ -107,7 +116,8 @@ TOOL_VERSION = "0.1"
 # 礼貌机制（默认写死；命令行可调宽但不能低于下限）
 # ---------------------------------------------------------------------------
 USER_AGENT = ("factscribe-legal-corpus/%s "
-              "(legal-citation verification research; contact: repo issues)"
+              "(legal-citation verification research; sources: FR/CN/IT/ES; "
+              "contact: repo issues)"
               % TOOL_VERSION)
 MIN_INTERVAL_S = 2.0        # 下限锁死：任何情况下相邻请求至少隔 2 秒
 DEFAULT_INTERVAL_MIN = 2.0
@@ -131,14 +141,25 @@ IT_API_BASE = "https://api.normattiva.it/t/normattiva.api"
 IT_SEARCH_PATH = "/bff-opendata/v1/api/v1/ricerca/semplice"
 IT_ADV_SEARCH_PATH = "/bff-opendata/v1/api/v1/ricerca/avanzata"
 IT_AKN_URL = "https://www.normattiva.it/do/atto/caricaAKN"
+ES_API_BASE = "https://www.boe.es/datosabiertos/api/legislacion-consolidada"
 CASE_HOME_URL = "https://rmfyalk.court.gov.cn/"
 
 # sample 抽样默认目标（规模闸：bulk 之外每源最多取这么多件）
 CN_SAMPLE_QUERIES = ["中华人民共和国劳动法", "中华人民共和国劳动合同法",
                      "中华人民共和国产品质量法"]
 IT_SAMPLE_ACTS = [("2012", "190"), ("1990", "241")]  # ( anno, numero ) 落空则顺延
+# ES sample 样单（BOE 官方标识 → 目录 slug）；每件 1 次请求（by-id 合并文本 XML）。
+# BOE 标识形如 BOE-A-<年份>-<序号>（BOE-A-2015-10565 = Ley 39/2015）。
+ES_SAMPLE_ACTS = [
+    ("BOE-A-2015-10565", "ley39-2015-procedimiento-administrativo"),
+    ("BOE-A-2015-10566", "ley40-2015-regimen-local"),
+    ("BOE-A-1978-31229", "const1978-constitucion-espanola"),
+]
 
 ART_CN_RE = re.compile(r"^第[一二三四五六七八九十百千零〇两]+条$")
+ES_BLOQUE_RE = re.compile(rb'<bloque id="([^"]+)"([^>]*)>(.*?)</bloque>', re.S)
+ES_META_RE = re.compile(rb"<metadatos>(.*?)</metadatos>", re.S)
+ES_ART_ID_RE = re.compile(r"^a(\d+)$")
 IT_ARTICLE_RE = re.compile(rb'<article eId="(art_[0-9]+)">(.*?)</article>', re.S)
 IT_ARTICLE_EID_RE = re.compile(rb'<article eId="(art_[0-9]+)">')
 DILA_INCREMENT_RE = re.compile(r'href="(LEGI_\d{8}-\d{6}\.tar\.gz)"')
@@ -450,6 +471,7 @@ def build_manifest(corpus_root, state, reference_date):
                        "(先不带 --yes 看预计请求/体积)",
             "bulk_cn": "python3 tools/fetch_corpus.py fetch --source cn --mode bulk --yes",
             "bulk_it": "python3 tools/fetch_corpus.py fetch --source it --mode bulk --yes",
+            "bulk_es": "python3 tools/fetch_corpus.py fetch --source es --mode bulk --yes",
             "note": "state/fetch_state.json 记了已取清单与 sha256；重跑自动跳过已取件。"
                     "manifest.files 的 sha256 可对账：对不上即该文件与取件时不一致。",
         },
@@ -1164,6 +1186,224 @@ def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
 
 
 # ---------------------------------------------------------------------------
+# ES —— BOE 开放数据（legislacion-consolidada by-id：合并文本 XML 整件）
+# ---------------------------------------------------------------------------
+# 官方通道实测（2026-11-16）：
+#   GET https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/{BOE-A-…}
+#   → Accept: application/xml 时返回整件合并文本 XML（<metadatos> + <texto>）。
+#   ⚠️ 不带 Accept（或带 application/json）会被官方拒（400「No soportado ningún
+#   mime type de la cabecera Accept」）；带 application/xml 即通。
+#   ⚠️ 任务书里写的 api.boe.es 域名不存在（DNS NXDOMAIN），真域名是 www.boe.es。
+# 整件里每个 <bloque id="a7" tipo="precepto" titulo="Artículo 7"> 是一个条文块；
+# 切片取整件字节的**原样子串**（m.start():m.end()），保证与官方件脱钩可查。
+ES_LICENCE = ("Condiciones de reutilización de la AEBOE (Resolución de la "
+              "Agencia de 27 de junio de 2024)")
+ES_ATTRIBUTION = ("Fuente de los datos: Agencia Estatal Boletín Oficial del "
+                  "Estado (https://www.boe.es/)")
+
+
+def _es_plain(xml_text):
+    """XML 片段 → 纯文本（去标签、解实体、压空白）。"""
+    s = re.sub(r"<[^>]+>", " ", xml_text)
+    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                 ("&quot;", '"'), ("&#39;", "'"), ("&#13;", " ")):
+        s = s.replace(a, b)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _es_attr(attrs, name):
+    m = re.search((r'%s="([^"]*)"' % name).encode(), attrs)
+    return m.group(1).decode("utf-8", "replace") if m else ""
+
+
+def _es_meta(raw):
+    """从 <metadatos> 里取法件元数据（字段缺了也不炸，空串照填）。"""
+    m = ES_META_RE.search(raw)
+    blob = m.group(1) if m else b""
+
+    def _g(tag):
+        mm = re.search((r"<%s[^>]*>(.*?)</%s>" % (tag, tag)).encode(),
+                       blob, re.S)
+        if not mm:
+            return ""
+        return _es_plain(mm.group(1).decode("utf-8", "replace"))
+
+    return {
+        "identificador": _g("identificador"),
+        "titulo": _g("titulo"),
+        "fecha_actualizacion": _g("fecha_actualizacion"),
+        "fecha_disposicion": _g("fecha_disposicion"),
+        "fecha_publicacion": _g("fecha_publicacion"),
+        "fecha_vigencia": _g("fecha_vigencia"),
+        "numero_oficial": _g("numero_oficial"),
+        "rango": _g("rango"),
+        "estado_consolidacion": _g("estado_consolidacion"),
+        "url_eli": _g("url_eli"),
+        "url_html_consolidada": _g("url_html_consolidada"),
+    }
+
+
+def _es_date(compact):
+    """20261116T084356Z → 2026-11-16（空串照回空串）。"""
+    d = (compact or "")[:8]
+    if len(d) != 8 or not d.isdigit():
+        return ""
+    return "%s-%s-%s" % (d[0:4], d[4:6], d[6:8])
+
+
+def es_fetch_act(http, act_id):
+    """取 BOE 合并文本整件（by-id）。一次请求拿整件（metadatos + 全部 bloque）。"""
+    url = "%s/id/%s" % (ES_API_BASE, urllib.request.quote(act_id, safe=""))
+    r = http.request(url, headers={"Accept": "application/xml",
+                                   "Accept-Language": "es-ES,es;q=0.9"})
+    body = r["body"]
+    if b"<metadatos>" not in body[:20000]:
+        raise FetchError("BOE by-id 返回的不是合并文本 XML：%s :: %s"
+                         % (url, body[:200].decode("utf-8", "replace")))
+    return url, body
+
+
+def fetch_es(http, corpus_root, state, max_items, mode, reference_date, yes):
+    es_root = os.path.join(corpus_root, "es")
+    os.makedirs(es_root, exist_ok=True)
+    acts = ES_SAMPLE_ACTS
+    if mode == "bulk":
+        log("[plan]  ES bulk：样单 %d 部西班牙法律整件（可改 ES_SAMPLE_ACTS 扩单）"
+            % len(acts))
+        log("[plan]   预计请求：每部 1 次（by-id 合并文本 XML）= %d 次" % len(acts))
+        if not yes:
+            if sys.stdin.isatty():
+                if input("确认开跑？[y/N] ").strip().lower() not in ("y", "yes"):
+                    log("[abort] 未确认，停止（--yes 可跳过询问）")
+                    return 3
+            else:
+                log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
+                return 2
+
+    for act_id, slug in acts:
+        run_id = "run-%s-es-%s" % (reference_date.replace("-", ""), slug)
+        run_dir = os.path.join(es_root, run_id)
+        off_dir = os.path.join(run_dir, "official")
+        os.makedirs(off_dir, exist_ok=True)
+        idx_path = os.path.join(run_dir, "index.json")
+
+        item_id = "act:%s@%s" % (act_id, reference_date)
+        if state.fetched("es", item_id) and os.path.exists(idx_path) and \
+                os.path.exists(os.path.join(off_dir, "act.xml")):
+            log("[skip]  es:%s 已取过（state 命中）：%s" % (item_id, run_id))
+            continue
+        log("[pick]  ES act: %s" % act_id)
+        url, raw = es_fetch_act(http, act_id)
+        meta = _es_meta(raw)
+        version_date = _es_date(meta.get("fecha_actualizacion"))
+        act_path = os.path.join(off_dir, "act.xml")
+        with open(act_path, "wb") as fh:
+            fh.write(raw)
+        state.mark("es", item_id, url=url, sha256=sha256_bytes(raw),
+                   bytes_=len(raw), act_id=act_id,
+                   act_title=meta.get("titulo"), run=run_id,
+                   version_date=version_date)
+
+        # 条文切片 + 卡（sample：取编号条文 a<N>，按条号序；排除超长附件表）
+        articles = {}
+        picked = 0
+        for m in ES_BLOQUE_RE.finditer(raw):
+            bid = m.group(1).decode("utf-8")
+            attrs = m.group(2)
+            tipo = _es_attr(attrs, "tipo")
+            title = _es_attr(attrs, "titulo")
+            am = ES_ART_ID_RE.match(bid)
+            if tipo != "precepto" or not am:
+                continue   # 只收编号条文（a1、a2…）；标题块/附则/单条另计
+            if mode == "sample" and picked >= max_items:
+                break
+            blob = raw[m.start():m.end()]     # 原样切片（与整件字节一致）
+            text = _es_plain(blob.decode("utf-8", "replace"))
+            if mode == "sample" and len(text) > 20000:
+                log("[skip]  es:%s 正文 %d chars 超长（附件表类），sample 跳过"
+                    % (bid, len(text)))
+                continue
+            with open(os.path.join(off_dir, "%s.xml" % bid), "wb") as fh:
+                fh.write(blob)
+            card = "\n".join([
+                "# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）",
+                "ACT_ID: %s" % (meta.get("identificador") or act_id),
+                "ACT_ELI: %s" % meta.get("url_eli"),
+                "ACT_TITLE: %s" % meta.get("titulo"),
+                "ACT_NUMBER: %s" % meta.get("numero_oficial"),
+                "BLOCK_ID: %s" % bid,
+                "ARTICLE_NUM: %s" % am.group(1),
+                "ARTICLE_TITLE: %s" % title,
+                "VERSION_DATE: %s" % version_date,
+                "FETCH_DATE: %s" % reference_date,
+                "REFERENCE_DATE: %s" % reference_date,
+                "SOURCE_FILE: official/act.xml",
+                "SOURCE_URL: %s" % url,
+                "OFFICIAL_XML_SHA256: %s" % sha256_bytes(raw),
+                "ARTICLE_SHA256: %s" % sha256_bytes(blob),
+                "TEXT_CHARS: %d" % len(text),
+                "TEXT_STATUS: texto consolidado de carácter meramente informativo",
+                "LICENCE: %s" % ES_LICENCE,
+                "ATTRIBUTION: %s" % ES_ATTRIBUTION,
+                "FETCHED_AT: %s" % now_iso(),
+                "--- OFFICIAL TEXT ---",
+                text[:600] + ("…" if len(text) > 600 else ""),
+                "",
+            ])
+            card_path = os.path.join(run_dir, "%s.es.card.txt" % bid)
+            with open(card_path, "w", encoding="utf-8") as fh:
+                fh.write(card)
+            articles[bid] = {
+                "block_id": bid,
+                "num": am.group(1),
+                "title": title,
+                "article_file": "official/%s.xml" % bid,
+                "article_sha256": sha256_bytes(blob),
+                "article_bytes": len(blob),
+                "text_sha256": sha256_bytes(text.encode("utf-8")),
+                "text_chars": len(text),
+                "card_file": "%s.es.card.txt" % bid,
+                "card_sha256": sha256_file(card_path),
+            }
+            state.mark("es", "%s:%s" % (item_id, bid), url=url + "#" + bid,
+                       sha256=sha256_bytes(blob), bytes_=len(blob),
+                       run=run_id, article_file="official/%s.xml" % bid)
+            picked += 1
+            log("[ok]    es:%s %s（%d chars）" % (bid, title or "artículo", len(text)))
+        if not articles:
+            raise FetchError("ES 抓到的整件里没有编号条文（%s）" % act_id)
+        index = {
+            "act_id": meta.get("identificador") or act_id,
+            "act_eli": meta.get("url_eli"),
+            "act_title": meta.get("titulo"),
+            "act_number": meta.get("numero_oficial"),
+            "act_range": meta.get("rango"),
+            "estado_consolidacion": meta.get("estado_consolidacion"),
+            "fecha_disposicion": meta.get("fecha_disposicion"),
+            "fecha_publicacion": meta.get("fecha_publicacion"),
+            "fecha_vigencia": meta.get("fecha_vigencia"),
+            "url_html_consolidada": meta.get("url_html_consolidada"),
+            "source_url": url,
+            "source_file": "official/act.xml",
+            "source_sha256": sha256_bytes(raw),
+            "source_bytes": len(raw),
+            "version_date": version_date,
+            "fetch_reference_date": reference_date,
+            "reference_date": reference_date,
+            "articles": articles,
+        }
+        with open(idx_path, "w", encoding="utf-8") as fh:
+            json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
+            fh.write("\n")
+        log("[done]  ES：%s 条文卡 %d 张，整件 %d bytes"
+            % (run_id, len(articles), len(raw)))
+    state.note("es", "last_run", now_iso())
+    state.note("es", "runs", sorted(
+        d for d in os.listdir(es_root) if d.startswith("run-")))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CASE —— 人民法院案例库：匿名通道不可用，如实报备（不硬闯）
 # ---------------------------------------------------------------------------
 def fetch_case_probe(http, corpus_root, state, max_items, mode, reference_date, yes):
@@ -1207,7 +1447,7 @@ def _pick_number(text, minimum=10):
 def materialize(corpus_root, project_dir):
     os.makedirs(os.path.join(project_dir, "facts"), exist_ok=True)
     os.makedirs(os.path.join(project_dir, "cards"), exist_ok=True)
-    facts_fr, facts_cn, facts_it = [], [], []
+    facts_fr, facts_cn, facts_it, facts_es = [], [], [], []
     tex_lines = ["% 合成小项目：由 tools/fetch_corpus.py materialize 生成",
                  "% 事实账引用的是真官方件的钉哈希证据卡（两层证据模型）", ""]
 
@@ -1371,6 +1611,63 @@ def materialize(corpus_root, project_dir):
                   "w", encoding="utf-8") as fh:
             fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_it))
 
+    # ---- ES ----
+    # verify-es 一目录一法；多法语料时取「条文卡最多」的那个 run 物化（确定性：
+    # 同数取名字序），其余 run 留在语料里可单独 --corpus 验证。
+    es_root = os.path.join(corpus_root, "es")
+    if os.path.isdir(es_root):
+        candidates = []
+        for name in sorted(d for d in os.listdir(es_root) if d.startswith("run-")):
+            idx = os.path.join(es_root, name, "index.json")
+            if os.path.exists(idx):
+                with open(idx, encoding="utf-8") as fh:
+                    d = json.load(fh)
+                candidates.append((-len(d.get("articles") or {}), name))
+        if candidates:
+            candidates.sort()
+            run_name = candidates[0][1]
+            run_dir = os.path.join(es_root, run_name)
+            with open(os.path.join(run_dir, "index.json"), encoding="utf-8") as fh:
+                index = json.load(fh)
+            log("[pick]  ES run for facts: %s" % run_name)
+            for bid in sorted(index.get("articles", {}),
+                              key=lambda b: int(b[1:]) if b[1:].isdigit() else 0):
+                meta = index["articles"][bid]
+                art_path = os.path.join(run_dir, meta.get("article_file"))
+                if not os.path.exists(art_path):
+                    continue
+                card_src = os.path.join(run_dir, "%s.es.card.txt" % bid)
+                if not os.path.exists(card_src):
+                    continue
+                with open(art_path, "rb") as fh:
+                    raw = fh.read()
+                text = re.sub(r"<[^>]+>", " ", raw.decode("utf-8", "replace"))
+                text = re.sub(r"\s+", " ", text).strip()
+                card_dst = os.path.join(project_dir, "cards", "%s.es.card.txt" % bid)
+                shutil.copyfile(card_src, card_dst)
+                val = _pick_number(text)
+                if val is None:
+                    continue
+                facts_es.append([
+                    "[[fact]]",
+                    'id = "ES-%s"' % bid,
+                    'claim = "%s 第 %s 条正文数值（官方件引用示例）"'
+                    % (index.get("act_title") or "西班牙法条", meta.get("num")),
+                    'value = "%s"' % val,
+                    'source = "%s"' % rel(card_dst),
+                    'source_sha256 = "sha256:%s"' % sha256_file(card_dst),
+                    'locator = "%s (%s)"' % (bid, index.get("act_id")),
+                    'confidence = "high"',
+                    "derived_from = []",
+                    "",
+                ])
+                tex_lines.append(r"西班牙侧引用示例：\cite{art-es-%s}（值 %s）。"
+                                 % (bid, val))
+    if facts_es:
+        with open(os.path.join(project_dir, "facts", "40-es-provisions.toml"),
+                  "w", encoding="utf-8") as fh:
+            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_es))
+
     # ---- CASE（有真实官方正文才物化）----
     case_off = os.path.join(corpus_root, "case", "official")
     if os.path.isdir(case_off):
@@ -1442,16 +1739,18 @@ def materialize(corpus_root, project_dir):
     def _count(blocks):
         return sum(b.count("[[fact]]") for b in blocks)
     log("[done]  materialize：%s" % project_dir)
-    log("        facts: FR %d + CN %d + IT %d 条；paper.tex 引用 %d 行"
-        % (_count(facts_fr), _count(facts_cn), _count(facts_it),
+    log("        facts: FR %d + CN %d + IT %d + ES %d 条；paper.tex 引用 %d 行"
+        % (_count(facts_fr), _count(facts_cn), _count(facts_it), _count(facts_es),
            len(tex_lines) - 3))
-    log("        四闸验证命令：")
+    log("        五闸验证命令：")
     log("          PYTHONPATH=<integrations/factscribe-legal> python3 -m factscribe_legal verify "
         "--project %s --corpus <corpus>/fr --date <参考日> --view <corpus>/fr/view_current.jsonl"
         % project_dir)
     log("          ... verify-cn   --project %s --catalog <corpus>/cn/catalog.jsonl.gz --date <参考日>"
         % project_dir)
     log("          ... verify-it   --project %s --corpus <corpus>/it/<run> --date <参考日>"
+        % project_dir)
+    log("          ... verify-es   --project %s --corpus <corpus>/es/<run> --date <参考日>"
         % project_dir)
     log("          ... verify-case --project %s" % project_dir)
     return 0
@@ -1468,7 +1767,7 @@ def main(argv=None):
 
     f = sub.add_parser("fetch", help="抓语料（默认 sample 小样例）")
     f.add_argument("--source", required=True,
-                   choices=["fr", "cn", "it", "case", "all"])
+                   choices=["fr", "cn", "it", "es", "case", "all"])
     f.add_argument("--mode", default="sample", choices=["sample", "bulk"])
     f.add_argument("--max-per-source", type=int, default=10,
                    help="sample 模式每源最多取几件（默认 10）")
@@ -1521,9 +1820,9 @@ def main(argv=None):
         % (http.interval_min, http.interval_max, MIN_INTERVAL_S,
            BACKOFF_START_S, BACKOFF_FACTOR, BACKOFF_CAP_S))
 
-    sources = ["fr", "cn", "it", "case"] if args.source == "all" \
+    sources = ["fr", "cn", "it", "es", "case"] if args.source == "all" \
         else [args.source]
-    runners = {"fr": fetch_fr, "cn": fetch_cn, "it": fetch_it,
+    runners = {"fr": fetch_fr, "cn": fetch_cn, "it": fetch_it, "es": fetch_es,
                "case": fetch_case_probe}
     failures = []
     for src in sources:

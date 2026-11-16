@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"verdict\": \"exists\", \"caseNo\": \"（2022）苏0322执保100号\", \"title\": \"张某甲、李某甲等机动车交通事故责任纠纷、机动车交通事故责任纠纷、机动车交通事故责任纠纷、机动车交通事故责任纠纷财产保全执行执行裁定书\", \"court\": \"江苏省沛县人民法院\", \"date\": \"2022-01-17\", \"province\": \"江苏省\", \"records_with_this_case_number\": 3, \"trace\": {\"note\": \"以「案号 + 法院 + 裁判日期」三元组作溯源凭证，可上中国裁判文书网自行核对。\"}, \"_coverage\": {\"corpus\": \"160,291,678 条记录（不是案件数）\", \"corpus_note\": \"记录数不是案件数；案号字段存在缺失、脏值及格式未统一，因此不对案件总数作精确宣称\", \"search_type\": \"精确词汇检索（BM25），非向量语义检索\", \"measured_at\": \"2026-08-24\", \"source\": \"数据来源：文书查（深圳星谱网络科技有限公司） https://www.wenshucha.com\", \"more_quota\": \"需要更多调用额度或独享 Key：https://www.wenshucha.com/pricing/\", \"caveats\": [\"案号字段覆盖率 97.8%，约 2.2% 的记录无案号，无法被本工具核验到。\"]}, \"_quota\": {\"plan\": \"public-test\", \"label\": \"公开测试\", \"used\": 2239, \"limit\": 20000, \"remaining\": 17761, \"body_used\": 450, \"body_limit\": 1000, \"body_remaining\": 550, \"ip_used_today\": 4, \"ip_daily\": 20, \"ip_body_used_today\": 0, \"ip_body_daily\": 5}}"
+      }
+    ]
+  }
+}

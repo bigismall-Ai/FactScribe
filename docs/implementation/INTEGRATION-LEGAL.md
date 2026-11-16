@@ -1,7 +1,7 @@
 # INTEGRATION-LEGAL｜第三方集成件：法律维度（法国 / 中国 / 中国案例 / 意大利）
 
 > 日期：2026-11-15（M2 挂槽更新：2026-11-16）
-> 对应规范：`docs/design/SPEC-V1.md` §2.3（factscribe 的诚实边界：只核「账本一致」，不核「科学为真」）；`docs/design/SPEC-CHECKS-draft.md` §3（核验包契约）、§7 M2
+> 对应规范：`docs/design/SPEC-V1.md` §2.3（factscribe 的诚实边界：只核「账本一致」，不核「科学为真」）；`docs/design/SPEC-CHECKS.md` §3（核验包契约）、§7 M2
 > 对应集成件：`integrations/factscribe-legal/`（**第三方件，不进 `factscribe/` 包**；M2 起兼任**核验槽第二个核验包**）
 > 纪律：**上游 `factscribe/` 判据一行未改** —— 行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动（M1 核验槽机构与 M2 适配器挂载是修约批的既定增量）。
 > 本文件只记「这个集成件在哪、判什么、边界在哪、读数是多少」。
@@ -11,7 +11,7 @@
 | 事项 | 结果 |
 |---|---|
 | 进不进上游包 | **不进**。放 `integrations/factscribe-legal/`，沿用 `integrations/minifactscribe/` 的先例；`pyproject.toml` 的 `packages = ["factscribe"]` 不变 |
-| 上游核心改动 | 判据**零**。M2 挂槽批（四步走之④）按 SPEC-CHECKS-draft 新增：core `factscribe/checks.py`（M1 已交付的核验槽机构上，加 `load_integration` 约定路径发现＋多包 summary 合并）、`report.py`／`cli.py`（多域分节渲染）；适配器居本件 `checks_adapter.py`，core 不 import integrations |
+| 上游核心改动 | 判据**零**。M2 挂槽批（四步走之④）按 SPEC-CHECKS 新增：core `factscribe/checks.py`（M1 已交付的核验槽机构上，加 `load_integration` 约定路径发现＋多包 summary 合并）、`report.py`／`cli.py`（多域分节渲染）；适配器居本件 `checks_adapter.py`，core 不 import integrations |
 | M2 挂槽形态 | `[checks] packages = ["paper", "legal"]` → `factscribe audit` 单命令双域报告（legal 节在后、`summary.by_domain` 域计数、退出码 aggregate_exit 单一入口折算）；发现注册＝约定路径 `check-package.toml`（domain＋adapter 两字段），整目录删掉＝legal 回到未注册（点名即 exit 2），「integrations 独立、可卸载」先例不破 |
 | M2 新增码 | `LEGAL_DATE_INVALID`（红，date 缺/非法）／`LEGAL_EVIDENCE_CHANGED`（红，`audit/evidence-legal.lock` 与现算不符或锁件坏）／`LEGAL_EVIDENCE_UNFROZEN`（黄，已解冻未重冻）——码表只增 |
 | 每域冻结锁 | legal 维锁件＝`audit/evidence-legal.lock`（与 paper 的 `audit/evidence.lock` 互不干扰）；canonical 四键＝语料视图路径＋参考日＋现行视图路径＋语料索引哈希；解冻走只加流水账 `audit/evidence-legal-log.ndjson` |

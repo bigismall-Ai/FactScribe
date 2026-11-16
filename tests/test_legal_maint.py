@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""松尾账①（P-100）：mark_dup_ok 移出 facts_ledger 为独立维护模块的守锁。
 
-规范出处：SPEC-CHECKS-draft §9.7（改账是写径不是核验，不进 verify()）；
+规范出处：SPEC-CHECKS §9 裁定⑦（改账是写径不是核验，不进 verify()）；
 拆分口径＝``facts_ledger`` 只读检测、``ledger_maint`` 改账维护。
 
 锁三件事：

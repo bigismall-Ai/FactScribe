@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""legal 核验包（M2）：发现注册＋卡形状＋fail-closed＋槽内行为。
 
-规范：docs/design/SPEC-CHECKS-draft.md §3（包契约）、§5（配置）、§7 M2。
+规范：docs/design/SPEC-CHECKS.md §3（包契约）、§5（配置）、§7 M2。
 适配器居 integrations/factscribe-legal/factscribe_legal/checks_adapter.py，
 core 只按 check-package.toml 的声明发现载入（core 不 import integrations）。
 

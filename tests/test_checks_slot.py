@@ -15,7 +15,9 @@ r"""核验槽（factscribe/checks.py）机制测试：注册表＋[checks] 解�
   单一实现（audit 旧名＝同一函数对象）、闭集整表；
 * 槽路径信封：域标只增键、by_domain 只增键、与直跑内容逐条相同；
 * 端到端三态对表（验收门 f）：无节＝直跑无域标；裸节＝走槽带域标
-  packages=paper；显式点名＝按点名；
+packages=paper；显式点名＝按点名；
+* M1.5 三态扩展（裁定⑤第二批）：点名 style／pdf＝只跑被点名域（paper 判据
+不搭车）、发现带域标、与独立命令同读数；裸节不搭车跑 style／pdf；
 * 每域一把冻结锁：paper 沿用既有锁路径、其他域带域后缀。
 """
 from __future__ import annotations
@@ -360,7 +362,7 @@ class TestRunPackages(SlotCase):
 
 
 # --------------------------------------------------------------------------
-# 6. 端到端（子进程）：无节 vs 显式 paper 的行为对表（验收门 g）
+# 6. 端到端（子进程）：无节 vs 显式 paper vs 点名 style/pdf 的行为对表
 # --------------------------------------------------------------------------
 
 class TestEndToEnd(SlotCase):
@@ -420,6 +422,99 @@ class TestEndToEnd(SlotCase):
             "yellow": len(plain["warnings"]),
             "hints": len(plain["hints"]),
         }})
+
+    # ------------------------------------------------------------------
+    # M1.5 三态扩展（裁定⑤第二批）：显式点名 style／pdf 各态
+    # ------------------------------------------------------------------
+
+    def test_explicit_style_only_runs_style_and_skips_paper(self):
+        # 点名 ["style"]＝只跑 style：paper 判据一条不发（该项目的红
+        # MISSING_CITE／黄 UNBOUND_NUMBER 都不得出现），发现带 style 域标，
+        # 退出码只由 style 折算（与独立 style 命令同值）。
+        exit_style, style = self._run(
+            "m15-style", '\n[checks]\npackages = ["style"]\n')
+        standalone = cli("style", str(self.tmp / "m15-style"), "--json")
+        s_payload = json.loads(standalone.stdout)
+        self.assertEqual(exit_style, standalone.returncode)
+        paper_codes = {"MISSING_CITE", "UNMATCHED_NUMBER", "UNBOUND_NUMBER"}
+        for key in ("issues", "warnings", "hints", "findings"):
+            for item in style[key]:
+                self.assertEqual(item.get("domain"), "style")
+                self.assertNotIn(item.get("code"), paper_codes)
+        # 槽内黄码多重集＝独立 style 命令的 findings 黄码多重集（判据零改动）
+        self.assertEqual(
+            sorted(i["code"] for i in style["warnings"]),
+            sorted(f["code"] for f in s_payload["findings"]))
+        # 槽 hints＝独立命令的 info＋advisories 两通道之和（TERM_UNREGISTERED、
+        # NUMERAL_DENSITY(revision) 走 info；RHYTHM_PLATEAU 参考读数走 advisories）
+        self.assertEqual(
+            sorted(h["code"] for h in style["hints"]),
+            sorted([f["code"] for f in s_payload.get("info", [])]
+                   + [f["code"] for f in s_payload.get("advisories", [])]))
+        self.assertEqual(style["summary"]["by_domain"].get("paper"), None)
+        self.assertIn("style", style["summary"]["by_domain"])
+
+    def test_explicit_pdf_only_runs_pdf_and_skips_paper(self):
+        # 点名 ["pdf"]＝只跑 pdf：给一份坏 report（audit/report.json 不是
+        # JSON）→ pdf 域 fail-closed 红；paper 判据一条不发。
+        # 折算边界注：REPORT_SCHEMA_INVALID 的存量 exit_code 是 2
+        # （verify-pdf 独立命令出 2）；槽内红按 aggregate_exit 全局口径
+        # 折 1（2 不在 8/1/5/7 优先链里）——槽折算单一入口的既有口径。
+        root = make_audit_project(self.tmp / "m15-pdf",
+                                  '\n[checks]\npackages = ["pdf"]\n')
+        (root / "audit").mkdir()
+        (root / "audit" / "report.json").write_text("{not-json", encoding="utf-8")
+        proc = cli("audit", str(root), "--json")
+        payload = json.loads(proc.stdout)
+        for key in ("issues", "warnings", "findings"):
+            for item in payload[key]:
+                self.assertEqual(item.get("domain"), "pdf")
+                self.assertNotIn(item.get("code"),
+                                 {"MISSING_CITE", "UNMATCHED_NUMBER"})
+        from factscribe import pdfgate as pdfgate_mod
+        if pdfgate_mod.missing_tools():
+            self.assertEqual(payload["issues"][0]["code"], "PDF_TOOL_MISSING")
+            self.assertEqual(proc.returncode, 8)
+        else:
+            self.assertEqual(payload["issues"][0]["code"],
+                             "REPORT_SCHEMA_INVALID")
+            self.assertEqual(proc.returncode, 1)
+        self.assertIn("pdf", payload["summary"]["by_domain"])
+        self.assertNotIn("paper", payload["summary"]["by_domain"])
+
+    def test_bare_section_does_not_run_style_or_pdf(self):
+        # 裁定③不变：裸 [checks]（省 packages）＝默认 ["paper"]——style／pdf
+        # 只在被显式点名时走槽。同项目放一份坏 report（pdf 在场即必红），
+        # 裸节下必须零 pdf 发现、by_domain 只有 paper。
+        root = make_audit_project(self.tmp / "m15-bare", "\n[checks]\n")
+        (root / "audit").mkdir()
+        (root / "audit" / "report.json").write_text("{not-json", encoding="utf-8")
+        proc = cli("audit", str(root), "--json")
+        payload = json.loads(proc.stdout)
+        self.assertEqual(proc.returncode, 1)   # paper 的红（缺 source）
+        for key in ("issues", "warnings", "hints"):
+            for item in payload[key]:
+                self.assertNotEqual(item.get("domain"), "pdf")
+                self.assertNotEqual(item.get("domain"), "style")
+        self.assertEqual(list(payload["summary"]["by_domain"]), ["paper"])
+
+    def test_multi_domain_named_order_and_stamps(self):
+        # 点名 ["paper", "style"]＝双域：by_domain 按点名序，两域发现各带
+        # 各的域标；paper 判据照常跑（该项目的红仍在）。
+        exit_both, both = self._run(
+            "m15-both", '\n[checks]\npackages = ["paper", "style"]\n')
+        self.assertEqual(list(both["summary"]["by_domain"]), ["paper", "style"])
+        doms = {}
+        for key in ("issues", "warnings", "hints"):
+            for item in both[key]:
+                doms.setdefault(item.get("domain"), []).append(item.get("code"))
+        self.assertIn("UNMATCHED_NUMBER", doms.get("paper", []))
+        self.assertEqual(doms.get("pdf"), None)
+        self.assertEqual(exit_both, 1)
+        # 显式点名时发现带域标（批内要求）：每条发现都有 domain 键
+        for key in ("issues", "warnings", "hints"):
+            for item in both[key]:
+                self.assertIn("domain", item)
 
 
 # --------------------------------------------------------------------------

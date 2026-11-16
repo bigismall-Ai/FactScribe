@@ -86,6 +86,86 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
   `LEGAL_PROV_UNKNOWN` **假红**）。本批也**不加** `\cite{…}` 前缀（判例闸不处理
   cite，照抄 CN 案例闸的最小面）。
 
+另有三条 `cn-lead-*` 子命令属**线索层**（不是闸，不进核验槽）——见下文专节。
+
+## 中国判例线索层（第三方：文书查）：`cn-lead-*`（非闸，不进核验槽）
+
+五条 `verify-*` 子命令核的都是**官方件**（官方发布渠道取来的字节，钉哈希）。
+线索层是另一回事：**文书查**（wenshucha.com，MCP 服务）是第三方聚合库
+（服务自报 1.6 亿条记录、案号字段覆盖 97.8%、约 91% 记录正文非空），它**不是**
+人民法院案例库，也不是裁判文书网。所以它的输出只能当「线索与初步核对」，
+**禁止写成官方证明**——每条命令输出的**首行**固定是这句话：
+
+```
+线索层（第三方：文书查）——非官方核验，溯源凭案号＋法院＋日期三元组上裁判文书网核对
+```
+
+| | `verify-case`（官方维度） | `cn-lead-*`（线索层） |
+|---|---|---|
+| 回答的问题 | 官方入库案例正文被动没动（哈希链） | 找案子＋案号存在性（第三方库检索） |
+| 材料来源 | 官方件＋回执链（钉哈希） | 第三方聚合库（无哈希可钉） |
+| 结论效力 | 红/黄/绿机械判定 | 线索与初步核对，**不是官方证明** |
+| 进核验槽？ | 是（`[checks]` 点名 legal） | 否——独立 CLI，`[checks]` 永不点名线索层 |
+
+```bash
+# 找案子：精确词检索（BM25 非语义；一发一页 ≤5 条，页顶 3，翻页＝换 --page 重跑）
+python3 -m factscribe_legal cn-lead-search --q "机动车交通事故责任纠纷" [--page 2]
+
+# 案号存在性核验（exists=退出码 0；查无/判不出=1）
+python3 -m factscribe_legal cn-lead-verify --case-no "（2022）苏0322执保100号"
+
+# 取单件库内元信息/正文（--meta 只取元信息省正文配额；--max-chars 分段读）
+python3 -m factscribe_legal cn-lead-get --case-no "（2022）苏0322执保100号"
+```
+
+退出码：**0**＝服务有答（verify 仅当判定「库内存在」）；**1**＝verify 查无／判不出
+（线索口径：库内没有，不代表案件不存在）；**2**＝配置错／网络错／参数错
+（fail-closed：超时、连不上、信封坏都明确报错退出——拿不到线索不许编；
+服务侧参数错误不计数）。三次输出都透出服务自报的 `_quota` 余额行与
+`_coverage` 数据口径全文。
+
+### 数据口径三条（如实转抄服务自报）
+
+1. **无原文链接**：线索层不提供官方原文链接——溯源凭「案号＋法院＋裁判日期」
+   三元组上中国裁判文书网（或人民法院案例库）自行核对官方件；
+2. **记录数≠案件数**：服务自报「160,291,678 条记录（不是案件数）」——同一案号
+   多条记录常见（保全/执行系列），且约 2.2% 记录无案号字段，别拿记录数当规模、
+   别拿命中条数当案件数；
+3. **查不到≠不存在**：检索基于标题与库内正文（约 91% 非空），调解结案等文书
+   本就不公开正文。0 命中只说明这个第三方库没检索到，不说明案件不存在。
+
+### 配额与专属 Key
+
+- 缺省走**公共测试 Key**（`wsc_demo_public`，共享评估额度，**禁批量**）：
+  客户端内置串行＋随机间隔 ≥2 秒，每条命令恰好一次服务调用；
+- 生产用请申请**专属 Key**（输出里 `_coverage.more_quota` 指引，
+  wenshucha.com/pricing），注入方式二选一，**不要**写进代码或命令行参数
+  （命令行参数会留在 shell 历史里）：
+  - `factscribe.toml` 可选节（照 `[budget]`/`[evidence]` 可选节先例，缺了不报错）：
+
+    ```toml
+    [cn_lead]
+    endpoint = "https://mcp.wenshucha.com/mcp"   # 缺省即此，可不填
+    key      = "你的专属 Key"
+    ```
+
+    该节对三条 `cn-lead-*` 生效（`--config` 显式给路径，不给则看当前目录的
+    `factscribe.toml`）；
+  - 环境变量 `FACTSCRIBE_CN_LEAD_ENDPOINT` / `FACTSCRIBE_CN_LEAD_KEY`
+    （优先级：环境变量 > toml 节 > 缺省）。
+
+### 实现备注
+
+- 纯标准库 urllib 直调 JSON-RPC（免 MCP SDK——quickstart 已证 curl 直调合法）；
+  不 import 上游 `factscribe`，可单独拷走单跑。
+- `verify_case_number` 的参数名照服务实测是 **`caseNo`**（不是 caseNumber），
+  发错名会白扣评估额度——客户端已按实测形状写死并有测试锁。
+- `get_judgment` 的 `include_body=false` 形状已实测入库；`include_body=true`
+  的正文键名未实测（省正文配额），解析按 `body`/`content`/`text` 等多键防御
+  适配——首次真实取正文后建议回来校准一次（照实适配，不猜）。
+- 离线夹具是 2026-11-17 真端点响应录制后脱敏（人名/公司名 → 某某）；
+  真端点冒烟是一次性人工验收，不进测试套。
+
 ## 两层证据
 
 ```
@@ -223,13 +303,20 @@ python3 -m factscribe_legal verify-case --project .
 python3 -m factscribe_legal verify-it   --project . --corpus runs/run-20261115-it --date 2026-11-15
 python3 -m factscribe_legal verify-es   --project . --corpus corpus/es/run-20261116-es-ley39-2015-procedimiento-administrativo --date 2026-11-16
 python3 -m factscribe_legal verify-fr-case --project .
+
+# 4) 中国判例线索层（第三方文书查，非官方核验——详见上文专节）
+python3 -m factscribe_legal cn-lead-search --q "机动车交通事故责任纠纷"
+python3 -m factscribe_legal cn-lead-verify --case-no "（2022）苏0322执保100号"
+python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100号" --meta
 ```
 
-退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**。
+退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**（`cn-lead-*` 三条例外，
+见专节：0 有答 / 1 查无或判不出 / 2 fail-closed）。
 
-> 核验槽时代（M2 起），这六条子命令作为**调试／单域入口保留**（不删功能、
+> 核验槽时代（M2 起），六条核验子命令作为**调试／单域入口保留**（不删功能、
 > 废弃窗口不限期）；正式的跨域报告走 `factscribe audit [checks]`——一份
-> 信封、一套退出码、legal 节并排在 paper 之后。
+> 信封、一套退出码、legal 节并排在 paper 之后。线索层三条（cn-lead-*）
+> 不是核验入口，不挂废弃窗口提示，`[checks]` 也永不点名线索层。
 
 ## 与上游核心的关系
 
@@ -244,7 +331,9 @@ python3 -m factscribe_legal verify-fr-case --project .
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 ```
 
-**50 条测试，全部离线**（不联网、不写仓库外的东西）。含三类回归：
+**101 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
+真端点冒烟是一次性人工验收读数，不进测试套，离线夹具用真响应录制后脱敏）。
+含三类回归：
 
 - **双向**：每条红码都有「必须触发」与「不该触发」两个用例（上游 §5 的做法）。
 - **防假绿**：多级 source 路径曾经整批被跳过 ⇒ 测它；空集不许伪装成全绿。
@@ -253,7 +342,9 @@ python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 
 ## 依赖
 
-**Python ≥ 3.10，纯标准库，无网络调用，无 `eval`。**
+**Python ≥ 3.10，纯标准库，无 `eval`。** 五条 `verify-*` 闸与抓取面全离线运行；
+线索层 `cn-lead-*` 是本包唯一按需联网的面（第三方文书查 MCP 端点，纯标准库
+urllib 直调 JSON-RPC，见上文专节）。
 
 TOML 读取（`factscribe_legal/_toml.py`）有一处刻意设计：3.11+ 用标准库 `tomllib`，
 3.10 用本包自带的极简解析器。**不直接复用上游 `factscribe.config.load_toml`** ——
@@ -277,6 +368,10 @@ TOML 读取（`factscribe_legal/_toml.py`）有一处刻意设计：3.11+ 用标
 
 取件、钉哈希、建卡、选版（`date_debut <= T < date_fin`）的脚本在各自的工程仓里，
 本包只消费「已经钉好哈希的官方件」。
+
+线索层（`cn-lead-*`）**不在上表**：它的数据源是第三方聚合库文书查，不是官方
+开放数据通道，也没有可钉哈希的官方字节——这正是它只能当线索、不能当官方件、
+进不了核验槽的根本原因（见「中国判例线索层」专节）。
 
 ## 许可
 

@@ -6,6 +6,10 @@
 
   factscribe-legal verify  --project <dir> --corpus <dir> --date YYYY-MM-DD
         跑法律专项校验：法条存在？哈希未变？参考日生效？引用的数字真出自该法条？
+
+  factscribe-legal cn-lead-search / cn-lead-verify / cn-lead-get
+        中国判例线索层（第三方文书查，非官方核验）：找案子／案号存在性／取正文。
+        不属核验槽——输出首行固定是线索层标注，溯源凭三元组上裁判文书网核对。
 """
 import argparse
 import os
@@ -111,6 +115,57 @@ def cmd_verify_it_case(args):
     return code
 
 
+# ---- 中国判例线索层（第三方：文书查）——非闸，不进核验槽 ----
+
+def _cn_lead_client(args):
+    """按 --config / ./factscribe.toml / 环境变量 / 缺省装配客户端。"""
+    from .cn_lead import WenshuChaClient, load_cn_lead_config
+    endpoint, key = load_cn_lead_config(getattr(args, "config", None))
+    return WenshuChaClient(endpoint=endpoint, api_key=key)
+
+
+def _cn_lead_error_exit(exc):
+    """线索层统一错误面：打印原因，exit 2（fail-closed：拿不到线索不许编）。"""
+    print(exc)
+    print("线索层失败＝退出码 2（fail-closed）；官方维度请走 verify-case / verify-cn。")
+    return 2
+
+
+def cmd_cn_lead_search(args):
+    """cn-lead-search：找案子（一发一页，页顶 3）。有答＝0，含 0 命中。"""
+    from .cn_lead import CnLeadError, render_search
+    try:
+        inner = _cn_lead_client(args).search(args.q, page_size=args.page_size,
+                                             page=args.page)
+    except CnLeadError as exc:
+        return _cn_lead_error_exit(exc)
+    print(render_search(inner, args.q))
+    return 0
+
+
+def cmd_cn_lead_verify(args):
+    """cn-lead-verify：案号存在性核验。exists＝0，查无/判不出＝1（线索口径）。"""
+    from .cn_lead import CnLeadError, render_verify
+    try:
+        inner = _cn_lead_client(args).verify_case_no(args.case_no)
+    except CnLeadError as exc:
+        return _cn_lead_error_exit(exc)
+    print(render_verify(inner))
+    return 0 if (inner.get("verdict") or "") == "exists" else 1
+
+
+def cmd_cn_lead_get(args):
+    """cn-lead-get：取单件元信息/正文。库内查无＝1，其余有答＝0。"""
+    from .cn_lead import CnLeadError, render_get
+    try:
+        inner = _cn_lead_client(args).get_judgment(
+            args.case_no, include_body=not args.meta, max_chars=args.max_chars)
+    except CnLeadError as exc:
+        return _cn_lead_error_exit(exc)
+    print(render_get(inner))
+    return 0 if inner.get("found") is not False else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
@@ -162,12 +217,46 @@ def main(argv=None):
                     help="语料目录（it-case/run-<run>-itcase-<tier>/）")
     tc.set_defaults(func=cmd_verify_it_case)
 
+    # 中国判例线索层（第三方：文书查）——不是闸，不进核验槽；废弃窗口提示
+    # 不适用（这三条不是核验入口，[checks] 永不点名线索层）。
+    s = sub.add_parser("cn-lead-search",
+                       help="中国判例线索检索（第三方文书查；一发一页 ≤5 条，页顶 3）")
+    s.add_argument("--q", required=True, help="检索词（简体中文，法律术语优先）")
+    s.add_argument("--page-size", type=int, default=5,
+                   help="每页条数，硬顶 5（默认 5；评估 Key 禁批量）")
+    s.add_argument("--page", type=int, default=1,
+                   help="页码，硬顶 3（默认 1；翻页＝换页码重跑本命令）")
+    s.add_argument("--config", default=None,
+                   help="factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）")
+    s.set_defaults(func=cmd_cn_lead_search)
+
+    lv = sub.add_parser("cn-lead-verify",
+                        help="中国案号存在性核验（第三方文书查；非官方证明）")
+    lv.add_argument("--case-no", required=True, help="案号，如「（2022）苏0322执保100号」")
+    lv.add_argument("--config", default=None,
+                   help="factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）")
+    lv.set_defaults(func=cmd_cn_lead_verify)
+
+    g = sub.add_parser("cn-lead-get",
+                       help="取单件判论文的库内元信息/正文（第三方文书查）")
+    g.add_argument("--case-no", required=True, help="案号，如「（2022）苏0322执保100号」")
+    g.add_argument("--meta", action="store_true",
+                   help="只取元信息不取正文（省正文配额）")
+    g.add_argument("--max-chars", type=int, default=None,
+                   help="分段读正文：本次最多取多少字符")
+    g.add_argument("--config", default=None,
+                   help="factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）")
+    g.set_defaults(func=cmd_cn_lead_get)
+
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
     # 一节的既有文案；正式的跨域报告走 factscribe audit [checks]。
-    print("提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；"
-          "正式报告走 factscribe audit [checks]（单命令双域）。")
+    # 线索层三条（cn-lead-*）不属核验入口，提示不适用且不得占输出首行
+    # （红线一：线索层首行必须是线索层标注）。
+    if not args.cmd.startswith("cn-lead-"):
+        print("提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；"
+              "正式报告走 factscribe audit [checks]（单命令双域）。")
     if args.cmd == "fetch":
         return cmd_fetch(args)
     if args.cmd == "verify-cn":
@@ -182,6 +271,12 @@ def main(argv=None):
         return cmd_verify_fr_case(args)
     if args.cmd == "verify-it-case":
         return cmd_verify_it_case(args)
+    if args.cmd == "cn-lead-search":
+        return cmd_cn_lead_search(args)
+    if args.cmd == "cn-lead-verify":
+        return cmd_cn_lead_verify(args)
+    if args.cmd == "cn-lead-get":
+        return cmd_cn_lead_get(args)
     return cmd_verify(args)
 
 

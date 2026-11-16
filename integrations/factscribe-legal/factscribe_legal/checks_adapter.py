@@ -46,6 +46,8 @@ factscribe 的模块**，且只在核验槽点名 legal 时才经 ``checks.load_
 拷走单跑。载入方向＝扩展件 import 宿主；宿主 core 只认 check-package.toml
 的声明，不反向依赖——「integrations 独立、可卸载」先例不破。
 """
+import hashlib
+import json
 import os
 import re
 
@@ -167,6 +169,15 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
 
     scope = _gate_scope(project_dir)
 
+    # ---- 域级冻结锁（裁定⑨，M2）：legal 维的锁件＝audit/evidence-legal.lock，
+    #      与 paper 的 audit/evidence.lock 互不干扰。canonical 形态由本卡写死：
+    #      语料视图路径＋参考日＋现行视图路径＋语料索引字节哈希（闭集四键）。
+    #      锁在而现算不符＝红；已解冻未重冻＝黄；没冻过＝不检查（照 paper 口径）。
+    frozen = _evidence_lock_state(project_dir, corpus_rel, date, view_rel,
+                                  corpus_dir)
+    red += frozen["red"]
+    yellow += frozen["yellow"]
+
     # ---- FR 闸（法国：法条存在／参考日生效／官方字节哈希／值出自正文）----
     if corpus_dir and date:
         try:
@@ -249,6 +260,154 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
         ],
     }
     return red, yellow, hints, summary, []
+
+
+# --------------------------------------------------------------------------
+# 域级冻结锁（裁定⑨，M2）：锁件 audit/evidence-legal.lock（evidence_lock_path
+# 的 legal 实例）。canonical 形态由 legal 卡写死——闭集四键：语料视图路径、
+# 参考日、现行视图路径、语料索引（index.json）字节哈希；同输入同哈希，
+# 不碰系统钟。纪律与 paper 同一套：冻结可复核、解冻必须过只加流水账、
+# 锁在而现算不符＝红、已解冻未重冻＝黄、没冻过＝不检查。
+# --------------------------------------------------------------------------
+
+LOCK_REL = "audit/evidence-legal.lock"
+LOG_REL = "audit/evidence-legal-log.ndjson"
+LOCK_HEADER = ("# legal 域冻结锁：语料视图＋参考日（canonical 形态由 legal 卡"
+               "写死；同输入逐字节一致）")
+LOCK_KEYS = ("corpus", "date", "index_sha256", "view")
+
+
+def canonical_form(corpus, date, view, index_sha256) -> str:
+    """legal 冻结工件的规范化正文（键为闭集、按键名排序；同输入同字节）。"""
+    rows = {"corpus": str(corpus or "").strip(),
+            "date": str(date or "").strip(),
+            "index_sha256": str(index_sha256 or "").strip().lower(),
+            "view": str(view or "").strip()}
+    return "\n".join("%s\t%s" % (k, rows[k]) for k in sorted(rows))
+
+
+def canonical_sha256(corpus, date, view, index_sha256) -> str:
+    return hashlib.sha256(canonical_form(corpus, date, view,
+                                         index_sha256).encode("utf-8")
+                          ).hexdigest()
+
+
+def _file_sha256(path) -> str:
+    if not path or not os.path.exists(path):
+        return ""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _index_sha256(corpus_dir) -> str:
+    return _file_sha256(os.path.join(corpus_dir, "index.json")) \
+        if corpus_dir else ""
+
+
+def write_evidence_lock(project_root, corpus, date, view="") -> dict:
+    """写 audit/evidence-legal.lock；不碰系统钟，同输入逐字节一致。
+
+    用法（冻结＝把本批核验的语料视图身份钉住）::
+
+        from factscribe_legal.checks_adapter import write_evidence_lock
+        write_evidence_lock(project_root, corpus="results/corpus-legal",
+                            date="2026-11-14", view="out/view.jsonl")
+    """
+    root = str(project_root)
+    corpus = str(corpus or "").strip()
+    date = str(date or "").strip()
+    view = str(view or "").strip()
+    idx = _index_sha256(os.path.join(root, corpus) if corpus else "")
+    digest = canonical_sha256(corpus, date, view, idx)
+    lines = [LOCK_HEADER,
+             'canonical_sha256 = "%s"' % digest] + \
+            ['%s = "%s"' % (k, {"corpus": corpus, "date": date,
+                                "index_sha256": idx, "view": view}[k])
+             for k in LOCK_KEYS] + [""]
+    path = os.path.join(root, *LOCK_REL.split("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return {"path": LOCK_REL, "sha256": digest, "corpus": corpus,
+            "date": date, "view": view, "index_sha256": idx}
+
+
+def unfreeze_evidence_lock(project_root, reason, at="") -> dict:
+    """解冻＝删锁件＋往只加流水账记一条（不碰系统钟，at 由调用方给）。"""
+    root = str(project_root)
+    lock = os.path.join(root, *LOCK_REL.split("/"))
+    if os.path.exists(lock):
+        os.remove(lock)
+    record = {"action": "unfreeze", "domain": DOMAIN_ID,
+              "reason": str(reason or ""), "at": str(at or "")}
+    log = os.path.join(root, *LOG_REL.split("/"))
+    os.makedirs(os.path.dirname(log), exist_ok=True)
+    with open(log, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False,
+                            separators=(",", ":")) + "\n")
+    return record
+
+
+def _log_last_action(project_dir) -> str:
+    """流水账最后一条的 action：""＝没账／没 unfreeze；unreadable＝坏账。"""
+    path = os.path.join(project_dir, *LOG_REL.split("/"))
+    if not os.path.exists(path):
+        return ""
+    last = ""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.strip():
+                    last = line
+        if not last:
+            return ""
+        return str(json.loads(last).get("action") or "")
+    except Exception:
+        return "unreadable"
+
+
+def _evidence_lock_state(project_dir, corpus_rel, date, view_rel,
+                         corpus_dir) -> dict:
+    """verify 侧的锁检查（只读）：返回 {"red": [...], "yellow": [...]}。"""
+    out = {"red": [], "yellow": []}
+    lock_path = os.path.join(project_dir, *LOCK_REL.split("/"))
+    if os.path.exists(lock_path):
+        frozen = ""
+        try:
+            data = load_toml(lock_path)
+            frozen = str(data.get("canonical_sha256") or "").strip().lower()
+            if not frozen:
+                raise ValueError("缺少 canonical_sha256")
+        except Exception as exc:
+            out["red"].append(_issue(
+                "LEGAL_EVIDENCE_CHANGED", "red",
+                "legal 冻结锁 %s 不可读（%s）——坏了不能静默当成「没冻结」"
+                "（fail-closed）" % (LOCK_REL, exc), location=LOCK_REL))
+            return out
+        current = canonical_sha256(corpus_rel, date, view_rel,
+                                   _index_sha256(corpus_dir))
+        if current != frozen:
+            out["red"].append(_issue(
+                "LEGAL_EVIDENCE_CHANGED", "red",
+                "legal 语料视图与冻结锁不符（锁 %s… / 现算 %s…）——语料索引、"
+                "参考日或现行视图路径变了；要换先解冻（unfreeze）再重冻"
+                % (frozen[:12], current[:12]), location=LOCK_REL))
+        return out
+    state = _log_last_action(project_dir)
+    if state == "unfreeze":
+        out["yellow"].append(_issue(
+            "LEGAL_EVIDENCE_UNFROZEN", "yellow",
+            "legal 冻结处在「已解冻、未重冻」状态（%s 最后一条是 unfreeze）"
+            "——核验继续，但语料视图未钉版" % LOG_REL, location=LOG_REL))
+    elif state == "unreadable":
+        out["yellow"].append(_issue(
+            "LEGAL_EVIDENCE_UNFROZEN", "yellow",
+            "legal 冻结流水账 %s 不可读——坏了不能静默当成「没解冻过」"
+            "（fail-closed）" % LOG_REL, location=LOG_REL))
+    return out
 
 
 # --------------------------------------------------------------------------

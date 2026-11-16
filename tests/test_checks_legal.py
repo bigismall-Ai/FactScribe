@@ -417,5 +417,114 @@ class TestDualDomainEndToEnd(LegalSlotCase):
         self.assertIn("已注册", payload["findings"][0]["message"])
 
 
+# --------------------------------------------------------------------------
+# 每域一把冻结锁（裁定⑨）：audit/evidence-legal.lock 与 paper 锁互不干扰
+# --------------------------------------------------------------------------
+
+from factscribe_legal.checks_adapter import (canonical_form,  # noqa: E402
+                                             canonical_sha256,
+                                             unfreeze_evidence_lock,
+                                             write_evidence_lock)
+
+
+class TestLegalEvidenceLock(LegalSlotCase):
+    def _run_slot(self, root):
+        cfg = load_config(root)
+        red, yellow, _h, summary, _u = checks.run_packages(
+            cfg, load_facts(cfg), load_sections(cfg))
+        legal = [i for i in red + yellow
+                 if getattr(i, "domain", "") == "legal"]
+        return cfg, legal, summary
+
+    def test_lock_path_is_domain_scoped_and_deterministic(self):
+        root = build_legal_project(self.tmp / "p1")
+        a = write_evidence_lock(root, corpus="results/corpus-legal",
+                                date="2026-11-14", view="")
+        b = write_evidence_lock(root, corpus="results/corpus-legal",
+                                date="2026-11-14", view="")
+        self.assertEqual(a["path"], "audit/evidence-legal.lock")
+        self.assertEqual(a["sha256"], b["sha256"])
+        lock = root / "audit" / "evidence-legal.lock"
+        self.assertTrue(lock.is_file())
+        # 适配器的锁件路径与槽的唯一权威函数同源（裁定⑨）
+        self.assertEqual(checks.evidence_lock_path(root, "legal"), lock)
+        self.assertFalse((root / "audit" / "evidence.lock").exists(),
+                         "legal 锁不许碰 paper 的锁件")
+
+    def test_canonical_form_is_closed_set_and_order_free(self):
+        f1 = canonical_form("c", "2026-11-14", "v", "ab" * 32)
+        self.assertEqual(f1,
+                         "corpus\tc\n"
+                         "date\t2026-11-14\n"
+                         "index_sha256\t" + "ab" * 32 + "\n"
+                         "view\tv")
+        self.assertEqual(canonical_sha256("c", "2026-11-14", "v", "ab" * 32),
+                         canonical_sha256("c", "2026-11-14", "v", "ab" * 32))
+
+    def test_frozen_project_runs_without_evidence_findings(self):
+        root = build_legal_project(self.tmp / "p2")
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        _cfg, legal, _summary = self._run_slot(root)
+        self.assertEqual([i.code for i in legal], [])
+
+    def test_date_flip_after_freeze_is_red(self):
+        root = build_legal_project(self.tmp / "p3")
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+        toml = toml.replace('date = "2026-11-14"', 'date = "2026-11-15"')
+        (root / "factscribe.toml").write_text(toml, encoding="utf-8")
+        _cfg, legal, _summary = self._run_slot(root)
+        self.assertIn("LEGAL_EVIDENCE_CHANGED", [i.code for i in legal])
+        self.assertTrue(all(i.severity == "red"
+                            for i in legal
+                            if i.code == "LEGAL_EVIDENCE_CHANGED"))
+
+    def test_corpus_change_after_freeze_is_red(self):
+        root = build_legal_project(self.tmp / "p4")
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        idx = root / "results" / "corpus-legal" / "index.json"
+        data = json.loads(idx.read_text(encoding="utf-8"))
+        data["pool_asof"] = "2026-11-01"   # 换了语料视图（索引字节变）
+        idx.write_text(json.dumps(data, ensure_ascii=False, indent=2,
+                                  sort_keys=True) + "\n", encoding="utf-8")
+        _cfg, legal, _summary = self._run_slot(root)
+        self.assertIn("LEGAL_EVIDENCE_CHANGED", [i.code for i in legal])
+
+    def test_unfreeze_is_yellow_then_refreeze_clears_it(self):
+        root = build_legal_project(self.tmp / "p5")
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        unfreeze_evidence_lock(root, reason="换语料", at="2026-11-16")
+        _cfg, legal, _summary = self._run_slot(root)
+        self.assertIn("LEGAL_EVIDENCE_UNFROZEN", [i.code for i in legal])
+        self.assertTrue(all(i.severity == "yellow"
+                            for i in legal
+                            if i.code == "LEGAL_EVIDENCE_UNFROZEN"))
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        _cfg, legal, _summary = self._run_slot(root)
+        self.assertNotIn("LEGAL_EVIDENCE_UNFROZEN", [i.code for i in legal])
+        self.assertNotIn("LEGAL_EVIDENCE_CHANGED", [i.code for i in legal])
+
+    def test_paper_lock_check_unaffected_by_legal_lock(self):
+        # paper 的 audit/evidence.lock 不存在 ⇒ paper 不判 EVIDENCE_SET_CHANGED；
+        # legal 锁只在自己域里说话（互不干扰）。
+        root = build_legal_project(self.tmp / "p6")
+        write_evidence_lock(root, corpus="results/corpus-legal",
+                            date="2026-11-14")
+        cfg, facts, sections = (lambda c: (c, load_facts(c),
+                                           load_sections(c)))(load_config(root))
+        red, yellow, _h, _s, _u = checks.run_packages(cfg, facts, sections)
+        paper = [i for i in red + yellow
+                 if getattr(i, "domain", "") == "paper"]
+        self.assertNotIn("EVIDENCE_SET_CHANGED", [i.code for i in paper])
+        legal = [i for i in red + yellow
+                 if getattr(i, "domain", "") == "legal"]
+        self.assertNotIn("EVIDENCE_SET_CHANGED", [i.code for i in legal])
+
+
 if __name__ == "__main__":
     unittest.main()

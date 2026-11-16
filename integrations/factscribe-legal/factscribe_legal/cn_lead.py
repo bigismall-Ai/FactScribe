@@ -253,6 +253,8 @@ def load_cn_lead_config(config_path=None):
     * `config_path` 显式给路径；不给则看当前目录有没有 factscribe.toml；
       还没有就用缺省（公共端点＋公共测试 Key）——节可选，缺了不报错；
     * 节里只认 `endpoint`、`key` 两个字符串键；其余键忽略（向前兼容）；
+    * 优先级：环境变量（`FACTSCRIBE_CN_LEAD_ENDPOINT` / `FACTSCRIBE_CN_LEAD_KEY`）
+      ＞ toml 节 ＞ 缺省（12 因子惯例：密钥环境优先于落盘文件）；
     * 专属 Key 永不从命令行参数进（会留在 shell 历史里），只走配置/环境。
 
     返回 (endpoint, api_key)，两者都可能为 None＝用缺省。
@@ -270,8 +272,13 @@ def load_cn_lead_config(config_path=None):
             raise CnLeadError(f"{path} 的 [cn_lead] 必须是表（endpoint / key 两键），"
                               f"现在是 {type(raw).__name__}")
         table = raw or {}
-    endpoint = table.get("endpoint") or os.environ.get(ENV_ENDPOINT) or None
-    key = table.get("key") or os.environ.get(ENV_KEY) or None
+    # 环境变量 > 配置文件（12 因子惯例：密钥走环境优先于落盘文件）
+    endpoint = os.environ.get(ENV_ENDPOINT) or table.get("endpoint") or None
+    key = os.environ.get(ENV_KEY) or table.get("key") or None
+    for name, val in (("endpoint", endpoint), ("key", key)):
+        if val is not None and not isinstance(val, str):
+            raise CnLeadError(f"[cn_lead].{name} 必须是字符串，现在是 "
+                              f"{type(val).__name__}（值不回显）")
     if endpoint is not None and not str(endpoint).strip():
         endpoint = None
     if key is not None and not str(key).strip():

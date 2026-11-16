@@ -18,6 +18,13 @@ EXIT_INTEGRITY = 5 # 覆盖缺口 / PDF 与签名信任链失败（V3.0）
 EXIT_STALE = 7     # 报告/PDF 过期、nonce 重放
 EXIT_MISSING = 8   # 必需工具缺失（PDF 工具链）——不许静默放行
 
+# 退出码全闭集（裁定 2026-11-16：全闭集入宪——「值↔语义配对」永不变化；
+# 唯一权威表＝SPEC-V3.0 §2.5）。上面 0/1/2/3/4/5/7/8 是本仓折算现行使用的
+# 分层；下面补齐权威表里其余两值，使闭集在代码里有完整的名字可对照。
+# 新增或改义任何一值＝修约（major，BREAKING）。
+EXIT_PROOF = 6        # RED(PROOF)：--require-proof 未达标（SPEC-V3.0 §2.5）
+EXIT_ATTACK_OPEN = 9  # RED(ATTACK_OPEN)：ATTACKS.md 有 blocking/open 条目
+
 SEV_RED = "red"
 SEV_YELLOW = "yellow"
 SEV_INFO = "info"

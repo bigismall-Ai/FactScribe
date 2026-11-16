@@ -14,6 +14,8 @@ from pathlib import Path
 
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check, source_base
+from .checks import aggregate_exit as checks_aggregate_exit
+from .checks import run_packages
 from .brief import build_brief
 from .brief import payload as brief_payload
 from .brief import render as render_brief
@@ -1043,10 +1045,21 @@ def cmd_audit(args) -> int:
             return bcode
     facts = load_facts(cfg)
     sections = load_sections(cfg)
-    red, yellow, hints, summary, unresolved = run_audit(
-        cfg, facts, sections, resolve=getattr(args, "resolve", False))
-    code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
-                           integrity_first=cfg.is_v3)
+    strict = getattr(args, "strict", False)
+    resolve = getattr(args, "resolve", False)
+    if getattr(cfg, "checks_defined", False) and cfg.checks_packages:
+        # 显式点名 [checks].packages：走核验槽（SPEC-CHECKS §5.2）。
+        # 槽收发现、加域标、折算退出码——退出码值与直跑完全一致。
+        red, yellow, hints, summary, unresolved = run_packages(
+            cfg, facts, sections, resolve=resolve)
+        code = checks_aggregate_exit(red, yellow, strict,
+                                     integrity_first=cfg.is_v3)
+    else:
+        # 缺省（无 [checks]，或节存在但省 packages）：宪法保证——行为与槽
+        # 引入前逐字节一致（SPEC-CHECKS §5.2；[budget]/[evidence] 先例口径）。
+        red, yellow, hints, summary, unresolved = run_audit(
+            cfg, facts, sections, resolve=resolve)
+        code = _aggregate_exit(red, yellow, strict, integrity_first=cfg.is_v3)
     text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     if rule_report.get("present"):
         keys = list(rule_report.get("keys") or [])

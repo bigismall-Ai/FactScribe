@@ -313,7 +313,7 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**（`cn-lead-*` 三条例外，
 见专节：0 有答 / 1 查无或判不出 / 2 fail-closed）。
 
-> 核验槽时代（M2 起），六条核验子命令作为**调试／单域入口保留**（不删功能、
+> 核验槽时代（M2 起），核验子命令（现七闸＋fetch 族）作为**调试／单域入口保留**（不删功能、
 > 废弃窗口不限期）；正式的跨域报告走 `factscribe audit [checks]`——一份
 > 信封、一套退出码、legal 节并排在 paper 之后。线索层三条（cn-lead-*）
 > 不是核验入口，不挂废弃窗口提示，`[checks]` 也永不点名线索层。
@@ -331,7 +331,7 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 ```
 
-**101 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
+**154 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
 真端点冒烟是一次性人工验收读数，不进测试套，离线夹具用真响应录制后脱敏）。
 含三类回归：
 

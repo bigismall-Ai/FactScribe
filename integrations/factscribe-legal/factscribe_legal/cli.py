@@ -109,6 +109,11 @@ def main(argv=None):
     i.set_defaults(func=cmd_verify_it)
 
     args = ap.parse_args(argv)
+    # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：五条子命令保留作调试／
+    # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
+    # 一节的既有文案；正式的跨域报告走 factscribe audit [checks]。
+    print("提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；"
+          "正式报告走 factscribe audit [checks]（单命令双域）。")
     if args.cmd == "fetch":
         return cmd_fetch(args)
     if args.cmd == "verify-cn":

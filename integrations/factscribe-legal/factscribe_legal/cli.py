@@ -74,6 +74,14 @@ def cmd_verify_it(args):
     return code
 
 
+def cmd_verify_es(args):
+    from .es_verify import render_es, verify_es
+    findings, index = verify_es(args.project, args.corpus, args.date)
+    text, code = render_es(findings, index)
+    print(text)
+    return code
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
@@ -108,8 +116,14 @@ def main(argv=None):
     i.add_argument("--date", required=True, help="参考日 YYYY-MM-DD")
     i.set_defaults(func=cmd_verify_it)
 
+    e = sub.add_parser("verify-es", help="西班牙法条专项校验（BOE 官方合并文本 XML）")
+    e.add_argument("--project", required=True)
+    e.add_argument("--corpus", required=True, help="语料目录（es/run-<run>-es-<slug>/）")
+    e.add_argument("--date", required=True, help="参考日 YYYY-MM-DD")
+    e.set_defaults(func=cmd_verify_es)
+
     args = ap.parse_args(argv)
-    # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：五条子命令保留作调试／
+    # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
     # 一节的既有文案；正式的跨域报告走 factscribe audit [checks]。
     print("提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；"
@@ -122,6 +136,8 @@ def main(argv=None):
         return cmd_verify_case(args)
     if args.cmd == "verify-it":
         return cmd_verify_it(args)
+    if args.cmd == "verify-es":
+        return cmd_verify_es(args)
     return cmd_verify(args)
 
 

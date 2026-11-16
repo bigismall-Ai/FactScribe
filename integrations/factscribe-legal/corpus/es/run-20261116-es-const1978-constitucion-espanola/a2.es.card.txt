@@ -1,0 +1,22 @@
+# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）
+ACT_ID: BOE-A-1978-31229
+ACT_ELI: https://www.boe.es/eli/es/c/1978/12/27/(1)
+ACT_TITLE: Constitución Española.
+ACT_NUMBER: 
+BLOCK_ID: a2
+ARTICLE_NUM: 2
+ARTICLE_TITLE: Artículo 2
+VERSION_DATE: 2026-11-04
+FETCH_DATE: 2026-11-16
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.xml
+SOURCE_URL: https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229
+OFFICIAL_XML_SHA256: cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e
+ARTICLE_SHA256: 3cf40c774b6e166c18dab20362bef0a7fc1e7e1f0ed8ac85dbd5bc2d97b4d60b
+TEXT_CHARS: 273
+TEXT_STATUS: texto consolidado de carácter meramente informativo
+LICENCE: Condiciones de reutilización de la AEBOE (Resolución de la Agencia de 27 de junio de 2024)
+ATTRIBUTION: Fuente de los datos: Agencia Estatal Boletín Oficial del Estado (https://www.boe.es/)
+FETCHED_AT: 2026-11-16T09:51:40Z
+--- OFFICIAL TEXT ---
+Artículo 2 La Constitución se fundamenta en la indisoluble unidad de la Nación española, patria común e indivisible de todos los españoles, y reconoce y garantiza el derecho a la autonomía de las nacionalidades y regiones que la integran y la solidaridad entre todas ellas.

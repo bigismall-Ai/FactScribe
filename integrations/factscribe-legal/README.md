@@ -43,6 +43,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-cn` | 中国（国家法律法规数据库） | 官方详情 JSON 派生卡 | 法规现行有效、条文号存在、官方件未变 |
 | `verify-case` | 中国（人民法院案例库入库案例） | 官方案例正文 + 回执链 | 案号/日期/金额与官方件一致 |
 | `verify-it` | 意大利（Normattiva） | 官方 AKN XML + 条文切片 | 数值真出自官方 AKN 正文 |
+| `verify-es` | 西班牙（BOE 官方公报） | 官方合并文本 XML + 条文切片 | 数值真出自官方 BOE 合并文本正文 |
 
 各闸的错误码（**红 = 必须修，黄 = 不是绿**）：
 
@@ -52,6 +53,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-cn` | `CN_PROV_UNKNOWN` `CN_PROV_NOT_IN_FORCE` `CN_ARTICLE_NOT_FOUND` `CN_CARD_MISSING` `CN_CARD_NO_HASH` `CN_CARD_SHA256_MISMATCH` `CN_OFFICIAL_HASH_MISMATCH` `CN_VALUE_MISMATCH` | — |
 | `verify-case` | `CASE_OFFICIAL_MISSING` `CASE_CARD_MISSING` `CASE_OFFICIAL_HASH_MISMATCH` `CASE_NO_MISMATCH` `CASE_DATE_MISMATCH` `CASE_AMOUNT_MISMATCH` `CASE_VALUE_NOT_IN_OFFICIAL` `CASE_CARD_TEXT_DIVERGED` `CASE_CHAIN_BROKEN` | — |
 | `verify-it` | `IT_PROV_UNKNOWN` `IT_CARD_MISSING` `IT_CARD_NO_HASH` `IT_CARD_SHA256_MISMATCH` `IT_SOURCE_HASH_MISMATCH` `IT_ARTICLE_HASH_MISMATCH` `IT_ARTICLE_NOT_IN_SOURCE` `IT_CARD_FIELD_MISMATCH` `IT_QUOTE_MISMATCH` | `IT_VERSION_GAP` |
+| `verify-es` | `ES_PROV_UNKNOWN` `ES_CARD_MISSING` `ES_CARD_NO_HASH` `ES_CARD_SHA256_MISMATCH` `ES_SOURCE_HASH_MISMATCH` `ES_ARTICLE_HASH_MISMATCH` `ES_ARTICLE_NOT_IN_SOURCE` `ES_CARD_FIELD_MISMATCH` `ES_QUOTE_MISMATCH` | `ES_VERSION_GAP` |
 
 **M2 新增三码**（挂槽后材料依赖与冻结锁的 fail-closed 语义；码表只增不改）：
 
@@ -68,6 +70,12 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 - 案例库存的是**要旨体例案例稿**，不是判决书原文 ⇒ `verify-case` 核的是「这份案例稿与官方件一致」。
 - `verify-it` 判的是「数值出自官方 AKN 条文」；`IT_VERSION_GAP` 只说明**参考日**的版本没拿到，
   是黄不是红。
+- **西班牙闸尚未接进核验槽**（本批只做 `factscribe_legal` 层，不越界动 [checks] 槽）：
+  槽内「材料依赖 fail-closed」的计数按卡后缀分桶，`checks_adapter.py` 的 `PROV_RE`
+  兜底会把 `.es.card.txt` 并进 `fr` 桶、`\cite{art-es-…}` 也会并进 `fr` 桶。后果**只到
+  黄项文案**（「有 N 条法国事项」把 ES 事项算进去），不误红、不假绿——法国闸本身已跳过
+  `.es.card.txt` 与 `art-es-` 引用。ES 进槽须另开一批（改 `GATE_ORDER`、加 es 桶与
+  材料依赖声明）。
 
 ## 两层证据
 
@@ -91,8 +99,12 @@ runs/run-YYYYMMDD-legal/
 - 意大利：`ACT_URN` `ACT_ELI` `ACT_TITLE` `DATA_GU` `CODICE_REDAZIONALE`
   `ARTICLE_EID` `ARTICLE_NUM` `VERSION_DATE` `FETCH_VIGENZA` `REFERENCE_DATE`
   `SOURCE_FILE` `OFFICIAL_XML_SHA256` `ARTICLE_SHA256` `TEXT_SHA256` `LICENCE` `ATTRIBUTION`
+- 西班牙：`ACT_ID` `ACT_ELI` `ACT_TITLE` `ACT_NUMBER` `BLOCK_ID` `ARTICLE_NUM`
+  `ARTICLE_TITLE` `VERSION_DATE` `FETCH_DATE` `REFERENCE_DATE` `SOURCE_FILE`
+  `SOURCE_URL` `OFFICIAL_XML_SHA256` `ARTICLE_SHA256` `TEXT_CHARS` `TEXT_STATUS`
+  `LICENCE` `ATTRIBUTION` `FETCHED_AT`
 
-**归属靠文件名后缀判定**（`.it.card.txt` / `.cn.card.txt` / `.case.card.txt` / 法国侧的 `.card.txt`），
+**归属靠文件名后缀判定**（`.it.card.txt` / `.es.card.txt` / `.cn.card.txt` / `.case.card.txt` / 法国侧的 `.card.txt`），
 不靠卡内有没有某个标记字段 —— 靠标记猜会让「卡被删 / 卡被篡改」被静默跳过，变成假绿。
 
 ## 核验包注册形态（M2）：`audit [checks]` 单命令双域
@@ -184,15 +196,16 @@ python3 -m factscribe_legal verify \
     --date    2026-11-14 \
     --view    out/legifrance/view_20261114/merged_current.jsonl
 
-# 3) 中国法条 / 中国案例 / 意大利法条
+# 3) 中国法条 / 中国案例 / 意大利法条 / 西班牙法条
 python3 -m factscribe_legal verify-cn   --project . --catalog out/cn/catalog_full.jsonl.gz --date 2026-11-14
 python3 -m factscribe_legal verify-case --project .
 python3 -m factscribe_legal verify-it   --project . --corpus runs/run-20261115-it --date 2026-11-15
+python3 -m factscribe_legal verify-es   --project . --corpus corpus/es/run-20261116-es-ley39-2015-procedimiento-administrativo --date 2026-11-16
 ```
 
 退出码沿用上游：**0 绿 / 1 红 / 2 配置错 / 3 黄**。
 
-> 核验槽时代（M2 起），这五条子命令作为**调试／单域入口保留**（不删功能、
+> 核验槽时代（M2 起），这六条子命令作为**调试／单域入口保留**（不删功能、
 > 废弃窗口不限期）；正式的跨域报告走 `factscribe audit [checks]`——一份
 > 信封、一套退出码、legal 节并排在 paper 之后。
 
@@ -236,6 +249,7 @@ TOML 读取（`factscribe_legal/_toml.py`）有一处刻意设计：3.11+ 用标
 | 中国 | 国家法律法规数据库（FLK）详情 JSON | 官方 JSON | 官方公开接口 |
 | 中国案例 | 人民法院案例库入库案例正文 | 官方正文 + 回执 | 官方用户协议（个人查询、建库须走程序） |
 | 意大利 | Normattiva OpenData API（`caricaAKN`） | 官方 AKN XML | CC BY 4.0 |
+| 西班牙 | BOE 开放数据 API（`legislacion-consolidada` by-id） | 官方合并文本 XML | AEBOE 复用条件（2024-06-27 决议；须注明出处） |
 
 取件、钉哈希、建卡、选版（`date_debut <= T < date_fin`）的脚本在各自的工程仓里，
 本包只消费「已经钉好哈希的官方件」。

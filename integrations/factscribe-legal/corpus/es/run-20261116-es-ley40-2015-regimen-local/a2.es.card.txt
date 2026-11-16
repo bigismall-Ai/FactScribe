@@ -1,0 +1,22 @@
+# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）
+ACT_ID: BOE-A-2015-10566
+ACT_ELI: https://www.boe.es/eli/es/l/2015/10/01/40
+ACT_TITLE: Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.
+ACT_NUMBER: 40/2015
+BLOCK_ID: a2
+ARTICLE_NUM: 2
+ARTICLE_TITLE: Artículo 2
+VERSION_DATE: 2026-11-10
+FETCH_DATE: 2026-11-16
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.xml
+SOURCE_URL: https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566
+OFFICIAL_XML_SHA256: 917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a
+ARTICLE_SHA256: 2f14864fc97f4fea3a49d88201e23db7350ddb34fa34a2212361f7ec8d289117
+TEXT_CHARS: 1209
+TEXT_STATUS: texto consolidado de carácter meramente informativo
+LICENCE: Condiciones de reutilización de la AEBOE (Resolución de la Agencia de 27 de junio de 2024)
+ATTRIBUTION: Fuente de los datos: Agencia Estatal Boletín Oficial del Estado (https://www.boe.es/)
+FETCHED_AT: 2026-11-16T09:51:34Z
+--- OFFICIAL TEXT ---
+Artículo 2. Ámbito Subjetivo. 1. La presente Ley se aplica al sector público que comprende: a) La Administración General del Estado. b) Las Administraciones de las Comunidades Autónomas. c) Las Entidades que integran la Administración Local. d) El sector público institucional. 2. El sector público institucional se integra por: a) Cualesquiera organismos públicos y entidades de derecho público vinculados o dependientes de las Administraciones Públicas. b) Las entidades de derecho privado vinculadas o dependientes de las Administraciones Públicas que quedarán sujetas a lo dispuesto en las normas…

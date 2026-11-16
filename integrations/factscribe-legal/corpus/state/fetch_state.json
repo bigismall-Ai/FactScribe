@@ -51,6 +51,120 @@
     "last_run": "2026-11-16T04:58:16Z"
    }
   },
+  "es": {
+   "items": {
+    "act:BOE-A-1978-31229@2026-11-16": {
+     "act_id": "BOE-A-1978-31229",
+     "act_title": "Constitución Española.",
+     "bytes": 213512,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229",
+     "version_date": "2026-11-04"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 706,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "50e233175a3dba6cd1d918973bd0f39e41d52c844a48b56f36a5a1f768d3db9d",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a1"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 537,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "3cf40c774b6e166c18dab20362bef0a7fc1e7e1f0ed8ac85dbd5bc2d97b4d60b",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a2"
+    },
+    "act:BOE-A-1978-31229@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 745,
+     "fetched_at": "2026-11-16T09:51:40Z",
+     "run": "run-20261116-es-const1978-constitucion-espanola",
+     "sha256": "c1b451c3e099c6602dd2cdd796868a4ec817504935699a797ca01db362626634",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229#a3"
+    },
+    "act:BOE-A-2015-10565@2026-11-16": {
+     "act_id": "BOE-A-2015-10565",
+     "act_title": "Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas.",
+     "bytes": 484176,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565",
+     "version_date": "2026-11-16"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 1226,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "a751654b5f3250412d07ddea5bd8f16b5c4980caaf35b1343d1b30b1ef514c0b",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a1"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 2041,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "8a530801827076fd42bd0751c5a344db2033dce6b7929e9ce182d792f67b4afd",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a2"
+    },
+    "act:BOE-A-2015-10565@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 1176,
+     "fetched_at": "2026-11-16T09:51:29Z",
+     "run": "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "sha256": "ab76c2102574d35b45e2432c3377f9a8f1310ed2ff09324f6f1945ce0a251e13",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565#a3"
+    },
+    "act:BOE-A-2015-10566@2026-11-16": {
+     "act_id": "BOE-A-2015-10566",
+     "act_title": "Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.",
+     "bytes": 843327,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566",
+     "version_date": "2026-11-10"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a1": {
+     "article_file": "official/a1.xml",
+     "bytes": 655,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "41d67622c82df49082262179047af48cbd44ad400ce668c02ba70ff4a7db9ef7",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a1"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a2": {
+     "article_file": "official/a2.xml",
+     "bytes": 1801,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "2f14864fc97f4fea3a49d88201e23db7350ddb34fa34a2212361f7ec8d289117",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a2"
+    },
+    "act:BOE-A-2015-10566@2026-11-16:a3": {
+     "article_file": "official/a3.xml",
+     "bytes": 2861,
+     "fetched_at": "2026-11-16T09:51:34Z",
+     "run": "run-20261116-es-ley40-2015-regimen-local",
+     "sha256": "421344610970191e32ef13b45a5ddb66409714db6df777ee27a5e340aff8d030",
+     "url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566#a3"
+    }
+   },
+   "notes": {
+    "last_run": "2026-11-16T09:51:40Z",
+    "runs": [
+     "run-20261116-es-const1978-constitucion-espanola",
+     "run-20261116-es-ley39-2015-procedimiento-administrativo",
+     "run-20261116-es-ley40-2015-regimen-local"
+    ]
+   }
+  },
   "fr": {
    "items": {
     "D641-10-1": {

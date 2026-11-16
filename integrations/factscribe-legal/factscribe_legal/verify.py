@@ -112,6 +112,9 @@ def verify(project_dir, provisions_dir, reference_date, view_path=None):
         if src.endswith(".it.card.txt"):
             # 意大利证据卡：归意大利专闸（verify-it）判，这里跳过
             continue
+        if src.endswith(".es.card.txt"):
+            # 西班牙证据卡：归西班牙专闸（verify-es）判，这里跳过
+            continue
         m = PROV_RE.match(src)
         if not m:
             continue
@@ -218,6 +221,9 @@ def verify(project_dir, provisions_dir, reference_date, view_path=None):
             continue
         if key.startswith("art-it-"):
             # 意大利法条引用归意大利专闸（verify-it）判，这里跳过
+            continue
+        if key.startswith("art-es-"):
+            # 西班牙法条引用归西班牙专闸（verify-es）判，这里跳过
             continue
         if key.startswith("art:"):
             num = key[4:]

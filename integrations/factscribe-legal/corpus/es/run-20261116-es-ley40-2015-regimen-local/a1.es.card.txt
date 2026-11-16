@@ -1,0 +1,22 @@
+# 西班牙法条证据卡（派生件；官方 BOE 合并文本整件与条文切片哈希钉在这里）
+ACT_ID: BOE-A-2015-10566
+ACT_ELI: https://www.boe.es/eli/es/l/2015/10/01/40
+ACT_TITLE: Ley 40/2015, de 1 de octubre, de Régimen Jurídico del Sector Público.
+ACT_NUMBER: 40/2015
+BLOCK_ID: a1
+ARTICLE_NUM: 1
+ARTICLE_TITLE: Artículo 1
+VERSION_DATE: 2026-11-10
+FETCH_DATE: 2026-11-16
+REFERENCE_DATE: 2026-11-16
+SOURCE_FILE: official/act.xml
+SOURCE_URL: https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10566
+OFFICIAL_XML_SHA256: 917fd26e42be75996607957107195780ad8ca824da3cf2e577a7d67496bfc21a
+ARTICLE_SHA256: 41d67622c82df49082262179047af48cbd44ad400ce668c02ba70ff4a7db9ef7
+TEXT_CHARS: 387
+TEXT_STATUS: texto consolidado de carácter meramente informativo
+LICENCE: Condiciones de reutilización de la AEBOE (Resolución de la Agencia de 27 de junio de 2024)
+ATTRIBUTION: Fuente de los datos: Agencia Estatal Boletín Oficial del Estado (https://www.boe.es/)
+FETCHED_AT: 2026-11-16T09:51:34Z
+--- OFFICIAL TEXT ---
+Artículo 1. Objeto. La presente Ley establece y regula las bases del régimen jurídico de las Administraciones Públicas, los principios del sistema de responsabilidad de las Administraciones Públicas y de la potestad sancionadora, así como la organización y funcionamiento de la Administración General del Estado y de su sector público institucional para el desarrollo de sus actividades.

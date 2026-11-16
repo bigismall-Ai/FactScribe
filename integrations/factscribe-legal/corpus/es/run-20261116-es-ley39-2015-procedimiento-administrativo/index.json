@@ -1,0 +1,57 @@
+{
+ "act_eli": "https://www.boe.es/eli/es/l/2015/10/01/39",
+ "act_id": "BOE-A-2015-10565",
+ "act_number": "39/2015",
+ "act_range": "Ley",
+ "act_title": "Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo Común de las Administraciones Públicas.",
+ "articles": {
+  "a1": {
+   "article_bytes": 1226,
+   "article_file": "official/a1.xml",
+   "article_sha256": "a751654b5f3250412d07ddea5bd8f16b5c4980caaf35b1343d1b30b1ef514c0b",
+   "block_id": "a1",
+   "card_file": "a1.es.card.txt",
+   "card_sha256": "180f203d7b0851c469645ad183133113a9c427d826575b2c3cb67cedbeebd439",
+   "num": "1",
+   "text_chars": 919,
+   "text_sha256": "67375f29980b0aff9578742ca970c839d70b2e62ba9e1ab30b0d530a3a3301ae",
+   "title": "Artículo 1"
+  },
+  "a2": {
+   "article_bytes": 2041,
+   "article_file": "official/a2.xml",
+   "article_sha256": "8a530801827076fd42bd0751c5a344db2033dce6b7929e9ce182d792f67b4afd",
+   "block_id": "a2",
+   "card_file": "a2.es.card.txt",
+   "card_sha256": "44656da0ed57670fa459d345087ea36677d84a0473dbf51ec22ab079a5b2e026",
+   "num": "2",
+   "text_chars": 1411,
+   "text_sha256": "9e14abb103b8a173bf123be59039fdbc4a785b117364a87170f01f37d934301f",
+   "title": "Artículo 2"
+  },
+  "a3": {
+   "article_bytes": 1176,
+   "article_file": "official/a3.xml",
+   "article_sha256": "ab76c2102574d35b45e2432c3377f9a8f1310ed2ff09324f6f1945ce0a251e13",
+   "block_id": "a3",
+   "card_file": "a3.es.card.txt",
+   "card_sha256": "c74f3e71b4073ca4b1061ee00182a124fa21c3f8c2b7241fd83587bac260b3ce",
+   "num": "3",
+   "text_chars": 802,
+   "text_sha256": "bc10ce9256ad7641b601963beeb39fa5d0ab8d110684a22b0230e45f481f5941",
+   "title": "Artículo 3"
+  }
+ },
+ "estado_consolidacion": "Finalizado",
+ "fecha_disposicion": "20151001",
+ "fecha_publicacion": "20151002",
+ "fecha_vigencia": "20161002",
+ "fetch_reference_date": "2026-11-16",
+ "reference_date": "2026-11-16",
+ "source_bytes": 484176,
+ "source_file": "official/act.xml",
+ "source_sha256": "affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57",
+ "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565",
+ "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10565",
+ "version_date": "2026-11-16"
+}

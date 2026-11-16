@@ -18,6 +18,12 @@ LEGAL-TAKEOVER.md 松尾账 2.2）。本件把再取方法收编进仓，消除�
 3. 规模闸：默认 sample 模式每源只取少量样例（默认 ≤10 件，本批实跑各取 2–3）；
    bulk 全量必须显式 --bulk 且先打印预计请求数要人确认（--yes 才动）。
 
+TLS 纪律：证书验证**永不关闭**（fail-closed）。若本机 CA 束缺某个信任根
+（实测过：macOS 系统 cert.pem 缺 GlobalSign Root R46，api.normattiva.it
+2025-10 起的新链验不过），脚本按「系统默认 → 常见系统束 → state/cacert-mozilla.pem
+→ certifi」逐个换信任根重试；把 `curl.se/ca/cacert.pem` 下载一份存到
+`<corpus>/state/cacert-mozilla.pem` 即愈（state 目录已在 .gitignore 排除该文件）。
+
 用法
 ----
   # 抽样（本批交付的口径）
@@ -77,12 +83,14 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+import http.cookiejar as http_cookiejar
 import io
 import json
 import os
 import random
 import re
 import shutil
+import ssl
 import sys
 import tarfile
 import tempfile
@@ -173,13 +181,57 @@ class PoliteHttp:
     """
 
     def __init__(self, interval_min=DEFAULT_INTERVAL_MIN,
-                 interval_max=DEFAULT_INTERVAL_MAX):
+                 interval_max=DEFAULT_INTERVAL_MAX, ca_extra_paths=None):
         self.interval_min = max(float(interval_min), MIN_INTERVAL_S)
         if float(interval_min) < MIN_INTERVAL_S:
             log("[polite] 请求间隔下限 %ss 锁死，--interval-min 已被抬到下限" % MIN_INTERVAL_S)
         self.interval_max = max(float(interval_max), self.interval_min)
         self.request_count = 0
         self.gap_log = []          # 每次随机间隔实值（礼貌机制自证用）
+        # CA 束候选：默认 → 常见系统路径 → 语料目录里的 Mozilla 束 → certifi。
+        # ⚠️ 证书验证永不关闭（fail-closed）；只是逐个换「信任根来源」。
+        #   本机踩过的坑：macOS 系统 cert.pem 与部分 venv OpenSSL 缺
+        #   GlobalSign Root R46（api.normattiva.it 2025 年换的新链），
+        #   放一份 curl.se/ca/cacert.pem 到 <corpus>/state/cacert-mozilla.pem 即愈。
+        self._ca_paths = []
+        for p in ["/etc/ssl/certs/ca-certificates.crt",   # Debian/Ubuntu
+                  "/etc/pki/tls/cert.pem",                # RHEL/Fedora
+                  "/etc/ssl/cert.pem",                    # macOS
+                  ] + list(ca_extra_paths or []):
+            if p and p not in self._ca_paths:
+                self._ca_paths.append(p)
+        self._ctx_candidates = None
+        self._ctx_idx = 0
+        self._ctx = None
+
+    def _contexts(self):
+        if self._ctx_candidates is None:
+            cands = [("系统默认", ssl.create_default_context())]
+            for p in self._ca_paths:
+                if os.path.exists(p):
+                    try:
+                        cands.append(("束 %s" % os.path.basename(p),
+                                      ssl.create_default_context(cafile=p)))
+                    except ssl.SSLError:
+                        pass
+            try:
+                import certifi
+                cands.append(("certifi",
+                              ssl.create_default_context(cafile=certifi.where())))
+            except ImportError:
+                pass
+            self._ctx_candidates = cands
+            self._ctx_idx = 0
+            self._ctx = cands[0][1]
+        return self._ctx_candidates
+
+    def _next_context(self):
+        cands = self._contexts()
+        if self._ctx_idx + 1 < len(cands):
+            self._ctx_idx += 1
+            self._ctx = cands[self._ctx_idx][1]
+            return cands[self._ctx_idx][0]
+        return None
 
     def _polite_gap(self, url):
         gap = random.uniform(self.interval_min, self.interval_max)
@@ -204,22 +256,33 @@ class PoliteHttp:
         except Exception:
             return None
 
-    def request(self, url, method="GET", headers=None, data=None, timeout=90):
-        """返回 dict(status, headers, body)。失败按退避重试，穷尽即抛 FetchError。"""
+    def request(self, url, method="GET", headers=None, data=None, timeout=90,
+                jar=None):
+        """返回 dict(status, headers, body)。失败按退避重试，穷尽即抛 FetchError。
+
+        jar：可选 http.cookiejar.CookieJar —— Normattiva 的 ELI 页→caricaAKN
+        两步要同一个 servlet 会话（JSESSIONID + NCC 亲和），传同一只 jar 即可。
+        """
         last_err = None
-        for attempt in range(1, MAX_ATTEMPTS + 1):
+        attempt = 0
+        self._contexts()  # 初始化 CA 束候选（验证始终开启）
+        while attempt < MAX_ATTEMPTS:
             self._polite_gap(url)
             self.request_count += 1
             try:
                 req = urllib.request.Request(
                     url, data=data, method=method,
                     headers={"User-Agent": USER_AGENT, **(headers or {})})
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                handlers = [urllib.request.HTTPSHandler(context=self._ctx)]
+                if jar is not None:
+                    handlers.append(urllib.request.HTTPCookieProcessor(jar))
+                opener = urllib.request.build_opener(*handlers)
+                with opener.open(req, timeout=timeout) as resp:
                     body = resp.read()
                     log("[req]    %s %s -> %s (%d bytes)"
                         % (method, url, resp.status, len(body)))
                     return {"status": resp.status, "headers": dict(resp.headers),
-                            "body": body}
+                            "body": body, "final_url": resp.geturl()}
             except urllib.error.HTTPError as e:
                 last_err = e
                 log("[req]    %s %s -> HTTP %s" % (method, url, e.code))
@@ -242,6 +305,24 @@ class PoliteHttp:
                 detail = e.read(400).decode("utf-8", "replace") if e.fp else ""
                 raise FetchError("HTTP %s（不重试）：%s %s :: %s"
                                  % (e.code, method, url, detail))
+            except urllib.error.URLError as e:
+                reason = getattr(e, "reason", None)
+                if isinstance(reason, ssl.SSLCertVerificationError):
+                    label = self._next_context()
+                    if label is not None:
+                        log("[tls]    证书验证失败（当前 CA 束不含该信任根）"
+                            "-> 换候选：%s（验证始终开启，绝不关闭）" % label)
+                        continue  # 不算退避：换信任根立即重试同一请求
+                attempt += 1
+                last_err = e
+                delay = min(BACKOFF_CAP_S,
+                            BACKOFF_START_S * (BACKOFF_FACTOR ** (attempt - 1)))
+                log("[backoff] %s: %s on attempt %d/%d -> sleep %.0fs"
+                    % (type(e).__name__, str(e)[:120], attempt, MAX_ATTEMPTS, delay))
+                if attempt < MAX_ATTEMPTS:
+                    time.sleep(delay)
+                    continue
+                break
             except Exception as e:  # 网络瞬断类
                 last_err = e
                 delay = min(BACKOFF_CAP_S,
@@ -335,7 +416,7 @@ def write_gzip_jsonl(path, records):
 def collect_files(root, rel_ignore_prefixes=("raw/",)):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in ("raw", "state"))
+        dirnames[:] = sorted(d for d in dirnames if d != "raw")
         for name in sorted(filenames):
             if name == MANIFEST_NAME:
                 continue
@@ -343,6 +424,8 @@ def collect_files(root, rel_ignore_prefixes=("raw/",)):
             rel = os.path.relpath(full, root).replace(os.sep, "/")
             if any(rel.startswith(p) for p in rel_ignore_prefixes):
                 continue
+            if rel == "state/cacert-mozilla.pem":
+                continue  # 第三方信任束，不入库也不入账（会过时）
             out.append(rel)
     return out
 
@@ -415,14 +498,17 @@ def parse_dila_article(xml_bytes):
     if bloc is not None:
         text = " ".join(t.strip() for t in bloc.itertext() if t.strip())
     code_id, code_title = "", ""
-    ctx = spec.find("CONTEXTE") if spec is not None else None
+    ctx = root.find("CONTEXTE")  # CONTEXTE 挂在 ARTICLE 根下（实测非 META_SPEC 内）
     if ctx is not None:
         texte = ctx.find("TEXTE")
         if texte is not None:
-            titre = texte.find("TITRE_TXT")
-            if titre is not None:
-                code_id = titre.get("id") or ""
-                code_title = titre.get("c_titre_txt") or ""
+            # 现行版 TITRE_TXT：属_CODES 族时 c_titre_txt=Code xxx，其余常为 c_titre_court
+            for titre in texte.findall("TITRE_TXT"):
+                if (titre.get("id_txt") or titre.get("id") or "").startswith("LEGITEXT"):
+                    code_id = titre.get("id_txt") or titre.get("id") or ""
+                    code_title = titre.get("c_titre_txt") \
+                        or titre.get("c_titre_court") or ""
+                    break
     return {
         "legiarti": legiarti,
         "num": _dila_text(art, "NUM"),
@@ -533,16 +619,26 @@ def _fr_materialize(extract_dir, fr_dir, state, max_items, bulk, pool_asof,
             info["raw"] = raw
             cands.append(info)
     log("[scan]   增量内共 %d 个 XML，其中条文 %d 条" % (seen_files, len(cands)))
-    # 确定性选样：先 Code du travail，再按编号排；只取现行有效且正文带数字的
-    cands.sort(key=lambda c: (0 if c["code_title"] == FR_PREFER_CODE else 1,
-                              c["code_title"], c["num"]))
     if not bulk:
+        # 确定性选样：编号干净的条文优先（码式 L123-45 / R12 / 纯数字），
+        # 排除附件表格（Annexe…、带空格编号）与超长正文；现行有效且正文带数字。
+        def _rank(c):
+            num = c["num"]
+            style = 0 if re.fullmatch(r"[A-Z]\d+(?:-\d+)*", num) else \
+                (1 if num.isdigit() else 9)
+            return (c["code_title"] != FR_PREFER_CODE, style,
+                    len(c["text"]), c["code_title"], num)
+        cands.sort(key=_rank)
         picked, seen_num = [], set()
         for c in cands:
             if c["etat"] != "VIGUEUR" or not c["text"]:
                 continue
             if not re.search(r"\d", c["text"]):
                 continue
+            if not re.fullmatch(r"[A-Za-z0-9-]+", c["num"]):
+                continue  # 文件名要能当路径；带空格/括号的编号留给 bulk
+            if len(c["text"]) > 20000:
+                continue  # 附件大表不进 sample
             if c["num"] in seen_num:
                 continue
             seen_num.add(c["num"])
@@ -550,6 +646,7 @@ def _fr_materialize(extract_dir, fr_dir, state, max_items, bulk, pool_asof,
             if max_items and len(picked) >= max_items:
                 break
     else:
+        cands.sort(key=lambda c: (c["code_title"], c["num"]))
         picked = cands
     if not picked:
         raise FetchError("增量里没有可用的现行条文（多半是空批；换一天重跑即可）")
@@ -727,10 +824,13 @@ def fetch_cn(http, corpus_root, state, max_items, mode, reference_date, yes):
             break
         resp = cn_search(http, query, page=1, size=10)
         rows = resp.get("rows") or []
-        # 同名多版本：sxx 3(有效) 优先，其次公布日新；与 cn_corpus._prefer 同口径
+        # 选代表：标题与查询**完全同名**的现行版优先（verify-cn 本就按标题精确索引）；
+        # 同名多版本再按 sxx 3(有效) 优先、公布日新者优先（与 cn_corpus._prefer 同口径）。
         def _key(r):
-            return (0 if r.get("sxx") == 3 else 1, r.get("gbrq") or "")
-        rows = sorted(rows, key=_key)
+            clean = _cn_clean_title(r.get("title"))
+            return (clean == query, r.get("sxx") == 3,
+                    r.get("gbrq") or "0000-00-00")
+        rows = sorted(rows, key=_key, reverse=True)
         if not rows:
             log("[warn]  CN 查询无结果：%s" % query)
             continue
@@ -855,17 +955,52 @@ def it_search_act(http, anno, numero):
 
 
 def it_fetch_akn(http, codice_redaz, data_gu, data_vigenza):
-    """caricaAKN 取整件 AKN XML。dataGU/dataVigenza 都是 YYYYMMDD 紧凑形。"""
-    url = ("%s?dataGU=%s&codiceRedaz=%s&dataVigenza=%s"
-           % (IT_AKN_URL, data_gu, urllib.request.quote(codice_redaz),
-              data_vigenza))
-    r = http.request(url, headers={"Accept": "application/xml, text/xml, */*",
-                                   "Referer": "https://www.normattiva.it/"})
-    body = r["body"]
-    if body.lstrip()[:5] != b"<?xml" and b"<akomaNtoso" not in body[:2000]:
-        raise FetchError("caricaAKN 返回的不是 AKN/XML（可能是 WAF 拦截页）：%s "
-                         ":: %s" % (url, body[:200].decode("utf-8", "replace")))
-    return url, body
+    """取整件 AKN XML。dataGU 传 YYYY-MM-DD，data_vigenza 传 YYYYMMDD 紧凑形。
+
+    官方网站的正确打开姿势（2026-11-16 实测；与官方 OpenData 消费者一致）：
+    ① 先 GET ELI CONSOLIDATED 页建立 servlet 会话（JSESSIONID + NCC 亲和；
+       Set-Cookie 由 CookieJar 接住）；② 从页面里解析出**唯一一条**
+       caricaAKN 链接（其 dataGU/codiceRedaz/dataVigenza 必须与本次取件参数
+       一致，防串件）；③ 带同一会话 GET 该链接拿 AKN XML。
+    ⚠️ www 站拒绝 OpenData 门户的 Origin 头（HTTP 409），全程不带 Origin。
+    """
+    eli_url = ("https://www.normattiva.it/eli/id/%s/%s/%s/%s/CONSOLIDATED/%s"
+               % (data_gu[0:4], data_gu[5:7], data_gu[8:10],
+                  urllib.request.quote(codice_redaz, safe=""), data_vigenza))
+    jar = http_cookiejar.CookieJar()
+    web_headers = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                   "Accept-Language": "it-IT,it;q=0.9,en;q=0.7"}
+    r = http.request(eli_url, headers=web_headers, jar=jar)
+    if not r.get("final_url", eli_url).startswith("https://www.normattiva.it/"):
+        raise FetchError("ELI 页跳出了官方域：%s -> %s" % (eli_url, r["final_url"]))
+    html = r["body"].decode("utf-8", "replace")
+    from html import unescape
+    from urllib.parse import parse_qs
+    links = [unescape(x) for x in
+             re.findall(r'href="(/do/atto/caricaAKN\?[^"]+)"', html)]
+    wanted = None
+    for link in set(links):
+        q = parse_qs(link.split("?", 1)[1] if "?" in link else "")
+        if (q.get("dataGU", [""])[0] == data_gu.replace("-", "")
+                and q.get("codiceRedaz", [""])[0] == codice_redaz
+                and q.get("dataVigenza", [""])[0] == data_vigenza):
+            wanted = link
+            break
+    if not wanted:
+        raise FetchError("ELI 页里没有参数一致的 caricaAKN 链接（dataGU=%s "
+                         "codiceRedaz=%s dataVigenza=%s）；页面里共 %d 条 "
+                         "caricaAKN 链接" % (data_gu, codice_redaz, data_vigenza,
+                                             len(set(links))))
+    akn_url = "https://www.normattiva.it" + wanted
+    r2 = http.request(akn_url, jar=jar,
+                      headers={"Accept": "application/xml, text/xml, */*",
+                               "Accept-Language": "it-IT,it;q=0.9",
+                               "Referer": eli_url})
+    body = r2["body"]
+    if b"<akomaNtoso" not in body[:4000]:
+        raise FetchError("caricaAKN 返回的不是 AKN/XML：%s :: %s"
+                         % (akn_url, body[:200].decode("utf-8", "replace")))
+    return akn_url, body
 
 
 def _it_meta_from_akn(raw):
@@ -896,15 +1031,12 @@ def _it_meta_from_akn(raw):
 
 def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
     ref_compact = reference_date.replace("-", "")
-    run_id = "run-%s-it" % ref_compact
-    run_dir = os.path.join(corpus_root, "it", run_id)
-    off_dir = os.path.join(run_dir, "official")
-    os.makedirs(off_dir, exist_ok=True)
 
     acts = IT_SAMPLE_ACTS
     if mode == "bulk":
         log("[plan]  IT bulk：默认样单 %d 部法律整件（可改 IT_SAMPLE_ACTS 扩单）" % len(acts))
-        log("[plan]   预计请求：每部 2 次（检索 1 + caricaAKN 1）= %d 次" % (len(acts) * 2))
+        log("[plan]   预计请求：每部 3 次（检索 1 + ELI 页 1 + caricaAKN 1）= %d 次"
+            % (len(acts) * 3))
         if not yes:
             if sys.stdin.isatty():
                 if input("确认开跑？[y/N] ").strip().lower() not in ("y", "yes"):
@@ -914,21 +1046,18 @@ def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
                 log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
                 return 2
 
-    index = None
-    idx_path = os.path.join(run_dir, "index.json")
-    if os.path.exists(idx_path):
-        with open(idx_path, encoding="utf-8") as fh:
-            index = json.load(fh)
-    else:
-        index = {"articles": {}}
-
-    ok_acts = 0
+    # 每部法独立 run 目录（verify-it 的 --corpus 一目录一法）
     for anno, numero in acts:
+        run_id = "run-%s-it-%sn%s" % (ref_compact, anno, numero)
+        run_dir = os.path.join(corpus_root, "it", run_id)
+        off_dir = os.path.join(run_dir, "official")
+        os.makedirs(off_dir, exist_ok=True)
+        idx_path = os.path.join(run_dir, "index.json")
+
         item_id = "act:%s/%s@%s" % (anno, numero, ref_compact)
-        if state.fetched("it", item_id) and os.path.exists(
-                os.path.join(off_dir, "act.akn.xml")):
-            log("[skip]  it:%s 已取过（state 命中）" % item_id)
-            ok_acts += 1
+        if state.fetched("it", item_id) and os.path.exists(idx_path) and \
+                os.path.exists(os.path.join(off_dir, "act.akn.xml")):
+            log("[skip]  it:%s 已取过（state 命中）：%s" % (item_id, run_id))
             continue
         log("[pick]  IT act: anno=%s numero=%s vigenza=%s" % (anno, numero, ref_compact))
         codice_redaz, data_gu, titolo = it_search_act(http, anno, numero)
@@ -937,31 +1066,36 @@ def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
                              % (anno, numero))
         log("[ok]    IT 检索命中：codiceRedaz=%s dataGU=%s《%s》"
             % (codice_redaz, data_gu, titolo[:60]))
-        akn_url, raw = it_fetch_akn(http, codice_redaz, data_gu.replace("-", ""),
-                                    ref_compact)
+        akn_url, raw = it_fetch_akn(http, codice_redaz, data_gu, ref_compact)
         urn, eli, version_date, doc_title = _it_meta_from_akn(raw)
         act_path = os.path.join(off_dir, "act.akn.xml")
         with open(act_path, "wb") as fh:
             fh.write(raw)
         state.mark("it", item_id, url=akn_url, sha256=sha256_bytes(raw),
                    bytes_=len(raw), codice_redazionale=codice_redaz,
-                   data_gu=data_gu, act_urn=urn, act_title=titolo)
-        # 条文切片 + 卡（取前 max_items 条，编号确定性）
+                   data_gu=data_gu, act_urn=urn, act_title=titolo, run=run_id)
+        # 条文切片 + 卡（sample：编号序取前 max_items 条可用的；排除超长附件表）
         eids = sorted({m.group(1).decode() for m in
                        IT_ARTICLE_EID_RE.finditer(raw)},
                       key=lambda e: int(e.split("_")[1]))
-        picked = eids if mode == "bulk" else eids[:max_items]
-        articles = index.get("articles") or {}
-        for eid in picked:
+        articles = {}
+        n_picked = 0
+        for eid in eids:
+            if mode == "sample" and n_picked >= max_items:
+                break
             m = re.search(rb'<article eId="' + eid.encode() + rb'">(.*?)</article>',
                           raw, re.S)
             if not m:
                 continue
             blob = m.group(0)
-            with open(os.path.join(off_dir, "%s.xml" % eid), "wb") as fh:
-                fh.write(blob)
             text = re.sub(r"<[^>]+>", " ", blob.decode("utf-8", "replace"))
             text = re.sub(r"\s+", " ", text).strip()
+            if mode == "sample" and len(text) > 20000:
+                log("[skip]  it:%s 正文 %d chars 超长（附件表类），sample 跳过"
+                    % (eid, len(text)))
+                continue
+            with open(os.path.join(off_dir, "%s.xml" % eid), "wb") as fh:
+                fh.write(blob)
             card = "\n".join([
                 "# 意大利法条证据卡（派生件；官方 AKN 整件与条文切片哈希钉在这里）",
                 "ACT_URN: %s" % urn,
@@ -997,7 +1131,8 @@ def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
             }
             state.mark("it", "%s:%s" % (item_id, eid), url=akn_url + "#" + eid,
                        sha256=sha256_bytes(blob), bytes_=len(blob),
-                       article_file="official/%s.xml" % eid)
+                       run=run_id, article_file="official/%s.xml" % eid)
+            n_picked += 1
             log("[ok]    it:%s 切片+卡（%d chars）" % (eid, len(text)))
         index = {
             "act_key": "%s/%s" % (anno, numero),
@@ -1016,14 +1151,15 @@ def fetch_it(http, corpus_root, state, max_items, mode, reference_date, yes):
             "reference_date": reference_date,
             "articles": articles,
         }
-        ok_acts += 1
-    with open(idx_path, "w", encoding="utf-8") as fh:
-        json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
-        fh.write("\n")
-    state.note("it", "run", run_id)
+        with open(idx_path, "w", encoding="utf-8") as fh:
+            json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
+            fh.write("\n")
+        log("[done]  IT：%s 条文卡 %d 张，整件 %d bytes"
+            % (run_id, len(articles), len(raw)))
     state.note("it", "last_run", now_iso())
-    log("[done]  IT：run=%s 条文卡 %d 张，整件 %d bytes"
-        % (run_id, len(index["articles"]), index.get("source_bytes") or 0))
+    state.note("it", "runs", sorted(
+        d for d in os.listdir(os.path.join(corpus_root, "it"))
+        if d.startswith("run-")))
     return 0
 
 
@@ -1129,7 +1265,7 @@ def materialize(corpus_root, project_dir):
     if facts_fr:
         with open(os.path.join(project_dir, "facts", "10-fr-provisions.toml"),
                   "w", encoding="utf-8") as fh:
-            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join(facts_fr))
+            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_fr))
 
     # ---- CN ----
     cat_path = os.path.join(corpus_root, "cn", "catalog.jsonl.gz")
@@ -1176,16 +1312,27 @@ def materialize(corpus_root, project_dir):
     if facts_cn:
         with open(os.path.join(project_dir, "facts", "20-cn-provisions.toml"),
                   "w", encoding="utf-8") as fh:
-            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join(facts_cn))
+            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_cn))
 
     # ---- IT ----
+    # verify-it 一目录一法；多法语料时取「条文卡最多」的那个 run 物化（确定性：
+    # 同数取名字序），其余 run 留在语料里可单独 --corpus 验证。
     it_root = os.path.join(corpus_root, "it")
     if os.path.isdir(it_root):
-        runs = sorted(d for d in os.listdir(it_root) if d.startswith("run-"))
-        if runs:
-            run_dir = os.path.join(it_root, runs[-1])
+        candidates = []
+        for name in sorted(d for d in os.listdir(it_root) if d.startswith("run-")):
+            idx = os.path.join(it_root, name, "index.json")
+            if os.path.exists(idx):
+                with open(idx, encoding="utf-8") as fh:
+                    d = json.load(fh)
+                candidates.append((-len(d.get("articles") or {}), name))
+        if candidates:
+            candidates.sort()
+            run_name = candidates[0][1]
+            run_dir = os.path.join(it_root, run_name)
             with open(os.path.join(run_dir, "index.json"), encoding="utf-8") as fh:
                 index = json.load(fh)
+            log("[pick]  IT run for facts: %s" % run_name)
             for eid in sorted(index.get("articles", {}),
                               key=lambda e: int(e.split("_")[1])):
                 meta = index["articles"][eid]
@@ -1222,7 +1369,7 @@ def materialize(corpus_root, project_dir):
     if facts_it:
         with open(os.path.join(project_dir, "facts", "30-it-provisions.toml"),
                   "w", encoding="utf-8") as fh:
-            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join(facts_it))
+            fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_it))
 
     # ---- CASE（有真实官方正文才物化）----
     case_off = os.path.join(corpus_root, "case", "official")
@@ -1279,7 +1426,7 @@ def materialize(corpus_root, project_dir):
             ])
             with open(os.path.join(project_dir, "facts", "40-case.toml"),
                       "w", encoding="utf-8") as fh:
-                fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join(facts_case))
+                fh.write('schema = "paperkit-fact/3.0"\n\n' + "\n".join("\n".join(b) for b in facts_case))
             with open(os.path.join(prj_run, "result.json"), "w",
                       encoding="utf-8") as fh:
                 json.dump({"run_id": run, "tool": "fetch_corpus.py"}, fh)
@@ -1292,11 +1439,12 @@ def materialize(corpus_root, project_dir):
     with open(os.path.join(project_dir, "paper.tex"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(tex_lines) + "\n")
 
-    total = sum(x.count("[[fact]]") for x in (facts_fr, facts_cn, facts_it))
+    def _count(blocks):
+        return sum(b.count("[[fact]]") for b in blocks)
     log("[done]  materialize：%s" % project_dir)
-    log("        facts: FR %d + CN %d + IT %d 条（共 %d）；paper.tex 引用 %d 行"
-        % (facts_fr.count("[[fact]]"), facts_cn.count("[[fact]]"),
-           facts_it.count("[[fact]]"), total, len(tex_lines) - 3))
+    log("        facts: FR %d + CN %d + IT %d 条；paper.tex 引用 %d 行"
+        % (_count(facts_fr), _count(facts_cn), _count(facts_it),
+           len(tex_lines) - 3))
     log("        四闸验证命令：")
     log("          PYTHONPATH=<integrations/factscribe-legal> python3 -m factscribe_legal verify "
         "--project %s --corpus <corpus>/fr --date <参考日> --view <corpus>/fr/view_current.jsonl"
@@ -1359,7 +1507,10 @@ def main(argv=None):
     if args.mode == "bulk" and args.source == "case":
         ap.error("case 源没有 bulk（检索接口需登录，见 fetch_case_probe）")
 
-    http = PoliteHttp(args.interval_min, args.interval_max)
+    http = PoliteHttp(args.interval_min, args.interval_max,
+                      ca_extra_paths=[os.path.join(
+                          os.path.abspath(args.corpus_root), "state",
+                          "cacert-mozilla.pem")])
     corpus_root = os.path.abspath(args.corpus_root)
     state = State(os.path.join(corpus_root, STATE_REL))
     log("== fetch_corpus %s | mode=%s source=%s ref=%s ==" %

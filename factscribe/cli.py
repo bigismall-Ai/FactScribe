@@ -38,7 +38,8 @@ from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
 from .protect import compare as compare_protect
 from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, ReportError, _artifact_path, _config_block,
-                     _emit, _human_audit, _human_check, _payload,
+                     _emit, _human_audit, _human_audit_domains, _human_check,
+                     _payload,
                      _rel_posix, _resolve_in_ws, _severity_of, _sha256_of,
                      _toml_str, _ws_root, _write_atomic, check_report,
                      evidence_digest, load_report, lock_report, report_card,
@@ -1054,13 +1055,22 @@ def cmd_audit(args) -> int:
             cfg, facts, sections, resolve=resolve)
         code = checks_aggregate_exit(red, yellow, strict,
                                      integrity_first=cfg.is_v3)
+        domains = list(cfg.checks_packages)   # 走到这说明全部已注册
+        if any(d != "paper" for d in domains):
+            # 多域：人读报告按域分节（paper 节在前，其余域按点名序在后）；
+            # 结论行红黄计数是跨域合并数（与折算同口径）。单 paper 点名
+            # 保持 M1 版式不变。
+            text = _human_audit_domains(cfg, red, yellow, hints, summary,
+                                        unresolved, code, domains)
+        else:
+            text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     else:
         # 缺省（无 [checks]，或节存在但省 packages）：宪法保证——行为与槽
         # 引入前逐字节一致（SPEC-CHECKS §5.2；[budget]/[evidence] 先例口径）。
         red, yellow, hints, summary, unresolved = run_audit(
             cfg, facts, sections, resolve=resolve)
         code = _aggregate_exit(red, yellow, strict, integrity_first=cfg.is_v3)
-    text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+        text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     if rule_report.get("present"):
         keys = list(rule_report.get("keys") or [])
         if keys:

@@ -292,12 +292,129 @@ class TestSlotBehavior(LegalSlotCase):
         root = build_legal_project(self.tmp / "p")
         (root / "facts" / "two.toml").write_text(
             '[[fact]]\nid = "FR-BAD"\nclaim = "不存在的法条"\nvalue = "12"\n'
-            'source = "corpus-legal/L9999-99.xml"\n', encoding="utf-8")
+            'source = "results/corpus-legal/L9999-99.xml"\n', encoding="utf-8")
         cfg = load_config(root)
         red, yellow, _h, summary, _u = checks.run_packages(
             cfg, load_facts(cfg), load_sections(cfg))
         self.assertTrue(any(i.code == "LEGAL_PROV_UNKNOWN" for i in red))
         self.assertEqual(summary["by_domain"]["legal"]["red"], 1)
+
+
+# --------------------------------------------------------------------------
+# 端到端（提交在仓的合成演示项目 fixtures/legal-demo）：单命令双域报告
+# --------------------------------------------------------------------------
+
+DEMO = ROOT / "fixtures" / "legal-demo"
+
+
+class TestDualDomainEndToEnd(LegalSlotCase):
+    """验收门 f/g 的常驻面：无 [checks] 单域不变；点名 legal 双域分节；
+    缺语料 fail-closed 亮出；未注册包名 exit 2。"""
+
+    def _audit(self, root, human=False):
+        env = dict(os.environ, PYTHONPATH=str(ROOT))
+        cmd = [sys.executable, "-m", "factscribe", "audit", str(root)]
+        if not human:
+            cmd.append("--json")
+        proc = subprocess.run(cmd, cwd=str(ROOT), env=env,
+                              capture_output=True, text=True)
+        return proc
+
+    def _variant(self, name, mutate):
+        root = self.tmp / name
+        shutil.copytree(DEMO, root)
+        mutate(root)
+        return root
+
+    def test_demo_fixture_dual_domain_json(self):
+        proc = self._audit(DEMO)
+        self.assertEqual(proc.returncode, 1)   # paper 一红（UNMATCHED_NUMBER 7）
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["summary"]["by_domain"],
+                         {"paper": {"red": 1, "yellow": 1, "hints": 0},
+                          "legal": {"red": 0, "yellow": 0, "hints": 0}})
+        for f in payload["findings"]:
+            self.assertIn(f.get("domain"), ("paper", "legal"))
+        self.assertEqual(payload["summary"]["legal"]["gates"]["fr"]["status"],
+                         "ran")
+        self.assertEqual(payload["summary"]["legal"]["date"], "2026-11-14")
+
+    def test_demo_human_report_has_domain_sections_legal_last(self):
+        proc = self._audit(DEMO, human=True)
+        text = proc.stdout
+        self.assertIn("---- 核验域：legal ----", text)
+        self.assertIn("gates   : fr 红0/黄0（ran）", text)
+        self.assertLess(text.index("[黄] 1 处"),
+                        text.index("---- 核验域：legal ----"))
+        self.assertIn("结论：1 红 / 1 黄 → 红（有违例）（退出码 1）", text)
+
+    def test_no_checks_section_is_single_domain_unchanged(self):
+        def strip_checks(root):
+            toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+            head = toml.split("[checks]", 1)[0]
+            (root / "factscribe.toml").write_text(head, encoding="utf-8")
+        root = self._variant("plain", strip_checks)
+        proc_plain = self._audit(root)
+        self.assertEqual(proc_plain.returncode, 1)
+        payload = json.loads(proc_plain.stdout)
+        self.assertNotIn("by_domain", payload["summary"])
+        self.assertNotIn("domain", payload["findings"][0])
+        self.assertNotIn("核验域", self._audit(root, human=True).stdout)
+        # findings 内容与双域跑的 paper 部分逐条相同（去 domain 键后）
+        proc_dual = self._audit(DEMO)
+        dual = json.loads(proc_dual.stdout)
+        strip = lambda fs: sorted((f["severity"], f["code"],
+                                   f.get("location", ""), f["message"])
+                                  for f in fs if f.get("domain") == "paper")
+        self.assertEqual(strip(dual["findings"]),
+                         sorted((f["severity"], f["code"],
+                                 f.get("location", ""), f["message"])
+                                for f in payload["findings"]))
+
+    def test_missing_corpus_fails_closed_in_dual_report(self):
+        def drop_corpus(root):
+            toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+            toml = toml.replace('corpus = "results/corpus-legal"\n', "")
+            (root / "factscribe.toml").write_text(toml, encoding="utf-8")
+        root = self._variant("nocorpus", drop_corpus)
+        proc = self._audit(root)
+        payload = json.loads(proc.stdout)
+        legal_y = [f for f in payload["warnings"]
+                   if f.get("domain") == "legal"]
+        self.assertIn("LEGAL_COVERAGE_GAP", codes_of(legal_y))
+        text = self._audit(root, human=True).stdout
+        self.assertIn("法律域 0 覆盖", text)
+
+    def test_legal_only_run_renders_without_paper_header(self):
+        def legal_only(root):
+            toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+            toml = toml.replace('packages = ["paper", "legal"]',
+                                'packages = ["legal"]')
+            (root / "factscribe.toml").write_text(toml, encoding="utf-8")
+        root = self._variant("legalonly", legal_only)
+        proc = self._audit(root)
+        self.assertEqual(proc.returncode, 0)   # 只跑 legal：全绿
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["summary"]["by_domain"],
+                         {"legal": {"red": 0, "yellow": 0, "hints": 0}})
+        self.assertNotIn("paper", payload["summary"]["by_domain"])
+        text = self._audit(root, human=True).stdout
+        self.assertIn("---- 核验域：legal ----", text)
+        self.assertNotIn("numbers :", text)   # paper 头块不出现
+
+    def test_unregistered_package_is_exit_two(self):
+        def name_astro(root):
+            toml = (root / "factscribe.toml").read_text(encoding="utf-8")
+            toml = toml.replace('packages = ["paper", "legal"]',
+                                'packages = ["paper", "astro"]')
+            (root / "factscribe.toml").write_text(toml, encoding="utf-8")
+        root = self._variant("astro", name_astro)
+        proc = self._audit(root)
+        self.assertEqual(proc.returncode, 2)
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["code"], "CONFIG_INVALID")
+        self.assertIn("astro", payload["findings"][0]["message"])
+        self.assertIn("已注册", payload["findings"][0]["message"])
 
 
 if __name__ == "__main__":

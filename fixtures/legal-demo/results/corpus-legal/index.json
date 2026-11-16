@@ -1,0 +1,13 @@
+{
+  "pool_asof": "2026-11-14",
+  "provisions": {
+    "L3121-27": {
+      "code_id": "LEGITEXT000006072050",
+      "date_debut": "2008-05-01",
+      "date_fin": "",
+      "etat": "VIGUEUR",
+      "legiarti": "LEGIARTI000006331684",
+      "xml_file": "L3121-27.xml"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+[[fact]]
+id = "FR-HOURS"
+claim = "法国标准周工时（合成语料演示，非真实条文）"
+value = "35"
+source = "results/corpus-legal/L3121-27.xml"
+source_sha256 = "sha256:d606875ac0cec22d716f2ba43b8aa2758656af5eae383af614ffcbebe9f86a54"

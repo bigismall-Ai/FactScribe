@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
                         unused_bib_entries, valid_stable_id)
+from .checks import aggregate_exit
 from .config import (Config, ConfigError, _glob_paths, _read_text,
                      all_tex_files, facts_digest, git_commit, load_toml)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
@@ -167,19 +168,10 @@ def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
     return out
 
 
-def _aggregate_exit(red: list[Issue], yellow: list[Issue], strict: bool = False,
-                    integrity_first: bool = False) -> int:
-    if red:
-        codes = {i.exit_code for i in red}
-        if integrity_first and 5 in codes:
-            return 5
-        for code in (8, 1, 5, 7):
-            if code in codes:
-                return code
-        return 1
-    if yellow:
-        return 1 if strict else 3
-    return 0
+# 退出码折算已迁核验槽（factscribe/checks.py，SPEC-CHECKS §2.2 槽第 3 件事）：
+# 折算规则一字不改、值永不变化（包不产生退出码，折算只在槽发生）。
+# 旧名 `_aggregate_exit` 保留为再导出别名，cli/workbench 的既有 import 零改动。
+_aggregate_exit = aggregate_exit
 
 
 def _v3_source_issues(cfg: Config, facts: list[Fact],

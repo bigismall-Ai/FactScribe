@@ -232,6 +232,13 @@ class Config:
     # fact id」，机器照单钉死。键＝节文件名去扩展名。
     evidence_defined: bool = False
     evidence_sections: dict = field(default_factory=dict)  # {节键: [fact id]}
+    # 核验槽（`[checks]`，可选；SPEC-CHECKS §5）。checks_defined=False（无节）
+    # 时槽不启用：audit 行为与槽引入前逐字节一致（宪法保证）。节在场即走槽
+    #（裁定③，2026-11-16）：省 packages ⇒ 槽侧默认 ["paper"]（输出带域标）；
+    # 显式 packages 按点名。
+    checks_defined: bool = False
+    checks_packages: list = field(default_factory=list)   # 点名的包 id（去重保序）
+    checks_tables: dict = field(default_factory=dict)     # {域: 原始子表}，core 只透传
 
     @property
     def is_v3(self) -> bool:
@@ -452,6 +459,66 @@ def section_evidence(cfg: Config, file: str) -> tuple:
     return tuple(cfg.evidence_sections.get(Path(str(file)).stem, ()))
 
 
+# --------------------------------------------------------------------------
+# 核验槽（`[checks]`，可选；SPEC-CHECKS §5）
+# --------------------------------------------------------------------------
+
+CHECKS_TABLE = "checks"
+
+
+def _parse_checks(data: dict, path: Path,
+                  cfg: Config) -> tuple[bool, list, dict]:
+    """读 `[checks]`：返回 (是否声明, packages 点名, {域: 原始子表})。
+
+    没有 `[checks]` ⇒ (False, [], {})——槽不启用，audit 行为与引入前逐字
+    节一致（§5.2 兼容承诺）。节存在但省 `packages` ⇒ checks_defined=True、
+    点名空表——cmd_audit 照样挂槽，槽侧默认 ["paper"]（裁定③，2026-11-16：
+    裸节走槽，输出带 domain 键与 by_domain；发现本体与直跑逐条相同）。
+    `packages` 顺序无关：去重保序。
+
+    顶层只认 `packages` 一个键；其余顶层键若是表按域节透传给槽（键集由
+    该包的卡声明，core 不校验、只透传），非表的值记 CONFIG_UNKNOWN_FIELD
+    告警、不阻断。`[checks]` 不参与形态判定七步，v1/V3 项目都可挂。
+    """
+    raw = data.get(CHECKS_TABLE)
+    if raw is None:
+        return False, [], {}
+    if not isinstance(raw, dict):
+        raise ConfigError("%s 的 [checks] 必须是表（packages ＋ 各域子表），"
+                          "现在是 %r" % (path, raw))
+    packages: list[str] = []
+    packages_raw = raw.get("packages")
+    if packages_raw is not None:
+        if isinstance(packages_raw, str):
+            packages_raw = [packages_raw]
+        if not isinstance(packages_raw, list):
+            raise ConfigError("%s 的 [checks].packages 必须是字符串数组，"
+                              "现在是 %r" % (path, packages_raw))
+        for item in packages_raw:
+            if not isinstance(item, str) or not item.strip():
+                raise ConfigError(
+                    "%s 的 [checks].packages 里有非字符串/空条目：%r"
+                    % (path, item))
+            pid = item.strip()
+            if pid not in packages:
+                packages.append(pid)
+    tables: dict[str, dict] = {}
+    for key, value in raw.items():
+        if key == "packages":
+            continue
+        if not isinstance(key, str) or not key.strip():
+            raise ConfigError("%s 的 [checks] 里有一个非字符串/空键：%r"
+                              % (path, key))
+        if isinstance(value, dict):
+            tables[key.strip()] = dict(value)
+        else:
+            _config_warn(cfg, "CONFIG_UNKNOWN_FIELD",
+                         "[checks] 的顶层键 %r 不是域子表——已忽略"
+                         "（也不参与任何判据）" % key,
+                         field=str(key), location=str(path))
+    return True, packages, tables
+
+
 def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     """旧版：顶层 [project] 表（title/sections/facts/bib/build…），行为不变。"""
     proj = data.get("project")
@@ -492,6 +559,8 @@ def _load_v1_config(root: Path, path: Path, data: dict) -> Config:
     cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
         _parse_budget(data, path)
     cfg.evidence_defined, cfg.evidence_sections = _parse_evidence(data, path)
+    cfg.checks_defined, cfg.checks_packages, cfg.checks_tables = \
+        _parse_checks(data, path, cfg)
     # v1 的未知字段同样不静默（判据仍不看它们，行为不变）。
     _unknown_field_warnings(cfg, proj, V1_KNOWN_FIELDS, path, "[project]")
     return cfg
@@ -562,6 +631,7 @@ V3_KNOWN_FIELDS = {
     "approver_keys_file", "release_keys_file", "image_budget_extra",
     "frac_allow", "inline_images_allow", "numeric_macro_allow", "authors",
     "build", "manifest", "source_root", "bib_allow_unused", "budget", "evidence",
+    "checks",
 }
 
 # `[project]` 里出现这些键才按 v3 读；一个只有 title 的 [project] 仍是 v1
@@ -753,6 +823,8 @@ def _load_v3_config(root: Path, path: Path, data: dict,
     cfg.budget_defined, cfg.budget_default, cfg.budget_sections = \
         _parse_budget(data, path)
     cfg.evidence_defined, cfg.evidence_sections = _parse_evidence(data, path)
+    cfg.checks_defined, cfg.checks_packages, cfg.checks_tables = \
+        _parse_checks(data, path, cfg)
     # 未知字段：允许忽略，但绝不静默（进 --json 的 config.warnings）。
     # 形态 A 的声明在顶层；B/C 在 [project] 表里。两处都查，免得换个写法
     # 就把打错的字段名吞掉。

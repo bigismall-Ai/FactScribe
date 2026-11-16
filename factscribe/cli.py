@@ -14,6 +14,8 @@ from pathlib import Path
 
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check, source_base
+from .checks import aggregate_exit as checks_aggregate_exit
+from .checks import run_packages
 from .brief import build_brief
 from .brief import payload as brief_payload
 from .brief import render as render_brief
@@ -36,7 +38,8 @@ from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
 from .protect import compare as compare_protect
 from .protect import render_human as render_protect
 from .report import (PREAMBLE_TEXT, ReportError, _artifact_path, _config_block,
-                     _emit, _human_audit, _human_check, _payload,
+                     _emit, _human_audit, _human_audit_domains, _human_check,
+                     _payload,
                      _rel_posix, _resolve_in_ws, _severity_of, _sha256_of,
                      _toml_str, _ws_root, _write_atomic, check_report,
                      evidence_digest, load_report, lock_report, report_card,
@@ -1043,11 +1046,35 @@ def cmd_audit(args) -> int:
             return bcode
     facts = load_facts(cfg)
     sections = load_sections(cfg)
-    red, yellow, hints, summary, unresolved = run_audit(
-        cfg, facts, sections, resolve=getattr(args, "resolve", False))
-    code = _aggregate_exit(red, yellow, getattr(args, "strict", False),
-                           integrity_first=cfg.is_v3)
-    text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    strict = getattr(args, "strict", False)
+    resolve = getattr(args, "resolve", False)
+    if getattr(cfg, "checks_defined", False):
+        # [checks] 节在场即走核验槽（裁定③，2026-11-16）：显式点名 packages
+        # 按点名跑；节存在但省 packages ⇒ 默认 ["paper"]（仍走槽，输出带
+        # domain 键与 by_domain——只增键，报告其余逐条相同）。
+        # 无 [checks] 节才直跑：宪法承诺「无节＝逐字节不变」（SPEC-CHECKS §5.2）。
+        red, yellow, hints, summary, unresolved = run_packages(
+            cfg, facts, sections, resolve=resolve)
+        code = checks_aggregate_exit(red, yellow, strict,
+                                     integrity_first=cfg.is_v3)
+        # 域序＝点名序（by_domain 按包迭代序插入，dict 保序）；裸节默认
+        # paper 时即 ["paper"]。走到这说明全部已注册（未注册在 resolve 即 exit 2）。
+        domains = list((summary or {}).get("by_domain", {}))
+        if any(d != "paper" for d in domains):
+            # 多域：人读报告按域分节（paper 节在前，其余域按点名序在后）；
+            # 结论行红黄计数是跨域合并数（与折算同口径）。单 paper 点名
+            # 保持 M1 版式不变。
+            text = _human_audit_domains(cfg, red, yellow, hints, summary,
+                                        unresolved, code, domains)
+        else:
+            text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
+    else:
+        # 无 [checks] 节：宪法保证——行为与槽引入前逐字节一致（SPEC-CHECKS
+        # §5.2；[budget]/[evidence] 先例口径）。裁定③后裸节不再走此路。
+        red, yellow, hints, summary, unresolved = run_audit(
+            cfg, facts, sections, resolve=resolve)
+        code = _aggregate_exit(red, yellow, strict, integrity_first=cfg.is_v3)
+        text = _human_audit(cfg, red, yellow, hints, summary, unresolved, code)
     if rule_report.get("present"):
         keys = list(rule_report.get("keys") or [])
         if keys:

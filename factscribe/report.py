@@ -137,7 +137,8 @@ def _human_check(cfg, facts, issues, warnings, conflicts, summary, code) -> str:
     return "\n".join(lines)
 
 
-def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
+def _audit_header(cfg, summary) -> list[str]:
+    """audit 人读报告的头块（标题＋账面摘要行）。summary 是 paper 形状的基座。"""
     cov = summary.get("coverage", {})
     lines = [
         "== factscribe audit ==",
@@ -161,6 +162,84 @@ def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
         detail = "、".join("%s %d" % (k, v) for k, v in by_cat.items()) or "无"
         lines.insert(6, "pdf     : %s；结构性 token 掩掉 %d 个（%s）" % (
             pdf.get("file", ""), pdf.get("structural_masked", 0), detail))
+    return lines
+
+
+def _domain_summary(summary, domain: str) -> dict:
+    """取某域自己的 summary：信封基座若是该域（单域点名）直接用，否则取嵌套键。"""
+    if isinstance(summary, dict):
+        if summary.get("domain") == domain:
+            return summary
+        nested = summary.get(domain)
+        if isinstance(nested, dict):
+            return nested
+    return {}
+
+
+def _human_audit_domains(cfg, red, yellow, hints, summary, unresolved, code,
+                         domains) -> str:
+    """槽路径多域的人读报告（SPEC-CHECKS §2.2 槽第 4 件事）。
+
+    paper 节在前（版式与单域完全一致），其余域各一节、按点名序（legal 在后
+    是点名序的自然结果）；每域的发现只进自己的节（域标归位），结论行的红黄
+    计数是跨域合并数——退出码由 aggregate_exit 单一入口折算，报告口径一致。
+    各域 summary 若带 ``lines``（该域卡声明的人读域头），core 原样打印
+    （core 不懂域义，只认这个键）。
+    """
+    buckets: dict = {}
+    for sev, items in (("yellow", yellow), ("red", red), ("hints", hints)):
+        for i in items:
+            buckets.setdefault(getattr(i, "domain", "paper"),
+                               {}).setdefault(sev, []).append(i)
+    base = summary if isinstance(summary, dict) and "facts" in summary \
+        else _domain_summary(summary, "paper")
+    lines = list(_audit_header(cfg, base)) if base else \
+        ["== factscribe audit ==", "project : %s" % cfg.root, ""]
+    for n, domain in enumerate(domains):
+        bucket = buckets.get(domain, {})
+        d_y = bucket.get("yellow", [])
+        d_r = bucket.get("red", [])
+        d_h = [h for h in bucket.get("hints", []) if h.severity != SEV_YELLOW]
+        own = domain != "paper" or n > 0
+        if own:
+            lines.append("")
+            lines.append("---- 核验域：%s ----" % domain)
+            for ln in _domain_summary(summary, domain).get("lines") or []:
+                lines.append(str(ln))
+        if d_y:
+            lines.append("[黄] %d 处（未核验/未绑定/未签名——不判死，但不许当绿）"
+                         % len(d_y))
+            lines += [_print_issue(i, k) for k, i in enumerate(d_y, 1)]
+            lines.append("")
+        else:
+            lines.append("[黄] 0 处")
+        if d_r:
+            lines.append("[红] %d 处（必须修）" % len(d_r))
+            lines += [_print_issue(i, k) for k, i in enumerate(d_r, 1)]
+        elif own:
+            lines.append("[红] 0 处")
+        else:
+            lines.append("[红] 0 处 —— 数字与引用全部有账、有据")
+        if d_h:
+            lines.append("")
+            lines.append("[提示] %d 条（非红非黄，不拦）" % len(d_h))
+            for h in d_h:
+                lines.append(" - %-16s %s %s" % (h.code, h.location, h.message))
+    if unresolved:
+        lines.append("")
+        lines.append("联网核验：")
+        for u in unresolved:
+            lines.append(" - %-18s %s=%s -> %s（%s）" % (
+                u["key"], u["id_type"], u["id"], u["status"], u["detail"]))
+    lines.append("")
+    lines.append("结论：%d 红 / %d 黄 → %s（退出码 %d）" % (
+        len(red), len(yellow), _status_word(code), code))
+    lines.append("注意：绿只代表「账、据、正文自洽且据未被改」，不代表内容为真。")
+    return "\n".join(lines)
+
+
+def _human_audit(cfg, red, yellow, hints, summary, unresolved, code) -> str:
+    lines = list(_audit_header(cfg, summary))
     if yellow:
         lines.append("[黄] %d 处（未核验/未绑定/未签名——不判死，但不许当绿）" % len(yellow))
         lines += [_print_issue(i, n) for n, i in enumerate(yellow, 1)]

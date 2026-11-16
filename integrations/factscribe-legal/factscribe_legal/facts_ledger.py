@@ -1,11 +1,13 @@
-"""事实账维护工具：同值检测与 dup_ok 标注。
+"""事实账同值检测（只读）：``scan_dupes``。
 
-上游 FactScribe 的 R-04 规则：**同一个值挂在不同 claim 上**时会报 `DUPLICATE_VALUE`（黄），
+分工（P-100 松尾账①拆分）：**检测与改账分家**——本模块只读地扫出
+「同值且 claim 不同」的事实清单；会改写 ``facts/*.toml`` 的 ``dup_ok``
+标注（写径）在独立维护模块 ``ledger_maint.py``，不与检测同居。
+
+上游 FactScribe 的 R-04 规则：**同一个值挂在不同 claim 上**时会报
+`DUPLICATE_VALUE`（黄），
 确属同一个数（例如：法国侧参考日与中国侧参考日是同一天；某法公布日与施行日同为一天）
 要显式写 `dup_ok = true` 承认同值。
-
-本模块在写完事实账后扫一遍项目内所有 facts/*.toml，
-给"同值且 claim 不同"的事实自动补 `dup_ok = true`（幂等）。
 """
 import os
 import re
@@ -46,31 +48,3 @@ def scan_dupes(project_dir):
             for g in group:
                 dupes.append((g["file"], g["id"], val))
     return dupes, allfacts
-
-
-def mark_dup_ok(project_dir):
-    """给同值且 claim 不同的事实补 dup_ok = true（幂等）。返回被标注的 id 列表。"""
-    dupes, allfacts = scan_dupes(project_dir)
-    if not dupes:
-        return []
-    ids = {d[1] for d in dupes}
-    by_file = {}
-    for path, fid, _v in dupes:
-        by_file.setdefault(path, set()).add(fid)
-    changed = []
-    for path, want in by_file.items():
-        with open(path, encoding="utf-8") as f:
-            text = f.read()
-
-        def fix(m):
-            block = m.group(1)
-            fl = _fields(block)
-            if fl.get("id") in want and "dup_ok" not in block:
-                block = block.rstrip("\n") + "\ndup_ok = true\n"
-                changed.append(fl["id"])
-            return "[[fact]]\n" + block
-
-        new = FACT_BLOCK.sub(fix, text)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(new)
-    return changed

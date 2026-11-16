@@ -2,7 +2,7 @@
 
 为什么需要这一层
 ----------------
-上游 paperkit 的 CI 矩阵是 Python 3.10–3.14，而标准库 `tomllib` 是 3.11 才有的。
+上游 factscribe 的 CI 矩阵是 Python 3.10–3.14，而标准库 `tomllib` 是 3.11 才有的。
 本集成包若在模块顶层 `import tomllib`，在 3.10 上直接 ImportError —— 整个包装不上，
 上游 CI 的 3.10 那一格会红。
 

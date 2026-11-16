@@ -1,0 +1,18 @@
+[project]
+title = "法律域合成演示（双域单命令）"
+sections = "sections/*.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+
+# 核验槽（SPEC-CHECKS §5）：点名 paper＋legal，一次 audit 出双域报告。
+# 缺少整个 [checks] 节＝只跑 paper，行为与槽引入前逐字节一致。
+[checks]
+packages = ["paper", "legal"]
+
+# legal 卡的键集契约（config_keys＝{corpus, date, view}）：
+#   corpus＝语料视图目录（FR 闸读 index.json＋官方 XML；CN 看 catalog.jsonl.gz，
+#   IT 看 it/——本演示只合成 FR 语料）；date＝参考日（不读系统钟）；view＝可选。
+# 材料缺失 fail-closed：语料没拿到＝黄 LEGAL_COVERAGE_GAP，不许静默绿。
+[checks.legal]
+corpus = "results/corpus-legal"
+date = "2026-11-14"

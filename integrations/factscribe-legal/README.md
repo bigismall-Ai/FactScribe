@@ -56,6 +56,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-it` | `IT_PROV_UNKNOWN` `IT_CARD_MISSING` `IT_CARD_NO_HASH` `IT_CARD_SHA256_MISMATCH` `IT_SOURCE_HASH_MISMATCH` `IT_ARTICLE_HASH_MISMATCH` `IT_ARTICLE_NOT_IN_SOURCE` `IT_CARD_FIELD_MISMATCH` `IT_QUOTE_MISMATCH` | `IT_VERSION_GAP` |
 | `verify-es` | `ES_PROV_UNKNOWN` `ES_CARD_MISSING` `ES_CARD_NO_HASH` `ES_CARD_SHA256_MISMATCH` `ES_SOURCE_HASH_MISMATCH` `ES_ARTICLE_HASH_MISMATCH` `ES_ARTICLE_NOT_IN_SOURCE` `ES_CARD_FIELD_MISMATCH` `ES_QUOTE_MISMATCH` | `ES_VERSION_GAP` |
 | `verify-fr-case` | `FR_CASE_CARD_MISSING` `FR_CASE_OFFICIAL_MISSING` `FR_CASE_CARD_NO_HASH` `FR_CASE_OFFICIAL_HASH_MISMATCH` `FR_CASE_CARD_SHA256_MISMATCH` `FR_CASE_VALUE_NOT_IN_OFFICIAL` `FR_CASE_NO_MISMATCH` `FR_CASE_DATE_MISMATCH` `FR_CASE_CARD_TEXT_DIVERGED` | — |
+| `verify-it-case` | `ITCASE_CARD_MISSING` `ITCASE_PROV_UNKNOWN` `ITCASE_CARD_NO_HASH` `ITCASE_SLICE_HASH_MISMATCH` `ITCASE_CARD_SHA256_MISMATCH` `ITCASE_CARD_FIELD_MISMATCH` `ITCASE_CARD_TEXT_DIVERGED` `ITCASE_VALUE_NOT_IN_OFFICIAL` `ITCASE_NO_MISMATCH` `ITCASE_DATE_MISMATCH` | — |
 
 **M2 新增三码**（挂槽后材料依赖与冻结锁的 fail-closed 语义；码表只增不改）：
 
@@ -272,6 +273,7 @@ TOML 读取（`factscribe_legal/_toml.py`）有一处刻意设计：3.11+ 用标
 | 意大利 | Normattiva OpenData API（`caricaAKN`） | 官方 AKN XML | CC BY 4.0 |
 | 西班牙 | BOE 开放数据 API（`legislacion-consolidada` by-id） | 官方合并文本 XML | AEBOE 复用条件（2024-06-27 决议；须注明出处） |
 | 法国判例 | DILA INCA 全球判决档案（`echanges.dila.gouv.fr/OPENDATA/INCA/`，stock tar.gz；sample 只取 12MB 前缀） | 官方判决 XML（TEXTE_JURI_JUDI） | licence ouverte v2.0（Etalab；须署发布方＋源 URL＋下载日期） |
+| 意大利宪法法院判例 | Corte costituzionale 开放数据（`dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_*.zip`） | 官方判决档案 XML 切片 | CC BY-SA 3.0（署名＋相同方式共享；见 `corpus/it-case/ATTRIBUTION.md`） |
 
 取件、钉哈希、建卡、选版（`date_debut <= T < date_fin`）的脚本在各自的工程仓里，
 本包只消费「已经钉好哈希的官方件」。

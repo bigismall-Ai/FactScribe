@@ -90,6 +90,27 @@ def cmd_verify_fr_case(args):
     return code
 
 
+def cmd_verify_it_case(args):
+    """意大利宪法法院判例专项校验（语料＝it-case/run-* 判决档案 run 目录）。"""
+    from .it_case_verify import render_it_case, verify_it_case
+    try:
+        findings, index = verify_it_case(args.project, args.corpus)
+    except FileNotFoundError as e:
+        print("配置错：%s" % e)
+        print("提示：--corpus 指向 it-case/run-<YYYYMMDD>-itcase-<tier>/ 目录"
+              "（里面要有 index.json）")
+        return 2
+    except Exception as e:  # noqa: BLE001 —— 兜底：同类异常不许穿透成堆栈
+        print("配置错/材料异常：%s" % e)
+        print("提示：语料目录或官方件可能损坏。材料坏了应当落成红码 finding"
+              "（退出码 1），走到这里说明闸门内部有没兜住的异常，"
+              "请把上面这行原文报上去。")
+        return 2
+    text, code = render_it_case(findings, index)
+    print(text)
+    return code
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
@@ -135,6 +156,12 @@ def main(argv=None):
     fc.add_argument("--project", required=True)
     fc.set_defaults(func=cmd_verify_fr_case)
 
+    tc = sub.add_parser("verify-it-case", help="意大利宪法法院判例专项校验")
+    tc.add_argument("--project", required=True)
+    tc.add_argument("--corpus", required=True,
+                    help="语料目录（it-case/run-<run>-itcase-<tier>/）")
+    tc.set_defaults(func=cmd_verify_it_case)
+
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
@@ -153,6 +180,8 @@ def main(argv=None):
         return cmd_verify_es(args)
     if args.cmd == "verify-fr-case":
         return cmd_verify_fr_case(args)
+    if args.cmd == "verify-it-case":
+        return cmd_verify_it_case(args)
     return cmd_verify(args)
 
 

@@ -265,12 +265,25 @@ view   = "out/legifrance/view_20261114/merged_current.jsonl"
 - G5（派生）/G6（覆盖）/G7（闭包）/P 层（PDF 回检）：**第二批进槽**
   （裁定⑤，2026-11-16），见 M1.5。
 
-### M1.5　文风 G5–G7 与 PDF 层第二批进槽（已批待排——本批不写码）
+### M1.5　文风 G5–G7 与 PDF 层第二批进槽（已完成，落点 feat/check-slot-m15）
 
 裁定⑤（2026-11-16）：派生算式（G5）、覆盖豁免（G6）、闭包（G7）与
 PDF 回检层（P 层）作为 `paper` 包的第二批进槽。排期待 M3 实证排期一并定；
 进槽时照 §3 契约注册（同一张卡、同一套行为锁纪律：迁移前先冻结这批判据的
 发现清单金样例，迁移前后逐条相同）。
+
+落地形态（2026-11-16，M1.5 批）：按编排令注册为**两个独立域**进槽——
+`style`（文风闸：公式化写作特征黄牌＋证据钢印红；判据在 `style.analyze`，
+物理位置不动）与 `pdf`（PDF 回检层：文本层/栅格化/双向数字多重集/stamp
+信任链；判据在 `pdfgate.verify_pdf`，材料依赖＝main.pdf＋编译产物，缺失按
+现行语义 fail-closed 不静默绿）。两域只被 `[checks].packages` 显式点名时
+才跑；缺省（无节／裸节默认 `["paper"]`，裁定③）行为逐字节不变——**M1
+金样例锁原样通过，本批不重冻**。码为存量无前缀码（style 系各码与
+`PDF_*`/`STAMP_*` 系），按 §4.3「core 存量码一字不改」祖父条款照旧发射。
+G5–G7 的 audit 侧判据（派生/覆盖/闭包）在 M1 已随 `run_audit` 进 paper 包
+（见 M1 节），本批不再搬动。落点：`factscribe/checks.py::register_builtins`
+（commit `20c2fd2` style 包、`104f5e8` pdf 包）、三态矩阵扩展与两域行为锁
+`tests/test_checks_slot.py`＋`tests/test_checks_m15.py`（commit `1da5c02`）。
 
 ### M2　legal 注册为第二核验包、单命令双域报告（已完成）
 

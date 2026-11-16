@@ -1605,6 +1605,118 @@ def fetch_fr_case(http, corpus_root, state, max_items, mode, reference_date, yes
     if mode == "bulk":
         log("[plan]  FR-CASE bulk：%s（全量 stock 档案，约 664MB）" % name)
         log("[plan]   预计请求：1 次目录索引（已发）＋ 1 次整包下载 ＝ 2 次")
+        if not yes:
+            if sys.stdin.isatty():
+                if input("确认开跑？[y/N] ").strip().lower() not in ("y", "yes"):
+                    log("[abort] 未确认，停止（--yes 可跳过询问）")
+                    return 3
+            else:
+                log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
+                return 2
+        dest = os.path.join(raw_dir, name)
+        if os.path.exists(dest):
+            log("[skip]  全量档案已在本地：%s" % dest)
+        else:
+            http.download(archive_url, dest)
+        found = _fr_case_stream_xmls(dest, want=0)
+    else:
+        # sample：只取前缀（Range），流式解到够数即停
+        want = min(max_items or FR_CASE_SAMPLE_MAX, FR_CASE_SAMPLE_MAX)
+        prefix_path = os.path.join(raw_dir, name + ".prefix")
+        state_key = "prefix:%s:%d" % (name, FR_CASE_PREFIX_BYTES)
+        prev = state.fetched("fr-case", state_key)
+        if prev and os.path.exists(prefix_path):
+            log("[skip]  前缀已取过（state 命中），不重复下载：%s" % name)
+        else:
+            rng = "bytes=0-%d" % (FR_CASE_PREFIX_BYTES - 1)
+            r = http.request(archive_url, headers={"Range": rng,
+                                                  "Accept-Encoding": "identity"})
+            status = r.get("status")
+            if status == 200:
+                raise FetchError("服务器忽略了 Range（200 而非 206）：拒绝下载全量档案")
+            if status != 206:
+                raise FetchError("Range 请求返回 %s（期望 206）" % status)
+            with open(prefix_path, "wb") as fh:
+                fh.write(r["body"])
+            state.mark("fr-case", state_key, url=archive_url,
+                       sha256=sha256_bytes(r["body"]), bytes_=len(r["body"]),
+                       range_header=rng, archive=name)
+        found = _fr_case_stream_xmls(prefix_path, want=want)
+        if not found:
+            raise FetchError("INCA 前缀里没解出判决 XML（前缀 %d 字节）"
+                             % FR_CASE_PREFIX_BYTES)
+
+    R = _fr_case_reader()
+    fetched_at = now_iso()
+    cases = {}
+    for member_name, data in found:
+        meta = R.parse_meta(data)
+        case_id = meta.get("id") or os.path.splitext(
+            os.path.basename(member_name))[0]
+        if not case_id:
+            continue
+        plain = R.to_plain(data)
+        txt_bytes = plain.encode("utf-8")
+        with open(os.path.join(off_dir, "%s.xml" % case_id), "wb") as fh:
+            fh.write(data)
+        with open(os.path.join(off_dir, "%s.txt" % case_id), "wb") as fh:
+            fh.write(txt_bytes)
+        card = R.build_card(meta, plain, data, txt_bytes,
+                            source_url=archive_url, source_path=member_name,
+                            fetched_at=fetched_at,
+                            licence=FR_CASE_LICENCE,
+                            attribution=FR_CASE_ATTRIBUTION)
+        with open(os.path.join(run_dir, "%s.fr-case.card.txt" % case_id),
+                  "w", encoding="utf-8") as fh:
+            fh.write(card)
+        cases[case_id] = {
+            "titre": meta.get("titre", ""),
+            "date_dec": meta.get("date_dec", ""),
+            "juridiction": meta.get("juridiction", ""),
+            "numeros_affaires": meta.get("numeros_affaires") or [],
+            "nature": meta.get("nature", ""),
+            "solution": meta.get("solution", ""),
+            "xml_file": "official/%s.xml" % case_id,
+            "xml_sha256": sha256_bytes(data),
+            "txt_file": "official/%s.txt" % case_id,
+            "txt_sha256": sha256_bytes(txt_bytes),
+            "source_url": archive_url,
+            "source_path": member_name,
+            "card_file": "%s.fr-case.card.txt" % case_id,
+        }
+        state.mark("fr-case", case_id, url=archive_url + "#" + member_name,
+                   sha256=sha256_bytes(data), bytes_=len(data), run=run_id,
+                   member=member_name, txt_sha256=sha256_bytes(txt_bytes))
+        log("[ok]    fr-case:%s  %s  %s" % (case_id, meta.get("date_dec", ""),
+                                           meta.get("juridiction", "")))
+    if not cases:
+        raise FetchError("INCA 档案里没解出任何判决（run=%s）" % run_id)
+
+    index = {
+        "source_archive_url": archive_url,
+        "archive_path": name,
+        "fetched_at": fetched_at,
+        "licence": FR_CASE_LICENCE,
+        "attribution": FR_CASE_ATTRIBUTION,
+        "generator": "fetch_corpus.py " + TOOL_VERSION,
+        "run": run_id,
+        "cases": cases,
+    }
+    with open(os.path.join(run_dir, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
+        fh.write("\n")
+    with open(os.path.join(fr_case_dir, "ATTRIBUTION.txt"), "w",
+              encoding="utf-8") as fh:
+        fh.write(_fr_case_attribution(archive_url, cases, fetched_at))
+    state.note("fr-case", "last_run", fetched_at)
+    state.note("fr-case", "runs", sorted(
+        d for d in os.listdir(fr_case_dir) if d.startswith("run-")))
+    log("[done]  FR-CASE：%s 共 %d 件判决（档案 %s）" % (run_id, len(cases), name))
+    return 0
+
+
+
+# ---------------------------------------------------------------------------
 # IT-CASE —— 意大利宪法法院判例（Corte costituzionale 开放数据）
 # ---------------------------------------------------------------------------
 # 官方通道：dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_*.zip
@@ -1797,105 +1909,6 @@ def fetch_itcase(http, corpus_root, state, max_items, mode, reference_date, yes)
             else:
                 log("[abort] bulk 需显式 --yes 才动（当前非交互终端）")
                 return 2
-        dest = os.path.join(raw_dir, name)
-        if os.path.exists(dest):
-            log("[skip]  全量档案已在本地：%s" % dest)
-        else:
-            http.download(archive_url, dest)
-        found = _fr_case_stream_xmls(dest, want=0)
-    else:
-        # sample：只取前缀（Range），流式解到够数即停
-        want = min(max_items or FR_CASE_SAMPLE_MAX, FR_CASE_SAMPLE_MAX)
-        prefix_path = os.path.join(raw_dir, name + ".prefix")
-        state_key = "prefix:%s:%d" % (name, FR_CASE_PREFIX_BYTES)
-        prev = state.fetched("fr-case", state_key)
-        if prev and os.path.exists(prefix_path):
-            log("[skip]  前缀已取过（state 命中），不重复下载：%s" % name)
-        else:
-            rng = "bytes=0-%d" % (FR_CASE_PREFIX_BYTES - 1)
-            r = http.request(archive_url, headers={"Range": rng,
-                                                  "Accept-Encoding": "identity"})
-            status = r.get("status")
-            if status == 200:
-                raise FetchError("服务器忽略了 Range（200 而非 206）：拒绝下载全量档案")
-            if status != 206:
-                raise FetchError("Range 请求返回 %s（期望 206）" % status)
-            with open(prefix_path, "wb") as fh:
-                fh.write(r["body"])
-            state.mark("fr-case", state_key, url=archive_url,
-                       sha256=sha256_bytes(r["body"]), bytes_=len(r["body"]),
-                       range_header=rng, archive=name)
-        found = _fr_case_stream_xmls(prefix_path, want=want)
-        if not found:
-            raise FetchError("INCA 前缀里没解出判决 XML（前缀 %d 字节）"
-                             % FR_CASE_PREFIX_BYTES)
-
-    R = _fr_case_reader()
-    fetched_at = now_iso()
-    cases = {}
-    for member_name, data in found:
-        meta = R.parse_meta(data)
-        case_id = meta.get("id") or os.path.splitext(
-            os.path.basename(member_name))[0]
-        if not case_id:
-            continue
-        plain = R.to_plain(data)
-        txt_bytes = plain.encode("utf-8")
-        with open(os.path.join(off_dir, "%s.xml" % case_id), "wb") as fh:
-            fh.write(data)
-        with open(os.path.join(off_dir, "%s.txt" % case_id), "wb") as fh:
-            fh.write(txt_bytes)
-        card = R.build_card(meta, plain, data, txt_bytes,
-                            source_url=archive_url, source_path=member_name,
-                            fetched_at=fetched_at,
-                            licence=FR_CASE_LICENCE,
-                            attribution=FR_CASE_ATTRIBUTION)
-        with open(os.path.join(run_dir, "%s.fr-case.card.txt" % case_id),
-                  "w", encoding="utf-8") as fh:
-            fh.write(card)
-        cases[case_id] = {
-            "titre": meta.get("titre", ""),
-            "date_dec": meta.get("date_dec", ""),
-            "juridiction": meta.get("juridiction", ""),
-            "numeros_affaires": meta.get("numeros_affaires") or [],
-            "nature": meta.get("nature", ""),
-            "solution": meta.get("solution", ""),
-            "xml_file": "official/%s.xml" % case_id,
-            "xml_sha256": sha256_bytes(data),
-            "txt_file": "official/%s.txt" % case_id,
-            "txt_sha256": sha256_bytes(txt_bytes),
-            "source_url": archive_url,
-            "source_path": member_name,
-            "card_file": "%s.fr-case.card.txt" % case_id,
-        }
-        state.mark("fr-case", case_id, url=archive_url + "#" + member_name,
-                   sha256=sha256_bytes(data), bytes_=len(data), run=run_id,
-                   member=member_name, txt_sha256=sha256_bytes(txt_bytes))
-        log("[ok]    fr-case:%s  %s  %s" % (case_id, meta.get("date_dec", ""),
-                                           meta.get("juridiction", "")))
-    if not cases:
-        raise FetchError("INCA 档案里没解出任何判决（run=%s）" % run_id)
-
-    index = {
-        "source_archive_url": archive_url,
-        "archive_path": name,
-        "fetched_at": fetched_at,
-        "licence": FR_CASE_LICENCE,
-        "attribution": FR_CASE_ATTRIBUTION,
-        "generator": "fetch_corpus.py " + TOOL_VERSION,
-        "run": run_id,
-        "cases": cases,
-    }
-    with open(os.path.join(run_dir, "index.json"), "w", encoding="utf-8") as fh:
-        json.dump(index, fh, ensure_ascii=False, indent=1, sort_keys=True)
-        fh.write("\n")
-    with open(os.path.join(fr_case_dir, "ATTRIBUTION.txt"), "w",
-              encoding="utf-8") as fh:
-        fh.write(_fr_case_attribution(archive_url, cases, fetched_at))
-    state.note("fr-case", "last_run", fetched_at)
-    state.note("fr-case", "runs", sorted(
-        d for d in os.listdir(fr_case_dir) if d.startswith("run-")))
-    log("[done]  FR-CASE：%s 共 %d 件判决（档案 %s）" % (run_id, len(cases), name))
 
     for tier, url in tiers:
         run_id = "run-%s-itcase-%s" % (reference_date.replace("-", ""), tier)
@@ -2060,6 +2073,7 @@ def fetch_itcase(http, corpus_root, state, max_items, mode, reference_date, yes)
     state.note("it-case", "runs", sorted(
         d for d in os.listdir(root_dir) if d.startswith("run-")))
     return 0
+
 
 
 # ---------------------------------------------------------------------------

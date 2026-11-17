@@ -36,9 +36,9 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 第一次跑出一片红，查 [`docs/TRIAGE.md`](docs/TRIAGE.md)（先修什么、什么可以不管）；
 已有论文要接进来，先看 [`docs/ADOPT.md`](docs/ADOPT.md)（实测读数 + 六步迁移，别当成安装）。
 
-## 二十二个命令
+## 二十六个命令
 
-`factscribe` 一共二十五个子命令。上手两条，其余按用途分。
+`factscribe` 一共二十六个子命令。上手两条，其余按用途分。
 
 | 命令 | 干什么 |
 |---|---|
@@ -68,6 +68,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `terms` | 术语候选：`suggest` 提候选，`add` 只写你勾的 |
 | `refs` | 文献登记面：`dedupe` 查 bib 跨条目同 DOI／同 arXiv id、`register` 核对待补登记表 `refs/todo.toml`（缺字段逐项点名）、`search` 联网取候选题录（唯一联网面：只发查询词，候选入正式 bib 必须人采，机器不代签） |
 | `mirror-check` | 双语双盘账本逐条比对：facts 承重字段＋bib 条目级，漂移逐条列（盘／文件／id／字段／两侧值） |
+| `figures` | 画图管线：人填图规格 `figures/*.fig.toml`（图型 bar/line/table，数据点只许引 fact id，裸数字拒收），机械出 pgfplots 的 .tex ＋随图 .csv ＋绑定表；`check` 四面对账（规格↔绑定表↔随图 CSV↔现行账本），账动过而图未重生成必红 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 
@@ -118,7 +119,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1521 例，全离线
+python3 -m unittest discover -s tests     # 1545 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

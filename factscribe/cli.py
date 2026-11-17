@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import figures
 from . import mirror
 from . import mdscan
 from . import refs
@@ -332,6 +333,40 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--section", default=None, metavar="节",
                     help="配合 --pick：人给的落点节（如 02_related.tex）")
     rs.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "figures",
+        help="画图管线：账本驱动的图表生成与四面对账（CARD-G2）",
+        description="画图管线（零 LLM、零网络、纯标准库）。人填图规格 "
+                    "figures/*.fig.toml：图型（bar/line/table）、轴标签、caption，"
+                    "数据点只许引 fact id；规格里出现裸数字即配置错（退出码 2）。"
+                    "figures gen 读规格＋事实账，机械产出 pgfplots 的 .tex、"
+                    "随图数据 .csv 与绑定表 .bind.toml（每个数据点记 fact_id、"
+                    "生成时的值与 source_sha256），覆盖旧产物前先打印绑定表差异；"
+                    "figures check 四面比对（规格↔绑定表↔随图 CSV↔现行账本），"
+                    "账动过而图未重生成必红（逐点点名）。"
+                    "退出码 0＝绿、1＝红、2＝规格/用法错；无图规格时 skip（0）。")
+    fsp = sp.add_subparsers(dest="figures_action", required=True)
+    fg = fsp.add_parser(
+        "gen",
+        help="按人填规格生成图（.tex ＋ 随图 .csv ＋ 绑定表）",
+        description="读 figures/*.fig.toml ＋ facts/*.toml，机械产出三件套："
+                    "figures/gen/<名>.tex（pgfplots 代码，可独立编译出 PDF）、"
+                    "figures/gen/<名>.csv（随图数据，既有 FIGURE_UNVERIFIED 的对账物）、"
+                    "figures/gen/<名>.bind.toml（绑定表：每个数据点 ↔ fact id ↔ "
+                    "生成时的值与 source_sha256），另有项目级 figures/bind.toml。"
+                    "数据点只许引 fact id；裸数字／未知图型／缺数据点一律退出码 2。")
+    fg.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    fg.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    fc = fsp.add_parser(
+        "check",
+        help="四面比对：规格 ↔ 绑定表 ↔ 随图 CSV ↔ 现行账本",
+        description="逐点比对四个面：人填规格、绑定表、随图 .csv、现行事实账。"
+                    "数据点数不等、值不等、source_sha256 不等、账上 fact 不见了，"
+                    "都逐点点名并退出码 1；规格本身坏掉退出码 2；全一致退出码 0。")
+    fc.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    fc.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
@@ -1111,6 +1146,62 @@ def cmd_mirror_check(args) -> int:
     return code
 
 
+def _figures_config_error(args, command: str, exc) -> int:
+    """figures 子命令的结构错：退出码 2，且 JSON 里有 code 与 findings。"""
+    code = getattr(exc, "code", "CONFIG_INVALID")
+    finding = {"severity": "red", "code": code, "message": str(exc)}
+    payload = _payload(command, "error", EXIT_CONFIG, message=str(exc), code=code,
+                       findings=[finding], issues=[finding])
+    if getattr(args, "json", False):
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)
+    return EXIT_CONFIG
+
+
+def cmd_figures_gen(args) -> int:
+    """账本驱动的图表生成（CARD-G2）：人填规格 → 机械出三件套。"""
+    try:
+        result = figures.generate(Path(args.project))
+    except ConfigError as exc:
+        return _figures_config_error(args, "figures-gen", exc)
+    code = result.exit_code
+    payload = _payload("figures-gen",
+                       "ok" if code == EXIT_OK else "violation", code,
+                       summary=result.summary(),
+                       skipped=result.skipped,
+                       figures=[f.as_dict() for f in result.figures],
+                       findings=[f.as_dict() for f in result.findings],
+                       issues=[f.as_dict() for f in result.findings])
+    _emit(payload, figures.render_gen(result), args.json)
+    return code
+
+
+def cmd_figures_check(args) -> int:
+    """四面比对（CARD-G2）：规格 ↔ 绑定表 ↔ 随图 CSV ↔ 现行账本。"""
+    try:
+        result = figures.check(Path(args.project))
+    except ConfigError as exc:
+        return _figures_config_error(args, "figures-check", exc)
+    code = result.exit_code
+    payload = _payload("figures-check",
+                       "ok" if code == EXIT_OK else "violation", code,
+                       summary=result.summary(),
+                       skipped=result.skipped,
+                       figures=[f.as_dict() for f in result.figures],
+                       findings=[f.as_dict() for f in result.findings],
+                       issues=[f.as_dict() for f in result.findings])
+    _emit(payload, figures.render_check(result), args.json)
+    return code
+
+
+def cmd_figures(args) -> int:
+    """画图管线命令族（CARD-G2）。"""
+    if args.figures_action == "gen":
+        return cmd_figures_gen(args)
+    return cmd_figures_check(args)
+
+
 def cmd_refs_dedupe(args) -> int:
     """bib 跨条目查重（CARD-G1）：只读、离线。"""
     result = refs.dedupe(Path(args.project))
@@ -1876,6 +1967,7 @@ def main(argv=None) -> int:
         return code
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "mirror-check": cmd_mirror_check,
+                "figures": cmd_figures,
                 "refs": cmd_refs,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,

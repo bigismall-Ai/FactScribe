@@ -29,9 +29,9 @@ First time? Follow [`docs/QUICKSTART.md`](docs/QUICKSTART.md) (zero to a first g
 Staring at a wall of red? Read [`docs/TRIAGE.md`](docs/TRIAGE.md) (what to fix first, what to ignore).
 Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a migration, not an install, and it starts with measured readings.
 
-## Twenty-six commands
+## Twenty-seven commands
 
-`factscribe` ships twenty-six subcommands. Two get you started; the rest are grouped by purpose.
+`factscribe` ships twenty-seven subcommands. Two get you started; the rest are grouped by purpose.
 
 | Command | What it does |
 |---|---|
@@ -61,6 +61,7 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 | `terms` | Term candidates: `suggest`, then `add` only what you picked |
 | `refs` | Literature registry: `dedupe` finds two keys pointing at one paper (same DOI / arXiv id), `register` checks the to-fill table `refs/todo.toml` and names each missing field, `search` fetches candidate metadata (the only networked action — it sends the query terms only, and promoting a candidate into the formal bib stays a human act) |
 | `mirror-check` | Bilingual dual-disk ledger comparison: load-bearing fact fields plus bib entries, every drift listed (disk / file / id / field / both values) |
+| `bundle` | Submission artifact bundle: collects the `\input`/`\include` closure from main.tex (reusing the existing closure algorithm) plus refs.bib, figures/, tables/, facts/, the signed copies under runs/ and the three audit files; the checklist gate judges each item mechanically (closure complete / every figure has its per-figure CSV / no bib entry missing a unique key / evidence.lock present and not stale / audit reports no red); any failing item exits 1 and lists every item (pass / fail / waived), never a silent pass; the package defaults to a directory outside the project (`--out` overrides it) and ships MANIFEST.sha256 (one sha256 line per file, checkable with `shasum -a 256 -c`) plus BUNDLE-MANIFEST.json (the inventory: what was collected, what is only listed); `--verify` re-checks a package's MANIFEST; journal differences live in the project-side bundle-checklist.toml (extra checks and exclusions), and the tool names no journal |
 | `figures` | Chart pipeline: human-written specs `figures/*.fig.toml` (kinds bar / line / table; data points may only cite fact ids, bare numbers are refused; a spec may use the flat keys or the nested `[figure]` + `[[point]]` shape, and a missing name defaults to the file stem; no `factscribe.toml` required); mechanical output of a pgfplots `.tex`, a per-figure `.csv` and a binding table; `check` compares four faces (spec / binding table / per-figure CSV / current ledger) and turns red when the ledger moved but the figure was not regenerated |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
@@ -114,7 +115,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1545 tests, fully offline
+python3 -m unittest discover -s tests     # 1595 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

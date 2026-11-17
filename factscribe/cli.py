@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from . import figures
+from . import bundle
 from . import mirror
 from . import mdscan
 from . import refs
@@ -367,6 +368,32 @@ def build_parser() -> argparse.ArgumentParser:
                     "都逐点点名并退出码 1；规格本身坏掉退出码 2；全一致退出码 0。")
     fc.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
     fc.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "bundle",
+        help="投稿工件包：闭包收集 → 清单门 → 打包 + MANIFEST（CARD-G4）",
+        description="投稿工件包（零 LLM、零网络、纯标准库）。三步："
+                    "①收集——main.tex 起的 \\input/\\include 闭包（复用既有闭包"
+                    "算法）＋refs.bib＋figures/＋tables/＋facts/＋runs/ 的已签收"
+                    "副本＋audit/ 三件；②清单门——逐项机械判（闭包完整／每图有"
+                    "随图 CSV／bib 无缺唯一键条目／evidence.lock 在场且未过期／"
+                    "audit 现跑无红），任一项不过即退出码 1 并逐项列出"
+                    "（过／不过／豁免三态），不静默放行；③导出——包目录＋"
+                    "MANIFEST.sha256（逐文件 sha256 行，收包方 shasum -c 可验）"
+                    "＋BUNDLE-MANIFEST.json（清单：收了哪些、哪些只记不收）。"
+                    "期刊差异走项目侧 bundle-checklist.toml（附加检查项＋排除项），"
+                    "工具代码里零期刊专名。--verify 不打包，只复算包目录的 MANIFEST。")
+    sp.add_argument("project", nargs="?", default=".",
+                    help="项目目录（默认当前目录）")
+    sp.add_argument("--verify", metavar="BUNDLE_DIR", default=None,
+                    help="不打包：复算包目录的 MANIFEST.sha256（逐行复算＋件数对表）")
+    sp.add_argument("--out", default=None, metavar="DIR",
+                    help="包目录（默认 <项目>.bundle，放在项目外面——"
+                         "包留在项目里会让审计的覆盖报告把包的 .tex 副本当成闭包外文件）")
+    sp.add_argument("--runs-mode", choices=("signed", "full"), default="signed",
+                    help="runs/ 收哪些：signed＝只收已签收副本（默认，组内有 "
+                         "*.signoff.toml）；full＝全收")
+    sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
@@ -1202,6 +1229,41 @@ def cmd_figures(args) -> int:
     return cmd_figures_check(args)
 
 
+def cmd_bundle(args) -> int:
+    """投稿工件包：收集 → 清单门 → 打包；--verify 只复算 MANIFEST。"""
+    if getattr(args, "verify", None):
+        result = bundle.verify_bundle(Path(args.verify))
+        payload = _payload(
+            "bundle", "ok" if result.get("ok") else "red",
+            result.get("exit_code", EXIT_RED), action="verify",
+            bundle_dir=result.get("bundle_dir"),
+            lines=result.get("lines", 0), files=result.get("files", 0),
+            mismatched=result.get("mismatched") or [],
+            missing=result.get("missing") or [],
+            extra=result.get("extra") or [],
+            message=result.get("message", ""))
+        _emit(payload, bundle.render_verify(result), args.json)
+        return int(result.get("exit_code", EXIT_RED))
+    cfg = load_config(Path(args.project))
+    result = bundle.run_bundle(
+        cfg, runs_mode=getattr(args, "runs_mode", "signed"),
+        out_dir=getattr(args, "out", None))
+    payload = _payload(
+        "bundle", "ok" if result.get("exit_code") == EXIT_OK else "red",
+        result.get("exit_code", EXIT_RED),
+        gate=result.get("gate") or [],
+        bundle_dir=result.get("bundle_dir"),
+        files=result.get("files") or [],
+        listed_only=result.get("listed_only") or [],
+        excluded=result.get("excluded") or [],
+        manifest_lines=result.get("manifest_lines", 0),
+        checklist=result.get("checklist") or {},
+        closure=result.get("closure") or {},
+        audit_exit=result.get("audit_exit"))
+    _emit(payload, bundle.render_bundle(result), args.json)
+    return int(result.get("exit_code", EXIT_RED))
+
+
 def cmd_refs_dedupe(args) -> int:
     """bib 跨条目查重（CARD-G1）：只读、离线。"""
     result = refs.dedupe(Path(args.project))
@@ -1967,6 +2029,7 @@ def main(argv=None) -> int:
         return code
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "mirror-check": cmd_mirror_check,
+                "bundle": cmd_bundle,
                 "figures": cmd_figures,
                 "refs": cmd_refs,
                 "build": cmd_build, "preamble": cmd_preamble,

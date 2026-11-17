@@ -1,0 +1,48 @@
+# 投稿工件包的期刊差异声明（样例）——复制到项目根并改名 bundle-checklist.toml
+#
+# 通用清单（闭包完整／每图有随图 CSV／bib 无缺唯一键条目／evidence.lock 在场
+# 且未过期／audit 现跑无红）是工具内置的，照做即可。本文件只声明**这一本
+# 期刊（或这一次投稿）不一样的地方**：附加检查项 ＋ 排除声明。
+#
+# 语法只有两节：
+#   [[check]]   附加检查项：name ＋ kind（机械判式三形之一）
+#   [[exclude]] 排除声明：file（整件不进包）或 pattern（命中行不进包）
+#
+# 判式三形（都是机械判，不做语义判断）：
+#   exists    —— path 指向的文件/目录必须在场
+#   glob_min  —— glob 命中的文件数不得少于 min
+#   regex     —— file 的内容必须命中 pattern
+#
+# 排除声明：
+#   file = "sections/ack.tex"          这件整件不进包
+#   file = "main.tex" + pattern = "…"   只删命中 pattern 的行（匿名版剔致谢）
+#   pattern = "…"（不带 file）          该正则命中的行在所有文件里都不进包
+
+# ---- 附加检查项：匿名版必须在场 ----
+[[check]]
+name = "匿名版存在"
+kind = "exists"
+path = "anonymous/main.tex"
+
+# ---- 附加检查项：随图 CSV 不得少于 3 个 ----
+[[check]]
+name = "随图 CSV 不少于 3 个"
+kind = "glob_min"
+glob = "figures/gen/*.csv"
+min = 3
+
+# ---- 附加检查项：版权声明必须在场 ----
+[[check]]
+name = "版权声明在场"
+kind = "regex"
+file = "main.tex"
+pattern = '\\copyright'
+
+# ---- 排除声明：匿名版剔致谢（只按行模式剔，不做语义判断）----
+[[exclude]]
+file = "main.tex"
+pattern = '\\thanks\{[^}]*\}'
+
+# ---- 排除声明：致谢节整件不进包 ----
+[[exclude]]
+file = "sections/ack.tex"

@@ -36,9 +36,9 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 第一次跑出一片红，查 [`docs/TRIAGE.md`](docs/TRIAGE.md)（先修什么、什么可以不管）；
 已有论文要接进来，先看 [`docs/ADOPT.md`](docs/ADOPT.md)（实测读数 + 六步迁移，别当成安装）。
 
-## 二十六个命令
+## 二十七个命令
 
-`factscribe` 一共二十六个子命令。上手两条，其余按用途分。
+`factscribe` 一共二十七个子命令。上手两条，其余按用途分。
 
 | 命令 | 干什么 |
 |---|---|
@@ -68,6 +68,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `terms` | 术语候选：`suggest` 提候选，`add` 只写你勾的 |
 | `refs` | 文献登记面：`dedupe` 查 bib 跨条目同 DOI／同 arXiv id、`register` 核对待补登记表 `refs/todo.toml`（缺字段逐项点名）、`search` 联网取候选题录（唯一联网面：只发查询词，候选入正式 bib 必须人采，机器不代签） |
 | `mirror-check` | 双语双盘账本逐条比对：facts 承重字段＋bib 条目级，漂移逐条列（盘／文件／id／字段／两侧值） |
+| `bundle` | 投稿工件包：main.tex 起的 \input/\include 闭包收集（复用既有闭包算法）＋refs.bib＋figures/＋tables/＋facts/＋runs/ 的已签收副本＋audit/ 三件；清单门逐项机械判（闭包完整／每图有随图 CSV／bib 无缺唯一键条目／evidence.lock 在场且未过期／audit 现跑无红），任一项不过即 exit 1 并逐项列出（过／不过／豁免三态），不静默放行；包目录默认落在项目外（`--out` 可改），产出 MANIFEST.sha256（逐文件 sha256 行，`shasum -a 256 -c` 逐行可验）＋BUNDLE-MANIFEST.json（清单：收了哪些、哪些只记不收）；`--verify` 只复算包目录的 MANIFEST；期刊差异走项目侧 bundle-checklist.toml（附加检查项＋排除声明），工具代码里零期刊专名 |
 | `figures` | 画图管线：人填图规格 `figures/*.fig.toml`（图型 bar/line/table，数据点只许引 fact id，裸数字拒收；规格可写扁平键或 `[figure]`＋`[[point]]` 嵌套形态，图名缺省取文件名；不写 factscribe.toml 也跑得起来），机械出 pgfplots 的 .tex ＋随图 .csv ＋绑定表；`check` 四面对账（规格↔绑定表↔随图 CSV↔现行账本），账动过而图未重生成必红 |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
@@ -119,7 +120,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1545 例，全离线
+python3 -m unittest discover -s tests     # 1595 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

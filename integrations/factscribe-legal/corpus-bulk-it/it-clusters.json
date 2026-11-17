@@ -1,0 +1,727 @@
+{
+ "source": "https://www.cnel.it/media/docs/default-source/archivio-contratti---cartelle-excel/ccnl-di-settore-vigenti-e-ultrattivi.xlsx?sfvrsn=eb19a03c_17",
+ "xlsx_sha256": "408c0710ed7757f7bbff88511f1ea74e04a696e90c3d10c37bcd7c94754daa2c",
+ "n": 144,
+ "clusters": [
+  {
+   "code": "A011",
+   "title": "CCNL per gli operai agricoli e florovivaisti",
+   "dipendenti_2025": "5196"
+  },
+  {
+   "code": "A016",
+   "title": "CCNL per i dipendenti di cooperative e consorzi agricoli",
+   "dipendenti_2025": "10969"
+  },
+  {
+   "code": "A021",
+   "title": "CCNL per i Quadri e impiegati agricoli",
+   "dipendenti_2025": "22614"
+  },
+  {
+   "code": "A051",
+   "title": "CCNL per i lavoratori dipendenti delle imprese che esercitano attività agromeccaniche (contoterzismo in agricoltura)",
+   "dipendenti_2025": "3891"
+  },
+  {
+   "code": "A131",
+   "title": "CCNL per i dipendenti dai consorzi di bonifica e di miglioramento fondiario",
+   "dipendenti_2025": "4099"
+  },
+  {
+   "code": "A141",
+   "title": "CCNL per i dipendenti dei Consorzi Agrari",
+   "dipendenti_2025": "2133"
+  },
+  {
+   "code": "A221",
+   "title": "CCNL per i dipendenti dalle organizzazioni degli allevatori, consorzi ed enti zootecnici",
+   "dipendenti_2025": "1822"
+  },
+  {
+   "code": "B011",
+   "title": "CCNL per gli addetti dell'industria chimica, chimica-farmaceutica, fibre chimiche e settori abrasivi, lubrificanti e GPL",
+   "dipendenti_2025": "229797"
+  },
+  {
+   "code": "B012",
+   "title": "Coibentazioni Termiche Acustiche",
+   "dipendenti_2025": "2461"
+  },
+  {
+   "code": "B018",
+   "title": "CCNL Unionchimica Confapi per i lavoratori della piccola e media industria dei settori: chimica, concia e settori accorpati, plastica e gomma, abrasivi, ceramica e vetro",
+   "dipendenti_2025": "50918"
+  },
+  {
+   "code": "B101",
+   "title": "CCNL per gli addetti delle aziende conciarie",
+   "dipendenti_2025": "16167"
+  },
+  {
+   "code": "B122",
+   "title": "CCNL per gli addetti all'industria delle piastrelle di ceramica, dei materiali refrattari, ceramica sanitaria, di porcellane e ceramiche per uso domestico e ornamentale, di ceramica tecnica, di tubi in gres",
+   "dipendenti_2025": "25312"
+  },
+  {
+   "code": "B132",
+   "title": "CCNL per gli addetti delle aziende industriali che producono e trasformano articoli in vetro, comprese le aziende che producono lampade e display",
+   "dipendenti_2025": "28459"
+  },
+  {
+   "code": "B254",
+   "title": "CCNL Energia e Petrolio",
+   "dipendenti_2025": "37504"
+  },
+  {
+   "code": "B282",
+   "title": "CCNL Attività Minerarie",
+   "dipendenti_2025": "1703"
+  },
+  {
+   "code": "B371",
+   "title": "CCNL per gli addetti all'industria della gomma, cavi elettrici ed affini e all'industria delle materie plastiche",
+   "dipendenti_2025": "165681"
+  },
+  {
+   "code": "C011",
+   "title": "CCNL per i dipendenti dalle aziende metalmeccaniche e della installazione di impianti",
+   "dipendenti_2025": "1743897"
+  },
+  {
+   "code": "C016",
+   "title": "CCNL per i lavoratori addetti alle aziende cooperative metalmeccaniche",
+   "dipendenti_2025": "12527"
+  },
+  {
+   "code": "C018",
+   "title": "CCNL per i lavoratori addetti alla piccola e media industria metalmeccanica ed alla installazione di impianti Confapi",
+   "dipendenti_2025": "395443"
+  },
+  {
+   "code": "C021",
+   "title": "CCNL per gli addetti del settore orafo, argentiero e della gioielleria",
+   "dipendenti_2025": "16784"
+  },
+  {
+   "code": "C030",
+   "title": "CCNL Area Meccanica",
+   "dipendenti_2025": "503322"
+  },
+  {
+   "code": "D014",
+   "title": "CCNL per le imprese ed i lavoratori del settore Tessile-Abbigliamento-Moda",
+   "dipendenti_2025": "161564"
+  },
+  {
+   "code": "D018",
+   "title": "CCNL per gli addetti alle piccole e medie industrie del settore tessile-abbigliamento-moda, calzature, pelli e cuoio, penne, spazzole e pennelli, occhiali, giocattoli",
+   "dipendenti_2025": "48501"
+  },
+  {
+   "code": "D0L1",
+   "title": "CCNL lavanderie industriali e centrali di sterilizzazione ed imprese del sistema industriale integrato di beni e servizi tessili e medici affini",
+   "dipendenti_2025": "17432"
+  },
+  {
+   "code": "D111",
+   "title": "CCNL per gli addetti alle industrie manifatturiere delle pelli e succedanei e ombrelli e ombrelloni",
+   "dipendenti_2025": "32062"
+  },
+  {
+   "code": "D121",
+   "title": "CCNL per i lavoratori addetti all'industria delle calzature",
+   "dipendenti_2025": "43337"
+  },
+  {
+   "code": "D231",
+   "title": "CCNL per i lavoratori dipendenti dalle aziende che producono addobbi e ornamenti natalizi, giocattoli, giochi, modellismo, articoli di puericultura",
+   "dipendenti_2025": "3824"
+  },
+  {
+   "code": "D241",
+   "title": "CCNL per gli addetti alle aziende produttrici di penne, matite, parti staccate di matite, penne, articoli affini e per gli addetti alle aziende produttrici di spazzole, pennelli, scope e preparatrici relative materie prime",
+   "dipendenti_2025": "1981"
+  },
+  {
+   "code": "D271",
+   "title": "CCNL per gli addetti alle aziende che producono occhiali e articoli inerenti l'occhialeria",
+   "dipendenti_2025": "23723"
+  },
+  {
+   "code": "E012",
+   "title": "CCNL per l'industria alimentare",
+   "dipendenti_2025": "223627"
+  },
+  {
+   "code": "E015",
+   "title": "CCNL Area Alimentazione-Panificazione",
+   "dipendenti_2025": "131655"
+  },
+  {
+   "code": "E016",
+   "title": "CCNL per i lavoratori dipendenti da aziende cooperative di trasformazione di prodotti agricoli e zootecnici e lavorazione prodotti alimentari",
+   "dipendenti_2025": "15152"
+  },
+  {
+   "code": "E018",
+   "title": "CCNL per i lavoratori dipendenti della piccola e media industria alimentare",
+   "dipendenti_2025": "34646"
+  },
+  {
+   "code": "E023",
+   "title": "CCNL della Panificazione per il personale dipendente da aziende di panificazione anche per attività collaterali e complementari, nonché da negozi di vendita al minuto di pane, generi alimentari e vari",
+   "dipendenti_2025": "44142"
+  },
+  {
+   "code": "E042",
+   "title": "CCNL per i dipendenti delle aziende di lavorazione della foglia di tabacco secco allo stato sciolto",
+   "dipendenti_2025": "173"
+  },
+  {
+   "code": "E071",
+   "title": "CCNL per gli addetti imbarcati su natanti esercenti la pesca marittima",
+   "dipendenti_2025": "9292"
+  },
+  {
+   "code": "E072",
+   "title": "CCNL per gli imbarcati su natanti di cooperative di pesca",
+   "dipendenti_2025": "3173"
+  },
+  {
+   "code": "E076",
+   "title": "CCNL per il personale non imbarcato dipendente da cooperative esercenti attività di pesca marittima, attività di maricoltura, acquacoltura e vallicoltura",
+   "dipendenti_2025": "1749"
+  },
+  {
+   "code": "F012",
+   "title": "CCNL per i lavoratori dipendenti delle imprese edili ed affini e delle Cooperative",
+   "dipendenti_2025": "445037"
+  },
+  {
+   "code": "F015",
+   "title": "CCNL per i lavoratori dipendenti delle imprese artigiane e delle piccole e medie imprese industriali dell'edilizia e affini",
+   "dipendenti_2025": "179470"
+  },
+  {
+   "code": "F018",
+   "title": "CCNL per gli addetti delle piccole e medie industrie edili ed affini",
+   "dipendenti_2025": "70659"
+  },
+  {
+   "code": "F020",
+   "title": "CCNL dei materiali da costruzione",
+   "dipendenti_2025": "11914"
+  },
+  {
+   "code": "F021",
+   "title": "CCNL per i dipendenti delle aziende produttrici di laterizi e manufatti cementizi",
+   "dipendenti_2025": "17879"
+  },
+  {
+   "code": "F032",
+   "title": "CCNL per i dipendenti dalle aziende esercenti la produzione del cemento, della calce e suoi derivati, del gesso e relativi manufatti, delle malte e dei materiali di base per le costruzioni, nonché la produzione promiscua di cemento, calce, gesso e malte",
+   "dipendenti_2025": "10376"
+  },
+  {
+   "code": "F041",
+   "title": "CCNL per i lavoratori dipendenti da aziende esercenti l'attività di escavazione e lavorazione dei materiali lapidei, ghiaia, sabbia e inerti",
+   "dipendenti_2025": "23428"
+  },
+  {
+   "code": "F051",
+   "title": "CCNL Legno, Sughero, Mobile, Arredamento e Boschivi e Forestali",
+   "dipendenti_2025": "113513"
+  },
+  {
+   "code": "F058",
+   "title": "CCNL per i lavoratori della piccola e media industria del legno, del sughero, del mobile e dell'arredamento, e per le industrie boschive e forestali",
+   "dipendenti_2025": "22617"
+  },
+  {
+   "code": "F060",
+   "title": "CCNL Area Legno-Lapidei",
+   "dipendenti_2025": "74000"
+  },
+  {
+   "code": "G011",
+   "title": "CCNL Grafici Editori",
+   "dipendenti_2025": "64240"
+  },
+  {
+   "code": "G016",
+   "title": "CCNL Area Comunicazione",
+   "dipendenti_2025": "30651"
+  },
+  {
+   "code": "G022",
+   "title": "CCNL per i dipendenti delle aziende esercenti l'industria della carta, della cellulosa, pasta legno, fibra vulcanizzata e presfibra e per le aziende cartotecniche e della trasformazione della carta e del cartone",
+   "dipendenti_2025": "58142"
+  },
+  {
+   "code": "G029",
+   "title": "Altre attività di distribuzione di contenutidei servizi innovativi e della microimpresa",
+   "dipendenti_2025": "20282"
+  },
+  {
+   "code": "G041",
+   "title": "CCNL aziende editrici e stampatrici di giornali quotidiani ed agenzie di stampa",
+   "dipendenti_2025": "1921"
+  },
+  {
+   "code": "G091",
+   "title": "CCNL per i dipendenti di imprese radio televisive, multimediali e multipiattaforma",
+   "dipendenti_2025": "13296"
+  },
+  {
+   "code": "G111",
+   "title": "CCNL per i dipendenti dell'industria cineaudiovisiva",
+   "dipendenti_2025": "8057"
+  },
+  {
+   "code": "G121",
+   "title": "CCNL per gli addetti alle troupes (tecnici e maestranze) per la produzione di filmati dipendenti da case di produzione cineaudiovisiva",
+   "dipendenti_2025": "16253"
+  },
+  {
+   "code": "G131",
+   "title": "CCNL per i Generici dipendenti operanti sui set di ripresa cineteleaudiovisiva",
+   "dipendenti_2025": "6287"
+  },
+  {
+   "code": "G161",
+   "title": "CCNL del settore doppiaggio",
+   "dipendenti_2025": "1529"
+  },
+  {
+   "code": "G162",
+   "title": "CCNL del Doppiaggio",
+   "dipendenti_2025": "1014"
+  },
+  {
+   "code": "G211",
+   "title": "CCNL esercizi cinematografici",
+   "dipendenti_2025": "7078"
+  },
+  {
+   "code": "G310",
+   "title": "CCNL per gli impiegati e i tecnici dipendenti dai Teatri",
+   "dipendenti_2025": "9918"
+  },
+  {
+   "code": "G321",
+   "title": "CCNL per il personale artistico, tecnico e amministrativo scritturato dai Teatri Nazionali, dai teatri di Rilevante interesse Culturale, dai Centri di produzione e dalle Compagnie teatrali professionali",
+   "dipendenti_2025": "6281"
+  },
+  {
+   "code": "G351",
+   "title": "CCNL per il personale artistico scritturato a tempo determinato dai pubblici esercizi con attività di trattenimento e spettacolo",
+   "dipendenti_2025": "9232"
+  },
+  {
+   "code": "G360",
+   "title": "CCNL artisti, tecnici, amministrativi e ausiliari dipendenti da società cooperative e imprese sociali operanti nel settore della produzione culturale e dello spettacolo",
+   "dipendenti_2025": "9649"
+  },
+  {
+   "code": "G369",
+   "title": "CCNL per i dipendenti delle Fondazioni Lirico Sinfoniche",
+   "dipendenti_2025": "7893"
+  },
+  {
+   "code": "G421",
+   "title": "CCNL per i dipendenti delle aziende videofonografiche",
+   "dipendenti_2025": "1258"
+  },
+  {
+   "code": "G511",
+   "title": "CCNL per i dipendenti dei Fotolaboratori conto terzi",
+   "dipendenti_2025": "1670"
+  },
+  {
+   "code": "H008",
+   "title": "CCNL della Distribuzione Moderna Organizzata (DMO)",
+   "dipendenti_2025": "189411"
+  },
+  {
+   "code": "H011",
+   "title": "CCNL per i dipendenti da aziende del Terziario della Distribuzione e dei Servizi",
+   "dipendenti_2025": "2555539"
+  },
+  {
+   "code": "H012",
+   "title": "CCNL per i dipendenti da aziende del terziario della distribuzione e dei servizi",
+   "dipendenti_2025": "80752"
+  },
+  {
+   "code": "H016",
+   "title": "CCNL per i dipendenti da imprese della distribuzione cooperativa",
+   "dipendenti_2025": "63201"
+  },
+  {
+   "code": "H024",
+   "title": "CCNL per i quadri direttivi, impiegati ed operai dipendenti dei settori del Commercio",
+   "dipendenti_2025": "59853"
+  },
+  {
+   "code": "H04Z",
+   "title": "CCNL per i dipendenti delle imprese di Viaggi e Turismo",
+   "dipendenti_2025": "18018"
+  },
+  {
+   "code": "H052",
+   "title": "CCNL per i dipendenti da aziende del settore Turismo",
+   "dipendenti_2025": "565582"
+  },
+  {
+   "code": "H058",
+   "title": "CCNL per i dipendenti da Aziende del Settore Turismo",
+   "dipendenti_2025": "70278"
+  },
+  {
+   "code": "H05B",
+   "title": "CCNL per i dipendenti dell'Industria Turistica",
+   "dipendenti_2025": "39735"
+  },
+  {
+   "code": "H05K",
+   "title": "CCNL per i dirigenti, quadri, impiegati ed operai dipendenti dei settori Turismo, Agenzie di viaggio e Pubblici esercizi",
+   "dipendenti_2025": "42201"
+  },
+  {
+   "code": "H05Y",
+   "title": "CCNL per i dipendenti da aziende dei settori Pubblici Esercizi, Ristorazione Collettiva e Commerciale e Turismo",
+   "dipendenti_2025": "804596"
+  },
+  {
+   "code": "H077",
+   "title": "CCNL per i dipendenti degli impianti e delle attività sportive profit e no profit",
+   "dipendenti_2025": "35533"
+  },
+  {
+   "code": "H0B1",
+   "title": "CCNL per i dipendenti da agenti immobiliari professionali e da mandatari a titolo oneroso",
+   "dipendenti_2025": "6525"
+  },
+  {
+   "code": "H121",
+   "title": "CCNL dipendenti delle farmacie private",
+   "dipendenti_2025": "79349"
+  },
+  {
+   "code": "H124",
+   "title": "CCNL per i dipendenti delle imprese gestite o partecipate dagli enti locali, esercenti farmacie, parafarmacie, magazzini farmaceutici all'ingrosso, laboratori farmaceutici",
+   "dipendenti_2025": "6389"
+  },
+  {
+   "code": "H201",
+   "title": "CCNL per i dipendenti da Aziende esercenti la lavorazione, il commercio, il trasporto, l'esportazione e l'importazione all'ingrosso di fiori freschi recisi, verde e piante ornamentali per imprese commerciali, consortili o cooperative e G.E.I.E.",
+   "dipendenti_2025": "1246"
+  },
+  {
+   "code": "H341",
+   "title": "CCNL per i dipendenti da Aziende Ortofrutticole ed Agrumarie",
+   "dipendenti_2025": "9220"
+  },
+  {
+   "code": "H401",
+   "title": "CCNL dipendenti da proprietari di fabbricati",
+   "dipendenti_2025": "36089"
+  },
+  {
+   "code": "H442",
+   "title": "CCNL per i dipendenti degli studi e delle attività professionali",
+   "dipendenti_2025": "341015"
+  },
+  {
+   "code": "H501",
+   "title": "CCNL sulla disciplina del rapporto di lavoro domestico",
+   "dipendenti_2025": "523618"
+  },
+  {
+   "code": "H515",
+   "title": "CCNL Area Acconciatura ed Estetica",
+   "dipendenti_2025": "145039"
+  },
+  {
+   "code": "H601",
+   "title": "CCNL per i dipendenti di Centri Elaborazione Dati (CED), imprese ICT, professioni digitali e STP",
+   "dipendenti_2025": "21843"
+  },
+  {
+   "code": "HV17",
+   "title": "CCNL vigilanza privata e servizi di sicurezza",
+   "dipendenti_2025": "97097"
+  },
+  {
+   "code": "HV19",
+   "title": "CCNL per i dipendenti da Istituti e Imprese di vigilanza privata e servizi fiduciari",
+   "dipendenti_2025": "17051"
+  },
+  {
+   "code": "I022",
+   "title": "CCNL Autoferrotranvieri e Internavigatori (Mobilità - TPL)",
+   "dipendenti_2025": "113950"
+  },
+  {
+   "code": "I100",
+   "title": "CCNL logistica, trasporto merci e spedizione (personale non dirigente)",
+   "dipendenti_2025": "577472"
+  },
+  {
+   "code": "I192",
+   "title": "CCNL per il personale dipendente da società e consorzi concessionari di autostrade e trafori",
+   "dipendenti_2025": "12920"
+  },
+  {
+   "code": "I320",
+   "title": "CCNL della mobilità - area contrattuale attività ferroviarie",
+   "dipendenti_2025": "87954"
+  },
+  {
+   "code": "I391",
+   "title": "CCNL unico dell'industria armatoriale",
+   "dipendenti_2025": "30854"
+  },
+  {
+   "code": "I481",
+   "title": "CCNL dipendenti delle agenzie marittime raccomandatarie e mediatori marittimi",
+   "dipendenti_2025": "5260"
+  },
+  {
+   "code": "I5G1",
+   "title": "CCNL per i lavoratori dei porti",
+   "dipendenti_2025": "16267"
+  },
+  {
+   "code": "I726",
+   "title": "CCNL per gli ormeggiatori e barcaioli dei porti italiani",
+   "dipendenti_2025": "1183"
+  },
+  {
+   "code": "I810",
+   "title": "CCNL del trasporto aereo",
+   "dipendenti_2025": "56308"
+  },
+  {
+   "code": "I911",
+   "title": "CCNL per gli addetti degli Impianti di trasporto a Fune",
+   "dipendenti_2025": "6685"
+  },
+  {
+   "code": "IB11",
+   "title": "CCNL per il personale dipendente da imprese esercenti attività di pompe e trasporti funebri",
+   "dipendenti_2025": "14670"
+  },
+  {
+   "code": "IB17",
+   "title": "CCNL per i dipendenti delle imprese pubbliche del settore funerario",
+   "dipendenti_2025": "744"
+  },
+  {
+   "code": "IC35",
+   "title": "CCNL per i dipendenti da imprese esercenti autorimesse, noleggio auto con autista, locazione automezzi, noleggio motoscafi, posteggio e custodia autovettura su suolo pubblico e/o privato, lavaggio automatico e non automatico, attività di soccorso stradale …",
+   "dipendenti_2025": "41438"
+  },
+  {
+   "code": "IC36",
+   "title": "CCNL per i dipendenti da imprese esercenti il noleggio autobus con conducente e le relative attività correlate",
+   "dipendenti_2025": "5422"
+  },
+  {
+   "code": "IC37",
+   "title": "CCNL per i lavoratori dipendenti delle imprese artigiane di noleggio autobus con conducente e le relative attività correlate",
+   "dipendenti_2025": "1116"
+  },
+  {
+   "code": "IC50",
+   "title": "dipendenti di cooperative esercenti attività nel settore taxi, radio taxi e settori strumentali e collaterali al trasporto pubblico locale non di linea",
+   "dipendenti_2025": "2994"
+  },
+  {
+   "code": "IC91",
+   "title": "CCNL del personale dipendente delle aziende esercenti l'attività di autoscuola, scuola nautica e di studio di consulenza automobilistica e nautica",
+   "dipendenti_2025": "9816"
+  },
+  {
+   "code": "J121",
+   "title": "CCNL per il personale dipendente non dirigente delle imprese di assicurazione",
+   "dipendenti_2025": "44635"
+  },
+  {
+   "code": "J131",
+   "title": "CCNL per il personale dipendente non dirigente delle imprese di assicurazione/assistenza",
+   "dipendenti_2025": "8600"
+  },
+  {
+   "code": "J153",
+   "title": "CCNL per i dipendenti dalle agenzie di assicurazione in gestione libera",
+   "dipendenti_2025": "16568"
+  },
+  {
+   "code": "J154",
+   "title": "agenzie di assicurazione in gestione libera",
+   "dipendenti_2025": "17729"
+  },
+  {
+   "code": "J241",
+   "title": "CCNL per i quadri direttivi e per il personale delle aree professionali dipendenti dalle imprese creditizie, finanziarie e strumentali",
+   "dipendenti_2025": "258443"
+  },
+  {
+   "code": "J271",
+   "title": "CCNL per i quadri direttivi e per il personale delle aree professionali delle Banche di Credito Cooperativo Casse Rurali ed Artigiane",
+   "dipendenti_2025": "37717"
+  },
+  {
+   "code": "K051",
+   "title": "CCNL per i lavoratori addetti al settore elettrico",
+   "dipendenti_2025": "63163"
+  },
+  {
+   "code": "K321",
+   "title": "CCNL per il settore GAS-ACQUA",
+   "dipendenti_2025": "58430"
+  },
+  {
+   "code": "K411",
+   "title": "CCNL per il personale dipendente da imprese esercenti servizi di telecomunicazione",
+   "dipendenti_2025": "117991"
+  },
+  {
+   "code": "K461",
+   "title": "CCNL per i lavoratori dipendenti delle aziende termali",
+   "dipendenti_2025": "4293"
+  },
+  {
+   "code": "K511",
+   "title": "CCNL per il personale dipendente da imprese esercenti servizi di pulizia e servizi integrati/multiservizi",
+   "dipendenti_2025": "403136"
+  },
+  {
+   "code": "K512",
+   "title": "imprese di pulizia, di disinfestazione e servizi integrati / multiservizi",
+   "dipendenti_2025": "3129"
+  },
+  {
+   "code": "K521",
+   "title": "CCNL per i dipendenti delle imprese artigiane esercenti servizi di pulizia, disinfezione, disinfestazione, derattizzazione e sanificazione",
+   "dipendenti_2025": "76305"
+  },
+  {
+   "code": "K540",
+   "title": "CCNL dei Servizi Ambientali",
+   "dipendenti_2025": "125920"
+  },
+  {
+   "code": "K711",
+   "title": "CCNL per le imprese private operanti nel settore della distribuzione, del recapito e dei servizi postali e per le imprese che svolgono attività di vendita al dettaglio in aree pubbliche e/o private oppure in forma itinerante",
+   "dipendenti_2025": "2749"
+  },
+  {
+   "code": "K721",
+   "title": "CCNL per imprese esercenti servizi postali in appalto",
+   "dipendenti_2025": "4133"
+  },
+  {
+   "code": "T011",
+   "title": "CCNL per il personale non medico dipendente degli IRCCS e delle strutture sanitarie ospedaliere iscritte ad Aiop e Aris",
+   "dipendenti_2025": "146585"
+  },
+  {
+   "code": "T021",
+   "title": "CCNL ANFFAS",
+   "dipendenti_2025": "5852"
+  },
+  {
+   "code": "T090",
+   "title": "CCNL per il personale dipendente da residenze sanitarie assistenziali e centri di riabilitazione",
+   "dipendenti_2025": "19517"
+  },
+  {
+   "code": "T091",
+   "title": "CCNL per il personale delle RSA e delel altre strutture residenziali e socio-assistenziali",
+   "dipendenti_2025": "17840"
+  },
+  {
+   "code": "T09M",
+   "title": "CCNL per il personale dipendente del settore assistenziale, socio-sanitario e delle cure post-intensive",
+   "dipendenti_2025": "4839"
+  },
+  {
+   "code": "T111",
+   "title": "CCNL Socio-Assistenziale AGIDAE",
+   "dipendenti_2025": "18367"
+  },
+  {
+   "code": "T131",
+   "title": "CCNL ANASTE per il personale dipendente delle strutture territoriali",
+   "dipendenti_2025": "13091"
+  },
+  {
+   "code": "T141",
+   "title": "CCNL per il personale dipendente dai settori socio assistenziale, socio sanitario ed educativo UNEBA",
+   "dipendenti_2025": "124514"
+  },
+  {
+   "code": "T151",
+   "title": "CCNL Cooperative Sociali",
+   "dipendenti_2025": "436913"
+  },
+  {
+   "code": "T231",
+   "title": "CCNL ANINSEI per il personale della scuola non statale",
+   "dipendenti_2025": "69524"
+  },
+  {
+   "code": "T241",
+   "title": "CCNL per il personale direttivo, docente, amministrativo, tecnico ed ausiliario occupato negli Istituti aderenti all'AGIDAE",
+   "dipendenti_2025": "35346"
+  },
+  {
+   "code": "T261",
+   "title": "CCNL per la Formazione Professionale",
+   "dipendenti_2025": "19779"
+  },
+  {
+   "code": "T271",
+   "title": "CCNL per il personale occupato nei servizi dell'infanzia e della prima infanzia, delle scuole e degli enti aderenti e/o rappresentati dalla FISM",
+   "dipendenti_2025": "40849"
+  },
+  {
+   "code": "T411",
+   "title": "CCNL dei dipendenti degli enti previdenziali privati",
+   "dipendenti_2025": "2378"
+  },
+  {
+   "code": "T711",
+   "title": "CCNL per i dipendenti dei servizi della cultura, del turismo, dello sport e del tempo libero",
+   "dipendenti_2025": "7057"
+  },
+  {
+   "code": "V212",
+   "title": "CCNL per la categoria delle Agenzie di somministrazione di lavoro",
+   "dipendenti_2025": "393211"
+  },
+  {
+   "code": "V213",
+   "title": "CCNL per la categoria delle Agenzie di somministrazione di lavoro",
+   "dipendenti_2025": "37288"
+  },
+  {
+   "code": "V750",
+   "title": "CCNL Tessile Abbigliamento calzaturiero - Chimica - Ceramica per le PMI",
+   "dipendenti_2025": "2836"
+  },
+  {
+   "code": "V751",
+   "title": "CCNL Area Tessile-Moda e Chimica-Ceramica",
+   "dipendenti_2025": "127708"
+  },
+  {
+   "code": "V811",
+   "title": "Linee guida per la disciplina del rapporto di lavoro dei dipendenti delle Ambasciate, Consolati, Legazioni, Istituti culturali ed Organismi Internazionali in Italia",
+   "dipendenti_2025": "3761"
+  }
+ ]
+}

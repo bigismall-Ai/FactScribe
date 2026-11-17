@@ -28,3 +28,4 @@ audit/
 !fixtures/**/results/*.log
 !fixtures/**/audit/
 !fixtures/**/audit/**
+integrations/factscribe-legal/corpus-bulk-it/_state/

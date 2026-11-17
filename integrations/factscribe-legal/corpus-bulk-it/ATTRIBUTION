@@ -1,0 +1,76 @@
+意大利集体协议全行业清单与链接层（corpus-bulk-it，CNEL 档案）——来源、许可面与再分发红线
+
+来源   : CNEL — Archivio nazionale dei contratti collettivi di lavoro
+         （L.30 dicembre 1986, n. 936 art.17 法定官方档案；Ufficio IV 管理）
+入口   : https://www.cnel.it/archivio-contratti/entra-nell-archivio
+清单层 : https://www.cnel.it/media/docs/default-source/archivio-contratti---cartelle-excel/
+         ccnl-di-settore-vigenti-e-ultrattivi.xlsx?sfvrsn=eb19a03c_17
+         （「现行或超期有效」专区主表，144 簇，2026-11 更新）
+链接层 : ricerca-api（Azure APIM 网关，检索应用 https://archiviocontratti.cnel.it/ricerca/ 背后接口）
+         POST /ricerca-api/ricerca/pubblica/ccnl                                   簇检索（按 codice 精确过滤）
+         GET  /ricerca-api/ricerca/pubblica/accordi/cerca/accordi/codice-ccnl/<码>?vigenti=true|false
+                                                                                   现行/历史文书列表（分页）
+         （全文取件端点 scarica/accordi/<idAccordo> 已探明但**本层不调用**——只取列表与链接）
+取件日期: 2026-11-17（UTC）
+
+清单 xlsx 钉 sha256：
+  字节数 : 545,236
+  sha256 : 408c0710ed7757f7bbff88511f1ea74e04a696e90c3d10c37bcd7c94754daa2c
+
+————————————————————————————————————————————————————————————
+许可面与红线（与 fr 语料的关键差异，勿混用 fr 模式）
+
+1. 取件合法：官方档案公开、免费、无登录；档案页明文「Tutte le informazioni contenute
+   nell'Archivio possono essere riprodotte indicando la fonte」（可复制，须注明来源）；
+   www.cnel.it robots.txt 全站 Allow（仅禁 /sitefinity/）。
+2. 元数据许可：开放数据端点标 **IODL 2.0**（Italian Open Data License v2.0，≈CC-BY 4.0，
+   排除个人数据）——本目录入仓件（TSV/clusters.json/manifest/state）皆元数据，受其覆盖，
+   再分发须署名 CNEL。
+3. **全文再分发未清权（红线）**：协议文本的当事方在存档原件内自印版权保留句，两试点皆见——
+   - C053 定本页脚：「Il contenuto di questo contratto è di proprietà di Conflavoro PMI –
+     È severamente vietata la riproduzione in qualsiasi forma」；
+   - H011 Testo Unico 卷首专页：「Proprietà riservata…ne inibiscono la riproduzione totale
+     o parziale ad enti, imprese e privati, riservandosi ogni azione」。
+   ⇒ CNEL 的「可复制注明来源」与当事方保留句存在张力；**全文 PDF 不得对外再分发**
+   （不入 GitHub Release、不入公开仓）；内部研究语料（blobstore 对账用）与闸内短引文除外。
+   试点全文 2 件存工作区非 git 位 SiAgent/corpus/it-cc/samples/（内部用）。
+
+————————————————————————————————————————————————————————————
+本目录内容（皆元数据，无全文）
+
+- it-inventory-vigenti.tsv      清单主表 144 簇（码/标题/签约方/到期/覆盖数）
+- it-clusters.json              采集器输入（码＋标题）
+- it-ccnl-accordi-manifest.ndjson  append-only：inventory 行（xlsx sha 变更才追加）＋
+                                accordi 行（簇的列表快照，sha 变更才追加）＋anomaly 行（被拦/未命中存证）
+- it-harvest-state.json         增量索引：每簇 {ts, sha, nVigenti, nStorici}
+- _state/（gitignored）         xlsx 缓存、request-log.ndjson（逐请求审计）、run-config.json
+
+manifest accordi 行结构：
+  {kind:"accordi", ts, codice, idCcnl[], sha, nVigenti, nStorici,
+   content:{codice, harvested, faces:{<idCcnl>:{cluster, vigenti[], storici[]}}}}
+  文书记录含 idAccordo / identificativoAccordo / 七日期 / tipologiaAccordo / 签约方等；
+  全文取件链接可由 idAccordo 推导：
+  https://az-apim-cne-sa-0002-lgc-we.azure-api.net/ricerca-api/ricerca/pubblica/accordi/scarica/accordi/<idAccordo>
+
+————————————————————————————————————————————————————————————
+增量更新协议（周更口径）
+
+  # 清单层（www 域，裸 curl 可通；xlsx sha 变化才追加 manifest 行）
+  python3 -I scripts/it_cnel_inventory.py fetch
+  python3 -I scripts/it_cnel_inventory.py verify
+
+  # 链接层（真浏览器会话；Akamai 拒裸客户端）
+  #   先写 _state/run-config.json（spaceName 每次须唯一），再：
+  ego-browser nodejs < scripts/it_cnel_harvest.js
+
+  增量规则：it-harvest-state.json 内未过期（默认 144h）的簇跳过；
+  sha 变化的簇才追加 manifest 快照行——常态周更只落增量行。
+  被拦（Akamai 403）即停：进度已在 state，冷却 ≥45min 后重跑即续；
+  anomaly 行是被拦/未命中存证，不回滚不清洗（只追加账）。
+
+礼貌参数（预注册，改动须重新裁定）：
+  并发 1；请求间隔 5000–9000ms 随机；每 40 簇段间停顿 15–25s；
+  页面加载后拟人暖机（等 8s＋开合高级检索面板）；403 退避 15s 重试一次，再拦即停；
+  UA＝真实浏览器（ego-browser 会话）；逐请求入 request-log.ndjson 审计。
+  经验（2026-11-17）：交互式探查跑得太密曾致 Akamai 会话低分连 403——冷却 45min 后恢复，
+  批量跑宁可慢勿密。

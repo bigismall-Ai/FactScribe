@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import mirror
 from . import mdscan
 from .audit import _aggregate_exit, run_audit, run_check, source_base
 from .checks import aggregate_exit as checks_aggregate_exit
@@ -258,6 +259,21 @@ def build_parser() -> argparse.ArgumentParser:
                             help="中文字体文件（缺省用 fc-match 找 STHeiti）")
             sp.add_argument("--keep-temp", action="store_true",
                             help="保留临时副本并打印路径（默认清理）")
+    sp = sub.add_parser(
+        "mirror-check",
+        help="双语双盘账本逐条比对（facts 承重字段＋bib 条目级）",
+        description="比对两个论文盘（如 paper-b 与 paper-b-zh）的账本："
+                    "facts/*.toml 逐 id 比对承重字段（claim/value/display/source/"
+                    "source_sha256/locator/expr/derived_from/kind），"
+                    "refs.bib 条目级比对（title/author/year/doi/arXiv id）。"
+                    "豁免面不判漂：sections/ 正文、main.tex 导言区、GLOSSARY.md、"
+                    "生成物、以及 fact 的 confidence（人签置信升级）与 note。"
+                    "只读：不写盘、不自动同步。退出码 0＝零漂移、1＝漂移红"
+                    "（逐条列盘/文件/id/字段/两侧值）、2＝用法或结构错。")
+    sp.add_argument("disk_a", metavar="盘A", help="第一个论文盘（项目目录）")
+    sp.add_argument("disk_b", metavar="盘B", help="第二个论文盘（项目目录）")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
         description="事实账命令组。fact add 校验 id 与 source，自动把 sha256 写进 "
@@ -1022,6 +1038,20 @@ def cmd_check(args) -> int:
     return code
 
 
+def cmd_mirror_check(args) -> int:
+    """双语双盘账本逐条比对（CARD-G5）：只读，不写盘。"""
+    result = mirror.check(Path(args.disk_a), Path(args.disk_b))
+    code = result.exit_code
+    payload = _payload("mirror-check",
+                       "drift" if code == EXIT_RED else "ok", code,
+                       summary=result.summary(),
+                       drift=mirror.drift_dicts(result))
+    payload["disk_a"] = str(result.disk_a)
+    payload["disk_b"] = str(result.disk_b)
+    _emit(payload, mirror.render(result), args.json)
+    return code
+
+
 def cmd_audit(args) -> int:
     cfg = load_config(Path(args.project))
     # 批 130：audit 也把「本项目改过规则」摆在报告里（informational，
@@ -1723,6 +1753,7 @@ def main(argv=None) -> int:
         code = exc.code if isinstance(exc.code, int) else EXIT_CONFIG
         return code
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
+                "mirror-check": cmd_mirror_check,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,

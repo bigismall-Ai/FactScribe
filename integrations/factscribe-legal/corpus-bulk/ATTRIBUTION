@@ -1,0 +1,30 @@
+法国法条全量语料（corpus-bulk/fr，LEGI 全量包）——许可与署名
+
+许可   : Licence ouverte v2.0（Etalab / DILA，开放许可 2.0）
+发布方 : DILA — Direction de l'Information Légale et Administrative
+档案   : https://echanges.dila.gouv.fr/OPENDATA/LEGI/Freemium_legi_global_20261108-140000.tar.gz
+下载日期: 2026-11-16（UTC）
+
+署名三件套（Open Licence 2.0 要求）：
+  ① 发布方：DILA（Direction de l'Information Légale et Administrative）
+  ② 源 URL：https://echanges.dila.gouv.fr/OPENDATA/LEGI/
+     ＋包名 Freemium_legi_global_20261108-140000.tar.gz
+  ③ 下载日期：2026-11-16（UTC）
+
+源包整包**钉了 sha256**：
+  包名   : Freemium_legi_global_20261108-140000.tar.gz
+  字节数 : 1,260,809,118
+  sha256 : 90c9dc4a0a362943eef055881f00a727ac5d5f08fb9b4ec472e9da6da572bda2
+
+本目录内容与许可关系：
+- 本目录不直接存放官方字节副本（17GB 级解包与原始 tar 包不入仓），入仓的是
+  入库脚本（scripts/ingest_fr_blobstore.py）与逐件 mapping manifest
+  （fr-blobstore-manifest.jsonl：每行 path＋sha256＋字节数＋blobstore sha16）。
+- 官方条文与其证据卡的全量本体以 blobstore 内容寻址压缩快照分发
+  （GitHub Release 资产 blobs.sqlite：343,604 块＝171,801 对条文 XML＋证据卡
+  ＋index.json＋view_current.jsonl，zstd＋训练字典压缩）。每块内容经
+  sha256 寻址，逐件与上表 manifest 可对账：对不上即与取件时不一致。
+- 该快照属 Open Licence 2.0 允许的再分发；**再分发须保留本署名**。
+- 逐件级来源与取数时间（dila://increment/20261108#LEGIARTI… ＋ sha256）见
+  取件批的 manifest.json（留盘账本，随 corpus-bulk 数据目录存工作机，
+  不入仓）。

@@ -302,7 +302,16 @@ def _severity_of(code: int) -> str:
     return "error"
 
 
-def _payload(command: str, status: str, code: int, **kw) -> dict:
+def _payload(command: str, status: str, code: int, /, **kw) -> dict:
+    """统一 JSON payload 骨架：`exit` 是退出码，其余键走 **kw。
+
+    G2-FIX：前三个形参是**仅位置**的（`/` 之后）。理由：`code` 同时是本函数
+    的第 3 个形参名，而调用方常要往 payload 里塞一个 `code=` 键（错误码）。
+    形参不是仅位置时，`_payload(cmd, "error", EXIT_CONFIG, code=code)` 会同时
+    按位置与按关键字绑定 `code` → `TypeError: _payload() got multiple values
+    for argument 'code'`——正是 G2 验收时 `figures gen` 崩成 exit 4 的根因。
+    仅位置之后，`code=` 只会落进 **kw（payload 里的 "code" 键），不再撞形参。
+    """
     d = {"schema_version": SCHEMA_VERSION, "tool": "factscribe", "version": VERSION,
          "command": command, "status": status, "severity": _severity_of(code),
          "exit": code}

@@ -61,7 +61,7 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 | `terms` | Term candidates: `suggest`, then `add` only what you picked |
 | `refs` | Literature registry: `dedupe` finds two keys pointing at one paper (same DOI / arXiv id), `register` checks the to-fill table `refs/todo.toml` and names each missing field, `search` fetches candidate metadata (the only networked action — it sends the query terms only, and promoting a candidate into the formal bib stays a human act) |
 | `mirror-check` | Bilingual dual-disk ledger comparison: load-bearing fact fields plus bib entries, every drift listed (disk / file / id / field / both values) |
-| `figures` | Chart pipeline: human-written specs `figures/*.fig.toml` (kinds bar / line / table; data points may only cite fact ids, bare numbers are refused); mechanical output of a pgfplots `.tex`, a per-figure `.csv` and a binding table; `check` compares four faces (spec / binding table / per-figure CSV / current ledger) and turns red when the ledger moved but the figure was not regenerated |
+| `figures` | Chart pipeline: human-written specs `figures/*.fig.toml` (kinds bar / line / table; data points may only cite fact ids, bare numbers are refused; a spec may use the flat keys or the nested `[figure]` + `[[point]]` shape, and a missing name defaults to the file stem; no `factscribe.toml` required); mechanical output of a pgfplots `.tex`, a per-figure `.csv` and a binding table; `check` compares four faces (spec / binding table / per-figure CSV / current ledger) and turns red when the ledger moved but the figure was not regenerated |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 

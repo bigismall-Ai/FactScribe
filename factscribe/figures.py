@@ -35,7 +35,8 @@ from dataclasses import dataclass
 from dataclasses import field as dc_field
 from pathlib import Path
 
-from .config import ConfigError, facts_digest, load_config, load_facts, load_toml
+from .config import (Config, ConfigError, facts_digest, find_config_file,
+                     load_config, load_facts, load_toml)
 from .facts import canon_text, latex_display
 from .scaffold import toml_string
 
@@ -54,9 +55,19 @@ KINDS = ("bar", "line", "table")
 # 规格表认识的键（闭集：写错键名要报错，不许默默忽略）。
 SPEC_KEYS = ("name", "kind", "caption", "xlabel", "ylabel", "data", "labels")
 
+# 嵌套形态的规格：`[figure]` 表（图型与文字位）＋ `[[point]]` 表数组（数据点）。
+# 外行手写的最小规格多半长这样；本工具把它摊平成上面那套扁平键，
+# 两种形态只走一套判据（见 `_flatten_nested_spec`）。
+NESTED_FIGURE_KEYS = ("name", "kind", "caption", "xlabel", "ylabel")
+NESTED_POINT_KEYS = ("fact_id", "label")
+
 _NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
-_DIGIT_RE = re.compile(r"\d")
+# 「自由数字」＝**独立**的数字token：前后不挨着字母/数字/下划线。
+# "X1"、"A1" 这类**标识符里的数字**不是自由数字（图上那个 "1" 是名字的一部分，
+# 不是一笔账外数字）；"56.25"、"Figure 1"、"n=3" 是。
+_FREE_NUM_RE = re.compile(
+    r"(?<![A-Za-z0-9_])[-+]?\d+(?:[.,]\d+)*(?:%|\\%)?(?![A-Za-z0-9_])")
 _PLAIN_NUM_RE = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
 _FRACTION_RE = re.compile(r"^([+-]?\d+(?:\.\d+)?)\s*/\s*([+-]?\d+(?:\.\d+)?)$")
 
@@ -72,6 +83,7 @@ CODE_SPEC_BAD_LABELS = "FIG_SPEC_BAD_LABELS"
 CODE_SPEC_UNIT_MIXED = "FIG_SPEC_UNIT_MIXED"
 CODE_SPEC_UNPLOTTABLE = "FIG_SPEC_UNPLOTTABLE"
 CODE_FACT_NOT_FOUND = "FIG_FACT_NOT_FOUND"
+CODE_FACTS_INVALID = "FIG_FACTS_INVALID"
 CODE_VALUE_DRIFT = "FIG_VALUE_DRIFT"
 CODE_SOURCE_DRIFT = "FIG_SOURCE_DRIFT"
 CODE_CSV_DRIFT = "FIG_CSV_DRIFT"
@@ -119,6 +131,12 @@ def _value_form(value: str) -> tuple[str, str]:
     返回 `(口径, 画图用字符串)`；画不出来的值抛 ConfigError（exit 2）。
     """
     text = latex_display(str(value or "")).strip()
+    if not text:
+        # 值是空的：多半是这条 fact 压根没写 value（FACTS-SCHEMA §11.1：
+        # value 是必需字段）。点名缺哪个，别只说「画不了」。
+        raise ConfigError(
+            "缺 value（FACTS-SCHEMA §11.1：value 是必需字段）——画不了",
+            code=CODE_SPEC_UNPLOTTABLE)
     if "%" in text:
         body = text.replace("%", "").strip()
         if not _PLAIN_NUM_RE.match(body):
@@ -265,11 +283,138 @@ class CheckResult:
 # --------------------------------------------------------------------------
 # 规格读取
 # --------------------------------------------------------------------------
+def _looks_numeric(text: str) -> bool:
+    """这个字符串是不是一个「裸数字」（含分数／百分数形）。"""
+    if _PLAIN_NUM_RE.match(text):
+        return True
+    if _FRACTION_RE.match(text):
+        return True
+    if "%" in text:
+        return True
+    return False
+
+
+def _has_free_number(text: str) -> bool:
+    """这段文字里有没有**账外自由数字**（G2-FIX）。
+
+    "图上每个数都要能回账"指的是**数字**：caption 里写 "56.25" 是账外数字，
+    写 "Figure 1" 也是（那个 1 不在任何 fact 里）。但 "X1"、"A1" 这类**标识符**
+    里的数字是名字的一部分，不是数字主张——照抄 fact id 当标签是本工具的
+    正道，不该被当成裸数字拒收。
+
+    判据：数字token 前后不挨着字母/数字/下划线 ＝ 独立数字（＝自由数字）。
+    """
+    return bool(_FREE_NUM_RE.search(str(text or "")))
+
+
+def _flatten_nested_spec(raw: dict, rel: str) -> tuple:
+    """嵌套形态的规格（`[figure]` ＋ `[[point]]`）→ 扁平形态那套键。
+
+    外行手写的最小规格多半是嵌套的：图型与 caption 放 `[figure]`，数据点
+    放 `[[point]]`（每点一个 `fact_id`，可选 `label`）。这里只做**形状**的
+    摊平与点名，语义判据（裸数字、图型、口径…）仍旧走扁平那套——两种形态
+    只许一套语义。
+
+    返回 `(flat, findings, data_broken)`；`flat["data"]` 一定是 list（缺则空），
+    `data_broken=True` 表示数据点这一块已经点过名了（别再报第二遍）。
+    """
+    findings: list = []
+    flat: dict = {}
+
+    fig = raw.get("figure")
+    if fig is None:
+        findings.append(Finding(
+            CODE_SPEC_BAD_DATA,
+            "%s：缺 [figure] 表（图型 kind 与 caption 写在这里）" % rel,
+            severity="config"))
+        fig = {}
+    elif not isinstance(fig, dict):
+        findings.append(Finding(
+            CODE_SPEC_BAD_DATA,
+            "%s：[figure] 必须是表（现在是 %r）" % (rel, type(fig).__name__),
+            severity="config"))
+        fig = {}
+    else:
+        unknown = sorted(k for k in fig if k not in NESTED_FIGURE_KEYS)
+        if unknown:
+            findings.append(Finding(
+                CODE_SPEC_UNKNOWN_KEY,
+                "%s：[figure] 里未知键 %s（只认 %s）"
+                % (rel, "、".join(unknown), "、".join(NESTED_FIGURE_KEYS)),
+                severity="config"))
+    for key in NESTED_FIGURE_KEYS:
+        if key in fig:
+            flat[key] = fig[key]
+
+    points = raw.get("point")
+    ids: list = []
+    labels: list = []
+    label_flags: list = []
+    data_broken = False
+    if points is None:
+        findings.append(Finding(
+            CODE_SPEC_NO_POINTS,
+            "%s：缺数据点（[[point]]）——图里没有数据点" % rel, severity="config"))
+        data_broken = True
+    elif not isinstance(points, list):
+        findings.append(Finding(
+            CODE_SPEC_BAD_DATA,
+            "%s：[[point]] 必须是表数组（现在是 %r）"
+            % (rel, type(points).__name__), severity="config"))
+        data_broken = True
+    else:
+        for i, point in enumerate(points, 1):
+            if not isinstance(point, dict):
+                findings.append(Finding(
+                    CODE_SPEC_BAD_DATA, "%s：[[point]] 第 %d 项不是表" % (rel, i),
+                    severity="config"))
+                continue
+            unknown = sorted(k for k in point if k not in NESTED_POINT_KEYS)
+            if unknown:
+                findings.append(Finding(
+                    CODE_SPEC_UNKNOWN_KEY,
+                    "%s：[[point]] 第 %d 项未知键 %s（只认 %s）"
+                    % (rel, i, "、".join(unknown), "、".join(NESTED_POINT_KEYS)),
+                    severity="config"))
+            if "fact_id" not in point:
+                findings.append(Finding(
+                    CODE_SPEC_BAD_DATA,
+                    "%s：[[point]] 第 %d 项缺 fact_id（数据点只许引 fact id）"
+                    % (rel, i), severity="config"))
+                continue
+            ids.append(point["fact_id"])
+            has_label = "label" in point
+            label_flags.append(has_label)
+            if has_label:
+                labels.append(point["label"])
+        if labels and not all(label_flags):
+            findings.append(Finding(
+                CODE_SPEC_BAD_LABELS,
+                "%s：有的 [[point]] 写了 label、有的没写——要么都写，要么都不写"
+                % rel, severity="config"))
+            labels = []
+    flat["data"] = ids
+    if labels:
+        flat["labels"] = labels
+
+    unknown_top = sorted(k for k in raw if k not in ("figure", "point"))
+    if unknown_top:
+        findings.append(Finding(
+            CODE_SPEC_UNKNOWN_KEY,
+            "%s：未知键 %s（规格只认 %s 与 [[point]]）"
+            % (rel, "、".join(unknown_top), "、".join(NESTED_FIGURE_KEYS)),
+            severity="config"))
+    return flat, findings, data_broken
+
+
 def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
     """读一张规格表；返回 (spec|None, findings)。
 
     规格错**逐条点名**：一个文件里可能同时有错、未知图型、缺数据点，
     这里一次全收齐，不是一条一条挤牙膏。
+
+    两种形态都收：扁平的顶层键（`kind`/`data`/…），或嵌套的
+    `[figure]` ＋ `[[point]]`（外行手写的那一种）。
     """
     rel = path.relative_to(root).as_posix()
     findings: list = []
@@ -279,14 +424,26 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
         return None, [Finding(CODE_SPEC_BAD_DATA, "%s：规格表读不出来：%s" % (rel, exc),
                               severity="config")]
 
-    unknown = sorted(k for k in raw if k not in SPEC_KEYS)
-    if unknown:
-        findings.append(Finding(
-            CODE_SPEC_UNKNOWN_KEY,
-            "%s：未知键 %s（规格只认 %s）" % (rel, "、".join(unknown), "、".join(SPEC_KEYS)),
-            severity="config"))
+    nested = "figure" in raw or "point" in raw
+    data_label = "data"
+    data_broken = False
+    if nested:
+        raw, shape_findings, data_broken = _flatten_nested_spec(raw, rel)
+        findings.extend(shape_findings)
+        data_label = "[[point]]"
+    else:
+        unknown = sorted(k for k in raw if k not in SPEC_KEYS)
+        if unknown:
+            findings.append(Finding(
+                CODE_SPEC_UNKNOWN_KEY,
+                "%s：未知键 %s（规格只认 %s）" % (rel, "、".join(unknown), "、".join(SPEC_KEYS)),
+                severity="config"))
 
+    # 图名：写了就用写的；没写就拿文件名（`demo.fig.toml` → `demo`）——
+    # 外行手写规格时未必想得起还要写个 name。
     name = str(raw.get("name") or "").strip()
+    if not name:
+        name = path.name[:-len(".fig.toml")] if path.name.endswith(".fig.toml") else path.stem
     if not name:
         findings.append(Finding(CODE_SPEC_BAD_NAME, "%s：缺图名（name）" % rel,
                                 severity="config"))
@@ -305,29 +462,31 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
 
     data = raw.get("data")
     ids: list = []
-    if data is None:
-        findings.append(Finding(CODE_SPEC_NO_POINTS, "%s：缺数据点（data）" % rel,
+    if data_broken:
+        pass                                    # 上面已经点名过了，不重复报
+    elif data is None:
+        findings.append(Finding(CODE_SPEC_NO_POINTS, "%s：缺数据点（%s）" % (rel, data_label),
                                 severity="config"))
     elif not isinstance(data, list):
         findings.append(Finding(
             CODE_SPEC_BAD_DATA,
-            "%s：data 必须是 fact id 列表（现在是 %r）" % (rel, type(data).__name__),
+            "%s：%s 必须是 fact id 列表（现在是 %r）" % (rel, data_label, type(data).__name__),
             severity="config"))
     elif not data:
-        findings.append(Finding(CODE_SPEC_NO_POINTS, "%s：data 是空的——图里没有数据点" % rel,
+        findings.append(Finding(CODE_SPEC_NO_POINTS, "%s：%s 是空的——图里没有数据点" % (rel, data_label),
                                 severity="config"))
     else:
         for i, entry in enumerate(data, 1):
             if not isinstance(entry, str):
                 findings.append(Finding(
                     CODE_SPEC_BAD_DATA,
-                    "%s：data 第 %d 项不是字符串（%r）" % (rel, i, entry),
+                    "%s：%s 第 %d 项不是字符串（%r）" % (rel, data_label, i, entry),
                     severity="config"))
                 continue
             text = entry.strip()
             if not text:
                 findings.append(Finding(
-                    CODE_SPEC_BAD_ID, "%s：data 第 %d 项是空串" % (rel, i),
+                    CODE_SPEC_BAD_ID, "%s：%s 第 %d 项是空串" % (rel, data_label, i),
                     severity="config"))
                 continue
             if _looks_numeric(text):
@@ -336,20 +495,20 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
                 if text.casefold() not in known_ids:
                     findings.append(Finding(
                         CODE_BARE_NUMBER,
-                        "%s：data 第 %d 项 %r 是裸数字——数据点只许引 fact id"
-                        % (rel, i, text),
+                        "%s：%s 第 %d 项 %r 是裸数字——数据点只许引 fact id"
+                        % (rel, data_label, i, text),
                         severity="config"))
                     continue
             if not _ID_RE.match(text):
                 findings.append(Finding(
                     CODE_SPEC_BAD_ID,
-                    "%s：data 第 %d 项 %r 不是合法的 fact id 写法（只许字母数字与 . _ -）"
-                    % (rel, i, text),
+                    "%s：%s 第 %d 项 %r 不是合法的 fact id 写法（只许字母数字与 . _ -）"
+                    % (rel, data_label, i, text),
                     severity="config"))
                 continue
             ids.append(text)
 
-    # 文字位（会进图面）不许带数字：图上每个数都要能回账。
+    # 文字位（会进图面）不许带**账外自由数字**：图上每个数都要能回账。
     texts: dict = {}
     for key in ("caption", "xlabel", "ylabel"):
         value = raw.get(key)
@@ -362,10 +521,10 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
                 % (rel, key, type(value).__name__), severity="config"))
             texts[key] = ""
             continue
-        if _DIGIT_RE.search(value):
+        if _has_free_number(value):
             findings.append(Finding(
                 CODE_BARE_NUMBER,
-                "%s：%s 里出现数字 %r——图上的数只许来自 fact id 引用的数据点"
+                "%s：%s 里出现账外数字 %r——图上的数只许来自 fact id 引用的数据点"
                 % (rel, key, value),
                 severity="config"))
         texts[key] = value.strip()
@@ -384,17 +543,17 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
                         CODE_SPEC_BAD_DATA, "%s：labels 第 %d 项不是字符串" % (rel, i),
                         severity="config"))
                     continue
-                if _DIGIT_RE.search(entry):
+                if _has_free_number(entry):
                     findings.append(Finding(
                         CODE_BARE_NUMBER,
-                        "%s：labels 第 %d 项 %r 里出现数字——图上的数只许来自 fact id"
+                        "%s：labels 第 %d 项 %r 里出现账外数字——图上的数只许来自 fact id"
                         % (rel, i, entry),
                         severity="config"))
                 labels.append(entry.strip())
             if labels and len(labels) != len(ids):
                 findings.append(Finding(
                     CODE_SPEC_BAD_LABELS,
-                    "%s：labels %d 项与 data %d 项对不上" % (rel, len(labels), len(ids)),
+                    "%s：labels %d 项与 %s %d 项对不上" % (rel, len(labels), data_label, len(ids)),
                     severity="config"))
 
     if findings:
@@ -404,17 +563,6 @@ def _parse_spec(path: Path, root: Path, known_ids: set) -> tuple:
                       caption=texts["caption"], xlabel=texts["xlabel"],
                       ylabel=texts["ylabel"], data=ids, labels=labels)
     return spec, []
-
-
-def _looks_numeric(text: str) -> bool:
-    """这个字符串是不是一个「裸数字」（含分数／百分数形）。"""
-    if _PLAIN_NUM_RE.match(text):
-        return True
-    if _FRACTION_RE.match(text):
-        return True
-    if "%" in text:
-        return True
-    return False
 
 
 def load_specs(root: Path, known_ids: set) -> tuple:
@@ -674,6 +822,41 @@ def _diff_points(old: list, new: list) -> list:
 # --------------------------------------------------------------------------
 # gen
 # --------------------------------------------------------------------------
+def _project_config(root: Path) -> Config:
+    """项目声明：有 factscribe.toml 就读它；没有就用默认布局。
+
+    figures 只读两样东西——账本 `facts/*.toml` 与图规格 `figures/*.fig.toml`，
+    不碰 sections/bib/build。所以「外行手写的最小项目」不该因为没先写一份
+    项目声明就跑不动（G2-FIX：原先这里直接 ConfigError，而报错出口自己又崩，
+    整条命令落成 exit 4 的「工具内部错误」）。
+
+    有项目声明时一律照声明走（facts_glob 等仍由项目说了算）。
+    """
+    if find_config_file(root) is None:
+        return Config(root=root)
+    return load_config(root)
+
+
+def _load_ledger(cfg: Config) -> tuple:
+    """读账本＋账本指纹；读不出来 → (None, "", finding)。
+
+    账本坏了是**账面问题**：一律命名错误码＋人话，退出码 2，
+    不许裸异常逃逸到用户面前（G2-FIX）。
+    """
+    try:
+        facts = load_facts(cfg)
+        digest = facts_digest(cfg)
+    except ConfigError as exc:
+        code = getattr(exc, "code", "") or ""
+        if not code or code == "CONFIG_INVALID":
+            code = CODE_FACTS_INVALID
+        return None, "", Finding(code, "账本读不出来：%s" % exc, severity="config")
+    except OSError as exc:
+        return None, "", Finding(CODE_FACTS_INVALID,
+                                 "账本读不出来：%s" % exc, severity="config")
+    return facts, digest, None
+
+
 def generate(root: Path) -> GenResult:
     """按规格生成图产物（CARD-G2 §3）。
 
@@ -682,10 +865,11 @@ def generate(root: Path) -> GenResult:
     时坏图不写、好图照写。
     """
     root = Path(root)
-    cfg = load_config(root)
-    facts = load_facts(cfg)
+    cfg = _project_config(root)
+    facts, digest, ledger_err = _load_ledger(cfg)
+    if ledger_err is not None:
+        return GenResult(root=cfg.root, findings=[ledger_err])
     known_ids = {f.id.strip().casefold() for f in facts}
-    digest = facts_digest(cfg)
 
     specs, findings = load_specs(root, known_ids)
     if findings:
@@ -750,10 +934,11 @@ def check(root: Path) -> CheckResult:
     账本动过而图未重生成必红：value 或 source_sha256 不一致逐点点名。
     """
     root = Path(root)
-    cfg = load_config(root)
-    facts = load_facts(cfg)
+    cfg = _project_config(root)
+    facts, digest, ledger_err = _load_ledger(cfg)
+    if ledger_err is not None:
+        return CheckResult(root=cfg.root, findings=[ledger_err])
     known_ids = {f.id.strip().casefold() for f in facts}
-    digest = facts_digest(cfg)
 
     specs, findings = load_specs(root, known_ids)
     if findings:

@@ -363,5 +363,250 @@ class TestFiguresHouseRules(unittest.TestCase):
         self.assertIn("figures", run_cli("figures", "--help").stdout)
 
 
+# --------------------------------------------------------------------------
+# G2-FIX：外行手写的最小项目
+# --------------------------------------------------------------------------
+# 这一组夹具是**手写**的：不碰上面任何仓内 helper（make_project / add_fact
+# 都不许），也不写项目声明 factscribe.toml——就是一个外行照着 README 抄的
+# 项目：一条只有五个字段的 fact ＋ 一张手写规格表。
+#
+# G2 验收时正是这份夹具把 `figures gen` 打成 exit 4 的「工具内部错误：
+# TypeError: _payload() got multiple values for argument 'code'」。修完必须
+# gen/check 全程 exit 0；缺字段/坏 TOML 一律 exit 2 ＋ 命名错误码。
+# --------------------------------------------------------------------------
+
+# 手写 fact：只有 id/value/source/source_sha256/locator 五个字段
+# （无 claim/kind/note/expr/confidence —— 可选字段缺省，缺必填才拒）。
+OUTSIDER_FACT_TOML = """[[fact]]
+id = "X1"
+value = "42"
+source = "s.csv"
+source_sha256 = "abc"
+locator = "L1"
+"""
+
+# 手写规格表（嵌套形态：[figure] 放图型与 caption，[[point]] 放数据点）。
+OUTSIDER_FIG_TOML = """[figure]
+kind = "bar"
+caption = "smoke"
+[[point]]
+fact_id = "X1"
+label = "X1"
+"""
+
+
+def write_outsider_project(root: Path, *, fact: str = OUTSIDER_FACT_TOML,
+                            fig: str = OUTSIDER_FIG_TOML) -> Path:
+    """手写一个最小项目：**不经任何仓内 helper**，只落盘两个文件。
+
+    没有 factscribe.toml、没有 main.tex、没有 refs.bib——外行手写的东西就这些。
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "facts").mkdir(exist_ok=True)
+    (root / "figures").mkdir(exist_ok=True)
+    (root / "facts" / "a.toml").write_text(fact, encoding="utf-8")
+    (root / "figures" / "demo.fig.toml").write_text(fig, encoding="utf-8")
+    return root
+
+
+class FiguresOutsiderBase(unittest.TestCase):
+    """外行手写夹具的公共底座（仍不碰仓内 helper）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="factscribe-fig-outsider-")
+        self.root = write_outsider_project(Path(self.tmp) / "proj")
+
+    def gen(self, *extra: str):
+        return run_cli("figures", "gen", str(self.root), *extra)
+
+    def check(self, *extra: str):
+        return run_cli("figures", "check", str(self.root), *extra)
+
+
+class TestFiguresOutsiderMinimalProject(FiguresOutsiderBase):
+    """外行手写的最小项目：gen/check 全程 exit 0（不许再是 exit 4）。"""
+
+    def test_gen_is_not_internal_error(self):
+        """G2-FIX 主用例：同一份手写夹具，修前 exit 4，修后 exit 0。"""
+        proc = self.gen()
+        blob = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, blob)
+        self.assertNotIn("工具内部错误", blob)
+        self.assertNotIn("TypeError", blob)
+
+    def test_check_is_not_internal_error(self):
+        proc = self.gen()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        proc = self.check()
+        blob = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 0, blob)
+        self.assertNotIn("工具内部错误", blob)
+        self.assertNotIn("TypeError", blob)
+
+    def test_gen_writes_three_products(self):
+        self.assertEqual(self.gen().returncode, 0)
+        gen = self.root / "figures" / "gen"
+        for name in ("demo.tex", "demo.csv", "demo.bind.toml"):
+            self.assertTrue((gen / name).is_file(), "缺 %s" % name)
+        self.assertTrue((self.root / "figures" / "bind.toml").is_file(),
+                        "缺项目级绑定表 figures/bind.toml")
+
+    def test_check_is_green_after_gen(self):
+        self.assertEqual(self.gen().returncode, 0)
+        proc = self.check()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("零漂移", proc.stdout)
+
+    def test_five_field_fact_is_enough(self):
+        """五字段 fact（无 kind/note/expr/claim/confidence）够用：值能回账。"""
+        self.assertEqual(self.gen().returncode, 0)
+        bind = load_toml(self.root / "figures" / "gen" / "demo.bind.toml")
+        point = bind["point"][0]
+        self.assertEqual(point["fact_id"], "X1")
+        self.assertEqual(point["value"], "42")
+
+    def test_no_project_declaration_is_needed(self):
+        """没有 factscribe.toml 也跑得起来（figures 只读 facts/ 与 figures/）。"""
+        self.assertFalse((self.root / "factscribe.toml").exists())
+        proc = self.gen()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_flat_handwritten_spec_also_works(self):
+        """外行也可能写成扁平形态（顶层键）——同样 exit 0，图名取文件名。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            'kind = "bar"\ncaption = "smoke"\ndata = ["X1"]\nlabels = ["X1"]\n',
+            encoding="utf-8")
+        proc = self.gen()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue((self.root / "figures" / "gen" / "demo.tex").is_file())
+
+    def test_identifier_like_label_is_not_a_bare_number(self):
+        """标签 "X1" 是标识符不是账外数字——照抄 fact id 不该被当裸数字拒收。"""
+        proc = self.gen()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("FIG_BARE_NUMBER", proc.stdout)
+
+    def test_check_before_gen_is_red_not_crash(self):
+        """没生成过就 check → 红（exit 1）点名缺产物，不是 exit 4。"""
+        proc = self.check()
+        blob = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 1, blob)
+        self.assertIn("FIG_ARTIFACT_MISSING", proc.stdout)
+        self.assertNotIn("TypeError", blob)
+
+    def test_ledger_change_without_regen_is_red(self):
+        """账改过而图没重生成 → 逐点点名（外行项目同样适用）。"""
+        self.assertEqual(self.gen().returncode, 0)
+        facts = self.root / "facts" / "a.toml"
+        facts.write_text(facts.read_text(encoding="utf-8").replace(
+            'value = "42"', 'value = "43"'), encoding="utf-8")
+        proc = self.check()
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("FIG_VALUE_DRIFT", proc.stdout)
+        self.assertIn("X1", proc.stdout)
+
+
+class TestFiguresOutsiderRejections(FiguresOutsiderBase):
+    """缺字段/坏 TOML 的规范拒收：一律 exit 2 ＋ 命名错误码＋点名。
+
+    不许「工具内部错误」裸异常逃逸到用户面前（G2-FIX）。
+    """
+
+    def assert_refused(self, proc, code: str):
+        blob = proc.stdout + proc.stderr
+        self.assertEqual(proc.returncode, 2, blob)
+        self.assertIn(code, proc.stdout)
+        self.assertNotIn("工具内部错误", blob)
+        self.assertNotIn("TypeError", blob)
+
+    def test_fact_missing_id_is_refused(self):
+        """缺必填 id → exit 2，点名缺哪个字段。"""
+        (self.root / "facts" / "a.toml").write_text(
+            '[[fact]]\nvalue = "42"\nsource = "s.csv"\n'
+            'source_sha256 = "abc"\nlocator = "L1"\n', encoding="utf-8")
+        self.assert_refused(self.gen(), "FACT_ID_MISSING")
+
+    def test_fact_missing_value_is_refused(self):
+        """缺必填 value → exit 2，点名缺哪个字段。"""
+        (self.root / "facts" / "a.toml").write_text(
+            '[[fact]]\nid = "X1"\nsource = "s.csv"\n'
+            'source_sha256 = "abc"\nlocator = "L1"\n', encoding="utf-8")
+        proc = self.gen()
+        self.assert_refused(proc, "FIG_SPEC_UNPLOTTABLE")
+        self.assertIn("value", proc.stdout)
+
+    def test_broken_fact_toml_is_refused(self):
+        """账本 TOML 坏掉 → exit 2 ＋ 命名错误码，不许 exit 4。"""
+        (self.root / "facts" / "a.toml").write_text(
+            '[[fact]]\nid = "X1\nvalue = "42"\n', encoding="utf-8")
+        proc = self.gen()
+        self.assert_refused(proc, "FIG_FACTS_INVALID")
+        self.assertIn("a.toml", proc.stdout)
+
+    def test_broken_spec_toml_is_refused(self):
+        """规格表 TOML 坏掉 → exit 2 ＋ 命名错误码。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar\n', encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_SPEC_BAD_DATA")
+
+    def test_spec_missing_kind_is_refused(self):
+        """规格缺图型 → exit 2，点名缺哪个字段。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\ncaption = "smoke"\n[[point]]\nfact_id = "X1"\n',
+            encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_SPEC_BAD_KIND")
+
+    def test_spec_missing_points_is_refused(self):
+        """规格缺数据点 → exit 2，点名缺哪个字段。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar"\ncaption = "smoke"\n', encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_SPEC_NO_POINTS")
+
+    def test_point_missing_fact_id_is_refused(self):
+        """数据点没写 fact_id → exit 2，点名缺哪个字段。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar"\ncaption = "smoke"\n[[point]]\nlabel = "X1"\n',
+            encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_SPEC_BAD_DATA")
+
+    def test_bare_number_still_refused(self):
+        """裸数字仍然 exit 2（硬门不许松）。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar"\ncaption = "smoke"\n[[point]]\nfact_id = "56.25"\n',
+            encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_BARE_NUMBER")
+
+    def test_free_number_in_caption_is_refused(self):
+        """caption 里的**账外自由数字**仍然 exit 2（"X1" 这种标识符不算）。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar"\ncaption = "Figure 1"\n[[point]]\nfact_id = "X1"\n',
+            encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_BARE_NUMBER")
+
+    def test_identifier_digits_in_label_are_allowed(self):
+        """标签里的标识符数字（X1）不算账外数字——照抄 fact id 是正道。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "bar"\ncaption = "smoke"\n'
+            '[[point]]\nfact_id = "X1"\nlabel = "X1"\n', encoding="utf-8")
+        proc = self.gen()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("FIG_BARE_NUMBER", proc.stdout)
+
+    def test_refused_spec_writes_no_artifacts(self):
+        """规格坏了不许半生成（一个字都不许落盘）。"""
+        (self.root / "figures" / "demo.fig.toml").write_text(
+            '[figure]\nkind = "heatmap"\ncaption = "smoke"\n[[point]]\nfact_id = "X1"\n',
+            encoding="utf-8")
+        self.assert_refused(self.gen(), "FIG_SPEC_BAD_KIND")
+        self.assertFalse((self.root / "figures" / "gen" / "demo.tex").is_file())
+        self.assertFalse((self.root / "figures" / "bind.toml").is_file())
+
+    def test_check_also_refuses_broken_input(self):
+        """check 与 gen 同一套拒收口径。"""
+        (self.root / "facts" / "a.toml").write_text("[[fact]]\nid = \n", encoding="utf-8")
+        self.assert_refused(self.check(), "FIG_FACTS_INVALID")
+
+
 if __name__ == "__main__":
     unittest.main()

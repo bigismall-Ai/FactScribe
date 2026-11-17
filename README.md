@@ -38,7 +38,7 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 
 ## 二十二个命令
 
-`factscribe` 一共二十二个子命令。上手两条，其余按用途分。
+`factscribe` 一共二十五个子命令。上手两条，其余按用途分。
 
 | 命令 | 干什么 |
 |---|---|
@@ -66,6 +66,8 @@ python3 -m factscribe style --doc README.md    # 单篇文风体检
 | `prescribe` | 处方层：只给可执行改法，不进判据、不产生分数 |
 | `fonts` | Fandol 中文字体：`--status` 看状态，`--fetch` 下载到本地缓存 |
 | `terms` | 术语候选：`suggest` 提候选，`add` 只写你勾的 |
+| `refs` | 文献登记面：`dedupe` 查 bib 跨条目同 DOI／同 arXiv id、`register` 核对待补登记表 `refs/todo.toml`（缺字段逐项点名）、`search` 联网取候选题录（唯一联网面：只发查询词，候选入正式 bib 必须人采，机器不代签） |
+| `mirror-check` | 双语双盘账本逐条比对：facts 承重字段＋bib 条目级，漂移逐条列（盘／文件／id／字段／两侧值） |
 
 全部支持 `--json`。`check` 与 `audit` 支持 `--strict`，黄牌也当红牌，供 CI 使用。
 
@@ -116,7 +118,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1357 例，全离线
+python3 -m unittest discover -s tests     # 1521 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

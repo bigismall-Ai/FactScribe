@@ -31,7 +31,7 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 
 ## Twenty-two commands
 
-`factscribe` ships twenty-two subcommands. Two get you started; the rest are grouped by purpose.
+`factscribe` ships twenty-five subcommands. Two get you started; the rest are grouped by purpose.
 
 | Command | What it does |
 |---|---|
@@ -59,6 +59,8 @@ Adopting an existing paper? Read [`docs/ADOPT.md`](docs/ADOPT.md) first: it is a
 | `prescribe` | Prescription layer: executable fixes only, no criteria, no score |
 | `fonts` | Fandol fonts: `--status` to check, `--fetch` to cache locally |
 | `terms` | Term candidates: `suggest`, then `add` only what you picked |
+| `refs` | Literature registry: `dedupe` finds two keys pointing at one paper (same DOI / arXiv id), `register` checks the to-fill table `refs/todo.toml` and names each missing field, `search` fetches candidate metadata (the only networked action — it sends the query terms only, and promoting a candidate into the formal bib stays a human act) |
+| `mirror-check` | Bilingual dual-disk ledger comparison: load-bearing fact fields plus bib entries, every drift listed (disk / file / id / field / both values) |
 
 All commands accept `--json`. `check` and `audit` accept `--strict`, which treats yellow as red for CI.
 
@@ -111,7 +113,7 @@ All three limits point at the same promise. The tool keeps ledger, evidence, and
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1357 tests, fully offline
+python3 -m unittest discover -s tests     # 1521 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

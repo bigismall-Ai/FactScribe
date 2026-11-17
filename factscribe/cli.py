@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import mirror
 from . import mdscan
+from . import refs
 from .audit import _aggregate_exit, run_audit, run_check, source_base
 from .checks import aggregate_exit as checks_aggregate_exit
 from .checks import run_packages
@@ -273,6 +274,64 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("disk_a", metavar="盘A", help="第一个论文盘（项目目录）")
     sp.add_argument("disk_b", metavar="盘B", help="第二个论文盘（项目目录）")
     sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "refs",
+        help="文献登记面：跨条目查重 / 待补登记 / 联网检索候选（CARD-G1）",
+        description="文献登记命令组。三个动作："
+                    "refs dedupe 查 bib 跨条目同 DOI／同 arXiv id；"
+                    "refs register 核对待补登记表 refs/todo.toml；"
+                    "refs search 联网取候选题录（唯一联网面）。"
+                    "零 LLM、零第三方依赖；除 refs search 外全部零网络；"
+                    "检索结果只是候选，入正式 refs.bib 必须人采，机器不代签。")
+    rp = sp.add_subparsers(dest="refs_action", required=True)
+    rd = rp.add_parser(
+        "dedupe",
+        help="bib 跨条目查重：同 DOI / 同 arXiv id 即报 REF_DUP_ID",
+        description="解析 bib 全集，按 DOI / arXiv id 归一化后跨条目比对；"
+                    "同标识即报 REF_DUP_ID（黄级），JSON 给出冲突 key 对与"
+                    "文件行号。唯一键缺失（无 DOI 无 arXiv id）的条目只列清单，"
+                    "不判红。退出码 0＝零重复、3＝黄（有重复）、2＝结构错。")
+    rd.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    rd.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    rr = rp.add_parser(
+        "register",
+        help="核对待补文献登记表 refs/todo.toml（人填机器收）",
+        description="读可选登记表 refs/todo.toml，逐条核对必填字段"
+                    "（slug/title/authors/year/venue_or_id/planned_key/section）"
+                    "齐不齐、planned_key 撞不撞既有 bib key、落点节在不在；"
+                    "缺项逐项点名。退出码 0＝逐条齐、1＝红（缺字段／撞 key／"
+                    "落点节缺）、2＝没有登记表或表坏。")
+    rr.add_argument("project", nargs="?", default=".", help="项目目录（默认当前目录）")
+    rr.add_argument("--pick", type=int, default=None, metavar="候选号",
+                    help="从最近一次检索的候选里挑一条写进登记表（仍非正式 bib）")
+    rr.add_argument("--key", default=None, metavar="KEY",
+                    help="配合 --pick：人给的 planned_key（机器不编 key）")
+    rr.add_argument("--section", default=None, metavar="节",
+                    help="配合 --pick：人给的落点节（如 02_related.tex）")
+    rr.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    rs = rp.add_parser(
+        "search",
+        help="联网检索候选元数据（只发查询词；唯一联网面）",
+        description="按查询词去 Crossref / arXiv 取候选题录（题录/作者/年份/"
+                    "DOI 或 arXiv id），原始响应落 refs/candidates/ 并钉 sha256，"
+                    "编号列给人挑。候选与既有 bib/todo 按 DOI/id 查重并标注，"
+                    "重复的不给采纳号。--pick 把挑中的候选写进登记表——"
+                    "仍非正式 refs.bib，入正式 bib 必须人采。退出码 0＝候选已落盘、"
+                    "2＝网络失败（超时／无网／HTTP 错各有各的信息）。")
+    rs.add_argument("query", help="查询词（只发这个词，不发正文与本地路径）")
+    rs.add_argument("--project", default=".", help="项目目录（默认当前目录）")
+    rs.add_argument("--source", choices=("crossref", "arxiv"), default="crossref",
+                    help="检索源（默认 crossref）")
+    rs.add_argument("--pick", type=int, default=None, metavar="候选号",
+                    help="顺手把这条候选写进 refs/todo.toml（仍非正式 bib）")
+    rs.add_argument("--key", default=None, metavar="KEY",
+                    help="配合 --pick：人给的 planned_key（机器不编 key）")
+    rs.add_argument("--section", default=None, metavar="节",
+                    help="配合 --pick：人给的落点节（如 02_related.tex）")
+    rs.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
@@ -1052,6 +1111,69 @@ def cmd_mirror_check(args) -> int:
     return code
 
 
+def cmd_refs_dedupe(args) -> int:
+    """bib 跨条目查重（CARD-G1）：只读、离线。"""
+    result = refs.dedupe(Path(args.project))
+    code = result.exit_code
+    payload = _payload("refs-dedupe",
+                       "ok" if code == EXIT_OK else "violation", code,
+                       summary=result.summary(),
+                       findings=[g.as_dict() for g in result.groups],
+                       issues=[g.as_dict() for g in result.groups],
+                       without_unique_key=list(result.unkeyed))
+    _emit(payload, refs.render_dedupe(result), args.json)
+    return code
+
+
+def cmd_refs_register(args) -> int:
+    """待补文献登记表核对（CARD-G1）：只读。"""
+    picked = None
+    if args.pick is not None:
+        picked, _result = refs.pick_from_latest(
+            Path(args.project), args.pick,
+            planned_key=args.key or "", section=args.section or "")
+    result = refs.register(Path(args.project))
+    code = result.exit_code
+    findings = [f for entry in result.entries for f in entry.findings()]
+    payload = _payload("refs-register",
+                       "ok" if code == EXIT_OK else "violation", code,
+                       summary=result.summary(),
+                       findings=findings,
+                       issues=findings,
+                       entries=[e.as_dict() for e in result.entries])
+    if picked:
+        payload["picked"] = picked
+    _emit(payload, refs.render_register(result), args.json)
+    return code
+
+
+def cmd_refs_search(args) -> int:
+    """联网检索候选（CARD-G1）：唯一联网面；只发查询词。"""
+    result = refs.search(args.query, Path(args.project),
+                         source=args.source)
+    if args.pick is not None:
+        result.picked = refs.pick_candidate(
+            result, args.pick, planned_key=args.key or "",
+            section=args.section or "")
+    code = result.exit_code
+    payload = _payload("refs-search", "ok", code,
+                       summary=result.summary(),
+                       candidates=[c.as_dict() for c in result.candidates])
+    if result.picked:
+        payload["picked"] = result.picked
+    _emit(payload, refs.render_search(result), args.json)
+    return code
+
+
+def cmd_refs(args) -> int:
+    """文献登记面命令族（CARD-G1）。"""
+    if args.refs_action == "dedupe":
+        return cmd_refs_dedupe(args)
+    if args.refs_action == "register":
+        return cmd_refs_register(args)
+    return cmd_refs_search(args)
+
+
 def cmd_audit(args) -> int:
     cfg = load_config(Path(args.project))
     # 批 130：audit 也把「本项目改过规则」摆在报告里（informational，
@@ -1754,6 +1876,7 @@ def main(argv=None) -> int:
         return code
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "mirror-check": cmd_mirror_check,
+                "refs": cmd_refs,
                 "build": cmd_build, "preamble": cmd_preamble,
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,

@@ -172,19 +172,12 @@ table.mt code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#8
 .pt.save{border-color:#b6d8c4;background:#f2faf5;color:#1c6b4c;font-weight:600}
 .pt.save:hover{background:#e2f3e9}
 .pt.cancel{color:#8a8577}
-/* ---------- v2.1 编辑态 ---------- */
-p[data-pid]{position:relative}
-p.editing{background:#fffdf5;border:1px solid #e8dfc4;border-radius:9px;padding:12px 15px;margin:-6px -7px 1.2em;
- outline:none;box-shadow:0 0 0 3px rgba(217,164,65,.1);cursor:text}
-p.editing:focus{background:#fffdf2}
+/* ---------- v4 条目4：Notion 式就地编辑（细淡高亮，无边框框） ---------- */
+p[data-pid]{position:relative;cursor:text}
+p.editing{background:rgba(250,245,232,.55);outline:none;border-radius:6px;cursor:text}
+p.editing:focus{background:rgba(250,245,232,.78)}
 p.editing .fc{cursor:default}
 /* ---------- v2.1 受保护芯片 ---------- */
-.edit-note{display:flex;align-items:center;gap:16px;margin:-4px 0 16px;padding:9px 13px;
- border:1px dashed #c9d8ea;background:#f7fbfe;border-radius:8px;font-size:12px;color:#2f5279;line-height:1.65}
-.edit-note b{color:#1c3d5c}
-.edit-note .en{color:#5a6b7c}
-.edit-note .en-txt{flex:1 1 auto;min-width:0}
-.edit-note .en-btns{flex:0 0 auto;display:flex;gap:7px}
 .pchip{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 6px;margin:0 2px;
  font-size:14.5px;line-height:1.65;white-space:nowrap;vertical-align:baseline;border:1px solid transparent;
  cursor:not-allowed;user-select:none;-webkit-user-select:none;transition:box-shadow .12s}
@@ -437,43 +430,55 @@ body:not([data-view="workbench"]) .rc-collapse,body:not([data-view="workbench"])
    ===================================================================== */
 body{background:#ffffff}
 .shell{max-width:1560px}
-/* ---- 三视图显隐 ---- */
+/* ---- 三视图显隐（含条目7的实验报告视图） ---- */
 .mainview{flex:1 1 auto;min-width:0;display:none;background:#fff}
 body[data-view="projects"] #viewProjects{display:block}
 body[data-view="new"] #viewNew{display:block}
+body[data-view="reports"] #viewReports{display:block}
 body[data-view="projects"] .doc,body[data-view="projects"] .colright{display:none}
 body[data-view="new"] .doc,body[data-view="new"] .colright{display:none}
+body[data-view="reports"] .doc,body[data-view="reports"] .colright{display:none}
 .doc,.colright,.mainview{animation:viewfade .18s ease}
 @keyframes viewfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-/* ---- 左栏（Obsidian 侧栏纪律） ---- */
-.rail{width:236px;flex:0 0 236px;background:#f7f7f5;border-right:1px solid #ececec;
- display:flex;flex-direction:column;overflow:hidden;padding:12px 10px 12px 12px}
-.rail .brand{padding:2px 6px 10px;border-bottom:none;margin-bottom:8px}
-.rail .brand .tb-title{font-size:13.5px;font-weight:700;letter-spacing:.2px;color:#37352f}
-.rail .brand .tb-sub{display:none}
-.lang-seg{display:flex;gap:2px;background:#ececeb;border-radius:7px;padding:2px;margin:0 6px 8px}
+/* ---- 顶栏（三视图恒在，条目2） ---- */
+body{padding-top:52px}
+.topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;
+ display:flex;align-items:center;gap:10px;padding:0 18px;
+ background:rgba(255,255,255,.92);backdrop-filter:saturate(140%) blur(10px);-webkit-backdrop-filter:saturate(140%) blur(10px);
+ border-bottom:1px solid #ececec}
+.tb-brand{font-size:14px;font-weight:700;letter-spacing:.2px;color:#37352f;margin-right:8px}
+.tb-btn{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:12.5px;padding:6px 11px;
+ border:none;border-radius:7px;background:transparent;color:#5f5e5b;cursor:pointer;white-space:nowrap}
+.tb-btn:hover{background:#ececeb;color:#37352f}
+.lang-seg{display:flex;gap:2px;background:#ececeb;border-radius:7px;padding:2px;margin-left:auto}
 .lang-seg button{flex:1;font-family:inherit;font-size:11.5px;padding:4px 0;border:none;border-radius:5px;
  background:transparent;color:#8a8577;cursor:pointer}
 .lang-seg button.on{background:#fff;color:#37352f;font-weight:600;box-shadow:0 1px 2px rgba(15,15,15,.08)}
-.rail-actions{display:flex;gap:6px;margin:0 6px 2px}
-.ra-btn{flex:1 1 auto;display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12.5px;padding:6px 9px;
- border:none;border-radius:6px;background:transparent;color:#5f5e5b;cursor:pointer;white-space:nowrap}
-.ra-btn:hover{background:#ececeb;color:#37352f}
-.ra-plus{flex:0 0 34px;justify-content:center;padding:6px 0}
-.rail .toc{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;margin-top:12px;padding-top:10px;border-top:1px solid #ececec}
-.toc-new{display:flex;align-items:center;gap:6px;margin:0 6px 8px;padding:5px 9px;font-family:inherit;font-size:12px;
- color:#8a8577;background:transparent;border:none;border-radius:6px;cursor:pointer;text-align:left}
-.toc-new:hover{background:#ececeb;color:#37352f}
-.toc-todo{display:none;margin:2px 8px 0;font-size:11.5px;color:#9b9a96;line-height:1.7}
-body:not([data-view="workbench"]) .toc .rail-h,
-body:not([data-view="workbench"]) .toc-new,
-body:not([data-view="workbench"]) #tocList{display:none}
-body:not([data-view="workbench"]) .toc-todo{display:block}
-.rail .rail-h{margin:0 0 8px 8px;font-size:10.5px;letter-spacing:1.2px;color:#a3a29c}
-.rail li a{padding:4px 8px;border-radius:6px;font-size:12.8px;line-height:1.5;color:#5f5e5b}
-.rail li a:hover{background:#ececeb;color:#37352f}
-.rail li a.on{background:#e8e8e6;color:#37352f;font-weight:600}
-.rail li a .en{font-size:10.5px;color:#aaa69c}
+/* ---- 悬浮目录面板（条目3：半透明＋blur，仅 workbench；可收成左缘圆钮） ---- */
+.toc-float{position:fixed;left:16px;top:68px;width:238px;max-height:calc(100vh - 120px);z-index:65;
+ display:flex;flex-direction:column;padding:10px 10px 12px;
+ background:rgba(255,255,255,.72);backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);
+ border:1px solid rgba(15,15,15,.06);border-radius:14px;box-shadow:0 8px 30px rgba(15,15,15,.10);overflow:hidden}
+.toc-float .rail-h{margin:0 0 8px 6px;font-size:10.5px;letter-spacing:1.2px;color:#a3a29c}
+.tf-head{display:flex;align-items:center;margin-bottom:6px}
+.tf-collapse{margin-left:auto;width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+ border:none;background:transparent;color:#a3a29c;border-radius:6px;cursor:pointer;padding:0}
+.tf-collapse:hover{background:#ececeb;color:#37352f}
+.toc-float .toc-new{margin:0 2px 8px}
+.toc-float ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1 1 auto;min-height:0}
+.toc-float li a{padding:4px 8px;border-radius:6px;font-size:12.8px;line-height:1.5;color:#5f5e5b}
+.toc-float li a:hover{background:#ececeb;color:#37352f}
+.toc-float li a.on{background:#e8e8e6;color:#37352f;font-weight:600}
+.toc-float li a .en{font-size:10.5px;color:#aaa69c}
+.toc-fab{position:fixed;left:16px;top:68px;width:42px;height:42px;z-index:65;display:none;
+ align-items:center;justify-content:center;border-radius:50%;cursor:pointer;color:#5f5e5b;
+ background:rgba(255,255,255,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+ border:1px solid rgba(15,15,15,.08);box-shadow:0 4px 16px rgba(15,15,15,.12)}
+.toc-fab:hover{color:#37352f;background:rgba(255,255,255,.95)}
+body.toc-hidden .toc-float{display:none}
+body.toc-hidden .toc-fab{display:flex}
+body:not([data-view="workbench"]) .toc-float,
+body:not([data-view="workbench"]) .toc-fab{display:none}
 #tocList li{display:flex;align-items:center;gap:2px;border-radius:6px;padding-right:2px}
 #tocList li a{flex:1 1 auto;min-width:0}
 #tocList .cn{display:block}
@@ -489,10 +494,12 @@ body:not(.panel-en) #tocList .en{display:none}
 .topb{border:none;background:none;color:#9b9a96;cursor:pointer;padding:3px;border-radius:4px;display:flex}
 .topb:hover{background:#e3e2df;color:#37352f}
 .topb.tdel:hover{color:#9a3b1e;background:#f7ebe6}
-/* ---- 正文列（Notion 文档页） ---- */
-.doc{background:#fff;padding:44px 56px 160px}
-.page{max-width:720px;margin:0 auto}
-body.lang-zh .page{max-width:660px}
+/* ---- 正文列（Notion 文档页；条目3：居中窄栏上限放宽到 56rem；D1：展开态给目录让位） ---- */
+.doc{background:#fff;padding:44px 56px 160px;transition:padding-left .2s ease}
+body[data-view="workbench"]:not(.toc-hidden) .doc{padding-left:280px}
+@media (max-width:1099px){body[data-view="workbench"]:not(.toc-hidden) .doc{padding-left:56px}}
+.page{max-width:56rem;margin:0 auto}
+body.lang-zh .page{max-width:50rem}
 .cover{background:none;border:none;box-shadow:none;border-radius:0;padding:6px 0 8px;margin-bottom:44px}
 .cover h1{font-size:30px;line-height:1.32}
 .cover .sub{font-size:15px;color:#787774}
@@ -590,7 +597,7 @@ section.flash-sec{animation:flashsec 1.8s ease}
 @media (max-width:1100px){.np-layout{grid-template-columns:1fr}}
 /* ---- 右栏（互斥标签页） ---- */
 .colright{flex:0 0 384px;width:384px;background:#fafaf9;border-left:1px solid #ececec;display:flex;flex-direction:column;
- overflow:hidden;padding:12px 12px 0}
+ overflow:hidden;padding:12px 12px 0;position:sticky;top:52px;height:calc(100vh - 52px)}
 .rtabs{flex:0 0 auto;display:flex;gap:2px;border-bottom:1px solid #e6e6e4;margin-bottom:12px}
 .rtab{font-family:inherit;font-size:12.5px;color:#8f8d86;padding:7px 13px;border:none;background:none;cursor:pointer;
  border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -672,37 +679,92 @@ table.mt th{background:#fff}
 .fm-row .fm-b{font-size:12px;color:#5f5e5b;line-height:1.7;margin:3px 0 8px}
 /* toast 保持深色（Notion 风暗提示条） */
 #toast{background:#2f2e2b;border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.25)}
+
+/* ================= v4 统一修批（条目5–9） ================= */
+/* ---- 条目6：成本口径角标（浮层型 aside 收敛为角标＋模态） ---- */
+.cost-chip{display:inline-flex;align-items:center;gap:5px;margin:10px 0 2px;padding:4px 11px;font-size:11.5px;
+ color:#8a5a10;background:#fdf8ec;border:1px solid #ecd9b2;border-radius:999px;cursor:pointer;line-height:1.5;
+ font-family:inherit;white-space:nowrap}
+.cost-chip:hover{background:#fbf1da;border-color:#d9a441}
+.cost-note-off{display:none}
+/* ---- 条目8：检查报告「让 AI 解读」主按钮 + 机器细节抽屉 ---- */
+.rp-read{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;font-family:inherit;font-size:12.5px;
+ font-weight:600;padding:9px 12px;margin-bottom:12px;border:none;border-radius:9px;background:#2f2e2b;color:#fff;cursor:pointer}
+.rp-read:hover{background:#454340}
+.mdrawer{border:1px solid #e6e6e4;border-radius:10px;background:#fff;margin:2px 0 10px;flex:0 0 auto}
+.mdrawer summary{display:flex;align-items:center;gap:7px;padding:9px 12px;font-size:11.5px;color:#8f8d86;cursor:pointer;
+ list-style:none;user-select:none}
+.mdrawer summary::-webkit-details-marker{display:none}
+.mdrawer summary svg{margin-left:auto;transition:transform .15s}
+.mdrawer[open] summary svg{transform:rotate(180deg)}
+.mdrawer-b{padding:4px 12px 11px;font-size:11px;line-height:1.9;color:#6f6d66;font-family:ui-monospace,Menlo,monospace;
+ word-break:break-all;border-top:1px dashed #ececeb}
+.mdrawer-b .ok{color:#1c6b4c;font-weight:600}
+/* ---- 条目9：机器视图手风琴 ---- */
+.acc{display:flex;flex-direction:column;gap:14px;padding:2px 2px 16px;flex:0 0 auto}
+.acc-card{background:#fff;border:1px solid #e9e9e7;border-radius:11px;box-shadow:0 1px 2px rgba(15,15,15,.03);overflow:hidden}
+.acc-h{display:flex;align-items:center;gap:8px;width:100%;padding:11px 13px;border:none;background:none;
+ font-family:inherit;text-align:left;cursor:pointer}
+.acc-h:hover{background:#fbfbfa}
+.acc-t{font-size:13px;font-weight:650;color:#37352f}
+.acc-badge{font-size:11px;color:#8f8d86;background:#f1f0ee;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.acc-badge.ok{background:#eaf5ef;color:#1c6b4c}
+.acc-badge.warn{background:#fdf3e3;color:#8a5a10}
+.acc-chev{margin-left:auto;color:#a3a29c;transition:transform .15s;flex:0 0 auto}
+.acc-card.on .acc-chev{transform:rotate(180deg)}
+.acc-b{display:none;padding:2px 13px 12px;border-top:1px solid #f0f0ee;overflow:auto;max-height:calc(100vh - 260px)}
+.acc-card.on .acc-b{display:block}
+.acc-note{font-size:11px;color:#8f8d86;line-height:1.7;margin:6px 0 10px}
+.acc-b table.mt code{white-space:nowrap}
+/* ---- 条目7：实验报告管理视图 ---- */
+.rp-switch{display:inline-flex;gap:2px;background:#ececeb;border-radius:8px;padding:3px;margin-bottom:22px}
+.rp-switch button{font-family:inherit;font-size:12.5px;padding:6px 16px;border:none;border-radius:6px;
+ background:transparent;color:#8a8577;cursor:pointer}
+.rp-switch button.on{background:#fff;color:#37352f;font-weight:600;box-shadow:0 1px 2px rgba(15,15,15,.08)}
+.rp-card{background:#fff;border:1px solid #e6e6e4;border-radius:10px;padding:15px 16px;box-shadow:0 1px 2px rgba(15,15,15,.04);
+ display:flex;flex-direction:column;gap:7px;cursor:pointer;transition:box-shadow .15s,transform .15s}
+.rp-card:hover{box-shadow:0 6px 20px rgba(15,15,15,.08);transform:translateY(-1px)}
+.rp-top{display:flex;align-items:center;gap:8px}
+.rp-name{font-size:14px;font-weight:650;color:#37352f}
+.rp-ver{font-size:10.5px;color:#5f5e5b;background:#f1f0ee;border-radius:5px;padding:2px 7px}
+.rp-file{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9b9a96;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#8f8d86}
+.rp-chip{font-size:11px;border-radius:999px;padding:2px 9px;font-weight:600;margin-left:auto;white-space:nowrap}
+.rp-draft{background:#f1f0ee;color:#5f5e5b}
+.rp-signed{background:#e9f1fa;color:#2f5279}
+.rp-confirmed{background:#eaf5ef;color:#1c6b4c}
+.rp-detail{margin-top:6px}
+.rp-d-name{margin:14px 0 4px;font-size:22px;color:#1f1f1d}
+.rp-d-meta{font-size:12.5px;color:#8f8d86;margin-bottom:22px;line-height:1.8}
+.rp-d-h{margin:26px 0 10px;font-size:13px;font-weight:650;color:#37352f}
+.rp-bound-row{display:flex;align-items:baseline;gap:9px;padding:7px 2px;border-bottom:1px dashed #ececeb;font-size:12.5px}
+.rp-bound-row:last-child{border-bottom:none}
+.rp-bound-id{font-family:ui-monospace,Menlo,monospace;color:#54514a;flex:0 0 58px}
+.rp-bound-claim{flex:1 1 auto;min-width:0;color:#37352f}
+.rp-bound-val{font-weight:600;color:#1c3d5c}
+.rp-bound-conf{font-size:11px;color:#8f8d86;flex:0 0 auto}
+.rp-file-ph{font-size:12px;color:#9b9a96;background:#fbfbfa;border:1px dashed #e0dfda;border-radius:8px;padding:16px;line-height:1.7}
+.pj-reports{margin-left:auto;padding:6px 12px}
+.pj-open{padding:6px 16px}
 </style>
 </head>
 <body data-view="projects">
+<header class="topbar">
+  <span class="tb-brand">FactScribe</span>
+  <button type="button" class="tb-btn" id="goProjects">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
+    <span data-i18n="nav.projects">项目管理</span>
+  </button>
+  <button type="button" class="tb-btn" id="goNew">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+    <span data-i18n="tb.new">新建</span>
+  </button>
+  <div class="lang-seg" id="langSeg" role="group" aria-label="面板语言 / panel language">
+    <button type="button" data-lang="zh" class="on">中</button>
+    <button type="button" data-lang="en">EN</button>
+  </div>
+</header>
 <div class="shell">
-  <nav class="rail">
-    <div class="brand">
-      <div class="tb-title">FactScribe</div>
-    </div>
-    <div class="lang-seg" id="langSeg" role="group" aria-label="面板语言 / panel language">
-      <button type="button" data-lang="zh" class="on">中</button>
-      <button type="button" data-lang="en">EN</button>
-    </div>
-    <div class="rail-actions">
-      <button type="button" class="ra-btn" id="goProjects">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
-        <span data-i18n="nav.projects">项目管理</span>
-      </button>
-      <button type="button" class="ra-btn ra-plus" id="goNew" data-i18n-title="nav.new.title" title="新建论文项目" aria-label="新建论文项目">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-      </button>
-    </div>
-    <div class="toc">
-      <div class="rail-h" data-i18n="toc.h">目录</div>
-      <button type="button" class="toc-new" id="btnNewSec">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-        <span data-i18n="toc.new">新建章节</span>
-      </button>
-      <div class="toc-todo" data-i18n="toc.todo">打开一篇论文后，这里显示它的目录</div>
-      <ul id="tocList"></ul>
-    </div>
-  </nav>
 
   <main class="doc">
     <div class="progwrap"><div id="prog"></div></div>
@@ -983,6 +1045,41 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
     </div>
   </main>
 
+  <!-- v4 统一修批：实验报告管理视图（与项目管理页同级） -->
+  <main class="mainview" id="viewReports">
+    <div class="pv-wrap">
+      <div class="pv-head">
+        <div class="pv-head-txt">
+          <h1 data-i18n="rp.title">实验报告</h1>
+          <p class="pv-sub" data-i18n="rp.sub">每个项目的实验报告：导入、字段映射、数字绑定与签收状态。</p>
+        </div>
+        <button type="button" class="btn-primary" id="rpImportBtn">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+          <span data-i18n="wz.open">导入实验报告</span>
+        </button>
+      </div>
+      <div class="rp-switch" id="rpSwitch">
+        <button type="button" data-rproj="A" class="on" data-i18n="rp.projA">论文 A</button>
+        <button type="button" data-rproj="B" data-i18n="rp.projB">论文 B</button>
+      </div>
+      <div class="pv-grid rp-grid" id="rpList"></div>
+      <div class="rp-detail" id="rpDetail" hidden>
+        <button type="button" class="btn-ghost" id="rpBack">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3L5 8l5 5"/></svg>
+          <span data-i18n="rp.back">返回列表</span>
+        </button>
+        <h2 class="rp-d-name" id="rpDName"></h2>
+        <div class="rp-d-meta" id="rpDMeta"></div>
+        <h3 class="rp-d-h" data-i18n="rp.d.map">字段映射回看</h3>
+        <table class="mt"><thead><tr><th data-i18n="wz.col.metric">报告字段</th><th data-i18n="wz.col.field">事实账字段</th><th data-i18n="wz.col.val">报告值</th></tr></thead><tbody id="rpDMap"></tbody></table>
+        <h3 class="rp-d-h" data-i18n="rp.d.bound">数字绑定清单</h3>
+        <div id="rpDBound"></div>
+        <h3 class="rp-d-h" data-i18n="rp.d.file">原始文件</h3>
+        <div class="rp-file-ph" data-i18n="rp.d.filePh">原型占位：正式版在这里内嵌展示报告原文件。</div>
+      </div>
+    </div>
+  </main>
+
   <aside class="colright" id="colright">
     <div class="rtabs">
       <button type="button" class="rtab on" data-rtab="ai" data-i18n="tab.ai">AI 对话</button>
@@ -1003,6 +1100,10 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
       </div>
     </div>
     <div class="rpane rpane-report" id="pane-report">
+      <button type="button" class="rp-read" id="askReportRead" data-i18n-title="rp.readT" title="AI 用大白话总评当前检查结果">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 3.5h11v7.5H8.2l-3.2 2.6v-2.6H2.5z"/></svg>
+        <span data-i18n="rp.read">让 AI 解读这份报告</span>
+      </button>
       <section class="rcard">
         <div class="rc-h"><span class="rc-t" data-i18n="hc.h">体检</span><span class="rc-x" data-i18n="hc.sub">随项目切换重算</span></div>
         <div class="st-row">
@@ -1034,50 +1135,99 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
       <section class="rcard" id="reportCard">
         <div class="rc-h"><span class="rc-t" id="rptTitle">实验报告</span><span class="rc-x" data-i18n="rc.chain">四步链</span></div>
         <div class="rpt-meta" id="rptMeta"></div>
-        <div class="act-row"><button type="button" class="act" id="openWizard" data-i18n="wz.open">导入实验报告</button></div>
         <div class="rstep" id="rs1">
-          <div class="rstep-h"><span class="rstep-no">1</span><span data-i18n="rs1.t">报告 check</span><span class="badge todo">待办</span></div>
-          <div class="rstep-c"><span data-i18n="rs1.c">字段／数值核对：探针取值与报告写的值逐条对。</span><br><span data-i18n="rs.cli">CLI：</span><code>factscribe report check --report … --json</code></div>
+          <div class="rstep-h"><span class="rstep-no">1</span><span data-i18n="rs1.t">核对报告数字</span><span class="badge todo">待办</span></div>
+          <div class="rstep-c"><span data-i18n="rs1.c">把报告里写的数值与实测探针取值逐条核对，对得上才放行。</span></div>
           <div id="rs1list" style="margin-top:7px"></div>
-          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-check" data-i18n="btn.check">跑报告 check</button></div>
+          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-check" data-i18n="btn.check" data-i18n-title="btn.checkT" title="把报告写的数值与实测逐条核对">核对报告数字</button></div>
           <div class="rstep-out" id="rs1out"></div>
         </div>
         <div class="rstep" id="rs2">
-          <div class="rstep-h"><span class="rstep-no">2</span><span data-i18n="rs2.t">lock（钉 sha）</span><span class="badge todo">待办</span></div>
-          <div class="rstep-c"><span data-i18n="rs2.c">check 过关后写锁文件，把这一版报告的 sha 钉住。</span><br><span data-i18n="rs.cli">CLI：</span><code>factscribe report lock --report … --json</code></div>
-          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-lock" data-i18n="btn.lock">钉 sha</button></div>
+          <div class="rstep-h"><span class="rstep-no">2</span><span data-i18n="rs2.t">锁定这一版</span><span class="badge todo">待办</span></div>
+          <div class="rstep-c"><span data-i18n="rs2.c">核对过关后给这一版报告上锁：之后有人改动，马上会被发现。</span></div>
+          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-lock" data-i18n="btn.lock" data-i18n-title="btn.lockT" title="给这一版报告算指纹并上锁">锁定这一版</button></div>
           <div class="rstep-out" id="rs2out"></div>
         </div>
         <div class="rstep" id="rs3">
-          <div class="rstep-h"><span class="rstep-no">3</span><span data-i18n="rs3.t">人签复核</span><span class="badge todo">待办</span></div>
-          <div class="rstep-c"><span data-i18n="rs3.c1">出审阅卡并签收，写 signoff 与哈希链流水。</span><b data-i18n="rs3.c2">机器不代签</b><span data-i18n="rs3.c3">——这一步必须是人按的。</span><br><span data-i18n="rs.cli">CLI：</span><code>factscribe report sign --report … --by &lt;人&gt;</code></div>
-          <div class="rstep-btns"><button type="button" class="rbtn human" id="btn-sign" data-i18n="btn.sign">人签复核</button></div>
+          <div class="rstep-h"><span class="rstep-no">3</span><span data-i18n="rs3.t">我来签收</span><span class="badge todo">待办</span></div>
+          <div class="rstep-c"><span data-i18n="rs3.c1">人工确认无误后签收，留下签收记录。</span><b data-i18n="rs3.c2">机器不代签</b><span data-i18n="rs3.c3">——这一步必须是人按的。</span></div>
+          <div class="rstep-btns"><button type="button" class="rbtn human" id="btn-sign" data-i18n="btn.sign" data-i18n-title="btn.signT" title="人工确认无误后签收">我来签收</button></div>
           <div class="rstep-out" id="rs3out"></div>
         </div>
         <div class="rstep" id="rs4">
-          <div class="rstep-h"><span class="rstep-no">4</span><span data-i18n="rs4.t">fact import（导进事实账）</span><span class="badge todo">待办</span></div>
-          <div class="rstep-c"><span data-i18n="rs4.c">带签收门：没有人的签收文件，报告导不进事实账。</span><br><span data-i18n="rs.cli">CLI：</span><code>factscribe fact import --report … --paper &lt;盘&gt;</code></div>
-          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-import" data-i18n="btn.import">导入事实账</button></div>
+          <div class="rstep-h"><span class="rstep-no">4</span><span data-i18n="rs4.t">存入事实账</span><span class="badge todo">待办</span></div>
+          <div class="rstep-c"><span data-i18n="rs4.c">签收之后，报告里的数字才能进论文的事实账；没有签收一律不放行。</span></div>
+          <div class="rstep-btns"><button type="button" class="rbtn" id="btn-import" data-i18n="btn.import" data-i18n-title="btn.importT" title="签收后把报告里的数字导进论文事实账">存入事实账</button></div>
           <div class="rstep-out" id="rs4out"></div>
         </div>
         <div class="rnote" data-i18n="rpt.note">原型内内存模拟：四个按钮只改本页内存状态，不写任何文件；toast 统一标「原型演示」。</div>
       </section>
+
+      <details class="mdrawer">
+        <summary><span data-i18n="md.h">机器细节（给机器和排障用）</span><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></summary>
+        <div class="mdrawer-b" id="mdBody"></div>
+      </details>
     </div>
     <div class="rpane rpane-machine" id="pane-machine">
       <div class="mv-head">
         <div class="t" data-i18n="mv.h">机器视图</div>
-        <div class="sub" data-i18n="mv.sub">账本、黄牌、文献登记、索引 —— 这一层是给工具看的，不是给稿子看的</div>
+        <div class="sub" data-i18n="mv.sub">这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。</div>
       </div>
-      <div class="tabs">
-        <button type="button" class="tab on" data-tab="ledger">账本</button>
-        <button type="button" class="tab" data-tab="yellow">黄牌</button>
-        <button type="button" class="tab" data-tab="refs">文献登记</button>
-        <button type="button" class="tab" data-tab="index">索引</button>
+      <div class="acc" id="accBody">
+        <section class="acc-card on" data-acc="ledger">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="ac.ledger">账本完整性</span>
+            <span class="acc-badge" id="accBadgeLedger"></span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="accLedger"></div>
+        </section>
+        <section class="acc-card" data-acc="scan">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="ac.scan">正文扫描</span>
+            <span class="acc-badge" id="accBadgeScan"></span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="accScan"></div>
+        </section>
+        <section class="acc-card" data-acc="refs">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="ac.refs">文献与证据链</span>
+            <span class="acc-badge" id="accBadgeRefs"></span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="accRefs"></div>
+        </section>
+        <section class="acc-card" data-acc="export">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="ac.export">导出与命令</span>
+            <span class="acc-badge" id="accBadgeExport"></span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="accExport"></div>
+        </section>
       </div>
-      <div class="d-body" id="dbody"></div>
     </div>
   </aside>
 </div>
+
+<!-- v4 条目3：悬浮目录面板（仅 workbench），可收成左缘圆钮 -->
+<nav class="toc-float" id="tocFloat" aria-label="目录">
+  <div class="tf-head">
+    <span class="rail-h" data-i18n="toc.h">目录</span>
+    <button type="button" class="tf-collapse" id="tocCollapse" data-i18n-title="toc.collapse" title="收起目录">
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3l5 5-5 5"/></svg>
+    </button>
+  </div>
+  <button type="button" class="toc-new" id="btnNewSec">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+    <span data-i18n="toc.new">新建章节</span>
+  </button>
+  <ul id="tocList"></ul>
+</nav>
+<button type="button" class="toc-fab" id="tocFab" data-i18n-title="toc.expand" title="展开目录">
+  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>
+</button>
 
 <button class="rc-collapse" id="rcCollapse">收起右栏</button>
 <button class="rc-open" id="rcOpen">展开右栏</button>
@@ -1085,9 +1235,15 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
 <div class="modal-backdrop" id="modalBackdrop"></div>
 
 <div id="pmenu">
-  <button type="button" data-mact="edit" data-i18n="pm.edit">编辑</button>
   <button type="button" data-mact="ask" data-i18n="pm.ask">问 AI</button>
+  <button type="button" data-mact="edit" data-i18n="pm.inline">就地编辑</button>
+  <button type="button" data-mact="copy" data-i18n="pm.copy">复制段落</button>
   <button type="button" data-mact="close" data-i18n="pm.close">收起菜单</button>
+</div>
+
+<div class="modal modal-sm" id="noteModal" role="dialog" aria-modal="true" aria-label="批注全文">
+  <div class="modal-h"><span class="t" id="noteModalTitle"></span><button type="button" class="m-close" data-i18n="m.close">关闭</button></div>
+  <div class="modal-b" id="noteModalBody"></div>
 </div>
 
 <div class="modal" id="findingsModal" role="dialog" aria-modal="true" aria-label="检查发现明细">
@@ -1162,7 +1318,6 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
 </div>
 
 <div id="fcard"></div>
-<div id="ptools"></div>
 <div id="toast"></div>
 <script>
 let FACTS={"B1": {"claim": "第一套盲测首跑命中", "value": "0/12（首跑，#1）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 总表 #1", "conf": "high", "file": "a_blind.toml", "note": "#1 的 24 个项目全部 exit 2", "human": "盲测与文风证据总表"}, "B2": {"claim": "第七套盲测首跑命中（首次过线）", "value": "11/12（首跑，#7）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 总表 #7", "conf": "high", "file": "a_blind.toml", "note": "预注册阈值 ≥10/12", "human": "盲测与文风证据总表"}, "B3": {"claim": "三套真盲合计命中与比例", "value": "30/36（83%）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 汇总行", "conf": "high", "file": "a_blind.toml", "note": "#7/#8/#9 三套合计", "human": "盲测与文风证据总表"}, "B4": {"claim": "valid 项目误红合计", "value": "0/36（valid 误红）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 汇总行", "conf": "high", "file": "a_blind.toml", "note": "三套真盲的 benign 面全干净", "human": "盲测与文风证据总表"}, "B5": {"claim": "第八套首跑命中", "value": "10/12（#8 首跑）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 总表 #8", "conf": "high", "file": "a_blind.toml", "note": "过线", "human": "盲测与文风证据总表"}, "B6": {"claim": "第九套首跑命中", "value": "9/12（#9 首跑）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 总表 #9", "conf": "high", "file": "a_blind.toml", "note": "未过线；三套里唯一未过线", "human": "盲测与文风证据总表"}, "B7": {"claim": "盲测套数", "value": "9 套（#1–#9）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 表头", "conf": "high", "file": "a_blind.toml", "note": "#1–#7 记于 FS-BLIND-TESTS，#8–#9 记于 KNOWN-GAPS", "human": "盲测与文风证据总表"}, "B8": {"claim": "预注册判读阈值", "value": "≥10/12（判读阈值）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E1 表末行", "conf": "high", "file": "a_blind.toml", "note": "invalid 命中 ≥10/12 且 valid 零误红", "human": "盲测与文风证据总表"}, "B9": {"claim": "第三套盲测首跑命中（16 个项目）", "value": "0/8（首跑，#3）", "src": "runs/batch72/BLIND-TABLE.md", "sha": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a", "loc": "#3 行", "conf": "high", "file": "a_blind.toml", "note": "三种配置写法，规范未冻结", "human": "盲测分套记录表"}, "B10": {"claim": "第四套盲测首跑命中", "value": "0/12（首跑，#4）", "src": "runs/batch72/BLIND-TABLE.md", "sha": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a", "loc": "#4 行", "conf": "high", "file": "a_blind.toml", "note": "facts schema 未冻结（缺 id）", "human": "盲测分套记录表"}, "B11": {"claim": "第五套盲测首跑命中", "value": "8/12（首跑，#5）", "src": "runs/batch72/BLIND-TABLE.md", "sha": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a", "loc": "#5 行", "conf": "high", "file": "a_blind.toml", "note": "错误码表未并入规范", "human": "盲测分套记录表"}, "B12": {"claim": "第六套盲测首跑命中", "value": "9/12（首跑，#6）", "src": "runs/batch72/BLIND-TABLE.md", "sha": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a", "loc": "#6 行", "conf": "high", "file": "a_blind.toml", "note": "一个现象两个码 + 两条漏判", "human": "盲测分套记录表"}, "M1": {"claim": "文风闸核心指标数", "value": "8 项（核心指标）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E6", "conf": "high", "file": "b_indicators_round1.toml", "note": "连接词、CV、空泛形容词、三项并列、段末模板、双重限定、同头、超长句", "human": "盲测与文风证据总表"}, "M2": {"claim": "文风闸指标数（含节奏平台）", "value": "9 项（含节奏平台）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E6", "conf": "high", "file": "b_indicators_round1.toml", "note": "批 67 新增 RHYTHM_PLATEAU", "human": "盲测与文风证据总表"}, "S1a": {"claim": "第一轮评审一判改写胜", "value": "4/17（评审一判改写胜）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch65.JUDGE-1.rewrite_wins", "conf": "high", "file": "b_indicators_round1.toml", "note": "17 对全项目覆盖", "human": "盲评逐对判读记录"}, "S1b": {"claim": "第一轮评审二判改写胜", "value": "5/17（评审二判改写胜）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch65.JUDGE-2.rewrite_wins", "conf": "high", "file": "b_indicators_round1.toml", "note": "17 对全项目覆盖", "human": "盲评逐对判读记录"}, "S1c": {"claim": "第一轮盲评对数与语言分布", "value": "17 对（6 英 / 11 中）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 表首行", "conf": "high", "file": "b_indicators_round1.toml", "note": "不抽样，覆盖全部改动段落", "human": "盲测与文风证据总表"}, "S1d": {"claim": "第一轮评审一改写胜率", "value": "0.235（评审一胜率）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch65.JUDGE-1.rewrite_rate", "conf": "high", "file": "b_indicators_round1.toml", "note": "", "human": "盲评逐对判读记录"}, "S1e": {"claim": "第一轮评审二改写胜率", "value": "0.294（评审二胜率）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch65.JUDGE-2.rewrite_rate", "conf": "high", "file": "b_indicators_round1.toml", "note": "", "human": "盲评逐对判读记录"}, "S1l": {"claim": "第一轮两评审同选对数", "value": "14/17（两评审同选）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch65.agreement.same_choice", "conf": "high", "file": "b_indicators_round1.toml", "note": "", "human": "盲评逐对判读记录"}, "S1f": {"claim": "第一轮英文超长句归零", "value": "4→0（英超长句）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 指标表", "conf": "high", "file": "b_indicators_round1.toml", "note": "全项目 8 项规则口径", "human": "盲测与文风证据总表"}, "S1g": {"claim": "第一轮中文超长句归零", "value": "3→0（中超长句）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 指标表", "conf": "high", "file": "b_indicators_round1.toml", "note": "全项目 8 项规则口径", "human": "盲测与文风证据总表"}, "S1h": {"claim": "第一轮中文 05_eval 节级 CV 反向恶化", "value": "0.475→0.358（中文 05_eval 节 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 指标表", "conf": "high", "file": "b_indicators_round1.toml", "note": "拆长句压平分布，触发 SENTENCE_UNIFORMITY", "human": "盲测与文风证据总表"}, "S1i": {"claim": "第一轮事实绑定数不变", "value": "234（事实绑定数）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 事实闸行", "conf": "high", "file": "b_indicators_round1.toml", "note": "改写前后均 234", "human": "盲测与文风证据总表"}, "S1j": {"claim": "第一轮英文 token 多重集", "value": "754 / 170 / 12 / 19（英 token 多重集）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 token 表", "conf": "high", "file": "b_indicators_round1.toml", "note": "数字 / 事实标记 / 引用 / 交叉引用", "human": "盲测与文风证据总表"}, "S1k": {"claim": "第一轮中文 token 多重集", "value": "751 / 171 / 12 / 19（中 token 多重集）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E2 token 表", "conf": "high", "file": "b_indicators_round1.toml", "note": "数字 / 事实标记 / 引用 / 交叉引用", "human": "盲测与文风证据总表"}, "S2a": {"claim": "第二轮评审一判改写胜", "value": "5/24（评审一判改写胜）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.JUDGE-1.rewrite_wins", "conf": "high", "file": "c_round2.toml", "note": "24 对全项目覆盖", "human": "盲评逐对判读记录"}, "S2b": {"claim": "第二轮评审二判改写胜", "value": "3/24（评审二判改写胜）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.JUDGE-2.rewrite_wins", "conf": "high", "file": "c_round2.toml", "note": "24 对全项目覆盖", "human": "盲评逐对判读记录"}, "S2c": {"claim": "第二轮盲评对数与语言分布", "value": "24 对（13 英 / 11 中）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 表首行", "conf": "high", "file": "c_round2.toml", "note": "不抽样，段落集合随规则更新", "human": "盲测与文风证据总表"}, "S2d": {"claim": "第二轮评审二判原文胜", "value": "21/24（评审二判原文胜）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.JUDGE-2.original_wins", "conf": "high", "file": "c_round2.toml", "note": "", "human": "盲评逐对判读记录"}, "S2k": {"claim": "第二轮两评审同选对数", "value": "20/24（两评审同选）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.agreement.same_choice", "conf": "high", "file": "c_round2.toml", "note": "", "human": "盲评逐对判读记录"}, "S2l": {"claim": "第二轮评审一改写胜率", "value": "0.208（评审一胜率）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.JUDGE-1.rewrite_rate", "conf": "high", "file": "c_round2.toml", "note": "", "human": "盲评逐对判读记录"}, "S2m": {"claim": "第二轮评审二改写胜率", "value": "0.125（评审二胜率）", "src": "runs/batch72/decode-all.json", "sha": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020", "loc": "batch67.JUDGE-2.rewrite_rate", "conf": "high", "file": "c_round2.toml", "note": "", "human": "盲评逐对判读记录"}, "S2e": {"claim": "第二轮英文节奏平台归零", "value": "13→0（英节奏平台）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 指标表", "conf": "high", "file": "c_round2.toml", "note": "新规则只对节奏平台出牌", "human": "盲测与文风证据总表"}, "S2f": {"claim": "第二轮中文节奏平台归零", "value": "12→0（中节奏平台）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 指标表", "conf": "high", "file": "c_round2.toml", "note": "", "human": "盲测与文风证据总表"}, "S2g": {"claim": "第二轮英文改写后 CV", "value": "0.550（英改写后 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 指标表", "conf": "high", "file": "c_round2.toml", "note": "健康带内", "human": "盲测与文风证据总表"}, "S2h": {"claim": "第二轮中文改写后 CV", "value": "0.556（中改写后 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 指标表", "conf": "high", "file": "c_round2.toml", "note": "健康带内", "human": "盲测与文风证据总表"}, "S2i": {"claim": "第二轮规则改动后的测试例数", "value": "247 例（测试）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 表末", "conf": "high", "file": "c_round2.toml", "note": "新增 5 例", "human": "盲测与文风证据总表"}, "S2j": {"claim": "两轮盲评段落集合重叠", "value": "1/17（两轮重叠段落）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E3 表末", "conf": "high", "file": "c_round2.toml", "note": "旧 17 段只有 1 段在新规则下仍被标记", "human": "盲测与文风证据总表"}, "S3a": {"claim": "第三轮评审一判引导稿胜", "value": "9/10（评审一，引导胜）", "src": "runs/batch72/blind69-summary.json", "sha": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e", "loc": "reviewers.JUDGE-1.guided_wins", "conf": "high", "file": "d_round3.toml", "note": "批69 逐对记录未落独立文件", "human": "裸稿对引导稿盲评汇总"}, "S3b": {"claim": "第三轮评审二判引导稿胜", "value": "9/10（评审二，引导胜）", "src": "runs/batch72/blind69-summary.json", "sha": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e", "loc": "reviewers.JUDGE-2.guided_wins", "conf": "high", "file": "d_round3.toml", "note": "与评审一读数相同", "human": "裸稿对引导稿盲评汇总"}, "S3c": {"claim": "第三轮两评审选择一致", "value": "10/10（两位评审选择一致）", "src": "runs/batch72/blind69-summary.json", "sha": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e", "loc": "agreement.same_choice", "conf": "high", "file": "d_round3.toml", "note": "", "human": "裸稿对引导稿盲评汇总"}, "S3n": {"claim": "第三轮盲评对数", "value": "10 对（批69 盲评）", "src": "runs/batch72/blind69-summary.json", "sha": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e", "loc": "pairs", "conf": "high", "file": "d_round3.toml", "note": "逐段配对", "human": "裸稿对引导稿盲评汇总"}, "S3d": {"claim": "裸稿触发指标项数", "value": "6 项（裸稿触发）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "闸可见面 5 项核心 + 节奏平台", "human": "盲测与文风证据总表"}, "S3e": {"claim": "裸稿黄牌条数", "value": "20 条（裸稿黄牌）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "", "human": "盲测与文风证据总表"}, "S3f": {"claim": "引导稿黄牌条数", "value": "0 条（引导稿黄牌）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "exit 0", "human": "盲测与文风证据总表"}, "S3g": {"claim": "裸稿句长 CV", "value": "0.373（裸稿 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "低于 0.45，判「太平」", "human": "盲测与文风证据总表"}, "S3h": {"claim": "引导稿句长 CV", "value": "0.473（引导稿 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "跨过 0.45 下界", "human": "盲测与文风证据总表"}, "S3i": {"claim": "第三轮数字绑定数", "value": "66（数字绑定数）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "两头均 66/66", "human": "盲测与文风证据总表"}, "S3j": {"claim": "第三轮 事实标记 与数字令牌", "value": "49 处 事实标记、29 个 id、70 个数字令牌", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "两头逐项相同", "human": "盲测与文风证据总表"}, "S3k": {"claim": "裸稿全量探针黄牌", "value": "24 条（裸稿全量探针）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "补 \\$ 遮罩后", "human": "盲测与文风证据总表"}, "S3l": {"claim": "引导稿全量探针黄牌", "value": "2 条（引导稿全量探针）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "落在闸从未看见的段落", "human": "盲测与文风证据总表"}, "S3m": {"claim": "引导稿全量探针 CV", "value": "0.417（引导稿全量 CV）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E4 表", "conf": "high", "file": "d_round3.toml", "note": "低于健康带下界", "human": "盲测与文风证据总表"}, "S4a": {"claim": "修复解析 bug 后英文词数增量", "value": "6390→6924（英词数，+8.4%）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "旧读数被 \\$ 遮罩低估", "human": "盲测与文风证据总表"}, "S4b": {"claim": "修复解析 bug 后英文句数增量", "value": "368→397（英句数，+7.9%）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "", "human": "盲测与文风证据总表"}, "S4c": {"claim": "修复解析 bug 后英文段数增量", "value": "90→96（英段数）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "", "human": "盲测与文风证据总表"}, "S4d": {"claim": "修复解析 bug 后中文规模增量", "value": "10059→10893（中字数，+8.3%）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "", "human": "盲测与文风证据总表"}, "S4e": {"claim": "修复与阶段判断后的测试例数", "value": "256 例（测试）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 表末", "conf": "high", "file": "e_style_v3.toml", "note": "新增 9 例", "human": "盲测与文风证据总表"}, "S4f": {"claim": "draft 阶段的触发项阈值", "value": "3 项（draft 触发阈值）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 阶段判据", "conf": "high", "file": "e_style_v3.toml", "note": "triggers >= 3 判 draft", "human": "盲测与文风证据总表"}, "S4g": {"claim": "健康带上下界", "value": "0.45–0.80（健康带）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 阶段判据", "conf": "high", "file": "e_style_v3.toml", "note": "低于 0.45 报太平；高于 0.80 不报", "human": "盲测与文风证据总表"}, "S4h": {"claim": "修后英文 CV", "value": "0.529（英 CV，修后）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "", "human": "盲测与文风证据总表"}, "S4i": {"claim": "修后中文 CV", "value": "0.538（中 CV，修后）", "src": "runs/batch72/STYLE-EVIDENCE.md", "sha": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2", "loc": "E5 基线表", "conf": "high", "file": "e_style_v3.toml", "note": "", "human": "盲测与文风证据总表"}, "__order": ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B11", "B12", "M1", "M2", "S1a", "S1b", "S1c", "S1d", "S1e", "S1l", "S1f", "S1g", "S1h", "S1i", "S1j", "S1k", "S2a", "S2b", "S2c", "S2d", "S2k", "S2l", "S2m", "S2e", "S2f", "S2g", "S2h", "S2i", "S2j", "S3a", "S3b", "S3c", "S3n", "S3d", "S3e", "S3f", "S3g", "S3h", "S3i", "S3j", "S3k", "S3l", "S3m", "S4a", "S4b", "S4c", "S4d", "S4e", "S4f", "S4g", "S4h", "S4i"]}, BIB=[{"key": "kobak_excess", "type": "misc", "title": "Delving into LLM-assisted writing in biomedical publications through excess vocabulary", "year": "2025", "author": "Kobak", "nauthor": 4, "journal": "", "eprint": "2406.07016", "doi": "", "url": "", "hasAuthor": true, "uniqueKey": true}, {"key": "liang_mapping", "type": "misc", "title": "Mapping the Increasing Use of LLMs in Scientific Papers", "year": "2024", "author": "Liang", "nauthor": 14, "journal": "", "eprint": "2404.01268", "doi": "", "url": "", "hasAuthor": true, "uniqueKey": true}, {"key": "chakrabarty_art", "type": "inproceedings", "title": "Art or Artifice? Large Language Models and the False Promise of Creativity", "year": "2024", "author": "Chakrabarty", "nauthor": 3, "journal": "Proceedings of the CHI Conference on Human Factors in Computing Systems", "eprint": "", "doi": "10.1145/3613904.3642731", "url": "", "hasAuthor": true, "uniqueKey": true}, {"key": "jakesch_co", "type": "inproceedings", "title": "Co-Writing with Opinionated Language Models Affects Users' Views", "year": "2023", "author": "Jakesch", "nauthor": 5, "journal": "Proceedings of the CHI Conference on Human Factors in Computing Systems", "eprint": "", "doi": "10.1145/3544548.3581196", "url": "", "hasAuthor": true, "uniqueKey": true}, {"key": "paperorchestra2026", "type": "article", "title": "PaperOrchestra: A Multi-Agent Framework for Automated AI Research Paper Writing", "year": "2026", "author": "", "nauthor": 0, "journal": "arXiv preprint arXiv:2604.05018", "eprint": "2604.05018", "doi": "", "url": "", "hasAuthor": false, "uniqueKey": true}, {"key": "parness2026", "type": "article", "title": "PARNESS: A Paper Harness for End-to-End Automated Scientific Research with Dynamic Workflows", "year": "2026", "author": "", "nauthor": 0, "journal": "arXiv preprint arXiv:2605.05258", "eprint": "2605.05258", "doi": "", "url": "", "hasAuthor": false, "uniqueKey": true}, {"key": "xscientist2026", "type": "article", "title": "XScientist: A Git-Like Research Protocol for Long-Running Autonomous Scientific Discovery", "year": "2026", "author": "", "nauthor": 0, "journal": "arXiv preprint arXiv:2607.12301", "eprint": "2607.12301", "doi": "", "url": "", "hasAuthor": false, "uniqueKey": true}, {"key": "aiscientistv2_2025", "type": "article", "title": "The AI Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search", "year": "2025", "author": "", "nauthor": 0, "journal": "arXiv preprint arXiv:2504.08066", "eprint": "2504.08066", "doi": "", "url": "", "hasAuthor": false, "uniqueKey": true}, {"key": "scitexclew", "type": "misc", "title": "SciTeX-Clew: hash-linked provenance for research artefacts", "year": "2026", "author": "", "nauthor": 0, "journal": "https://github.com/scitex-ai/scitex-clew", "eprint": "", "doi": "", "url": "https://github.com/scitex-ai/scitex-clew", "hasAuthor": false, "uniqueKey": false}, {"key": "nosek2018preregistration", "type": "article", "title": "The preregistration revolution", "year": "2018", "author": "Nosek", "nauthor": 4, "journal": "Proceedings of the National Academy of Sciences", "eprint": "", "doi": "10.1073/pnas.1708274114", "url": "", "hasAuthor": true, "uniqueKey": true}], CITED={"kobak_excess": true, "liang_mapping": true, "chakrabarty_art": true, "jakesch_co": true, "paperorchestra2026": true, "parness2026": true, "xscientist2026": true, "aiscientistv2_2025": true, "scitexclew": true, "nosek2018preregistration": true};
@@ -1184,10 +1339,9 @@ const ICONS={
 };
 const I18N={
 zh:{
- 'nav.projects':'项目管理','nav.new.title':'新建论文项目','toc.h':'目录','toc.new':'新建章节',
- 'toc.todo':'打开一篇论文后，这里显示它的目录',
+ 'nav.projects':'项目管理','nav.new.title':'新建论文项目','tb.new':'新建','toc.h':'目录','toc.new':'新建章节','toc.collapse':'收起目录','toc.expand':'展开目录',
  'st.up':'上移','st.down':'下移','st.del':'删除本节','st.edit':'编辑标题','st.ask':'问 AI','st.drag':'拖动调序',
- 'pnav.title':'段落操作','pm.edit':'编辑','pm.ask':'问 AI','pm.close':'收起菜单',
+ 'pnav.title':'段落操作','pm.ask':'问 AI','pm.inline':'就地编辑','pm.copy':'复制段落','pm.close':'收起菜单',
  'pg.title':'论文项目','pg.sub':'打开一篇论文继续写，或新建一个项目。','pg.new':'新建论文项目','pg.searchPh':'搜索项目名…',
  'card.status':'状态','card.last':'最近打开','card.open':'打开',
  'card.cur':'当前：{l}（{d}）','card.diskline':'盘：{d}',
@@ -1209,7 +1363,7 @@ zh:{
  'hc.h':'体检','hc.sub':'随项目切换重算',
  'health.ok':'数据全有据可查 ✓（{n} 条全有据）','health.cost':'{n} 条小提醒','health.cost0':'0 条小提醒',
  'health.refs':'文献欠 {n} 篇作者名',
- 'health.exit':'账本检查 exit {rc}（红 {red} ／黄 {yellow}）· 事实 {n} 条 · 指纹 {sha}',
+ 'health.exit':'账本体检：红 {red} ／黄 {yellow} · {n} 条事实 · 指纹 {sha}',
  'health.pendingWarn':'{n} 条小提醒待处理',
  'cover.ok':'数据全有据可查 ✓（{n} 条带出处的数字，已逐个对上账）',
  'cover.meta':'项目：<b>{p}</b>　·　盘：<code>{d}</code>　·　{l}',
@@ -1218,22 +1372,27 @@ zh:{
  'recon.ok':'双语对账：一致（62 facts＋10 bib，2026-11-18 实测 drift 0）',
  'recon.warn':'双语对账：⚠ 有漂移（预置演示形态，非实测）——真值仍是 62 facts＋10 bib，drift 0',
  'recon.demo':'预置漂移演示','recon.restore':'还原实测读数',
- 'act.audit':'跑 audit','act.check':'跑 check','act.bundle':'打包预演',
+ 'act.audit':'重新查账','act.auditT':'把当前盘的账本完整对一遍','act.check':'再扫一遍正文','act.checkT':'重扫正文数字与账本是否一一对应',
+ 'act.bundle':'预演一次打包','act.bundleT':'不真打包，先预检交付清单是否齐全',
+ 'recon.demoT':'演示双语对账发现漂移时的样子（不碰真值）',
  't.demoCli':'原型演示（真实命令见输出与 DESIGN.md）',
  'act.auditDone':'✓ audit 完成','act.line2':'facts {f} · 红 {r} · 黄 {y}',
  'act.checkWarn':'⚠ check exit {rc}','act.checkOk':'✓ check exit 0','act.advisories':'黄牌：','act.none':'无',
  'act.bundleDone':'✓ 预演：清单门逐项过','act.bundleLine':'闭包 main.tex 起的 \\input 链 · refs.bib {b} 条 · facts/ {f} 份',
  'act.bundleLine2':'evidence.lock 在场 · audit 现跑无红',
- 'rc.chain':'四步链','rs.cli':'CLI：',
- 'rs1.t':'报告 check','rs1.c':'字段／数值核对：探针取值与报告写的值逐条对。',
- 'rs2.t':'lock（钉 sha）','rs2.c':'check 过关后写锁文件，把这一版报告的 sha 钉住。',
- 'rs3.t':'人签复核','rs3.c1':'出审阅卡并签收，写 signoff 与哈希链流水。','rs3.c2':'机器不代签','rs3.c3':'——这一步必须是人按的。',
- 'rs4.t':'fact import（导进事实账）','rs4.c':'带签收门：没有人的签收文件，报告导不进事实账。',
+ 'rc.chain':'四步链',
+ 'rs1.t':'核对报告数字','rs1.c':'把报告里写的数值与实测探针取值逐条核对，对得上才放行。',
+ 'rs2.t':'锁定这一版','rs2.c':'核对过关后给这一版报告上锁：之后有人改动，马上会被发现。',
+ 'rs3.t':'我来签收','rs3.c1':'人工确认无误后签收，留下签收记录。','rs3.c2':'机器不代签','rs3.c3':'——这一步必须是人按的。',
+ 'rs4.t':'存入事实账','rs4.c':'签收之后，报告里的数字才能进论文的事实账；没有签收一律不放行。',
  'badge.todo':'待办','badge.done':'完成',
- 'btn.check':'跑报告 check','btn.lock':'钉 sha','btn.sign':'人签复核','btn.import':'导入事实账',
- 'bt.lock':'先跑报告 check','bt.sign':'lock 之后才能人签','bt.import':'没有人的签收，导不进事实账',
+ 'btn.check':'核对报告数字','btn.checkT':'把报告写的数值与实测逐条核对',
+ 'btn.lock':'锁定这一版','btn.lockT':'给这一版报告算指纹并上锁',
+ 'btn.sign':'我来签收','btn.signT':'人工确认无误后签收',
+ 'btn.import':'存入事实账','btn.importT':'签收后把报告里的数字导进论文事实账',
+ 'bt.lock':'先核对报告数字','bt.sign':'锁定之后才能签收','bt.import':'没有签收，存不进事实账',
  'rpt.note':'原型内内存模拟：四个按钮只改本页内存状态，不写任何文件；toast 统一标「原型演示」。',
- 'rpt.m.report':'报告 ','rpt.m.metrics':' 个指标','rpt.m.manifest':'清单 ','rpt.m.by':'（{s}）',
+ 'rpt.m.line':'{n} 个指标已与正文对上','rpt.m.signed':'来源清单已签收',
  'wz.open':'导入实验报告','wz.title':'导入实验报告',
  'wz.s1':'选文件','wz.s2':'字段映射','wz.s3':'确认绑定',
  'wz.s1.h':'选择一份实验报告文件（原型内置 3 份演示报告）。',
@@ -1273,10 +1432,10 @@ zh:{
  'ai.q1':'① 总结这篇论文的状态','ai.q2':'② 这一段有什么可改的？','ai.q3':'③ 这段为什么被标了缺作者',
  'ai.you':'你',
  'ai.intro':'我能做三件事：\n① 总结这篇论文的状态\n② 对某一段提修改建议（给一张建议卡）\n③ 解释一段为什么被标了「缺作者」',
- 'pt.edit':'编辑','pt.ask':'问 AI','pt.save':'保存（人签·写回演示）','pt.cancel':'取消',
- 'en1a':'🔒 ','en1b':'受保护芯片',
- 'en1c':'：散文可以直接改；引用与数据渲染成芯片（灰＝引用，蓝＝数据），改字删不掉它们——删不动时芯片会原样留在原处，并弹提示说明。',
- 'mv.h':'机器视图','mv.sub':'账本、黄牌、文献登记、索引 —— 这一层是给工具看的，不是给稿子看的',
+ 't.inlineEdit':'就地编辑：直接改字，Esc 或点别处就提交','t.copied':'段落已复制','t.copyFail':'复制没成功（浏览器不允许）',
+ 'cost.chip':'成本口径提醒',
+ 'fc.verified':'来源文件的指纹已与账本核对一致','fc.mrec':'看机器记录',
+ 'mv.h':'机器视图','mv.sub':'这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。',
  'mt.ledger':'账本','mt.yellow':'黄牌','mt.refs':'文献登记','mt.index':'索引',
  'd.ledger':'账本全表 {n} 条。这一层是机器视图：字段名、文件路径与指纹都在这里，主界面不出现。',
  'd.yellow0':'黄牌（warning 级发现）：本盘 0 条。',
@@ -1286,16 +1445,31 @@ zh:{
  'd.refs':'文献登记：bib {n} 条，已引用 {c} 条；缺作者字段 {m} 条。',
  'd.index':'事实索引视图：与账本同义的逐条索引（id／断言／值／定位／文件／置信）。共 {n} 条，与账本逐条一致。',
  'd.na':'缺',
- 'th.id':'id','th.claim':'断言','th.value':'值','th.conf':'置信','th.src':'出处文件','th.sha':'指纹（sha256）','th.loc':'定位',
+ 'th.id':'id','th.claim':'断言','th.value':'值','th.conf':'置信','th.src':'出处文件','th.sha':'指纹（sha256）','th.fp':'短指纹','th.loc':'定位',
+ 'rp.title':'实验报告','rp.sub':'每个项目的实验报告：导入、字段映射、数字绑定与签收状态。',
+ 'rp.projA':'论文 A','rp.projB':'论文 B','rp.back':'返回列表','rp.open':'实验报告',
+ 'rp.card.time':'导入时间','rp.card.bound':'绑定 {n} 个数字',
+ 'rp.st.draft':'待核对','rp.st.signed':'已签收','rp.st.confirmed':'已确认',
+ 'rp.empty':'该项目还没有报告，点右上角「导入实验报告」。',
+ 'rp.read':'让 AI 解读这份报告','rp.readT':'AI 用大白话总评当前检查结果',
+ 'rp.d.map':'字段映射回看','rp.d.bound':'数字绑定清单','rp.d.file':'原始文件','rp.d.filePh':'原型占位：正式版在这里内嵌展示报告原文件。',
+ 'md.h':'机器细节（给机器和排障用）','md.current':'当前读数：','md.cliRef':'完整命令清单见「机器视图 · 导出与命令」。',
+ 'ac.ledger':'账本完整性','ac.scan':'正文扫描','ac.refs':'文献与证据链','ac.export':'导出与命令',
+ 'ac.ledgerOk':'{n} 条全部有据 ✓','ac.ledgerBad':'红 {r} 条','ac.scanOk':'零黄牌 ✓','ac.scanN':'{n} 条黄牌',
+ 'ac.refsBadge':'{n} 条文献 · 缺作者 {m}','ac.exportOk':'清单门可过 ✓','ac.indexSame':'事实索引视图与账本逐条一致，这里不再单独列出。',
+ 'ac.exportIntro':'当前盘对应的检查命令（原型演示，真实执行在命令行）：',
+ 'fm.open':'看全部明细','fm.openT':'列出所有还没处理的发现',
+ 'fm.view':'去看','fm.viewT':'看这条的来龙去脉（跳到正文位置）','fm.ask':'问 AI','fm.askT':'让 AI 解释这条发现并给修法',
+ 'ai.reportQ':'请用大白话解读这份检查报告','ai.reportQEn':'Explain this check report in plain words',
+ 'ai.findingQ':'检查报告里「{t}」这条是什么意思？我该怎么修？','ai.findingQEn':'What does the finding "{t}" mean, and how do I fix it?',
  'th.key':'key','th.type':'类型','th.title':'题名','th.year':'年','th.author':'作者','th.uk':'唯一键','th.cited':'正文已引','th.file':'文件',
  't.rcollapsed':'右栏已收起成窄条（点右侧窄条再展开）',
  'ai.ctxHead':'当前段落 · {sec}'
 },
 en:{
- 'nav.projects':'Projects','nav.new.title':'New paper project','toc.h':'Contents','toc.new':'New section',
- 'toc.todo':'Open a paper to see its outline here',
+ 'nav.projects':'Projects','nav.new.title':'New paper project','tb.new':'New','toc.h':'Contents','toc.new':'New section','toc.collapse':'Collapse outline','toc.expand':'Expand outline',
  'st.up':'Move up','st.down':'Move down','st.del':'Delete section','st.edit':'Edit title','st.ask':'Ask AI','st.drag':'Drag to reorder',
- 'pnav.title':'Paragraph actions','pm.edit':'Edit','pm.ask':'Ask AI','pm.close':'Close menu',
+ 'pnav.title':'Paragraph actions','pm.ask':'Ask AI','pm.inline':'Edit in place','pm.copy':'Copy paragraph','pm.close':'Close menu',
  'pg.title':'Paper projects','pg.sub':'Open a paper to keep writing, or start a new project.','pg.new':'New paper project','pg.searchPh':'Search projects…',
  'card.status':'Status','card.last':'Last opened','card.open':'Open',
  'card.cur':'Current: {l} ({d})','card.diskline':'Disks: {d}',
@@ -1317,7 +1491,7 @@ en:{
  'hc.h':'Health','hc.sub':'Recalculated per disk',
  'health.ok':'All numbers traceable ✓ ({n} facts)','health.cost':'{n} advisories','health.cost0':'0 advisories',
  'health.refs':'{n} refs missing authors',
- 'health.exit':'Ledger check exit {rc} (red {red} / yellow {yellow}) · {n} facts · fp {sha}',
+ 'health.exit':'Ledger check: red {red} / yellow {yellow} · {n} facts · fp {sha}',
  'health.pendingWarn':'{n} advisories to handle',
  'cover.ok':'All numbers traceable ✓ ({n} figures, each matched to the ledger)',
  'cover.meta':'Project: <b>{p}</b> · Disk: <code>{d}</code> · {l}',
@@ -1326,22 +1500,27 @@ en:{
  'recon.ok':'Bilingual reconciliation: in sync (62 facts + 10 bib, measured drift 0)',
  'recon.warn':'Bilingual reconciliation: ⚠ drift (demo state, not measured) — ground truth still 62 facts + 10 bib, drift 0',
  'recon.demo':'Drift demo','recon.restore':'Restore measured',
- 'act.audit':'Run audit','act.check':'Run check','act.bundle':'Bundle rehearsal',
+ 'act.audit':'Re-check the ledger','act.auditT':'Run a full pass over this disk\'s ledger','act.check':'Re-scan the text','act.checkT':'Re-verify that prose numbers match the ledger one by one',
+ 'act.bundle':'Rehearse the bundle','act.bundleT':'Dry-run the delivery checklist without packing',
+ 'recon.demoT':'Show what it looks like when bilingual reconciliation finds drift (never touches ground truth)',
  't.demoCli':'Prototype demo — real commands in the output and DESIGN.md',
  'act.auditDone':'✓ audit done','act.line2':'facts {f} · red {r} · yellow {y}',
  'act.checkWarn':'⚠ check exit {rc}','act.checkOk':'✓ check exit 0','act.advisories':'Advisories: ','act.none':'none',
  'act.bundleDone':'✓ rehearsal: manifest gate passed','act.bundleLine':'closure via main.tex \\input chain · refs.bib {b} · facts/ {f}',
  'act.bundleLine2':'evidence.lock present · audit live, no red',
- 'rc.chain':'4-step chain','rs.cli':'CLI: ',
- 'rs1.t':'Report check','rs1.c':'Check fields and values: every probe read-out is compared with the report.',
- 'rs2.t':'lock (pin sha)','rs2.c':'After check passes, write a lock file pinning this report\'s sha.',
- 'rs3.t':'Human sign-off','rs3.c1':'A review card is issued and signed; signoff and hash-chain records are written. ','rs3.c2':'The machine never signs for you','rs3.c3':' — this step must be pressed by a human.',
- 'rs4.t':'fact import (into the fact ledger)','rs4.c':'Signoff-gated: without a human signoff file the report cannot enter the fact ledger.',
+ 'rc.chain':'4-step chain',
+ 'rs1.t':'Check the report\'s numbers','rs1.c':'Compare every value written in the report with the measured probe read-outs; mismatches are held back.',
+ 'rs2.t':'Lock this version','rs2.c':'Once the check passes, lock this version: any later change is detected immediately.',
+ 'rs3.t':'I\'ll sign off','rs3.c1':'A human confirms and signs, leaving a signoff record. ','rs3.c2':'The machine never signs for you','rs3.c3':' — this step must be pressed by a human.',
+ 'rs4.t':'Save into the fact ledger','rs4.c':'Only after signoff can the report\'s numbers enter the paper\'s fact ledger; no signoff, no entry.',
  'badge.todo':'To do','badge.done':'Done',
- 'btn.check':'Run report check','btn.lock':'Pin sha','btn.sign':'Human sign-off','btn.import':'Import to ledger',
- 'bt.lock':'Run report check first','bt.sign':'Sign only after lock','bt.import':'Needs human signoff before import',
+ 'btn.check':'Check the report\'s numbers','btn.checkT':'Compare report values with measurements one by one',
+ 'btn.lock':'Lock this version','btn.lockT':'Fingerprint and lock this version of the report',
+ 'btn.sign':'I\'ll sign off','btn.signT':'Confirm it\'s correct and sign off',
+ 'btn.import':'Save into the fact ledger','btn.importT':'After signoff, import the report\'s numbers into the paper\'s fact ledger',
+ 'bt.lock':'Check the report\'s numbers first','bt.sign':'Sign only after locking','bt.import':'No signoff, no entry',
  'rpt.note':'In-prototype memory simulation: the four buttons only change in-page state, nothing is written; toasts are marked as demos.',
- 'rpt.m.report':'Report ','rpt.m.metrics':' metrics','rpt.m.manifest':'manifest ','rpt.m.by':' (signed by {s})',
+ 'rpt.m.line':'{n} metrics matched to the text','rpt.m.signed':'source manifest signed',
  'wz.open':'Import experiment report','wz.title':'Import experiment report',
  'wz.s1':'Choose file','wz.s2':'Map fields','wz.s3':'Confirm binding',
  'wz.s1.h':'Pick a report file (3 demo reports built in).',
@@ -1381,10 +1560,10 @@ en:{
  'ai.q1':'① Summarize this paper\'s state','ai.q2':'② What could be improved in this paragraph?','ai.q3':'③ Why is this flagged missing-author',
  'ai.you':'You',
  'ai.intro':'I can do three things:\n① Summarize this paper\'s state\n② Suggest a revision for a paragraph (a suggestion card)\n③ Explain why a paragraph is flagged “missing author”',
- 'pt.edit':'Edit','pt.ask':'Ask AI','pt.save':'Save (human-sign, write-back demo)','pt.cancel':'Cancel',
- 'en1a':'🔒 ','en1b':'Protected chips',
- 'en1c':': prose is directly editable; citations and data render as chips (gray = citation, blue = data) that text edits cannot remove — failed deletions leave the chip in place with a notice.',
- 'mv.h':'Machine view','mv.sub':'Ledger, advisories, ref registry, index — this layer is for tools, not for the manuscript',
+ 't.inlineEdit':'Edit in place: type directly — Esc or clicking elsewhere commits','t.copied':'Paragraph copied','t.copyFail':'Copy failed (browser refused)',
+ 'cost.chip':'Cost note',
+ 'fc.verified':'Source file fingerprint matches the ledger','fc.mrec':'See machine record',
+ 'mv.h':'Machine view','mv.sub':'This layer is for tools, not for the manuscript — folded by topic, click to expand.',
  'mt.ledger':'Ledger','mt.yellow':'Advisories','mt.refs':'Ref registry','mt.index':'Index',
  'd.ledger':'Full ledger, {n} entries. This is the machine view: field names, file paths and hashes live here, never in the main view.',
  'd.yellow0':'Advisories (warning-level findings): 0 on this disk.',
@@ -1394,7 +1573,23 @@ en:{
  'd.refs':'Ref registry: {n} bib entries, {c} cited, {m} missing author fields.',
  'd.index':'Fact index view: a per-entry index mirroring the ledger (id/claim/value/locator/file/confidence). {n} entries, identical to the ledger.',
  'd.na':'missing',
- 'th.id':'id','th.claim':'Claim','th.value':'Value','th.conf':'Conf','th.src':'Source file','th.sha':'Hash (sha256)','th.loc':'Locator',
+ 'th.id':'id','th.claim':'Claim','th.value':'Value','th.conf':'Conf','th.src':'Source file','th.sha':'Hash (sha256)','th.fp':'Short fp','th.loc':'Locator',
+ 'rp.title':'Experiment reports','rp.sub':'Per project: import, field mapping, bound numbers and signoff status.',
+ 'rp.projA':'Paper A','rp.projB':'Paper B','rp.back':'Back to list','rp.open':'Reports',
+ 'rp.card.time':'Imported','rp.card.bound':'{n} numbers bound',
+ 'rp.st.draft':'To check','rp.st.signed':'Signed off','rp.st.confirmed':'Confirmed',
+ 'rp.empty':'No reports for this project yet — import one from the top-right button.',
+ 'rp.read':'Let AI explain this report','rp.readT':'AI summarizes the current check results in plain words',
+ 'rp.d.map':'Field mapping (review)','rp.d.bound':'Bound numbers','rp.d.file':'Original file','rp.d.filePh':'Prototype placeholder: the real version shows the original report file here.',
+ 'md.h':'Machine details (for tools and troubleshooting)','md.current':'Current readings: ','md.cliRef':'Full command list lives in “Machine view · Export & commands”.',
+ 'ac.ledger':'Ledger integrity','ac.scan':'Text scan','ac.refs':'References & evidence chain','ac.export':'Export & commands',
+ 'ac.ledgerOk':'all {n} facts traceable ✓','ac.ledgerBad':'{r} red','ac.scanOk':'zero advisories ✓','ac.scanN':'{n} advisories',
+ 'ac.refsBadge':'{n} refs · {m} missing authors','ac.exportOk':'manifest gate passable ✓','ac.indexSame':'The fact-index view mirrors the ledger entry for entry; not repeated here.',
+ 'ac.exportIntro':'Check commands for the current disk (prototype demo; real runs happen on the command line):',
+ 'fm.open':'See all findings','fm.openT':'List every finding not yet handled',
+ 'fm.view':'View','fm.viewT':'See this finding in context (jump to its place in the text)','fm.ask':'Ask AI','fm.askT':'Let AI explain this finding and how to fix it',
+ 'ai.reportQ':'Explain this check report in plain words, please.','ai.reportQEn':'Explain this check report in plain words',
+ 'ai.findingQ':'What does the finding "{t}" mean, and how do I fix it?','ai.findingQEn':'What does the finding "{t}" mean, and how do I fix it?',
  'th.key':'key','th.type':'Type','th.title':'Title','th.year':'Year','th.author':'Authors','th.uk':'Unique key','th.cited':'Cited','th.file':'File',
  't.rcollapsed':'Right column collapsed — click the strip to reopen',
  'ai.ctxHead':'Current paragraph · {sec}'
@@ -1416,8 +1611,7 @@ function setLang(l){
   LANG=l;
   document.body.classList.toggle('panel-en',l==='en');
   $$('#langSeg button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-lang')===l));
-  applyI18n(); renderProjects(); refreshHealth(); refreshReportCard(); refreshFindings(); renderTabs(); refreshStatus();
-  if(RTAB==='machine'){const cur=$('.tab.on');selectTab(cur?cur.getAttribute('data-tab'):'ledger');}
+  applyI18n(); renderProjects(); renderReports(); refreshHealth(); refreshReportCard(); refreshFindings(); renderTabs(); renderMachineDrawer(); refreshStatus();
 }
 $$('#langSeg button').forEach(b=>b.addEventListener('click',()=>{if(b.getAttribute('data-lang')!==LANG)setLang(b.getAttribute('data-lang'))}));
 
@@ -1453,6 +1647,7 @@ function renderProjects(){
       '<div class="pj-prog"><div class="pj-prog-bar"><i style="width:'+p.progress+'%"></i></div><span class="pj-prog-n">'+p.progress+'%</span></div>'+
       '<div class="pm-btns">'+btns+'</div>'+
       '<div class="pj-foot"><span class="pm-cur"></span>'+
+      '<button type="button" class="rbtn pj-reports" data-reports="'+p.id+'" title="'+esc(T('rp.sub'))+'">'+esc(T('rp.open'))+'</button>'+
       '<button type="button" class="btn-primary pj-open" data-open="'+openTarget+'">'+esc(T('card.open'))+'</button></div>'+
       '</div>';
   }).join('');
@@ -1518,12 +1713,15 @@ function setRTab(n){
   RTAB=n;
   $$('.rtab').forEach(t=>t.classList.toggle('on',t.getAttribute('data-rtab')===n));
   $$('.rpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+n));
-  if(n==='machine'){const cur=$('.tab.on');selectTab(cur?cur.getAttribute('data-tab'):'ledger');}
+  if(n==='machine') renderTabs();
 }
 $$('.rtab').forEach(t=>t.addEventListener('click',()=>setRTab(t.getAttribute('data-rtab'))));
 function goMachine(tab){
   setView('workbench'); setRTab('machine');
-  const cur=$('.tab.on'); selectTab(tab||(cur?cur.getAttribute('data-tab'):'ledger'));
+  const map={ledger:'ledger',index:'ledger',yellow:'scan',refs:'refs'};
+  const card=document.querySelector('.acc-card[data-acc="'+(map[tab]||'ledger')+'"]');
+  if(card) card.classList.add('on');
+  renderTabs();
 }
 
 /* ---- 模态框（通用） ---- */
@@ -1542,7 +1740,8 @@ function refreshFindings(){
   list.innerHTML=notes.map(n=>{
     const t=n.querySelector('.n-title');
     return '<div class="ff-row"><span class="ff-dot"></span><span class="ff-t">'+esc(t?t.textContent:'')+'</span>'+
-      '<button type="button" class="rc-demo" data-fmjump="'+esc(n.id)+'">'+esc(T('fm.view'))+'</button></div>';
+      '<button type="button" class="rc-demo" data-fmask="'+esc(n.id)+'" title="'+esc(T('fm.askT'))+'">'+esc(T('fm.ask'))+'</button>'+
+      '<button type="button" class="rc-demo" data-fmjump="'+esc(n.id)+'" title="'+esc(T('fm.viewT'))+'">'+esc(T('fm.view'))+'</button></div>';
   }).join('');
 }
 function renderFindingsModal(){
@@ -1551,7 +1750,8 @@ function renderFindingsModal(){
   notes.forEach(n=>{
     const t=n.querySelector('.n-title'),b=n.querySelector('.n-body');
     h+='<div class="fm-row"><div class="fm-t">'+esc(t?t.textContent:'')+'</div><div class="fm-b">'+esc(b?b.textContent:'')+'</div>'+
-      '<button type="button" class="rbtn" data-fmjump="'+esc(n.id)+'">'+esc(T('fm.jump'))+'</button></div>';
+      '<button type="button" class="rbtn" data-fmask="'+esc(n.id)+'" title="'+esc(T('fm.askT'))+'">'+esc(T('fm.ask'))+'</button> '+
+      '<button type="button" class="rbtn" data-fmjump="'+esc(n.id)+'" title="'+esc(T('fm.viewT'))+'">'+esc(T('fm.jump'))+'</button></div>';
   });
   $('#fmBody').innerHTML=h;
 }
@@ -1565,6 +1765,7 @@ const WZFILES=[
 ];
 let WZ={step:1,file:0};
 function openWizard(){WZ={step:1,file:0};renderWzFiles();renderWz();openModal('wizardModal')}
+const owBtn=$('#openWizard'); if(owBtn) owBtn.addEventListener('click',openWizard);
 function renderWzFiles(){
   $('#wzFiles').innerHTML=WZFILES.map((f,i)=>'<label class="wz-file"><input type="radio" name="wzf" value="'+i+'"'+(i===WZ.file?' checked':'')+
     '><span class="rf-n">'+esc(f.f)+'</span><span class="rf-s">'+esc(f.d)+'</span></label>').join('');
@@ -1583,13 +1784,121 @@ function renderWzSummary(){
     esc(T('wz.sum.mapped'))+' '+mapped+' / 3<br>'+
     esc(T('wz.sum.disk'))+' <code>'+esc(DISKS_V3[CUR]?DISKS_V3[CUR].disk:'')+'</code>';
 }
-$('#openWizard').addEventListener('click',openWizard);
 $('#wzBack').addEventListener('click',()=>{if(WZ.step>1){WZ.step--;renderWz()}});
 $('#wzNext').addEventListener('click',()=>{
   if(WZ.step<3){WZ.step++;renderWz()}
-  else{closeModal();toast(T('t.wzdone',{f:WZFILES[WZ.file].f}))}
+  else{
+    const f=WZFILES[WZ.file];
+    const proj=(PROJECTS.filter(p=>p.disks.indexOf(CUR)>=0)[0]||{id:'B'}).id;
+    const d=new Date(),pad=n=>(n<10?'0':'')+n;
+    REPORTS.unshift({id:'r'+(100+REPORTS.length),proj:proj,name:baseName(f.f).replace(/\.[a-z]+$/i,''),
+      file:f.f,time:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes()),
+      bound:3,status:'draft',ver:'v1',
+      map:$$('#wpane2 .wzsel').map((s,i)=>({m:['pairs','j1_guided','drift'][i]||('metric'+(i+1)),f:s.value==='skip'?'（跳过）':s.value,v:['10','9','0'][i]||''})),
+      boundList:[{id:'NEW-1',claim:f.d,value:'—',conf:'high'},{id:'NEW-2',claim:'绑定清单待核对',value:'—',conf:'medium'},{id:'NEW-3',claim:'导进事实账前需人签收',value:'—',conf:'high'}]});
+    RP.proj=proj; RP.detail=null; renderReports();
+    closeModal();toast(T('t.wzdone',{f:f.f}));
+  }
 });
 $('#wzFiles').addEventListener('change',e=>{if(e.target.name==='wzf')WZ.file=+e.target.value});
+
+/* ---- 条目7：实验报告管理视图（列表/详情/项目切换；向导确认后入库） ---- */
+const REPORTS=[
+ {id:'r1',proj:'A',name:'热稳定性实验 v2',file:'runs/stability-v2.report.toml',time:'2026-11-17 16:40',bound:12,status:'confirmed',ver:'v2',
+  map:[{m:'decay_rate',f:'thermal.decay_rate',v:'0.043'},{m:'t90_hours',f:'thermal.t90',v:'36.5'},{m:'n_samples',f:'thermal.n',v:'24'}],
+  boundList:[{id:'T1',claim:'衰减率实测值',value:'0.043',conf:'high'},{id:'T2',claim:'T90 时长（小时）',value:'36.5',conf:'high'},{id:'T3',claim:'样本量',value:'24',conf:'high'}]},
+ {id:'r2',proj:'A',name:'盲评批次 69 汇总',file:'reports/blind69.report.toml',time:'2026-11-18 10:05',bound:10,status:'signed',ver:'v1',
+  map:[{m:'pairs',f:'blind.pairs',v:'10'},{m:'j1_guided',f:'blind.j1_guided',v:'9'},{m:'j2_guided',f:'blind.j2_guided',v:'9'},{m:'drift',f:'mirror.drift',v:'0'}],
+  boundList:[{id:'B7',claim:'盲测套数',value:'9 套',conf:'high'},{id:'S3n',claim:'批 69 盲评对数',value:'10 对',conf:'high'},{id:'S3a',claim:'JUDGE-1 判引导稿胜',value:'9/10',conf:'high'}]},
+ {id:'r3',proj:'B',name:'成本口径复核 v2',file:'reports/cost-v2.report.toml',time:'2026-11-18 14:12',bound:2,status:'draft',ver:'v2',
+  map:[{m:'ratio_real_bill',f:'cost.ratio_1p66',v:'1.66'},{m:'ratio_fresh_input',f:'cost.ratio_3x',v:'3'}],
+  boundList:[{id:'D1',claim:'按真实账单的成本比',value:'1.66×',conf:'high'},{id:'H1',claim:'按输入全额计价的成本比',value:'3×',conf:'high'}]}
+];
+let RP={proj:'A',detail:null};
+function syncRpSwitch(){
+  $$('#rpSwitch button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-rproj')===RP.proj));
+}
+function renderReports(){
+  const list=$('#rpList'),det=$('#rpDetail');
+  if(!list) return;
+  syncRpSwitch();
+  if(RP.detail){
+    list.hidden=true; det.hidden=false; return;
+  }
+  list.hidden=false; det.hidden=true;
+  const items=REPORTS.filter(r=>r.proj===RP.proj);
+  list.innerHTML=items.length?items.map(r=>
+    '<div class="rp-card" data-rp="'+esc(r.id)+'">'+
+    '<div class="rp-top"><span class="rp-name">'+esc(r.name)+'</span><span class="rp-ver">'+esc(r.ver)+'</span>'+
+    '<span class="rp-chip rp-'+r.status+'">'+esc(T('rp.st.'+r.status))+'</span></div>'+
+    '<div class="rp-file" title="'+esc(r.file)+'">'+esc(baseName(r.file))+'</div>'+
+    '<div class="rp-row"><span>'+esc(T('rp.card.time'))+'</span><span class="pj-v">'+esc(r.time)+'</span></div>'+
+    '<div class="rp-row"><span>'+esc(T('rp.card.bound',{n:r.bound}))+'</span></div>'+
+    '</div>').join(''):'<div class="ff-empty">'+esc(T('rp.empty'))+'</div>';
+}
+function openReport(id){
+  const r=REPORTS.filter(x=>x.id===id)[0]; if(!r) return;
+  RP.detail=r;
+  $('#rpDName').textContent=r.name;
+  $('#rpDMeta').innerHTML=esc(T('rp.card.time'))+' '+esc(r.time)+' · '+esc(T('rp.card.bound',{n:r.bound}))+
+    ' · '+esc(T('rp.st.'+r.status))+' · '+esc(r.ver)+
+    '<br>'+esc(T('rp.card.file'))+'： <code title="'+esc(r.file)+'">'+esc(baseName(r.file))+'</code>';
+  $('#rpDMap').innerHTML=r.map.map(m=>'<tr><td><code>'+esc(m.m)+'</code></td><td><code>'+esc(m.f)+'</code></td><td><code>'+esc(m.v)+'</code></td></tr>').join('');
+  $('#rpDBound').innerHTML=r.boundList.map(b=>
+    '<div class="rp-bound-row"><span class="rp-bound-id">'+esc(b.id)+'</span>'+
+    '<span class="rp-bound-claim">'+esc(b.claim)+'</span>'+
+    '<span class="rp-bound-val">'+esc(b.value)+'</span>'+
+    '<span class="rp-bound-conf">'+esc(b.conf)+'</span></div>').join('');
+  renderReports();
+}
+$$('#rpSwitch button').forEach(b=>b.addEventListener('click',()=>{
+  RP.proj=b.getAttribute('data-rproj'); RP.detail=null; renderReports();
+}));
+$('#rpBack').addEventListener('click',()=>{RP.detail=null;renderReports()});
+$('#rpImportBtn').addEventListener('click',openWizard);
+
+/* ---- 条目6：浮层型批注（成本口径这类）收敛为角标＋模态 ---- */
+function convertCostNotes(){
+  $$('#diskBody aside.note.cost').forEach(note=>{
+    if(note.classList.contains('cost-note-off')) return;
+    note.classList.add('cost-note-off');
+    const chip=document.createElement('button');
+    chip.type='button'; chip.className='cost-chip'; chip.id=note.id+'-chip';
+    chip.setAttribute('data-costnote',note.id);
+    const t=note.querySelector('.n-title');
+    chip.title=t?t.textContent:'';
+    chip.innerHTML='⚠ '+esc(T('cost.chip'));
+    note.parentNode.insertBefore(chip,note);
+  });
+}
+function openNoteModal(note){
+  const t=note.querySelector('.n-title');
+  $('#noteModalTitle').textContent=t?t.textContent:'';
+  $('#noteModalBody').innerHTML=note.innerHTML;
+  openModal('noteModal');
+}
+
+/* ---- 条目8：机器细节抽屉＋AI 解读 ---- */
+function renderMachineDrawer(){
+  const el=$('#mdBody'); if(!el) return;
+  if(!CUR||!DISKS_V3[CUR]){el.innerHTML='';return}
+  const D=DISKS_V3[CUR],H=D.health;
+  el.innerHTML=esc(T('md.current'))+'exit '+H.rc+' · red '+H.red+' / yellow '+H.yellow+
+    ' · facts '+D.n_facts+' · fp '+fp8(H.facts_sha256)+
+    '<br>'+esc(T('md.cliRef'));
+}
+$('#askReportRead').addEventListener('click',()=>{
+  setRTab('ai');
+  const q=T('ai.reportQ');
+  $('#aiText').value=q;
+  aiAsk(q);
+});
+function askFindingByNote(note){
+  const t=note&&note.querySelector('.n-title')?note.querySelector('.n-title').textContent:'';
+  setRTab('ai');
+  const q=T('ai.findingQ',{t:t});
+  $('#aiText').value=q; $('#aiText').focus();
+}
 
 /* ---- 章节管理三件套（目录↔正文联动） ---- */
 let TOC_ENTRIES=[];
@@ -1608,7 +1917,7 @@ function renderTocDom(){
     '</span></li>').join('');
 }
 function afterSecChange(){
-  toc=$$('.rail li a'); secs=$$('[data-sec]');
+  toc=$$('.toc-float li a'); secs=$$('[data-sec]');
   captureOrig(); onScroll(); refreshFindings(); refreshStatus();
 }
 function moveSec(id,dir){
@@ -1776,15 +2085,29 @@ function openPmenu(btn){
   if(r.top-4+mh>window.innerHeight-8) m.style.top=Math.max(8,window.innerHeight-8-mh)+'px';
 }
 function hidePmenu(){$('#pmenu').classList.remove('on');PMENU_PID=null}
+function fallbackCopy(txt,done){
+  try{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();done()}
+  catch(err){toast(T('t.copyFail'))}
+}
 function pmenuAct(act){
   const pid=PMENU_PID; hidePmenu();
   if(!pid) return;
-  if(act==='edit') enterEdit(pid);
-  else if(act==='ask'){
+  if(act==='ask'){
     openAI(pid);
     const p=document.querySelector('p[data-pid="'+pid+'"]');
     if(p){const q=p.textContent.replace(/\s+/g,' ').trim().slice(0,60);
       $('#aiText').value='「'+q+'…」'; $('#aiText').focus()}
+  }else if(act==='edit'){
+    const p=document.querySelector('p[data-pid="'+pid+'"]');
+    if(p&&!p.isConnected) return;
+    enterEdit(pid);
+  }else if(act==='copy'){
+    const p=document.querySelector('p[data-pid="'+pid+'"]');
+    const txt=p?p.textContent.replace(/\s+/g,' ').trim():'';
+    const done=()=>toast(T('t.copied'));
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,()=>fallbackCopy(txt,done))}
+    else fallbackCopy(txt,done);
   }
 }
 function editSecTitle(h2){
@@ -1828,6 +2151,26 @@ document.addEventListener('click',e=>{
   const pn=t.closest('.pnav');
   if(pn){openPmenu(pn);return}
   if(!t.closest('#pmenu')) hidePmenu();
+  /* 条目4：点正文段落文字＝就地编辑（芯片/批注/把手/按钮除外；拖选不触发） */
+  if(!edit&&document.body.getAttribute('data-view')==='workbench'){
+    const pe=t.closest('p[data-pid]');
+    if(pe&&!t.closest('.fc,.cite,.pchip,.nbtn,.note,a,button,select,input,.sec-tools')){
+      const sel=window.getSelection();
+      const hasSel=sel&&sel.rangeCount>0&&!sel.getRangeAt(0).collapsed;
+      if(!hasSel) enterEdit(pe.getAttribute('data-pid'));
+    }
+  }
+  const pr=t.closest('.pj-reports');
+  if(pr){RP.proj=pr.getAttribute('data-reports');RP.detail=null;syncRpSwitch();renderReports();setView('reports');return}
+  const rcCard=t.closest('.rp-card');
+  if(rcCard){openReport(rcCard.getAttribute('data-rp'));return}
+  const cn=t.closest('[data-costnote]');
+  if(cn){const n=document.getElementById(cn.getAttribute('data-costnote'));if(n)openNoteModal(n);return}
+  const fa=t.closest('[data-fmask]');
+  if(fa){const n=document.getElementById(fa.getAttribute('data-fmask'));
+    const title=n&&n.querySelector('.n-title')?n.querySelector('.n-title').textContent:'';
+    setRTab('ai');const q=T('ai.findingQ',{t:title});
+    $('#aiText').value=q;$('#aiText').focus();return}
   const pj=t.closest('.pj-open');
   if(pj){openDisk(pj.getAttribute('data-open'));return}
   const pb=t.closest('.pmbtn');
@@ -1842,12 +2185,20 @@ document.addEventListener('click',e=>{
   if(dl){askDeleteSec(dl.getAttribute('data-sec-del'));return}
   const fj=t.closest('[data-fmjump]');
   if(fj){const el=document.getElementById(fj.getAttribute('data-fmjump'));
-    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');
-      setTimeout(()=>el.classList.remove('flash'),1600)}
+    if(el){
+      if(el.classList.contains('cost-note-off')){
+        const chip=document.getElementById(el.id+'-chip');
+        if(chip){chip.scrollIntoView({behavior:'smooth',block:'center'});
+          chip.classList.add('flash');setTimeout(()=>chip.classList.remove('flash'),1600)}
+        openNoteModal(el);return;
+      }
+      el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');
+      setTimeout(()=>el.classList.remove('flash'),1600);
+    }
     closeModal();return}
 });
 /* ---- 目录 ---- */
-let toc=$$('.rail li a');
+let toc=$$('.toc-float li a');
 let secs=$$('[data-sec]');
 function onScroll(){
   let cur=null,y=window.scrollY+120;
@@ -1869,8 +2220,8 @@ function showCard(el){
     '<div class="fc-row"><span class="k">说法</span><span>'+esc(f.claim)+'</span></div>'+
     '<div class="fc-row"><span class="k">出处</span><span>'+esc(f.human)+'（'+esc(f.loc)+'）</span></div>'+
     '<div class="fc-row"><span class="k">指纹</span><span>已核 ✓</span></div>'+
-    '<div class="fc-foot"><span style="color:#9b9585">来源文件的指纹已与账本核对一致</span>'+
-    '<a data-mrec="'+esc(el.getAttribute('data-fact'))+'">看机器记录</a></div>';
+    '<div class="fc-foot"><span style="color:#9b9585">'+esc(T('fc.verified'))+'</span>'+
+    '<a data-mrec="'+esc(el.getAttribute('data-fact'))+'">'+esc(T('fc.mrec'))+'</a></div>';
   fcard.style.display='block';
   const r=el.getBoundingClientRect(),w=298;
   let left=r.left+window.scrollX+10;
@@ -1888,56 +2239,14 @@ document.addEventListener('focusout',hideCard);
 document.addEventListener('scroll',hideCard,{passive:true});
 fcard.addEventListener('click',e=>{const a=e.target.closest('[data-mrec]');if(!a)return;
   goMachine('ledger');highlight(a.getAttribute('data-mrec'));hideCard();});
-/* ---- 机器视图（v4：收编进右栏标签页） ---- */
-function selectTab(name){$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
-  $('#dbody').innerHTML=renderTab(name);}
-function renderTab(name){
-  if(name==='ledger'){
-    let h='<p class="d-note">账本全表 62 条（12＋14＋13＋14＋9）。这一层是机器视图：字段名、文件路径与指纹都在这里，主界面不出现。</p>';
-    h+='<table class="mt"><thead><tr><th>id</th><th>断言</th><th>值</th><th>置信</th><th>出处文件</th><th>指纹（sha256）</th><th>定位</th></tr></thead><tbody>';
-    FACTS.__order.forEach(id=>{const f=FACTS[id];
-      h+='<tr data-row="'+esc(id)+'"><td><code>'+esc(id)+'</code></td><td>'+esc(f.claim)+'</td><td>'+esc(f.value)+
-         '</td><td>'+esc(f.conf)+'</td><td><code>'+esc(f.src)+'</code></td><td><code>'+esc(f.sha)+'</code></td><td>'+esc(f.loc)+'</td></tr>'});
-    return h+'</tbody></table>';
-  }
-  if(name==='yellow'){
-    return '<p class="d-note">黄牌（warning 级发现）。正文里读到的是人话版本，机器字段在这里。</p>'+
-    '<div class="ycard"><h4>黄牌 1 条：同一指标两个口径（LEDGER_CONFLICT）</h4><dl>'+
-    '<dt>指标</dt><dd>cost-per-task（每题成本）</dd>'+
-    '<dt>口径</dt><dd>real-bill（真实账单）</dd>'+
-    '<dt>两条账</dt><dd><code>D1</code> = $0.0486 / $0.0292（1.66×）　｜　<code>H1</code> = 3×（输入 token 全额计价）</dd>'+
-    '<dt>位置</dt><dd><code>facts/d_cost.toml:7</code>（姊妹盘 paper/）</dd>'+
-    '<dt>定性</dt><dd>不是错误：两个口径分属两套计价场景，正文必须同时给出</dd>'+
-    '<dt>机器读数</dt><dd>status=yellow，severity=yellow，exit=3</dd>'+
-    '</dl></div>'+
-    '<p class="d-note">paper-b 自己的 62 条账（<code>facts/*.toml</code>）里没有 D1/H1；这一条黄牌来自姊妹盘 paper/ 的成本账，'+
-    '所以它是跨盘提醒，不是本篇正文里的数字。</p>';
-  }
-  if(name==='refs'){
-    let h='<p class="d-note">文献登记：bib 10 条，已引用 '+Object.keys(CITED).length+' 条；缺作者字段 '+
-      BIB.filter(b=>!b.hasAuthor).length+' 条。dedupe 读数：10 条条目、9 条有唯一键、1 条没有（scitexclew）、0 组重复。</p>';
-    h+='<table class="mt"><thead><tr><th>key</th><th>类型</th><th>题名</th><th>年</th><th>作者</th><th>唯一键</th><th>正文已引</th></tr></thead><tbody>';
-    BIB.forEach(b=>{h+='<tr><td><code>'+esc(b.key)+'</code></td><td>'+esc(b.type)+'</td><td>'+esc(b.title)+
-      '</td><td>'+esc(b.year)+'</td><td>'+(b.hasAuthor?esc(b.author)+' 等':'<span style="color:#9a5b06">缺</span>')+
-      '</td><td>'+(b.uniqueKey?'✓':'<span style="color:#9a5b06">✗</span>')+'</td><td>'+(CITED[b.key]?'✓':'—')+'</td></tr>'});
-    h+='</tbody></table><p class="d-note">待补登记：refs/todo.toml 未配置（REF_TODO_TABLE_MISSING，exit 2）。'+
-      'REFS-TODO 里的三条文献线：①多智能体/端到端论文生成 ②可复现性与数据/断言溯源 ③盲测与预注册方法学；'+
-      '第③条的预注册（nosek2018preregistration）已进 bib 且正文已引，标为已办。</p>';
-    return h;
-  }
-  // index
-  let h='<p class="d-note">FACTS-B 索引视图：与账本同义的逐条索引（id／断言／值／定位／文件／置信）。共 62 条，与账本逐条一致。</p>';
-  h+='<table class="mt"><thead><tr><th>id</th><th>断言</th><th>值</th><th>定位</th><th>文件</th><th>置信</th></tr></thead><tbody>';
-  FACTS.__order.forEach(id=>{const f=FACTS[id];
-    h+='<tr data-row="'+esc(id)+'"><td><code>'+esc(id)+'</code></td><td>'+esc(f.claim)+'</td><td>'+esc(f.value)+
-       '</td><td>'+esc(f.loc)+'</td><td><code>'+esc(f.file)+'</code></td><td>'+esc(f.conf)+'</td></tr>'});
-  return h+'</tbody></table>';
-}
-$$('.tab').forEach(t=>t.addEventListener('click',()=>selectTab(t.dataset.tab)));
+/* ---- 机器视图（v4 统一修批：右栏标签页内的手风琴卡片组） ---- */
+function baseName(p){return String(p==null?'':p).split('/').pop()}
+function fp8(s){return String(s==null?'':s).slice(0,8)}
+function cliRow(c){return '<tr><td><code>'+esc(c)+'</code></td></tr>'}
 function highlight(id){
-  $$('#dbody tr').forEach(tr=>tr.classList.remove('hit'));
-  const tr=$('#dbody tr[data-row="'+id+'"]');
-  if(tr){tr.classList.add('hit');tr.scrollIntoView({block:'center'})}
+  $$('#accLedger tr').forEach(tr=>tr.classList.remove('hit'));
+  const tr=$('#accLedger tr[data-row="'+id+'"]');
+  if(tr){const c=tr.closest('.acc-card');if(c)c.classList.add('on');tr.classList.add('hit');tr.scrollIntoView({block:'center'})}
 }
 /* ---- 批注动作 ---- */
 let handled={};
@@ -1978,8 +2287,7 @@ let ORIG_HTML={};
 function captureOrig(){ORIG_HTML={};$$('p[data-pid]').forEach(p=>{ORIG_HTML[p.dataset.pid]=p.innerHTML});}
 captureOrig();
 
-const ptools=$('#ptools');
-let edit=null, hoverPid=null, ptoolTimer=null;
+let edit=null;
 
 function lockToast(msg){
   const e=$('#toast');
@@ -2043,45 +2351,23 @@ function chipFromSnap(s){
   c.appendChild(lab); c.appendChild(lk);
   return c;
 }
-/* ---- 工具条 ---- */
-function buildTools(){
-  ptools.innerHTML='<button class="pt" id="pt-edit">'+esc(T('pt.edit'))+'</button><button class="pt ask" id="pt-ask">'+esc(T('pt.ask'))+'</button>';
-  $('#pt-edit').addEventListener('click',()=>enterEdit(hoverPid));
-  $('#pt-ask').addEventListener('click',()=>openAI(hoverPid));
+/* ---- v4 条目4：Notion 式就地编辑（点击正文即编，Esc/outside 提交） ---- */
+function placeCaretEnd(el){
+  try{const r=document.createRange();r.selectNodeContents(el);r.collapse(false);
+    const s=window.getSelection();s.removeAllRanges();s.addRange(r)}catch(err){}
 }
-function placeTools(p){
-  const r=p.getBoundingClientRect();
-  const w=ptools.offsetWidth||110;
-  let left=r.right+14+window.scrollX;
-  const max=document.documentElement.scrollWidth-8;
-  if(left+w>max) left=Math.max(8,r.right+window.scrollX-w-8);
-  ptools.style.left=left+'px';
-  ptools.style.top=(r.top+window.scrollY+1)+'px';
+function editOutside(ev){
+  if(!edit) return;
+  const p=edit.p;
+  if(!p.isConnected){document.removeEventListener('click',editOutside,true);edit=null;return}
+  if(p.contains(ev.target)) return;
+  commitEdit();
 }
-function showTools(p){
-  if(edit) return;
-  hoverPid=p.dataset.pid;
-  buildTools(); placeTools(p); ptools.classList.add('on');
-}
-function hideTools(){ if(!edit) ptools.classList.remove('on'); }
-document.addEventListener('mouseover',e=>{
-  if(!e.target.closest) return;
-  const p=e.target.closest('p[data-pid]');
-  if(p&&!edit){ clearTimeout(ptoolTimer); showTools(p); }
-});
-document.addEventListener('mouseout',e=>{
-  if(!e.target.closest) return;
-  const p=e.target.closest('p[data-pid]');
-  if(p&&!edit&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('#ptools')))
-    ptoolTimer=setTimeout(hideTools,180);
-});
-ptools.addEventListener('mouseenter',()=>clearTimeout(ptoolTimer));
-ptools.addEventListener('mouseleave',()=>{ if(!edit) ptoolTimer=setTimeout(hideTools,180); });
-/* ---- 进入编辑态 ---- */
 function enterEdit(pid){
-  if(edit||!pid) return;
+  if(!pid) return;
+  if(edit){ if(edit.pid===pid){edit.p.focus();placeCaretEnd(edit.p);return} commitEdit(); }
   const p=document.querySelector('p[data-pid="'+pid+'"]');
-  if(!p) return;
+  if(!p||p.getAttribute('contenteditable')==='true') return;
   const nodes=[...p.querySelectorAll('.cite, .fc')];
   const chips=[];
   nodes.forEach((n,i)=>{
@@ -2097,24 +2383,12 @@ function enterEdit(pid){
   p.classList.add('editing');
   edit={pid:pid,p:p,chips:chips};
   bindEditEvents(p);
-  showEditNote(p);
-  buildTools(); ptools.classList.remove('on');
+  document.removeEventListener('click',editOutside,true);
+  document.addEventListener('click',editOutside,true);
   p.focus();
-  toast(T('t.edit'));
+  placeCaretEnd(p);
+  toast(T('t.inlineEdit'));
 }
-function showEditNote(p){
-  const old=document.getElementById('edit-note'); if(old) old.remove();
-  const n=document.createElement('div');
-  n.className='edit-note'; n.id='edit-note';
-  n.innerHTML='<div class="en-txt">'+esc(T('en1a'))+'<b>'+esc(T('en1b'))+'</b>'+esc(T('en1c'))+
-    '</div>'+
-    '<div class="en-btns"><button class="pt save" id="pt-save">'+esc(T('pt.save'))+'</button>'+
-    '<button class="pt cancel" id="pt-cancel">'+esc(T('pt.cancel'))+'</button></div>';
-  p.insertAdjacentElement('afterend',n);
-  n.querySelector('#pt-save').addEventListener('click',saveEdit);
-  n.querySelector('#pt-cancel').addEventListener('click',cancelEdit);
-}
-function hideEditNote(){ const n=document.getElementById('edit-note'); if(n) n.remove(); }
 function bindEditEvents(p){
   p.addEventListener('beforeinput',e=>{
     if(e.inputType==='insertParagraph'||e.inputType==='insertLineBreak'){
@@ -2143,7 +2417,10 @@ function bindEditEvents(p){
     const t=(e.clipboardData||window.clipboardData).getData('text/plain');
     try{ document.execCommand('insertText',false,t); }catch(err){}
   });
-  p.addEventListener('keydown',e=>{ if(e.key==='Enter') e.preventDefault(); });
+  p.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); }
+    if(e.key==='Escape'){ e.preventDefault(); commitEdit(); }
+  });
 }
 function rangeTouchesChip(r){
   if(!r) return false;
@@ -2217,8 +2494,8 @@ function restoreMissing(){
   });
   return true;
 }
-/* ---- 保存 / 取消 ---- */
-function saveEdit(){
+/* ---- 提交（就地编辑退出即提交；取消由恢复原状场景承担） ---- */
+function commitEdit(){
   if(!edit) return;
   const p=edit.p, pid=edit.pid;
   restoreMissing();
@@ -2244,8 +2521,7 @@ function saveEdit(){
   p.classList.remove('editing'); p.classList.add('p-edited');
   ORIG_HTML[pid]=p.innerHTML;
   edit=null;
-  hideEditNote();
-  buildTools(); ptools.classList.remove('on');
+  document.removeEventListener('click',editOutside,true);
   enhanceDom();
   toast(T('t.save'));
 }
@@ -2256,8 +2532,7 @@ function cancelEdit(){
   p.removeAttribute('contenteditable');
   p.classList.remove('editing');
   edit=null;
-  hideEditNote();
-  buildTools(); ptools.classList.remove('on');
+  document.removeEventListener('click',editOutside,true);
   enhanceDom();
   toast(T('t.cancel'));
 }
@@ -2347,10 +2622,21 @@ $('#aiText').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefau
 
 function aiAnswer(q){
   const t=String(q||'');
+  if(/解读|这份报告|plain words|check report/i.test(t)) return aiReportRead();
   if(/总结|状态|概览|全文|这篇|读数/.test(t)) return aiSummary();
   if(/为什么|原因|缺作者|怎么标/.test(t)) return aiWhy();
   if(/建议|改|哪里|润色|优化|重写/.test(t)) return aiSuggest();
-  return '原型里我只认这三件事：\n① 总结这篇论文的状态\n② 对某一段提修改建议\n③ 解释一段为什么被标了「缺作者」\n\n换个问法试试，或者点下面三个快捷问题。';
+  return '原型里我只认这三件事：\n① 总结这篇论文的状态\n② 对某一段提修改建议\n③ 解释一段为什么被标了「缺作者」';
+}
+function aiReportRead(){
+  const D=DISKS_V3[CUR],H=D.health,miss=D.n_missing_author;
+  return '这份检查报告，大白话就三句：\n'+
+   '<ul class="sumlist">'+
+   '<li><b>数字</b>：'+D.n_facts+' 条全有出处，账本体检查一遍是「红 '+H.red+'、黄 '+H.yellow+'」——'+
+     (H.red?'有红的，要紧，先处理红。':'红为零，这部分可以信。')+'</li>'+
+   '<li><b>提醒</b>：'+H.warn_count+' 条小提醒'+(H.warn_count?'——提醒不是错误，多是口径差异，别当成矛盾去改正文。':'，没有。')+'</li>'+
+   '<li><b>文献</b>：登记了 '+D.n_bib+' 条，缺作者 '+miss+' 条'+(miss?'——读者看不出是谁的工作，建议先补。':'。')+'</li>'+
+   '</ul>要动手的就两件：补作者名、核对那条口径提醒。其余都是机器已经对好的账。';
 }
 function aiSummary(){
   const nf=FACTS.__order.length;
@@ -2504,10 +2790,11 @@ function renderDisk(id,silent,follow){
   CITED=D.cited; PARA_META=D.para; SUG=D.sug; FACTS=D.facts; BIB=D.bib;
   captureOrig();
   $('#docFoot').innerHTML=D.foot;
-  toc=$$('.rail li a'); secs=$$('[data-sec]');
+  toc=$$('.toc-float li a'); secs=$$('[data-sec]');
   onScroll();
   enhanceDom();
-  if(RTAB==='machine'){const cur=$('.tab.on');selectTab(cur?cur.getAttribute('data-tab'):'ledger');}
+  convertCostNotes();
+  if(RTAB==='machine') renderTabs();
   aiCtxPid=null; aiCtx.classList.remove('on');
   if(follow!==false) setLang(D.label==='中文版'?'zh':'en');
   refreshHealth();
@@ -2530,7 +2817,7 @@ function refreshHealth(){
   $('#st-refs').textContent=T('health.refs',{n:miss});
   $('#st-refs').classList.toggle('warn',miss>0);
   const wc=$('#st-warn-count');
-  if(wc) wc.textContent=T('health.exit',{rc:H.rc,red:H.red,yellow:H.yellow,n:H.facts,sha:(H.facts_sha256||'').slice(0,12)});
+  if(wc) wc.textContent=T('health.exit',{rc:H.rc,red:H.red,yellow:H.yellow,n:H.facts,sha:fp8(H.facts_sha256)});
   const cov=$('#coverSt');
   if(cov) cov.textContent=T('cover.ok',{n:H.facts});
   // 封面说明行（chrome 而非内容：随面板语言重写）
@@ -2566,17 +2853,66 @@ $('#reconDemo').addEventListener('click',()=>{
   }
 });
 
-/* ---- 机器视图标签随盘改数字 ---- */
+/* ---- 条目9：机器视图手风琴（四组人话卡，展开才见细节；条目5口径：短指纹/短路径/无CLI跑跑） ---- */
 function renderTabs(){
+  const accLedger=$('#accLedger'); if(!accLedger) return;
   if(!CUR||!DISKS_V3[CUR]) return;
-  const D=DISKS_V3[CUR];
-  const tb={ledger:$('.tab[data-tab="ledger"]'),yellow:$('.tab[data-tab="yellow"]'),
-            refs:$('.tab[data-tab="refs"]'),index:$('.tab[data-tab="index"]')};
-  if(tb.ledger) tb.ledger.textContent=T('mt.ledger')+' '+D.n_facts;
-  if(tb.yellow) tb.yellow.textContent=T('mt.yellow')+' '+D.health.warn_count;
-  if(tb.refs) tb.refs.textContent=T('mt.refs')+' '+D.n_bib;
-  if(tb.index) tb.index.textContent=T('mt.index')+' '+(D.disk.indexOf('paper-b')===0?'FACTS-B':'');
+  const D=DISKS_V3[CUR],H=D.health;
+  /* 组一：账本完整性 */
+  const bl=$('#accBadgeLedger');
+  bl.textContent=H.red?T('ac.ledgerBad',{r:H.red}):T('ac.ledgerOk',{n:D.n_facts});
+  bl.className='acc-badge '+(H.red?'warn':'ok');
+  let h='<p class="d-note">'+esc(T('d.ledger',{n:D.n_facts}))+'</p>';
+  h+='<table class="mt"><thead><tr><th>'+esc(T('th.id'))+'</th><th>'+esc(T('th.claim'))+'</th><th>'+esc(T('th.value'))+'</th><th>'+esc(T('th.conf'))+'</th><th>'+esc(T('th.src'))+'</th><th>'+esc(T('th.fp'))+'</th><th>'+esc(T('th.loc'))+'</th></tr></thead><tbody>';
+  FACTS.__order.forEach(id=>{const f=FACTS[id];
+    h+='<tr data-row="'+esc(id)+'"><td><code>'+esc(id)+'</code></td><td>'+esc(f.claim)+'</td><td>'+esc(f.value)+
+       '</td><td>'+esc(f.conf)+'</td><td><code title="'+esc(f.src)+'">'+esc(baseName(f.src))+'</code></td>'+
+       '<td><code title="'+esc(f.sha)+'">'+esc(fp8(f.sha))+'</code></td><td>'+esc(f.loc)+'</td></tr>'});
+  h+='</tbody></table>';
+  h+='<p class="acc-note">'+esc(T('ac.indexSame'))+'</p>';
+  accLedger.innerHTML=h;
+  /* 组二：正文扫描 */
+  const bs=$('#accBadgeScan');
+  bs.textContent=H.warn_count?T('ac.scanN',{n:H.warn_count}):T('ac.scanOk');
+  bs.className='acc-badge '+(H.warn_count?'warn':'ok');
+  let s='';
+  if(!H.warn_count){ s='<p class="d-note">'+esc(T('d.yellow0'))+'</p>'; }
+  else{
+    s='<p class="d-note">'+esc(T('d.yellowN',{n:H.warn_count}))+'</p>';
+    (H.warn_msgs||[]).forEach(m=>{
+      s+='<div class="ycard"><h4>'+esc(T('mt.yellow'))+'：'+esc(m.slice(0,80))+'</h4><dl>'+
+        '<dt>'+esc(T('d.machineread'))+'</dt><dd>status=yellow · exit='+H.rc+'</dd>'+
+        '<dt>'+esc(T('d.disk'))+'</dt><dd><code>'+esc(D.disk)+'/</code></dd></dl></div>';
+    });
+  }
+  $('#accScan').innerHTML=s;
+  /* 组三：文献与证据链 */
+  const br=$('#accBadgeRefs');
+  br.textContent=T('ac.refsBadge',{n:D.n_bib,m:D.n_missing_author});
+  br.className='acc-badge '+(D.n_missing_author?'warn':'ok');
+  let r='<p class="d-note">'+esc(T('d.refs',{n:D.n_bib,c:Object.keys(CITED).length,m:D.n_missing_author}))+'</p>';
+  r+='<table class="mt"><thead><tr><th>'+esc(T('th.key'))+'</th><th>'+esc(T('th.type'))+'</th><th>'+esc(T('th.title'))+'</th><th>'+esc(T('th.year'))+'</th><th>'+esc(T('th.author'))+'</th><th>'+esc(T('th.uk'))+'</th><th>'+esc(T('th.cited'))+'</th></tr></thead><tbody>';
+  BIB.forEach(b=>{r+='<tr><td><code>'+esc(b.key)+'</code></td><td>'+esc(b.type)+'</td><td>'+esc(b.title)+
+    '</td><td>'+esc(b.year)+'</td><td>'+(b.hasAuthor?esc(b.author)+' 等':'<span style="color:#9a5b06">'+esc(T('d.na'))+'</span>')+
+    '</td><td>'+(b.uniqueKey?'✓':'<span style="color:#9a5b06">✗</span>')+'</td><td>'+(CITED[b.key]?'✓':'—')+'</td></tr>'});
+  r+='</tbody></table>';
+  $('#accRefs').innerHTML=r;
+  /* 组四：导出与命令 */
+  const be=$('#accBadgeExport');
+  be.textContent=H.red?('⚠ exit '+H.rc):T('ac.exportOk');
+  be.className='acc-badge '+(H.red?'warn':'ok');
+  let x='<p class="d-note">'+esc(T('ac.exportIntro'))+'</p>';
+  x+='<table class="mt"><tbody>'+
+    cliRow('factscribe check --json '+D.disk+'/')+
+    cliRow('factscribe audit --json '+D.disk+'/')+
+    cliRow('factscribe bundle '+D.disk+'/ --out <dir>')+
+    cliRow('factscribe report check --report '+baseName(D.report.report_path)+' --json')+
+    '</tbody></table>';
+  $('#accExport').innerHTML=x;
 }
+$$('.acc-h').forEach(b=>b.addEventListener('click',()=>{b.closest('.acc-card').classList.toggle('on')}));
+$('#tocCollapse').addEventListener('click',()=>document.body.classList.add('toc-hidden'));
+$('#tocFab').addEventListener('click',()=>document.body.classList.remove('toc-hidden'));
 
 /* ---- 动作按钮：跑 audit／跑 check／打包预演（原型内模拟） ---- */
 function actOut(id,txt){const e=$('#'+id);e.innerHTML=txt;e.classList.add('on');}
@@ -2594,23 +2930,20 @@ function actBtn(id,label,fn){
 actBtn('act-audit','audit',()=>{
   const D=DISKS_V3[CUR],H=D.health;
   actOut('act-audit-out','<span class="ok">'+esc(T('act.auditDone'))+'</span>  exit 0\n'+
-    T('act.line2',{f:H.facts,r:H.red,y:H.yellow})+'\n'+
-    'CLI: factscribe audit --json '+D.disk+'/');
+    T('act.line2',{f:H.facts,r:H.red,y:H.yellow}));
 });
 actBtn('act-check','check',()=>{
   const D=DISKS_V3[CUR],H=D.health;
   const w=(H.warn_msgs&&H.warn_msgs.length)?('\n'+esc(T('act.advisories'))+H.warn_msgs[0].slice(0,120)):('\n'+esc(T('act.advisories'))+esc(T('act.none')));
   actOut('act-check-out','<span class="'+(H.warn_count?'bad':'ok')+'">'+
     esc(H.warn_count?T('act.checkWarn',{rc:H.rc}):T('act.checkOk'))+'</span>\n'+
-    T('act.line2',{f:H.facts,r:H.red,y:H.yellow})+w+'\n'+
-    'CLI: factscribe check --json '+D.disk+'/');
+    T('act.line2',{f:H.facts,r:H.red,y:H.yellow})+w);
 });
 actBtn('act-bundle','bundle',()=>{
   const D=DISKS_V3[CUR];
   actOut('act-bundle-out','<span class="ok">'+esc(T('act.bundleDone'))+'</span>\n'+
     esc(T('act.bundleLine',{b:D.n_bib,f:D.n_facts}))+'\n'+
-    esc(T('act.bundleLine2'))+'\n'+
-    'CLI: factscribe bundle '+D.disk+'/ --out <包目录>');
+    esc(T('act.bundleLine2')));
 });
 
 /* =====================================================================
@@ -2624,9 +2957,8 @@ function refreshReportCard(){
   if(!CUR||!DISKS_V3[CUR]) return;
   const D=DISKS_V3[CUR], P=D.report, S=rstate();
   $('#rptTitle').textContent=P.title;
-  $('#rptMeta').innerHTML=esc(T('rpt.m.report'))+'<code>'+esc(P.report_path)+'</code><br>'+
-    'schema <code>factscribe/report@1</code> · '+P.metrics.length+esc(T('rpt.m.metrics'))+
-    (P.manifest?(' · '+esc(T('rpt.m.manifest'))+'<code>'+esc(P.manifest.path)+'</code>'+esc(T('rpt.m.by',{s:P.manifest.signed_by}))):'');
+  $('#rptMeta').innerHTML=esc(T('rpt.m.line',{n:P.metrics.length}))+
+    (P.manifest?(' · '+esc(T('rpt.m.signed'))):'');
   // 步骤徽章
   const set=(n,ok)=>{
     const el=$('#rs'+n);
@@ -2653,8 +2985,8 @@ function refreshReportCard(){
   if(P.manifest){
     l1.innerHTML=P.manifest.files.map(f=>{
       const okc=f.state==='match';
-      return '<div class="rfile"><span class="rf-n" title="'+esc(f.rel)+'">'+esc(f.rel)+'</span>'+
-        '<span class="rf-s">'+esc(f.sha.slice(0,10))+'</span>'+
+      return '<div class="rfile"><span class="rf-n" title="'+esc(f.rel)+'">'+esc(baseName(f.rel))+'</span>'+
+        '<span class="rf-s" title="'+esc(f.sha)+'">'+esc(fp8(f.sha))+'</span>'+
         '<span class="'+(okc?'rf-ok':'rf-bad')+'">'+(okc?'✓':'✗')+'</span></div>';
     }).join('');
   }else{
@@ -2672,36 +3004,26 @@ $('#btn-check').addEventListener('click',()=>{
   if(P.manifest){
     const m=P.manifest;
     stepOut(1,'<span class="'+(m.drift||m.missing?'bad':'ok')+'">'+
-      (m.drift||m.missing?'✗ 有漂移':'✓ 9 份来源逐条 sha256 现算复核：'+m.match+'/'+m.files.length+' 一致，drift '+m.drift)+
-      '</span>\n清单 signed_by: '+m.signed_by+'\nsigned_at: '+m.signed_at+'\n'+
-      'CLI: factscribe report check --report '+m.path+' --json <ws>');
+      (m.drift||m.missing?'✗ 有漂移':'✓ 9 份来源逐条复核：'+m.match+'/'+m.files.length+' 份完全一致')+
+      '</span>\n清单签收人：'+m.signed_by+' · 签收时间：'+m.signed_at);
   }else{
-    stepOut(1,'<span class="ok">✓ 报告 check 通过（exit '+P.check_rc+'）</span>\n'+
-      P.metrics.length+' 个指标逐条探针取值，与报告写的值一致\n'+
-      'CLI: factscribe report check --report '+P.report_path+' --json <ws>');
+    stepOut(1,'<span class="ok">✓ 全部对上（'+P.metrics.length+' 个指标逐条与实测一致）</span>');
   }
   S.check=true; refreshReportCard(); toast(T('t.demoCli'));
 });
 $('#btn-lock').addEventListener('click',()=>{
-  const P=DISKS_V3[CUR].report,S=rstate();
-  stepOut(2,'<span class="ok">✓ 已钉 sha（lock 退出码 '+P.lock_rc+'）</span>\n'+
-    '锁文件：<id>.lock.json（0600，原子写）\n'+
-    'CLI: factscribe report lock --report '+P.report_path+' --json <ws>');
+  const S=rstate();
+  stepOut(2,'<span class="ok">✓ 这一版已锁定</span>\n之后有人改动这份报告，指纹立刻对不上，马上会被发现。');
   S.lock=true; refreshReportCard(); toast(T('t.demoCli'));
 });
 $('#btn-sign').addEventListener('click',()=>{
-  const P=DISKS_V3[CUR].report,S=rstate();
-  stepOut(3,'<span class="ok">✓ 人签复核完成</span>（原型内存模拟）\n'+
-    '签收人 moc · 写 <id>.signoff.toml 与哈希链流水\n'+
-    'CLI: factscribe report sign --report '+P.report_path+' --by moc --json <ws>\n'+
-    '机器不代签：这一步必须是人按的。');
+  const S=rstate();
+  stepOut(3,'<span class="ok">✓ 签收完成</span>（原型内存模拟）\n签收人 moc · 签收记录已留档。\n机器不代签：这一步必须是人按的。');
   S.sign=true; refreshReportCard(); toast(T('t.demoCli'));
 });
 $('#btn-import').addEventListener('click',()=>{
-  const P=DISKS_V3[CUR].report,S=rstate();
-  stepOut(4,'<span class="ok">✓ 已签收，报告可导进事实账</span>\n'+
-    '带签收门：没有 signoff 就不许导\n'+
-    'CLI: factscribe fact import --report '+P.report_path+' --paper <盘目录> --dry-run');
+  const S=rstate();
+  stepOut(4,'<span class="ok">✓ 已签收，数字正式存入论文事实账</span>\n这一步有签收门：没有人的签收，存不进去。');
   S.import=true; refreshReportCard(); toast(T('t.demoCli'));
 });
 
@@ -2717,46 +3039,8 @@ $('#rcCollapse').addEventListener('click',()=>{document.body.classList.add('rc-c
 $('#rcOpen').addEventListener('click',()=>{document.body.classList.remove('rc-collapsed');});
 
 /* =====================================================================
-   v3：机器视图与问 AI 的读数随盘重算（覆盖 v2.1 的硬编码版本）
+   v4 统一修批：机器视图渲染已并入 renderTabs()（手风琴）；本段只剩问 AI 的随盘读数
    ===================================================================== */
-function renderTab(name){
-  const D=DISKS_V3[CUR];
-  if(name==='ledger'){
-    let h='<p class="d-note">'+esc(T('d.ledger',{n:D.n_facts}))+'</p>';
-    h+='<table class="mt"><thead><tr><th>'+esc(T('th.id'))+'</th><th>'+esc(T('th.claim'))+'</th><th>'+esc(T('th.value'))+'</th><th>'+esc(T('th.conf'))+'</th><th>'+esc(T('th.src'))+'</th><th>'+esc(T('th.sha'))+'</th><th>'+esc(T('th.loc'))+'</th></tr></thead><tbody>';
-    FACTS.__order.forEach(id=>{const f=FACTS[id];
-      h+='<tr data-row="'+esc(id)+'"><td><code>'+esc(id)+'</code></td><td>'+esc(f.claim)+'</td><td>'+esc(f.value)+
-         '</td><td>'+esc(f.conf)+'</td><td><code>'+esc(f.src)+'</code></td><td><code>'+esc(f.sha)+'</code></td><td>'+esc(f.loc)+'</td></tr>'});
-    return h+'</tbody></table>';
-  }
-  if(name==='yellow'){
-    if(!D.health.warn_count){
-      return '<p class="d-note">'+esc(T('d.yellow0'))+'</p>'+
-        '<p class="d-note">'+esc(T('d.yellow0b',{d:D.disk,r:D.health.red,y:D.health.yellow,rc:D.health.rc}))+'</p>';
-    }
-    let h='<p class="d-note">'+esc(T('d.yellowN',{n:D.health.warn_count}))+'</p>';
-    (D.health.warn_msgs||[]).forEach(m=>{
-      h+='<div class="ycard"><h4>'+esc(T('mt.yellow'))+'：'+esc(m.slice(0,80))+'</h4><dl>'+
-         '<dt>'+esc(T('d.machineread'))+'</dt><dd>status=yellow，severity=yellow，exit='+D.health.rc+'</dd>'+
-         '<dt>'+esc(T('d.disk'))+'</dt><dd><code>'+esc(D.disk)+'/</code></dd></dl></div>';
-    });
-    return h;
-  }
-  if(name==='refs'){
-    let h='<p class="d-note">'+esc(T('d.refs',{n:D.n_bib,c:Object.keys(CITED).length,m:D.n_missing_author}))+'</p>';
-    h+='<table class="mt"><thead><tr><th>'+esc(T('th.key'))+'</th><th>'+esc(T('th.type'))+'</th><th>'+esc(T('th.title'))+'</th><th>'+esc(T('th.year'))+'</th><th>'+esc(T('th.author'))+'</th><th>'+esc(T('th.uk'))+'</th><th>'+esc(T('th.cited'))+'</th></tr></thead><tbody>';
-    BIB.forEach(b=>{h+='<tr><td><code>'+esc(b.key)+'</code></td><td>'+esc(b.type)+'</td><td>'+esc(b.title)+
-      '</td><td>'+esc(b.year)+'</td><td>'+(b.hasAuthor?esc(b.author)+' 等':'<span style="color:#9a5b06">'+esc(T('d.na'))+'</span>')+
-      '</td><td>'+(b.uniqueKey?'✓':'<span style="color:#9a5b06">✗</span>')+'</td><td>'+(CITED[b.key]?'✓':'—')+'</td></tr>'});
-    return h+'</tbody></table>';
-  }
-  let h='<p class="d-note">'+esc(T('d.index',{n:D.n_facts}))+'</p>';
-  h+='<table class="mt"><thead><tr><th>'+esc(T('th.id'))+'</th><th>'+esc(T('th.claim'))+'</th><th>'+esc(T('th.value'))+'</th><th>'+esc(T('th.loc'))+'</th><th>'+esc(T('th.file'))+'</th><th>'+esc(T('th.conf'))+'</th></tr></thead><tbody>';
-  FACTS.__order.forEach(id=>{const f=FACTS[id];
-    h+='<tr><td><code>'+esc(id)+'</code></td><td>'+esc(f.claim)+'</td><td>'+esc(f.value)+
-       '</td><td>'+esc(f.loc)+'</td><td>'+esc(f.file)+'</td><td>'+esc(f.conf)+'</td></tr>'});
-  return h+'</tbody></table>';
-}
 
 function aiSummary(){
   const D=DISKS_V3[CUR], nf=D.n_facts, miss=D.n_missing_author, H=D.health;

@@ -1,0 +1,2808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>paper-b 人用审阅工作台（交互原型）</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#fbfcfd; --line:#e2e6ea; --line-2:#eef1f4;
+  --ink:#1c2128; --ink-2:#4a545e; --muted:#6e7781; --accent:#2f6feb; --accent-soft:#eaf1fe;
+  --ok:#1a7f37; --ok-soft:#e9f7ee; --warn:#9a6700; --warn-soft:#fff6e0; --err:#cf222e; --err-soft:#fdeceb;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Source Han Sans SC",sans-serif;
+  --shadow:0 1px 2px rgba(16,22,26,.06),0 3px 10px rgba(16,22,26,.05);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.75;
+  -webkit-font-smoothing:antialiased}
+button{font-family:inherit;font-size:13px;line-height:1.4}
+h1,h2,h3,h4{margin:0;font-weight:650;letter-spacing:.01em}
+a{color:var(--accent);text-decoration:none}
+code,kbd{font-family:var(--mono);font-size:.92em}
+
+/* ---------- 顶栏 ---------- */
+.topbar{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 1px 0 rgba(16,22,26,.02)}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand h1{font-size:16px}
+.brand .sub{color:var(--muted);font-size:12px;white-space:nowrap}
+.badges{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;font-size:12px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);white-space:nowrap;cursor:default}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.badge.ok{background:var(--ok-soft);border-color:#c9e7d4;color:#14602a}
+.badge.ok .dot{background:var(--ok)}
+.badge.warn{background:var(--warn-soft);border-color:#f0dcae;color:#7a5200}
+.badge.warn .dot{background:#d99b00}
+.badge.todo{background:var(--accent-soft);border-color:#c7dbfb;color:#1c4e9c}
+.badge.todo .dot{background:var(--accent)}
+.acts{display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:7px;padding:6px 12px;
+  cursor:pointer;transition:.15s;border-bottom-color:#d3d8de}
+.btn:hover{background:var(--surface-2);border-color:#cfd6dd}
+.btn:active{transform:translateY(.5px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#2a63d6}
+.btn.sm{padding:3px 9px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- 布局 ---------- */
+.shell{display:grid;grid-template-columns:212px minmax(0,1fr);gap:0;min-height:calc(100vh - 132px)}
+.sidenav{border-right:1px solid var(--line);background:var(--surface);padding:14px 10px;position:sticky;top:53px;
+  align-self:start;max-height:calc(100vh - 53px);overflow:auto}
+.sidenav h4{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:0 8px;margin:2px 0 8px}
+.navitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:none;cursor:pointer;
+  padding:7px 9px;border-radius:7px;color:var(--ink-2);font-size:13.5px}
+.navitem:hover{background:var(--surface-2)}
+.navitem.on{background:var(--accent-soft);color:#1c4e9c;font-weight:600}
+.navitem .num{margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.navitem.on .num{color:#1c4e9c}
+main{padding:20px 24px 40px;min-width:0;max-width:1180px}
+.viewhead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap}
+.viewhead h2{font-size:19px}
+.viewhead p{margin:2px 0 0;color:var(--muted);font-size:12.5px;max-width:76ch}
+.kbdhint{color:var(--muted);font-size:12px}
+
+/* ---------- 卡片 ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px;
+  box-shadow:var(--shadow)}
+.card.sel{border-color:#b7cdf7;box-shadow:0 0 0 3px rgba(47,111,235,.10),var(--shadow)}
+.cardhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.tag{font-size:11px;padding:1px 8px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line);
+  color:var(--ink-2);white-space:nowrap}
+.tag.lit{background:var(--warn-soft);border-color:#f0dcae;color:#7a5200}
+.tag.info{background:var(--accent-soft);border-color:#c7dbfb;color:#1c4e9c}
+.tag.ok{background:var(--ok-soft);border-color:#c9e7d4;color:#14602a}
+.card h3{font-size:14.5px;margin:6px 0 3px}
+.one{color:var(--ink-2);font-size:13px;margin:0 0 10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.meta{color:var(--muted);font-size:11.5px;font-family:var(--mono);word-break:break-all}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat .n{font-size:22px;font-weight:650;font-family:var(--mono);letter-spacing:-.02em}
+.stat .l{color:var(--muted);font-size:12px}
+.stat.ok .n{color:var(--ok)} .stat.warn .n{color:var(--warn)} .stat.err .n{color:var(--err)}
+.stat.blue .n{color:var(--accent)}
+
+/* ---------- 表格 ---------- */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+input[type=text],input[type=search],select,textarea{font-family:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--line);
+  border-radius:7px;background:var(--surface);color:var(--ink);min-width:0}
+input[type=text]:focus,select:focus,textarea:focus{outline:2px solid rgba(47,111,235,.28);outline-offset:0;border-color:#b7cdf7}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line-2);vertical-align:top}
+th{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+  position:sticky;top:0;background:var(--surface);z-index:1;border-bottom:1px solid var(--line)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.sel{background:var(--accent-soft)}
+tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+td.id{font-family:var(--mono);white-space:nowrap;font-size:12.5px}
+td.val{font-family:var(--mono);font-size:12.5px;max-width:260px;overflow-wrap:anywhere}
+.tblwrap{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}
+.tblwrap .scroll{max-height:64vh;overflow:auto}
+.conf{font-size:11px;padding:0 6px;border-radius:4px;border:1px solid;white-space:nowrap}
+.conf.high{background:var(--ok-soft);border-color:#c9e7d4;color:#14602a}
+.conf.med{background:var(--warn-soft);border-color:#f0dcae;color:#7a5200}
+.conf.low{background:var(--err-soft);border-color:#f3c7c3;color:#a3221f}
+.rev{font-size:11px;padding:0 6px;border-radius:4px;border:1px dashed #b7cdf7;color:#1c4e9c;background:var(--accent-soft);white-space:nowrap}
+
+/* ---------- 详情展开 ---------- */
+.detail{background:var(--surface-2);border-left:3px solid var(--accent);padding:10px 12px;margin:4px 0 10px;
+  border-radius:0 8px 8px 0;font-size:12.5px}
+.detail dl{display:grid;grid-template-columns:120px minmax(0,1fr);gap:3px 12px;margin:0}
+.detail dt{color:var(--muted);font-size:11.5px}
+.detail dd{margin:0;font-family:var(--mono);word-break:break-all}
+.detail dd.txt{font-family:var(--sans)}
+
+/* ---------- 说明卡 / 列表 ---------- */
+.note{background:#f4f8ff;border:1px solid #d6e4fb;border-radius:9px;padding:10px 13px;font-size:12.5px;color:#1c3f6e}
+.note b{color:#12305c}
+.list{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--ink-2)}
+.list li{margin:3px 0}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;font-size:12.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);overflow-wrap:anywhere}
+.rowitem{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--line-2);font-size:12.5px}
+.rowitem:last-child{border-bottom:0}
+.rowitem .k{font-family:var(--mono);white-space:nowrap;color:var(--ink-2)}
+.rowitem .grow{flex:1;min-width:0}
+
+/* ---------- 表单（文献登记） ---------- */
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;margin-top:9px}
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:11px;color:var(--muted)}
+.field input{border-color:var(--line)}
+.field.miss input{border-color:#e6b8b3;background:#fffafa}
+.field .hint{font-size:10.5px;color:var(--err)}
+.field .okhint{font-size:10.5px;color:var(--ok)}
+
+/* ---------- 模态框 ---------- */
+.mask{position:fixed;inset:0;background:rgba(16,22,26,.45);display:none;align-items:center;justify-content:center;z-index:80;padding:24px}
+.mask.on{display:flex}
+.modal{background:var(--surface);border-radius:12px;max-width:760px;width:100%;max-height:86vh;overflow:auto;
+  box-shadow:0 12px 40px rgba(16,22,26,.25);padding:20px 22px}
+.modal h3{font-size:16px;margin-bottom:4px}
+.modal .mh{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
+.modal pre{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;
+  font-family:var(--mono);font-size:12px;max-height:44vh;line-height:1.6}
+.modal .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.x{border:0;background:none;font-size:20px;line-height:1;color:var(--muted);cursor:pointer;padding:0 4px}
+.demo{background:var(--warn-soft);border:1px solid #f0dcae;color:#7a5200;border-radius:7px;padding:5px 10px;font-size:11.5px}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);background:#1c2128;color:#fff;
+  padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.22s;z-index:95;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:88vw}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- 页脚 ---------- */
+footer{border-top:1px solid var(--line);background:var(--surface);padding:12px 24px;font-size:11.5px;color:var(--muted)}
+footer p{margin:3px 0}
+footer b{color:var(--ink-2)}
+.empty{padding:26px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px;background:var(--surface-2)}
+.kbd{background:var(--surface-2);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;
+  font-family:var(--mono);font-size:11px}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.flow .step{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;box-shadow:var(--shadow)}
+.flow .arr{color:var(--muted)}
+@media (max-width:900px){.shell{grid-template-columns:1fr}.sidenav{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <h1>paper-b</h1>
+    <span class="sub">人用审阅工作台 · 交互原型</span>
+  </div>
+  <div class="badges" id="badges"></div>
+  <div class="acts">
+    <button class="btn" data-sim="audit">跑 audit</button>
+    <button class="btn" data-sim="check">跑 check</button>
+    <button class="btn primary" data-sim="bundle">打包预演</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidenav">
+    <h4>按任务</h4>
+    <div id="nav"></div>
+  </nav>
+  <main id="main"></main>
+</div>
+
+<footer>
+  <p id="foot-meta"></p>
+  <p><b>写操作边界</b>：本原型内所有写操作均为<b>显式人签</b>——按钮文案一律带「人签」字样，AI 不代签。依据仓库既有纪律：<code>fact add</code> 不改 <code>signed_by</code>/<code>[files]</code>（factscribe/scaffold.py:8）；检索候选入正式 <code>refs.bib</code> 必须人采（factscribe/refs.py:22）。相关裁定 <b>P-079</b>（2026-11-15 用户裁定，阴性）：「factscribe 有意『不判文字只判数』，AI 面板采纳写入不加 by-LLM/模型/采纳人痕迹，宿主模型不钉版本。」</p>
+  <p><b>原型声明</b>：单文件离线原型，零外部请求；页内所有「写」均为内存模拟，不落盘、不改 paper-b。真实读数取自 paper-b 与其姊妹盘。</p>
+</footer>
+
+<div id="toast"></div>
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+
+<script id="snapshot" type="application/json">{
+ "meta": {
+  "generated_at": "2026-11-18 13:48:04 CST",
+  "paper_b": "/Users/moc/workspaces/SiAgent/paper-b",
+  "paper_b_zh": "/Users/moc/workspaces/SiAgent/paper-b-zh",
+  "sibling_paper": "/Users/moc/workspaces/SiAgent/paper",
+  "tool_version": "1.3.0",
+  "repo": "factscribe-dev @ feat/gap-cards",
+  "head_commit": "3e19f3c",
+  "audit_cmd": "PYTHONPATH=factscribe-dev python3 -m factscribe audit ../paper-b --json"
+ },
+ "facts": [
+  {
+   "id": "B1",
+   "claim": "第一套盲测首跑命中",
+   "value": "0/12（首跑，#1）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 总表 #1",
+   "confidence": "high",
+   "note": "#1 的 24 个项目全部 exit 2",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B2",
+   "claim": "第七套盲测首跑命中（首次过线）",
+   "value": "11/12（首跑，#7）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 总表 #7",
+   "confidence": "high",
+   "note": "预注册阈值 ≥10/12",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B3",
+   "claim": "三套真盲合计命中与比例",
+   "value": "30/36（83%）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 汇总行",
+   "confidence": "high",
+   "note": "#7/#8/#9 三套合计",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B4",
+   "claim": "valid 项目误红合计",
+   "value": "0/36（valid 误红）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 汇总行",
+   "confidence": "high",
+   "note": "三套真盲的 benign 面全干净",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B5",
+   "claim": "第八套首跑命中",
+   "value": "10/12（#8 首跑）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 总表 #8",
+   "confidence": "high",
+   "note": "过线",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B6",
+   "claim": "第九套首跑命中",
+   "value": "9/12（#9 首跑）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 总表 #9",
+   "confidence": "high",
+   "note": "未过线；三套里唯一未过线",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B7",
+   "claim": "盲测套数",
+   "value": "9 套（#1–#9）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 表头",
+   "confidence": "high",
+   "note": "#1–#7 记于 FS-BLIND-TESTS，#8–#9 记于 KNOWN-GAPS",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B8",
+   "claim": "预注册判读阈值",
+   "value": "≥10/12（判读阈值）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E1 表末行",
+   "confidence": "high",
+   "note": "invalid 命中 ≥10/12 且 valid 零误红",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B9",
+   "claim": "第三套盲测首跑命中（16 个项目）",
+   "value": "0/8（首跑，#3）",
+   "source": "runs/batch72/BLIND-TABLE.md",
+   "source_sha256": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a",
+   "locator": "#3 行",
+   "confidence": "high",
+   "note": "三种配置写法，规范未冻结",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B10",
+   "claim": "第四套盲测首跑命中",
+   "value": "0/12（首跑，#4）",
+   "source": "runs/batch72/BLIND-TABLE.md",
+   "source_sha256": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a",
+   "locator": "#4 行",
+   "confidence": "high",
+   "note": "facts schema 未冻结（缺 id）",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B11",
+   "claim": "第五套盲测首跑命中",
+   "value": "8/12（首跑，#5）",
+   "source": "runs/batch72/BLIND-TABLE.md",
+   "source_sha256": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a",
+   "locator": "#5 行",
+   "confidence": "high",
+   "note": "错误码表未并入规范",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "B12",
+   "claim": "第六套盲测首跑命中",
+   "value": "9/12（首跑，#6）",
+   "source": "runs/batch72/BLIND-TABLE.md",
+   "source_sha256": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a",
+   "locator": "#6 行",
+   "confidence": "high",
+   "note": "一个现象两个码 + 两条漏判",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/a_blind.toml"
+  },
+  {
+   "id": "M1",
+   "claim": "文风闸核心指标数",
+   "value": "8 项（核心指标）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E6",
+   "confidence": "high",
+   "note": "连接词、CV、空泛形容词、三项并列、段末模板、双重限定、同头、超长句",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "M2",
+   "claim": "文风闸指标数（含节奏平台）",
+   "value": "9 项（含节奏平台）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E6",
+   "confidence": "high",
+   "note": "批 67 新增 RHYTHM_PLATEAU",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1a",
+   "claim": "第一轮评审一判改写胜",
+   "value": "4/17（评审一判改写胜）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch65.JUDGE-1.rewrite_wins",
+   "confidence": "high",
+   "note": "17 对全项目覆盖",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1b",
+   "claim": "第一轮评审二判改写胜",
+   "value": "5/17（评审二判改写胜）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch65.JUDGE-2.rewrite_wins",
+   "confidence": "high",
+   "note": "17 对全项目覆盖",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1c",
+   "claim": "第一轮盲评对数与语言分布",
+   "value": "17 对（6 英 / 11 中）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 表首行",
+   "confidence": "high",
+   "note": "不抽样，覆盖全部改动段落",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1d",
+   "claim": "第一轮评审一改写胜率",
+   "value": "0.235（评审一胜率）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch65.JUDGE-1.rewrite_rate",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1e",
+   "claim": "第一轮评审二改写胜率",
+   "value": "0.294（评审二胜率）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch65.JUDGE-2.rewrite_rate",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1l",
+   "claim": "第一轮两评审同选对数",
+   "value": "14/17（两评审同选）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch65.agreement.same_choice",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1f",
+   "claim": "第一轮英文超长句归零",
+   "value": "4→0（英超长句）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 指标表",
+   "confidence": "high",
+   "note": "全项目 8 项规则口径",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1g",
+   "claim": "第一轮中文超长句归零",
+   "value": "3→0（中超长句）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 指标表",
+   "confidence": "high",
+   "note": "全项目 8 项规则口径",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1h",
+   "claim": "第一轮中文 05_eval 节级 CV 反向恶化",
+   "value": "0.475→0.358（中文 05_eval 节 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 指标表",
+   "confidence": "high",
+   "note": "拆长句压平分布，触发 SENTENCE_UNIFORMITY",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1i",
+   "claim": "第一轮事实绑定数不变",
+   "value": "234（事实绑定数）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 事实闸行",
+   "confidence": "high",
+   "note": "改写前后均 234",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1j",
+   "claim": "第一轮英文 token 多重集",
+   "value": "754 / 170 / 12 / 19（英 token 多重集）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 token 表",
+   "confidence": "high",
+   "note": "数字 / \\fact / 引用 / 交叉引用",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S1k",
+   "claim": "第一轮中文 token 多重集",
+   "value": "751 / 171 / 12 / 19（中 token 多重集）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E2 token 表",
+   "confidence": "high",
+   "note": "数字 / \\fact / 引用 / 交叉引用",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/b_indicators_round1.toml"
+  },
+  {
+   "id": "S2a",
+   "claim": "第二轮评审一判改写胜",
+   "value": "5/24（评审一判改写胜）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.JUDGE-1.rewrite_wins",
+   "confidence": "high",
+   "note": "24 对全项目覆盖",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2b",
+   "claim": "第二轮评审二判改写胜",
+   "value": "3/24（评审二判改写胜）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.JUDGE-2.rewrite_wins",
+   "confidence": "high",
+   "note": "24 对全项目覆盖",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2c",
+   "claim": "第二轮盲评对数与语言分布",
+   "value": "24 对（13 英 / 11 中）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 表首行",
+   "confidence": "high",
+   "note": "不抽样，段落集合随规则更新",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2d",
+   "claim": "第二轮评审二判原文胜",
+   "value": "21/24（评审二判原文胜）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.JUDGE-2.original_wins",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2k",
+   "claim": "第二轮两评审同选对数",
+   "value": "20/24（两评审同选）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.agreement.same_choice",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2l",
+   "claim": "第二轮评审一改写胜率",
+   "value": "0.208（评审一胜率）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.JUDGE-1.rewrite_rate",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2m",
+   "claim": "第二轮评审二改写胜率",
+   "value": "0.125（评审二胜率）",
+   "source": "runs/batch72/decode-all.json",
+   "source_sha256": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020",
+   "locator": "batch67.JUDGE-2.rewrite_rate",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2e",
+   "claim": "第二轮英文节奏平台归零",
+   "value": "13→0（英节奏平台）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 指标表",
+   "confidence": "high",
+   "note": "新规则只对节奏平台出牌",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2f",
+   "claim": "第二轮中文节奏平台归零",
+   "value": "12→0（中节奏平台）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 指标表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2g",
+   "claim": "第二轮英文改写后 CV",
+   "value": "0.550（英改写后 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 指标表",
+   "confidence": "high",
+   "note": "健康带内",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2h",
+   "claim": "第二轮中文改写后 CV",
+   "value": "0.556（中改写后 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 指标表",
+   "confidence": "high",
+   "note": "健康带内",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2i",
+   "claim": "第二轮规则改动后的测试例数",
+   "value": "247 例（测试）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 表末",
+   "confidence": "high",
+   "note": "新增 5 例",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S2j",
+   "claim": "两轮盲评段落集合重叠",
+   "value": "1/17（两轮重叠段落）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E3 表末",
+   "confidence": "high",
+   "note": "旧 17 段只有 1 段在新规则下仍被标记",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/c_round2.toml"
+  },
+  {
+   "id": "S3a",
+   "claim": "第三轮评审一判引导稿胜",
+   "value": "9/10（评审一，引导胜）",
+   "source": "runs/batch72/blind69-summary.json",
+   "source_sha256": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e",
+   "locator": "reviewers.JUDGE-1.guided_wins",
+   "confidence": "high",
+   "note": "批69 逐对记录未落独立文件",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3b",
+   "claim": "第三轮评审二判引导稿胜",
+   "value": "9/10（评审二，引导胜）",
+   "source": "runs/batch72/blind69-summary.json",
+   "source_sha256": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e",
+   "locator": "reviewers.JUDGE-2.guided_wins",
+   "confidence": "high",
+   "note": "与评审一读数相同",
+   "kind": "",
+   "dup_ok": true,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3c",
+   "claim": "第三轮两评审选择一致",
+   "value": "10/10（两位评审选择一致）",
+   "source": "runs/batch72/blind69-summary.json",
+   "source_sha256": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e",
+   "locator": "agreement.same_choice",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3n",
+   "claim": "第三轮盲评对数",
+   "value": "10 对（批69 盲评）",
+   "source": "runs/batch72/blind69-summary.json",
+   "source_sha256": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e",
+   "locator": "pairs",
+   "confidence": "high",
+   "note": "逐段配对",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3d",
+   "claim": "裸稿触发指标项数",
+   "value": "6 项（裸稿触发）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "闸可见面 5 项核心 + 节奏平台",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3e",
+   "claim": "裸稿黄牌条数",
+   "value": "20 条（裸稿黄牌）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3f",
+   "claim": "引导稿黄牌条数",
+   "value": "0 条（引导稿黄牌）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "exit 0",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3g",
+   "claim": "裸稿句长 CV",
+   "value": "0.373（裸稿 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "低于 0.45，判「太平」",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3h",
+   "claim": "引导稿句长 CV",
+   "value": "0.473（引导稿 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "跨过 0.45 下界",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3i",
+   "claim": "第三轮数字绑定数",
+   "value": "66（数字绑定数）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "两头均 66/66",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3j",
+   "claim": "第三轮 \\fact 与数字令牌",
+   "value": "49 处 \\fact、29 个 id、70 个数字令牌",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "两头逐项相同",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3k",
+   "claim": "裸稿全量探针黄牌",
+   "value": "24 条（裸稿全量探针）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "补 \\$ 遮罩后",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3l",
+   "claim": "引导稿全量探针黄牌",
+   "value": "2 条（引导稿全量探针）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "落在闸从未看见的段落",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S3m",
+   "claim": "引导稿全量探针 CV",
+   "value": "0.417（引导稿全量 CV）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E4 表",
+   "confidence": "high",
+   "note": "低于健康带下界",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/d_round3.toml"
+  },
+  {
+   "id": "S4a",
+   "claim": "修复解析 bug 后英文词数增量",
+   "value": "6390→6924（英词数，+8.4%）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "旧读数被 \\$ 遮罩低估",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4b",
+   "claim": "修复解析 bug 后英文句数增量",
+   "value": "368→397（英句数，+7.9%）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4c",
+   "claim": "修复解析 bug 后英文段数增量",
+   "value": "90→96（英段数）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4d",
+   "claim": "修复解析 bug 后中文规模增量",
+   "value": "10059→10893（中字数，+8.3%）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4e",
+   "claim": "修复与阶段判断后的测试例数",
+   "value": "256 例（测试）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 表末",
+   "confidence": "high",
+   "note": "新增 9 例",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4f",
+   "claim": "draft 阶段的触发项阈值",
+   "value": "3 项（draft 触发阈值）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 阶段判据",
+   "confidence": "high",
+   "note": "triggers >= 3 判 draft",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4g",
+   "claim": "健康带上下界",
+   "value": "0.45–0.80（健康带）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 阶段判据",
+   "confidence": "high",
+   "note": "低于 0.45 报太平；高于 0.80 不报",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4h",
+   "claim": "修后英文 CV",
+   "value": "0.529（英 CV，修后）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  },
+  {
+   "id": "S4i",
+   "claim": "修后中文 CV",
+   "value": "0.538（中 CV，修后）",
+   "source": "runs/batch72/STYLE-EVIDENCE.md",
+   "source_sha256": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+   "locator": "E5 基线表",
+   "confidence": "high",
+   "note": "",
+   "kind": "",
+   "dup_ok": false,
+   "file": "facts/e_style_v3.toml"
+  }
+ ],
+ "fact_files": [
+  {
+   "file": "facts/a_blind.toml",
+   "count": 12,
+   "schema": "factscribe-fact/3.0"
+  },
+  {
+   "file": "facts/b_indicators_round1.toml",
+   "count": 14,
+   "schema": "factscribe-fact/3.0"
+  },
+  {
+   "file": "facts/c_round2.toml",
+   "count": 13,
+   "schema": "factscribe-fact/3.0"
+  },
+  {
+   "file": "facts/d_round3.toml",
+   "count": 14,
+   "schema": "factscribe-fact/3.0"
+  },
+  {
+   "file": "facts/e_style_v3.toml",
+   "count": 9,
+   "schema": "factscribe-fact/3.0"
+  }
+ ],
+ "index_diff": [
+  {
+   "id": "S3a",
+   "index": "med",
+   "ledger": "high"
+  },
+  {
+   "id": "S3b",
+   "index": "med",
+   "ledger": "high"
+  },
+  {
+   "id": "S3c",
+   "index": "med",
+   "ledger": "high"
+  }
+ ],
+ "bib": [
+  {
+   "key": "kobak_excess",
+   "type": "misc",
+   "title": "Delving into {LLM}-assisted writing in biomedical publications through excess vocabulary",
+   "author": "Kobak, Dmitry and Gonz{\\'a}lez-M{\\'a}rquez, Rita and Horv{\\'a}t, Em{\\H{o}}ke {\\'A}. and Lause, Jan",
+   "year": "2025",
+   "doi": "",
+   "eprint": "2406.07016",
+   "journal": "",
+   "booktitle": "",
+   "url": "",
+   "missing": [],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex",
+    "sections/04_style_case.tex"
+   ]
+  },
+  {
+   "key": "liang_mapping",
+   "type": "misc",
+   "title": "Mapping the Increasing Use of {LLMs} in Scientific Papers",
+   "author": "Liang, Weixin and Zhang, Yaohui and Wu, Zhengxuan and Lepp, Haley and Ji, Wenlong and Zhao, Xuandong and Cao, Huy and Liu, Sheng and He, Siyu and Huang, Zhi and Yang, Diyi and Potts, Christopher and Manning, Christopher D. and Zou, James Y.",
+   "year": "2024",
+   "doi": "",
+   "eprint": "2404.01268",
+   "journal": "",
+   "booktitle": "",
+   "url": "",
+   "missing": [],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex",
+    "sections/04_style_case.tex"
+   ]
+  },
+  {
+   "key": "chakrabarty_art",
+   "type": "inproceedings",
+   "title": "Art or Artifice? Large Language Models and the False Promise of Creativity",
+   "author": "Chakrabarty, Tuhin and Padmakumar, Vishakh and He, He",
+   "year": "2024",
+   "doi": "10.1145/3613904.3642731",
+   "eprint": "",
+   "journal": "",
+   "booktitle": "Proceedings of the CHI Conference on Human Factors in Computing Systems",
+   "url": "",
+   "missing": [],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex",
+    "sections/04_style_case.tex"
+   ]
+  },
+  {
+   "key": "jakesch_co",
+   "type": "inproceedings",
+   "title": "Co-Writing with Opinionated Language Models Affects Users' Views",
+   "author": "Jakesch, Maurice and Bhat, Advait and Buschek, Daniel and Zalmanson, Lior and Naaman, Mor",
+   "year": "2023",
+   "doi": "10.1145/3544548.3581196",
+   "eprint": "",
+   "journal": "",
+   "booktitle": "Proceedings of the CHI Conference on Human Factors in Computing Systems",
+   "url": "",
+   "missing": [],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex",
+    "sections/04_style_case.tex"
+   ]
+  },
+  {
+   "key": "paperorchestra2026",
+   "type": "article",
+   "title": "{PaperOrchestra}: A Multi-Agent Framework for Automated {AI} Research Paper Writing",
+   "author": "",
+   "year": "2026",
+   "doi": "",
+   "eprint": "2604.05018",
+   "journal": "arXiv preprint arXiv:2604.05018",
+   "booktitle": "",
+   "url": "",
+   "missing": [
+    "authors"
+   ],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  },
+  {
+   "key": "parness2026",
+   "type": "article",
+   "title": "{PARNESS}: A Paper Harness for End-to-End Automated Scientific Research with Dynamic Workflows",
+   "author": "",
+   "year": "2026",
+   "doi": "",
+   "eprint": "2605.05258",
+   "journal": "arXiv preprint arXiv:2605.05258",
+   "booktitle": "",
+   "url": "",
+   "missing": [
+    "authors"
+   ],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  },
+  {
+   "key": "xscientist2026",
+   "type": "article",
+   "title": "{XScientist}: A Git-Like Research Protocol for Long-Running Autonomous Scientific Discovery",
+   "author": "",
+   "year": "2026",
+   "doi": "",
+   "eprint": "2607.12301",
+   "journal": "arXiv preprint arXiv:2607.12301",
+   "booktitle": "",
+   "url": "",
+   "missing": [
+    "authors"
+   ],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  },
+  {
+   "key": "aiscientistv2_2025",
+   "type": "article",
+   "title": "The {AI} Scientist-v2: Workshop-Level Automated Scientific Discovery via Agentic Tree Search",
+   "author": "",
+   "year": "2025",
+   "doi": "",
+   "eprint": "2504.08066",
+   "journal": "arXiv preprint arXiv:2504.08066",
+   "booktitle": "",
+   "url": "",
+   "missing": [
+    "authors"
+   ],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  },
+  {
+   "key": "scitexclew",
+   "type": "misc",
+   "title": "{SciTeX-Clew}: hash-linked provenance for research artefacts",
+   "author": "",
+   "year": "2026",
+   "doi": "",
+   "eprint": "",
+   "journal": "",
+   "booktitle": "",
+   "url": "github.com/scitex-ai/scitex-clew",
+   "missing": [
+    "authors",
+    "venue_or_id"
+   ],
+   "has_unique_key": false,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  },
+  {
+   "key": "nosek2018preregistration",
+   "type": "article",
+   "title": "The preregistration revolution",
+   "author": "Nosek, Brian A. and Ebersole, Charles R. and DeHaven, Alexander C. and Mellor, David T.",
+   "year": "2018",
+   "doi": "10.1073/pnas.1708274114",
+   "eprint": "",
+   "journal": "Proceedings of the National Academy of Sciences",
+   "booktitle": "",
+   "url": "",
+   "missing": [],
+   "has_unique_key": true,
+   "cites": [
+    "sections/02_related.tex"
+   ]
+  }
+ ],
+ "refs_todo": [
+  {
+   "group": "一、多智能体 / 端到端论文生成",
+   "text": "PaperOrchestra（多智能体论文写作流水线）",
+   "landing": "02_related.tex",
+   "n": 1,
+   "bib_keys": [
+    "paperorchestra2026"
+   ],
+   "bib_state": [
+    {
+     "key": "paperorchestra2026",
+     "found": true,
+     "missing": [
+      "authors"
+     ],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    }
+   ],
+   "in_bib": true
+  },
+  {
+   "group": "一、多智能体 / 端到端论文生成",
+   "text": "同类：AI Scientist 系列、AutoSurvey / SurveyForge 一类自动综述系统",
+   "landing": "02_related.tex",
+   "n": 2,
+   "bib_keys": [
+    "aiscientistv2_2025",
+    "parness2026"
+   ],
+   "bib_state": [
+    {
+     "key": "aiscientistv2_2025",
+     "found": true,
+     "missing": [
+      "authors"
+     ],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    },
+    {
+     "key": "parness2026",
+     "found": true,
+     "missing": [
+      "authors"
+     ],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    }
+   ],
+   "in_bib": true
+  },
+  {
+   "group": "二、可复现性与数据/断言溯源",
+   "text": "SciTeX-Clew（LaTeX 源码层的事实/引用核查）",
+   "landing": "02_related.tex",
+   "n": 3,
+   "bib_keys": [
+    "scitexclew"
+   ],
+   "bib_state": [
+    {
+     "key": "scitexclew",
+     "found": true,
+     "missing": [
+      "authors",
+      "venue_or_id"
+     ],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    }
+   ],
+   "in_bib": true
+  },
+  {
+   "group": "二、可复现性与数据/断言溯源",
+   "text": "XScientist（科学断言核查）",
+   "landing": "02_related.tex",
+   "n": 4,
+   "bib_keys": [
+    "xscientist2026"
+   ],
+   "bib_state": [
+    {
+     "key": "xscientist2026",
+     "found": true,
+     "missing": [
+      "authors"
+     ],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    }
+   ],
+   "in_bib": true
+  },
+  {
+   "group": "二、可复现性与数据/断言溯源",
+   "text": "工件评审（artifact evaluation / badging）与工作流溯源模型（如 W3C PROV）",
+   "landing": "02_related.tex",
+   "n": 5,
+   "bib_keys": [],
+   "bib_state": [],
+   "in_bib": false
+  },
+  {
+   "group": "三、盲测与预注册方法学",
+   "text": "人类评测中的 A/B 盲评与评审间一致性（Cohen's kappa 一类）",
+   "landing": "02_related.tex",
+   "n": 6,
+   "bib_keys": [],
+   "bib_state": [],
+   "in_bib": false
+  },
+  {
+   "group": "三、盲测与预注册方法学",
+   "text": "预注册（pre-registration）在 HCI / NLP 评测中的实践",
+   "landing": "02_related.tex",
+   "n": 7,
+   "bib_keys": [
+    "nosek2018preregistration"
+   ],
+   "bib_state": [
+    {
+     "key": "nosek2018preregistration",
+     "found": true,
+     "missing": [],
+     "cites": [
+      "sections/02_related.tex"
+     ]
+    }
+   ],
+   "in_bib": true
+  }
+ ],
+ "conflicts": [
+  {
+   "id": "H1",
+   "claim": "成本口径冲突：我们比 mcode 贵 3 倍（旧口径）vs 1.66 倍（真实账单）",
+   "value": "3×",
+   "kind": "config",
+   "confidence": "med",
+   "metric": "cost-per-task",
+   "scope": "real-bill",
+   "note": "与 D1 冲突：3× 是「不计缓存」的记账口径（全部输入按新鲜 token 计价）；D1 是按公开价目换算的真实账单 1.66×。正文若用 3×，必须同一句同时给出 D1 的 1.66× 与口径差别。",
+   "source": "experiments/ctx-compiler-redblue/BATCH31-COST.md",
+   "locator": "结论先行",
+   "source_sha256": "2b4935720cde847c2c624442996681ff3283bb194decc582c6ec06bf59eb4225"
+  },
+  {
+   "id": "H2",
+   "claim": "BATCH23 token 均值 vs BATCH20：不同题目集合，不可混用",
+   "value": "97.3k（6 题）vs 90,431（16 题）",
+   "kind": "config",
+   "confidence": "high",
+   "metric": "token-budget-ctx-on",
+   "scope": "cross-batch-caveat",
+   "note": "与 A11、B2 相关：A11＝BATCH23 全 16 题 90,431，B2＝BATCH20 6 题 97.3k。两个均值分母不同，禁止相加、平均或互相印证；比较只能在同题集内做。",
+   "source": "experiments/ctx-compiler-redblue/BATCH20-SWB-RUN.md",
+   "locator": "§二 汇总",
+   "source_sha256": "5c5829c0022b0be34de8c8f68850495af4ded0b6a0e1624ee64df5ccd0854a15"
+  },
+  {
+   "id": "H3",
+   "claim": "mcode 24 步 vs 60 步：3/6 与 5/6 是两个设置",
+   "value": "3/6 vs 5/6",
+   "kind": "config",
+   "confidence": "high",
+   "metric": "mcode-resolved",
+   "scope": "step-limit-caveat",
+   "note": "与 C1 相关：3/6 是协议臂（--max-steps 24），5/6 是放宽到 60 步的补跑口径。报 mcode 分数必须点明步数上限，不得只报一个数。",
+   "source": "experiments/ctx-compiler-redblue/BATCH25-MCODE.md",
+   "locator": "§一 / §二",
+   "source_sha256": "af816b2daecd537c5bf6435e9a95e80e3b428a9aaab8035ccd3ea86855602d84"
+  }
+ ],
+ "paper_check": {
+  "status": "yellow",
+  "conflicts": 1,
+  "yellow": 1,
+  "facts": 48,
+  "warnings": [
+   {
+    "severity": "yellow",
+    "code": "LEDGER_CONFLICT",
+    "message": "账本自相矛盾（黄）：同一 claim/metric 有不同 value 且没有被 supersedes：D1=$0.0486 / $0.0292（1.66×） / H1=3×",
+    "location": "facts/d_cost.toml:7",
+    "token": "D1,H1"
+   }
+  ]
+ },
+ "manifest": {
+  "path": "paper/results/MANIFEST.toml",
+  "signed_by": "batch36-agent (agent-signed, pending moc review)",
+  "signed_at": "2026-11-07T20:40:00+08:00",
+  "version": "1",
+  "files": 9,
+  "also": "paper-zh/results/MANIFEST.toml（同内容）"
+ },
+ "style_families": [
+  {
+   "family": "HEADING_MALFORMED",
+   "action": "整族撤除",
+   "basis": "盲评 R3「标题格式是否合惯例」轴 n=20：双席一致成立 0/20，一致判无缺陷 14/20，分歧 6",
+   "readout": "28 篇语料复扫 48→0",
+   "anchor": "命中全部是领域惯例格式（冒号主副题／括号缩写／连字符复合／标题问句／末尾句点）"
+  },
+  {
+   "family": "HEADING_ECHO",
+   "action": "收紧为「字面高度重复」",
+   "basis": "标题实义词须在节首句里成团连续出现，且首句新增实义词 ≤ thresholds.heading_echo_max_new_terms（默认 3）",
+   "readout": "28 篇语料复扫 39→1（正例锚 F037）",
+   "anchor": "重复次数只作明细记录，不作触发条件"
+  },
+  {
+   "family": "LIGHT_VERB_NOMINALIZATION",
+   "action": "收紧到重度",
+   "basis": "乙组（make/give/take/have/do/reach/achieve/establish）整组退场，盲评 7/7 全判无缺陷；甲组改按篇累计",
+   "readout": "28 篇语料复扫 108→34；阈值 thresholds.light_verb_doc_min（默认 5）",
+   "anchor": "同样「perform experiments」出现 1 次判无缺陷、15 次判有缺陷"
+  }
+ ],
+ "audit": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "audit",
+  "status": "ok",
+  "severity": "ok",
+  "exit": 0,
+  "summary": {
+   "facts": 62,
+   "sections": 10,
+   "numbers_total": 191,
+   "numbers_matched": 191,
+   "numbers_bound": 191,
+   "numbers_unbound": 0,
+   "numbers_unmatched": 0,
+   "annotations_skipped": 1,
+   "annotation_sites": [
+    "audit/preamble.tex:5 \\fsignore"
+   ],
+   "cites_total": 14,
+   "cites_unique": 10,
+   "bib_entries": 10,
+   "bib_files": [
+    "refs.bib"
+   ],
+   "bib_used": 10,
+   "bib_unused": [],
+   "red": 0,
+   "yellow": 0,
+   "hints": 0,
+   "pdf": {
+    "checked": true,
+    "file": "main.pdf",
+    "ledger": 130,
+    "whitelist": 9,
+    "stale": false,
+    "red": 0,
+    "yellow": 0,
+    "structural_masked": 54,
+    "structural_masked_by": {
+     "pages": 3,
+     "sections": 35,
+     "years": 16
+    }
+   },
+   "confidence": {
+    "high": 62,
+    "med": 0,
+    "low": 0
+   },
+   "coverage": {
+    "files_scanned": [
+     "audit/preamble.tex",
+     "main.tex",
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/02_related.tex",
+     "sections/03_design.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex",
+     "sections/06_limits.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "files_scanned_count": 10,
+    "files_matched_by_glob": 1,
+    "files_unscanned": [],
+    "facts_loaded": 62,
+    "parse_errors": 0,
+    "sha_pinned": 62,
+    "numbers_total": 191,
+    "numbers_bound": 191
+   },
+   "usage": {
+    "B1": [
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "B2": [
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "B3": [
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "B4": [
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "B5": [
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex"
+    ],
+    "B6": [
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex"
+    ],
+    "B7": [
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex"
+    ],
+    "B8": [
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/05_blind.tex"
+    ],
+    "B9": [
+     "sections/05_blind.tex"
+    ],
+    "B10": [
+     "sections/05_blind.tex"
+    ],
+    "B11": [
+     "sections/05_blind.tex"
+    ],
+    "B12": [
+     "sections/05_blind.tex"
+    ],
+    "M1": [
+     "sections/01_intro.tex",
+     "sections/03_design.tex",
+     "sections/04_style_case.tex"
+    ],
+    "M2": [
+     "sections/04_style_case.tex"
+    ],
+    "S1a": [
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex"
+    ],
+    "S1b": [
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex"
+    ],
+    "S1c": [
+     "sections/04_style_case.tex"
+    ],
+    "S1d": [
+     "sections/04_style_case.tex"
+    ],
+    "S1e": [
+     "sections/04_style_case.tex"
+    ],
+    "S1l": [
+     "sections/04_style_case.tex"
+    ],
+    "S1f": [
+     "sections/04_style_case.tex"
+    ],
+    "S1g": [
+     "sections/04_style_case.tex"
+    ],
+    "S1h": [
+     "sections/04_style_case.tex"
+    ],
+    "S1i": [
+     "sections/04_style_case.tex"
+    ],
+    "S1j": [
+     "sections/04_style_case.tex"
+    ],
+    "S1k": [
+     "sections/04_style_case.tex"
+    ],
+    "S2a": [
+     "sections/04_style_case.tex",
+     "sections/06_limits.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "S2b": [
+     "sections/00_abstract.tex",
+     "sections/04_style_case.tex",
+     "sections/06_limits.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "S2c": [
+     "sections/04_style_case.tex"
+    ],
+    "S2d": [
+     "sections/04_style_case.tex"
+    ],
+    "S2k": [
+     "sections/04_style_case.tex"
+    ],
+    "S2l": [
+     "sections/04_style_case.tex"
+    ],
+    "S2m": [
+     "sections/04_style_case.tex"
+    ],
+    "S2e": [
+     "sections/04_style_case.tex"
+    ],
+    "S2f": [
+     "sections/04_style_case.tex"
+    ],
+    "S2g": [
+     "sections/04_style_case.tex"
+    ],
+    "S2h": [
+     "sections/04_style_case.tex"
+    ],
+    "S2i": [
+     "sections/03_design.tex",
+     "sections/04_style_case.tex"
+    ],
+    "S2j": [
+     "sections/04_style_case.tex"
+    ],
+    "S3a": [
+     "sections/00_abstract.tex",
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/06_limits.tex",
+     "sections/07_conclusion.tex"
+    ],
+    "S3b": [
+     "sections/01_intro.tex",
+     "sections/04_style_case.tex",
+     "sections/06_limits.tex"
+    ],
+    "S3c": [
+     "sections/04_style_case.tex"
+    ],
+    "S3n": [
+     "sections/04_style_case.tex"
+    ],
+    "S3d": [
+     "sections/01_intro.tex",
+     "sections/03_design.tex",
+     "sections/04_style_case.tex"
+    ],
+    "S3e": [
+     "sections/04_style_case.tex"
+    ],
+    "S3f": [
+     "sections/04_style_case.tex"
+    ],
+    "S3g": [
+     "sections/04_style_case.tex"
+    ],
+    "S3h": [
+     "sections/04_style_case.tex"
+    ],
+    "S3i": [
+     "sections/04_style_case.tex"
+    ],
+    "S3j": [
+     "sections/04_style_case.tex"
+    ],
+    "S3k": [
+     "sections/04_style_case.tex"
+    ],
+    "S3l": [
+     "sections/04_style_case.tex"
+    ],
+    "S3m": [
+     "sections/04_style_case.tex"
+    ],
+    "S4a": [
+     "sections/04_style_case.tex"
+    ],
+    "S4b": [
+     "sections/04_style_case.tex"
+    ],
+    "S4c": [
+     "sections/04_style_case.tex"
+    ],
+    "S4d": [
+     "sections/04_style_case.tex"
+    ],
+    "S4e": [
+     "sections/03_design.tex",
+     "sections/04_style_case.tex"
+    ],
+    "S4f": [
+     "sections/04_style_case.tex"
+    ],
+    "S4g": [
+     "sections/04_style_case.tex"
+    ],
+    "S4h": [
+     "sections/04_style_case.tex"
+    ],
+    "S4i": [
+     "sections/04_style_case.tex"
+    ]
+   },
+   "marker_count": {
+    "B1": 5,
+    "B2": 6,
+    "B3": 6,
+    "B4": 6,
+    "B5": 3,
+    "B6": 3,
+    "B7": 3,
+    "B8": 3,
+    "B9": 1,
+    "B10": 1,
+    "B11": 1,
+    "B12": 1,
+    "M1": 3,
+    "M2": 1,
+    "S1a": 2,
+    "S1b": 2,
+    "S1c": 1,
+    "S1d": 1,
+    "S1e": 1,
+    "S1l": 1,
+    "S1f": 1,
+    "S1g": 1,
+    "S1h": 1,
+    "S1i": 1,
+    "S1j": 1,
+    "S1k": 1,
+    "S2a": 3,
+    "S2b": 4,
+    "S2c": 2,
+    "S2d": 2,
+    "S2k": 1,
+    "S2l": 1,
+    "S2m": 1,
+    "S2e": 2,
+    "S2f": 2,
+    "S2g": 1,
+    "S2h": 1,
+    "S2i": 2,
+    "S2j": 1,
+    "S3a": 7,
+    "S3b": 3,
+    "S3c": 1,
+    "S3n": 2,
+    "S3d": 4,
+    "S3e": 2,
+    "S3f": 1,
+    "S3g": 1,
+    "S3h": 1,
+    "S3i": 1,
+    "S3j": 1,
+    "S3k": 1,
+    "S3l": 1,
+    "S3m": 1,
+    "S4a": 1,
+    "S4b": 1,
+    "S4c": 1,
+    "S4d": 1,
+    "S4e": 2,
+    "S4f": 1,
+    "S4g": 1,
+    "S4h": 1,
+    "S4i": 1
+   },
+   "attestation": {
+    "facts_sha256": "cf819b9559b4d415ecb8f84080e58a01e7858bc3648886b8e3ebaea11a8e7481",
+    "sources_sha256": {
+     "runs/batch72/BLIND-TABLE.md": "6cafe14c37807acb46b3c31d9fcaf3c3f71a7bc0ae1ed3209579b90d72ff774a",
+     "runs/batch72/STYLE-EVIDENCE.md": "8f01a773879511bc15eedc1b44eced8f225ff04e6de1c259f052205f0aa667d2",
+     "runs/batch72/blind69-summary.json": "f176008addab24cd3e510d99c1897dba8c1ec870223e133a418abcc74de7717e",
+     "runs/batch72/decode-all.json": "ee33a7ba7ab9c902a990ce85e9223e016339d6783b7e323828b18751d3ea2020"
+    },
+    "git_commit": ""
+   }
+  },
+  "findings": [],
+  "issues": [],
+  "warnings": [],
+  "hints": [],
+  "coverage": {
+   "files_scanned": [
+    "audit/preamble.tex",
+    "main.tex",
+    "sections/00_abstract.tex",
+    "sections/01_intro.tex",
+    "sections/02_related.tex",
+    "sections/03_design.tex",
+    "sections/04_style_case.tex",
+    "sections/05_blind.tex",
+    "sections/06_limits.tex",
+    "sections/07_conclusion.tex"
+   ],
+   "files_scanned_count": 10,
+   "files_matched_by_glob": 1,
+   "files_unscanned": [],
+   "facts_loaded": 62,
+   "parse_errors": 0,
+   "sha_pinned": 62,
+   "numbers_total": 191,
+   "numbers_bound": 191
+  },
+  "resolved": [],
+  "build": {
+   "ran": false,
+   "ok": true,
+   "pdf_bytes": 0
+  },
+  "rule_overrides": {
+   "present": false,
+   "path": null,
+   "source": "default",
+   "count": 0,
+   "keys": [],
+   "ignored": []
+  },
+  "config": {
+   "shape": "flat-schema",
+   "schema": "factscribe-project/3.0",
+   "file": "factscribe.toml",
+   "warnings": []
+  },
+  "config_warnings": []
+ },
+ "check": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "check",
+  "status": "ok",
+  "severity": "ok",
+  "exit": 0,
+  "summary": {
+   "facts": 62,
+   "ids": 62,
+   "sources_ok": 62,
+   "sha_pinned": 62,
+   "conflicts": 0,
+   "red": 0,
+   "yellow": 0,
+   "confidence": {
+    "high": 62,
+    "med": 0,
+    "low": 0
+   },
+   "derived": 0,
+   "attestation": {
+    "facts_sha256": "cf819b9559b4d415ecb8f84080e58a01e7858bc3648886b8e3ebaea11a8e7481",
+    "git_commit": ""
+   }
+  },
+  "issues": [],
+  "warnings": [],
+  "hints": [],
+  "conflicts": [],
+  "config": {
+   "shape": "flat-schema",
+   "schema": "factscribe-project/3.0",
+   "file": "factscribe.toml",
+   "warnings": []
+  },
+  "config_warnings": []
+ },
+ "mirror": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "mirror-check",
+  "status": "ok",
+  "severity": "ok",
+  "exit": 0,
+  "summary": {
+   "facts_a": 62,
+   "facts_b": 62,
+   "bib_a": 10,
+   "bib_b": 10,
+   "drift_count": 0,
+   "fact_fields_compared": [
+    "claim",
+    "value",
+    "display",
+    "source",
+    "source_sha256",
+    "locator",
+    "expr",
+    "derived_from",
+    "kind"
+   ],
+   "fact_fields_exempt": [
+    "confidence",
+    "note"
+   ],
+   "bib_fields_compared": [
+    "title",
+    "author",
+    "year",
+    "doi",
+    "arxiv"
+   ]
+  },
+  "drift": [],
+  "disk_a": "/Users/moc/workspaces/SiAgent/paper-b",
+  "disk_b": "/Users/moc/workspaces/SiAgent/paper-b-zh"
+ },
+ "refs_dedupe": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "refs-dedupe",
+  "status": "ok",
+  "severity": "ok",
+  "exit": 0,
+  "summary": {
+   "bib_files": [
+    "refs.bib"
+   ],
+   "entries": 10,
+   "with_unique_key": 9,
+   "without_unique_key": 1,
+   "dup_groups": 0
+  },
+  "findings": [],
+  "issues": [],
+  "without_unique_key": [
+   {
+    "key": "scitexclew",
+    "file": "refs.bib",
+    "line": 67
+   }
+  ]
+ },
+ "refs_register": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "refs",
+  "status": "error",
+  "severity": "error",
+  "exit": 2,
+  "message": "项目里没有 refs/todo.toml（待补文献登记表是可选的：不配不跑）",
+  "code": "REF_TODO_TABLE_MISSING",
+  "findings": [
+   {
+    "severity": "red",
+    "code": "REF_TODO_TABLE_MISSING",
+    "message": "项目里没有 refs/todo.toml（待补文献登记表是可选的：不配不跑）"
+   }
+  ],
+  "issues": [
+   {
+    "severity": "red",
+    "code": "REF_TODO_TABLE_MISSING",
+    "message": "项目里没有 refs/todo.toml（待补文献登记表是可选的：不配不跑）"
+   }
+  ]
+ },
+ "figures": {
+  "schema_version": "1.0",
+  "tool": "factscribe",
+  "version": "1.3.0",
+  "command": "figures-check",
+  "status": "ok",
+  "severity": "ok",
+  "exit": 0,
+  "summary": {
+   "figures": 0,
+   "points": 0,
+   "points_ok": 0,
+   "skipped": true,
+   "findings": 0
+  },
+  "skipped": true,
+  "figures": [],
+  "findings": [],
+  "issues": []
+ },
+ "bundle": {
+  "gate": [
+   {
+    "code": "BUNDLE_CLOSURE",
+    "name": "闭包完整（无悬空 \\input/\\include）",
+    "status": "pass",
+    "status_text": "过",
+    "detail": "闭包 10 个源文件（起点 main.tex），无悬空引用",
+    "origin": "builtin"
+   },
+   {
+    "code": "BUNDLE_FIGURE_CSV",
+    "name": "每张图有随图 .csv",
+    "status": "waived",
+    "status_text": "豁免",
+    "detail": "本项目闭包内没有图，无随图 CSV 可查",
+    "origin": "builtin"
+   },
+   {
+    "code": "BUNDLE_BIB",
+    "name": "bib 无缺唯一键条目（引用都落得到）",
+    "status": "pass",
+    "status_text": "过",
+    "detail": "引用与 bib 条目一一落得到，无缺键／无缺稳定标识",
+    "origin": "builtin"
+   },
+   {
+    "code": "BUNDLE_EVIDENCE_LOCK",
+    "name": "evidence.lock 在场且未过期",
+    "status": "pass",
+    "status_text": "过",
+    "detail": "冻结件在场（103 条，sha256 036da978950a…），未解冻、与当前清单一致",
+    "origin": "builtin"
+   },
+   {
+    "code": "BUNDLE_AUDIT",
+    "name": "audit 现跑无红",
+    "status": "pass",
+    "status_text": "过",
+    "detail": "审计退出码 0（无红无黄）",
+    "origin": "builtin"
+   }
+  ],
+  "status": "ok",
+  "exit": 0,
+  "bundle_dir": "/private/tmp/fs-gcards-wo/bundle-run-9627673a",
+  "files_count": 17,
+  "manifest_head": [
+   {
+    "path": "audit/evidence-log.ndjson",
+    "sha256": "5a818594640f609a",
+    "bytes": 168
+   },
+   {
+    "path": "audit/evidence.lock",
+    "sha256": "aa4f60c78ca99bea",
+    "bytes": 986
+   },
+   {
+    "path": "audit/preamble.tex",
+    "sha256": "a8ad2a011e57a05b",
+    "bytes": 358
+   },
+   {
+    "path": "figures/.gitkeep",
+    "sha256": "e3b0c44298fc1c14",
+    "bytes": 0
+   },
+   {
+    "path": "main.tex",
+    "sha256": "ee9a06ecd85bf588",
+    "bytes": 1003
+   },
+   {
+    "path": "refs.bib",
+    "sha256": "157a86cdb09451ff",
+    "bytes": 3247
+   },
+   {
+    "path": "sections/00_abstract.tex",
+    "sha256": "3b997a236fd74172",
+    "bytes": 1461
+   },
+   {
+    "path": "sections/01_intro.tex",
+    "sha256": "28d00877c3aa711b",
+    "bytes": 6030
+   },
+   {
+    "path": "sections/02_related.tex",
+    "sha256": "d4602f41c6725d1f",
+    "bytes": 3757
+   },
+   {
+    "path": "sections/03_design.tex",
+    "sha256": "ab292bfd95d6ad74",
+    "bytes": 7159
+   },
+   {
+    "path": "sections/04_style_case.tex",
+    "sha256": "a475019727d6427e",
+    "bytes": 10190
+   },
+   {
+    "path": "sections/05_blind.tex",
+    "sha256": "cdffec48d67b9752",
+    "bytes": 7513
+   }
+  ]
+ }
+}</script>
+<script>
+const SNAP = JSON.parse(document.getElementById('snapshot').textContent);
+const $ = (s,r)=> (r||document).querySelector(s);
+const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const M = SNAP.meta, F = SNAP.facts, B = SNAP.bib, RT = SNAP.refs_todo;
+const AU = SNAP.audit.summary||{}, CK = SNAP.check.summary||{}, MI = SNAP.mirror.summary||{};
+
+/* ================= 通用件 ================= */
+function toast(msg){ const t=$('#toast'); t.textContent=msg||'原型演示：正式版将写回账本'; t.classList.add('on');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),2400); }
+function modal(title, bodyHTML, footHTML){
+  $('#modal').innerHTML = `<div class="mh"><div><h3>${esc(title)}</h3></div><button class="x" onclick="closeModal()">&times;</button></div>`
+    + bodyHTML + `<div class="foot">${footHTML||'<button class="btn" onclick="closeModal()">关闭</button>'}</div>`;
+  $('#mask').classList.add('on');
+}
+function closeModal(){ $('#mask').classList.remove('on'); }
+$('#mask').addEventListener('click', e=>{ if(e.target.id==='mask') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+function demoBanner(txt){ return '<div class="demo">原型演示：'+esc(txt)+'</div>'; }
+
+/* ================= 徽章行 ================= */
+function badges(){
+  const items=[
+    ['ok', `账本 ${F.length} 条 · 全 ${CK.confidence?CK.confidence.high:AU.confidence.high} high`, `facts/*.toml 合计 ${F.length} 条；check 读数 sha_pinned=${CK.sha_pinned}、sources_ok=${CK.sources_ok}、conflicts=${CK.conflicts}`],
+    ['warn','黄牌 1', `LEDGER_CONFLICT：${(SNAP.paper_check.warnings[0]||{}).message||''}（位置 ${(SNAP.paper_check.warnings[0]||{}).location||''}）`],
+    ['todo',`文献待办 ${RT.length}`, 'paper-b/REFS-TODO.md 的 7 条去重清单（3 条缺字段 + 4 条待补登记）'],
+    ['ok','双语一致', `mirror-check：facts ${MI.facts_a}/${MI.facts_b}、bib ${MI.bib_a}/${MI.bib_b}、漂移 ${MI.drift_count}`],
+    ['ok','PDF 常设态 1', `audit pdf：${AU.pdf.file} checked=${AU.pdf.checked}、stale=${AU.pdf.stale}、ledger ${AU.pdf.ledger}、白名单 ${AU.pdf.whitelist}、结构性遮罩 ${AU.pdf.structural_masked}`],
+  ];
+  $('#badges').innerHTML = items.map(([k,t,tip])=>`<span class="badge ${k}" title="${esc(tip)}"><span class="dot"></span>${esc(t)}</span>`).join('');
+}
+
+/* ================= 导航 ================= */
+const VIEWS=[
+  {id:'todo', name:'今日待办', count:()=>5},
+  {id:'facts', name:'事实账', count:()=>F.length},
+  {id:'audit', name:'挑刺', count:()=> (SNAP.paper_check.yellow||0)},
+  {id:'refs', name:'文献', count:()=> RT.filter(r=>!r.done).length},
+  {id:'mirror', name:'双语', count:()=> MI.drift_count},
+  {id:'figures', name:'图表', count:()=> (SNAP.figures.summary&&SNAP.figures.summary.figures)||0},
+  {id:'bundle', name:'交付', count:()=> (SNAP.bundle.gate||[]).length},
+  {id:'report', name:'报告', count:()=> F.length},
+];
+let view='todo';
+function nav(){
+  $('#nav').innerHTML = VIEWS.map(v=>`<button class="navitem ${v.id===view?'on':''}" data-view="${v.id}">
+    ${esc(v.name)}<span class="num">${v.count()}</span></button>`).join('');
+  $$('.navitem').forEach(b=>b.onclick=()=>{ view=b.dataset.view; location.hash=view; nav(); render(); });
+}
+
+/* ================= 视图：今日待办 ================= */
+const REFS_MISS3 = RT.filter(r=>r.bib_keys.length===2 || r.bib_keys.includes('paperorchestra2026'));
+function todoCards(){
+  const a=SNAP;
+  const miss3 = RT.filter(r=>r.n<=2).flatMap(r=>r.bib_state.map(s=>({...s, group:r.group})));
+  const cardA = {t:'文献 · 缺字段', lit:true, h:'3 条具名文献已进正文，登记字段不全',
+    one:`paperorchestra2026 / parness2026 / aiscientistv2_2025 都在 refs.bib 且已 \\citep（sections/02_related.tex:10），但 bib 条目没有 author 字段——refs/todo.toml 登记表目前还不存在（实测 ${esc(SNAP.refs_register.code||'')}）。`,
+    body:`<div>${miss3.map(m=>`<div class="rowitem"><span class="k">${esc(m.key)}</span>
+      <span class="grow">${esc(m.group)} · 缺 <code>${m.missing.join('</code>、<code>')||'—'}</code> · 引用点 ${esc((m.cites||[]).join(', ')||'—')}</span>
+      <span class="tag ${m.missing.length?'lit':'ok'}">缺 ${m.missing.length} 项</span></div>`).join('')}</div>`,
+    acts:[['补 authors（人签）','fill-authors'],['检索候选','search'],['标记已知悉（人签）','ack']]};
+
+  const h1 = a.conflicts.find(c=>c.id==='H1')||{};
+  const w = a.paper_check.warnings[0]||{};
+  const cardB = {t:'账本 · 冲突', lit:true, h:'1 条账内冲突提醒（LEDGER_CONFLICT）',
+    one:`${esc(h1.source||'paper/facts/h_conflicts.toml')} 的 ${esc(h1.id||'H1')} 与 D1 共用 metric=${esc(h1.metric||'cost-per-task')}、scope=${esc(h1.scope||'real-bill')}，两条同时在账上且值不同。`,
+    body:`<div class="detail" style="margin-bottom:8px"><dl>
+        <dt>码</dt><dd>${esc(w.code||'LEDGER_CONFLICT')}（黄 · ${esc(w.severity||'yellow')}）</dd>
+        <dt>位置</dt><dd>${esc(w.location||'facts/d_cost.toml:7')}</dd>
+        <dt>token</dt><dd>${esc(w.token||'D1,H1')}</dd>
+        <dt>原文摘录</dt><dd class="txt">${esc(h1.claim||'')}</dd>
+        <dt>值</dt><dd>${esc(h1.value||'')}</dd>
+      </dl></div>
+      <div class="note"><b>口径冲突非知识缺口。</b>${esc(h1.note||'')}
+      <br><br>kind=<code>${esc(h1.kind||'config')}</code> 的条目是「口径提醒」而不是论文结论，不进全局数字值域（不能当数字白名单用）；它照常要 source/sha 与 note 说明与谁冲突。看板上它属于<b>挑刺队列</b>，不属于「论文缺知识」。</div>`,
+    acts:[['确认是问题（人签）','confirm-problem'],['忽略（记原因）','ignore'],['转实验题','to-exp']]};
+
+  const m = a.manifest;
+  const cardC = {t:'签收 · 待复核', lit:false, h:'runs 签收待办：MANIFEST 仍是 agent 签',
+    one:`${esc(m.path)} 的 signed_by = ${esc(m.signed_by)}——清单是 agent 签的，尚未经 moc 人工复核；${esc(m.also)}。`,
+    body:`<dl class="kv"><dt>signed_by</dt><dd>${esc(m.signed_by)}</dd>
+      <dt>signed_at</dt><dd>${esc(m.signed_at)}</dd><dt>version</dt><dd>${esc(m.version)}</dd>
+      <dt>[files]</dt><dd>${esc(m.files)} 份来源清单</dd></dl>
+      <div class="note" style="margin-top:8px">agent 签只证明「清单生成那刻起文件没被改」，不等于人已看过。要解除这条待办，需要<b>人签复核</b>——机器不代签。</div>`,
+    acts:[['人签复核（人签）','sign-manifest'],['看清单内容','manifest']]};
+
+  const fam = a.style_families;
+  const cardD = {t:'文风 · 校准', lit:false, h:'文风校准候选单 3 族：口径已定案，待修订批',
+    one:`P-152 终审定案已落 style-rules.toml；回归门全绿（paper-b / paper-b-zh 仍 0 findings），${esc(M.head_commit)} 之后的正文修订批还没跑。`,
+    body:`<div>${fam.map(f=>`<div class="rowitem"><span class="k">${esc(f.family)}</span>
+      <span class="grow"><b>${esc(f.action)}</b> —— ${esc(f.basis)}<br><span class="meta">复扫读数：${esc(f.readout)}</span></span></div>`).join('')}</div>`,
+    acts:[['开修订批（人签）','open-batch'],['看复扫读数','scan']]};
+
+  const rest = RT.filter(r=>r.n>=3 && r.n<=6);
+  const done = RT.filter(r=>r.n===7);
+  const cardE = {t:'文献 · 待补登记', lit:true, h:'4 条文献待补登记（REFS-TODO.md 清单）',
+    one:`${rest.map(r=>r.text.split('（')[0]).join(' / ')}；${esc(SNAP.refs_todo[0].landing?'':'')}落点写在 REFS-TODO.md 各自段落里。`,
+    body:`<div>${rest.map(r=>`<div class="rowitem"><span class="k">#${r.n}</span><span class="grow">
+        ${esc(r.text)}<br><span class="meta">落点：${esc(r.landing||'—')} ｜ 已有 bib：${r.bib_keys.length?esc(r.bib_keys.join(', ')):'（无）'}${r.bib_keys.length?' ｜ 缺 '+r.bib_state.map(s=>s.missing.join('/')||'—').join(', '):''}</span></span>
+        <span class="tag ${r.in_bib?'info':'lit'}">${r.in_bib?'已进 bib 待补字段':'未登记'}</span></div>`).join('')}</div>
+      <div class="note" style="margin-top:8px">清单第 7 条（${esc(done[0]?done[0].text:'预注册')}）已办：bib 键 <code>nosek2018preregistration</code> 字段齐（author/year/doi），正文 ${esc(done[0]&&done[0].bib_state[0]?(done[0].bib_state[0].cites||[]).join(', '):'')} 已引。</div>`,
+    acts:[['逐条登记（人签）','register'],['检索候选','search']]};
+
+  return [cardA,cardB,cardC,cardD,cardE];
+}
+function renderTodo(){
+  const cards = todoCards();
+  return `<div class="viewhead">
+      <div><h2>今日待办</h2><p>按任务而非按文件组织。每张卡自带处理动作——处理不跳页。键盘 <span class="kbd">j</span>/<span class="kbd">k</span> 上下移动，<span class="kbd">Enter</span> 展开。</p></div>
+      <div class="kbdhint">共 ${cards.length} 张卡 · ${esc(M.generated_at)} 快照</div>
+    </div>` + cards.map((c,i)=>`<div class="card${i===0?' sel':''}" data-card="${i}">
+      <div class="cardhead"><span class="tag ${c.lit?'lit':'info'}">${esc(c.t)}</span></div>
+      <h3>${esc(c.h)}</h3>
+      <p class="one">${esc(c.one)}</p>
+      ${c.body||''}
+      <div class="actions">${c.acts.map(([l,a])=>`<button class="btn sm${a==='confirm-problem'||a==='fill-authors'?' primary':''}" data-act="${a}">${esc(l)}</button>`).join('')}
+        <button class="btn sm" data-act="toggle">展开/收起</button></div>
+    </div>`).join('');
+}
+
+/* ================= 视图：事实账 ================= */
+let fFilter={file:'',conf:'',kw:''}, fSel=null;
+function renderFacts(){
+  const files = SNAP.fact_files.map(f=>f.file);
+  const rows = F.filter(f=>
+    (!fFilter.file || f.file===fFilter.file) &&
+    (!fFilter.conf || f.confidence===fFilter.conf) &&
+    (!fFilter.kw || (f.id+' '+f.claim+' '+f.value+' '+f.source+' '+f.note).toLowerCase().includes(fFilter.kw.toLowerCase())));
+  return `<div class="viewhead"><div><h2>事实账</h2>
+      <p>${F.length} 条逐条列出：id／断言摘要／值／置信／来源文件与行号。点行展开 source_sha256、locator、note；每条都要人签才算复核过。</p></div>
+      <div class="kbdhint">账文件 ${SNAP.fact_files.length} 个 · 全部 sha 已钉</div></div>
+    <div class="toolbar">
+      <select id="f-file"><option value="">全部账文件</option>${files.map(x=>`<option value="${esc(x)}" ${fFilter.file===x?'selected':''}>${esc(x)}（${F.filter(f=>f.file===x).length}）</option>`).join('')}</select>
+      <select id="f-conf"><option value="">全部置信</option>${['high','med','low'].map(c=>`<option ${fFilter.conf===c?'selected':''}>${c}</option>`).join('')}</select>
+      <input type="search" id="f-kw" placeholder="关键词：id／断言／值／note" value="${esc(fFilter.kw)}" style="width:240px">
+      <span class="kbdhint">命中 ${rows.length} / ${F.length} 条</span>
+    </div>
+    <div class="tblwrap"><div class="scroll"><table>
+      <thead><tr><th>id</th><th>断言</th><th>值</th><th>置信</th><th>来源文件 · 行号</th><th>复核</th></tr></thead>
+      <tbody>${rows.map(f=>`<tr data-fid="${esc(f.id)}" class="${fSel===f.id?'sel':''}">
+        <td class="id">${esc(f.id)}</td>
+        <td>${esc(f.claim)}</td>
+        <td class="val">${esc(f.value)}</td>
+        <td><span class="conf ${esc(f.confidence)}">${esc(f.confidence)}</span></td>
+        <td class="meta">${esc(f.source)}<br>${esc(f.locator)}</td>
+        <td><span class="rev" data-rev="${esc(f.id)}">未复核</span>
+            <button class="btn sm" data-sign="${esc(f.id)}" style="margin-left:4px">签名复核（人签）</button></td>
+      </tr>${fSel===f.id?`<tr><td colspan="6" style="padding:0"><div class="detail"><dl>
+        <dt>id</dt><dd>${esc(f.id)}</dd>
+        <dt>账文件</dt><dd>${esc(f.file)}</dd>
+        <dt>source</dt><dd>${esc(f.source)}</dd>
+        <dt>source_sha256</dt><dd>${esc(f.source_sha256)}</dd>
+        <dt>locator</dt><dd>${esc(f.locator)}</dd>
+        <dt>confidence</dt><dd>${esc(f.confidence)}</dd>
+        ${f.dup_ok?'<dt>dup_ok</dt><dd>true</dd>':''}
+        <dt>note</dt><dd class="txt">${esc(f.note||'（无）')}</dd></dl></div></td></tr>`:''}`).join('')}</tbody>
+    </table></div></div>
+    ${SNAP.index_diff.length?`<div class="note" style="margin-top:12px"><b>索引与账本不一致（${SNAP.index_diff.length} 条）</b>：FACTS-B.md 把
+      ${SNAP.index_diff.map(d=>`<code>${esc(d.id)}</code> 记成 <code>${esc(d.index)}</code>`).join('、')}，而 facts/${esc(SNAP.index_diff[0].id)} 所在的 TOML 里是 <code>${esc(SNAP.index_diff[0].ledger)}</code>；
+      check 现跑的置信分布是 high ${CK.confidence.high} / med ${CK.confidence.med} / low ${CK.confidence.low}。FACTS-B.md 是机械生成的索引，这三行已滞后。</div>`:''}`;
+}
+
+/* ================= 视图：挑刺 ================= */
+function renderAudit(){
+  const w = SNAP.paper_check.warnings[0]||{};
+  const h1 = SNAP.conflicts.find(c=>c.id==='H1')||{};
+  const h2 = SNAP.conflicts.find(c=>c.id==='H2')||{};
+  const h3 = SNAP.conflicts.find(c=>c.id==='H3')||{};
+  return `<div class="viewhead"><div><h2>挑刺</h2>
+      <p>audit 现跑 paper-b：红 ${AU.red} · 黄 ${AU.yellow} · hints ${AU.hints}（exit ${esc(AU.exit!=null?AU.exit:SNAP.audit.exit)}）。黄牌来自姊妹盘 paper 的账本冲突，按盘分列。</p></div>
+      <div class="kbdhint">paper-b 0 条 · paper 1 条</div></div>
+    <div class="card">
+      <div class="cardhead"><span class="tag lit">黄牌 · LEDGER_CONFLICT</span><span class="tag info">paper 盘</span></div>
+      <h3>${esc(h1.claim||'账本自相矛盾')}</h3>
+      <p class="one">${esc(w.message||'')}</p>
+      <div class="detail"><dl>
+        <dt>码</dt><dd>${esc(w.code||'')}</dd>
+        <dt>位置</dt><dd>${esc(w.location||'')}</dd>
+        <dt>token</dt><dd>${esc(w.token||'')}</dd>
+        <dt>冲突条目</dt><dd class="txt">D1 = $0.0486 / $0.0292（1.66×）　｜　${esc(h1.id||'H1')} = ${esc(h1.value||'')}</dd>
+        <dt>metric / scope</dt><dd>${esc(h1.metric||'')} / ${esc(h1.scope||'')}</dd>
+        <dt>source</dt><dd>${esc(h1.source||'')}</dd>
+        <dt>source_sha256</dt><dd>${esc(h1.source_sha256||'')}</dd>
+        <dt>locator</dt><dd>${esc(h1.locator||'')}</dd>
+      </dl></div>
+      <div class="detail"><dl><dt>上下文展开</dt><dd class="txt">${esc(h1.note||'')}</dd></dl></div>
+      <div class="actions">
+        <button class="btn sm primary" data-act="confirm-problem">确认是问题（人签）</button>
+        <button class="btn sm" data-act="ignore">忽略（记原因）</button>
+        <button class="btn sm" data-act="to-exp">转实验题</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><span class="tag info">同族 · 口径提醒</span></div>
+      <h3>kind=config 的另外两条（H2 / H3）</h3>
+      <p class="one">这两条也在 h_conflicts.toml，但口径不同（scope 不同），不触发 LEDGER_CONFLICT——只作提醒：</p>
+      <div class="rowitem"><span class="k">${esc(h2.id||'H2')}</span><span class="grow">${esc(h2.claim||'')}<br><span class="meta">${esc(h2.value||'')} ｜ scope=${esc(h2.scope||'')} ｜ ${esc(h2.note||'')}</span></span></div>
+      <div class="rowitem"><span class="k">${esc(h3.id||'H3')}</span><span class="grow">${esc(h3.claim||'')}<br><span class="meta">${esc(h3.value||'')} ｜ scope=${esc(h3.scope||'')} ｜ ${esc(h3.note||'')}</span></span></div>
+    </div>
+    <div class="empty">paper-b 本盘 audit 读数：红 ${AU.red} · 黄 ${AU.yellow} · findings ${(SNAP.audit.findings||[]).length} 条；<br>
+      数字回账 ${AU.numbers_matched}/${AU.numbers_total} 全中，未绑定 ${AU.numbers_unbound}，未匹配 ${AU.numbers_unmatched}；引用 ${AU.cites_unique} 个唯一键，bib ${AU.bib_entries} 条，未用 ${(AU.bib_unused||[]).length}。</div>`;
+}
+
+/* ================= 视图：文献 ================= */
+function renderRefs(){
+  const reg = SNAP.refs_register;
+  return `<div class="viewhead"><div><h2>文献</h2>
+      <p>${RT.length} 条待办逐条登记：表单预填已知字段，缺字段高亮。机器只出候选，入正式 <code>refs.bib</code> 必须人采。</p></div>
+      <div class="kbdhint">refs dedupe：${SNAP.refs_dedupe.summary.entries} 条条目 · 重复 ${SNAP.refs_dedupe.summary.dup_groups} 组 · 缺唯一键 ${SNAP.refs_dedupe.summary.without_unique_key}</div></div>
+    ${reg.status==='error'?`<div class="note" style="margin-bottom:12px"><b>${esc(reg.code||'')}</b>：${esc(reg.message||'')}——待补登记表 <code>refs/todo.toml</code> 还没有建。下面这些表单就是建表用的。</div>`:''}
+    ${RT.map(r=>{
+      const keys=r.bib_keys, e=keys.length?B.find(b=>b.key===keys[0]):null;
+      const missing = e? e.missing : ['authors','year','venue_or_id','planned_key'];
+      const F7=[['slug',r.text.split('（')[0],true],['title',e?e.title:'',!!e],
+        ['authors',e?e.author:'',!missing.includes('authors')],
+        ['year',e?e.year:'',!missing.includes('year')],
+        ['venue_or_id',e?(e.doi||e.eprint||''):'',!missing.includes('venue_or_id')],
+        ['planned_key',keys[0]||'',!!keys[0]],['section',r.landing||'',!!r.landing]];
+      return `<div class="card">
+        <div class="cardhead"><span class="tag ${r.in_bib?'info':'lit'}">${r.in_bib?'已进 bib':'未登记'}</span>
+          <span class="tag">${esc(r.group.replace(/^一、|^二、|^三、/,''))}</span>
+          ${r.bib_keys.length?`<span class="tag">bib：${esc(r.bib_keys.join(', '))}</span>`:''}</div>
+        <h3>#${r.n} ${esc(r.text)}</h3>
+        <p class="one">落点：${esc(r.landing||'—')}。${r.bib_state.length?`现 bib 条目缺 ${esc([...new Set(r.bib_state.flatMap(s=>s.missing))].join('、')||'—')}。`:'refs.bib 里还没有条目，需整条登记。'}</p>
+        <div class="form">${F7.map(([n,v,ok])=>`<div class="field ${ok?'':'miss'}">
+          <label>${n}${ok?'':'（缺）'}</label>
+          <input type="text" value="${esc(v||'')}" placeholder="${ok?'':'待人填'}">
+          ${ok?'':'<span class="hint">refs register 会点名缺这一项</span>'}</div>`).join('')}</div>
+        <div class="actions">
+          <button class="btn sm primary" data-act="register-one" data-n="${r.n}">登记这一条（人签）</button>
+          <button class="btn sm" data-act="search" data-n="${r.n}">检索候选</button>
+          ${r.bib_keys.length?'<button class="btn sm" data-act="cite-check" data-n="'+r.n+'">查重/引用核对</button>':''}
+        </div>
+      </div>`;}).join('')}`;
+}
+
+/* ================= 视图：双语 ================= */
+function renderMirror(){
+  const ex = MI.fact_fields_exempt||[];
+  return `<div class="viewhead"><div><h2>双语</h2>
+      <p>mirror-check 双盘逐条比对：承重字段逐条对，bib 逐条对；豁免面不判漂。</p></div>
+      <div class="kbdhint">${esc(M.paper_b)} ⇄ ${esc(M.paper_b_zh)}</div></div>
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="stat ok"><div class="n">${MI.facts_a} / ${MI.facts_b}</div><div class="l">事实条数（盘 A / 盘 B）</div></div>
+      <div class="stat ok"><div class="n">${MI.bib_a} / ${MI.bib_b}</div><div class="l">bib 条目（盘 A / 盘 B）</div></div>
+      <div class="stat ok"><div class="n">${MI.drift_count}</div><div class="l">漂移条数</div></div>
+    </div>
+    <div class="card"><div class="cardhead"><span class="tag ok">零漂移</span></div>
+      <h3>${MI.facts_a} 条 facts ＋ ${MI.bib_a} 条 bib 逐条一致</h3>
+      <p class="one">退出码 ${esc(SNAP.mirror.exit)}，漂移清单为空。</p>
+      <div class="grid2">
+        <div><h4 style="font-size:12.5px;color:var(--muted)">逐条比对字段</h4>
+          <ul class="list">${(MI.fact_fields_compared||[]).map(f=>`<li><code>${esc(f)}</code></li>`).join('')}</ul></div>
+        <div><h4 style="font-size:12.5px;color:var(--muted)">bib 比对字段</h4>
+          <ul class="list">${(MI.bib_fields_compared||[]).map(f=>`<li><code>${esc(f)}</code></li>`).join('')}</ul></div>
+      </div>
+    </div>
+    <div class="card"><div class="cardhead"><span class="tag info">豁免面</span></div>
+      <h3>这些不判漂移（单盘人签）</h3>
+      <ul class="list">
+        <li><b>sections/ 正文与 main.tex 导言区</b>：两盘各写各的，不进账本比对。</li>
+        <li><b>GLOSSARY.md 与生成物</b>：不参与比对。</li>
+        <li><b>fact 的 confidence 与 note</b>：${ex.map(f=>`<code>${esc(f)}</code>`).join('、')} —— 置信升级是人签动作，只在单盘生效，不算漂移。</li>
+      </ul>
+      <div class="note" style="margin-top:8px">承重字段（claim／value／display／source／source_sha256／locator／expr／derived_from／kind）任一不同即红。</div>
+    </div>`;
+}
+
+/* ================= 视图：图表 ================= */
+function renderFigures(){
+  const fs = SNAP.figures.summary||{};
+  return `<div class="viewhead"><div><h2>图表</h2>
+      <p>账本驱动的图表生成：规格里只许引 fact id，出现裸数字即配置错；生成产物是三件套，check 做四面对账。</p></div>
+      <div class="kbdhint">figures check：figures=${esc(fs.figures)} · skipped=${esc(fs.skipped)}</div></div>
+    <div class="empty" style="margin-bottom:12px">
+      <b>figures/ 目前是空的</b><br>paper-b/figures/ 只有 .gitkeep（0 字节）。figures check 读数：figures=${esc(fs.figures)}、points=${esc(fs.points)}、skipped=${esc(fs.skipped)}、findings=${esc(fs.findings)} —— 无规格时 skip（exit 0），不判红。</div>
+    <div class="card"><div class="cardhead"><span class="tag info">流程示意</span></div>
+      <h3>规格 → 三件套 → 四面对账</h3>
+      <div class="flow" style="margin:12px 0">
+        <div class="step"><b>① 人填规格</b><br><span class="meta">figures/*.fig.toml：图型（bar/line/table）、轴标签、caption；数据点只许引 fact id，裸数字即 exit 2</span></div>
+        <span class="arr">→</span>
+        <div class="step"><b>② 生成三件套</b><br><span class="meta">figures gen → .tex（pgfplots）＋ 随图 .csv ＋ .bind.toml（每点记 fact_id、生成时的值与 source_sha256）</span></div>
+        <span class="arr">→</span>
+        <div class="step"><b>③ 四面对账</b><br><span class="meta">figures check：规格 ↔ 绑定表 ↔ 随图 CSV ↔ 现行账本；账动过而图未重生成必红（逐点点名）</span></div>
+      </div>
+      <ul class="list">
+        <li>覆盖旧产物前先打印绑定表差异，不静默覆盖。</li>
+        <li>退出码：0 绿 / 1 红 / 2 规格或用法错；无规格 skip（0）。</li>
+      </ul>
+      <div class="actions"><button class="btn sm" data-act="fig-demo">看看规格长什么样（演示）</button></div>
+    </div>`;
+}
+
+/* ================= 视图：交付 ================= */
+function renderBundle(){
+  const g = SNAP.bundle.gate||[];
+  const cls = s=> s==='pass'?'ok':(s==='waived'?'info':'lit');
+  const bld = SNAP.audit.build||{};
+  return `<div class="viewhead"><div><h2>交付</h2>
+      <p>投稿工件包：闭包收集 → 清单门 → 导出。清单门逐项机械判，任一项不过即 exit 1 逐项列出，不静默放行。</p></div>
+      <div class="kbdhint">预演结果：${esc(SNAP.bundle.status)}（exit ${esc(SNAP.bundle.exit)}）</div></div>
+    <div class="card"><div class="cardhead"><span class="tag ok">清单门预演</span>
+      ${g.map(x=>`<span class="tag ${cls(x.status)}">${esc(x.code)}：${esc(x.status_text)}</span>`).join('')}</div>
+      <h3>逐项过／不过／豁免（真实读数）</h3>
+      <div style="margin-top:8px">${g.map(x=>`<div class="rowitem"><span class="k">${esc(x.status_text)}</span>
+        <span class="grow"><b>${esc(x.name)}</b>　<span class="meta">${esc(x.code)} · ${esc(x.origin)}</span><br>${esc(x.detail)}</span>
+        <span class="tag ${cls(x.status)}">${esc(x.status_text)}</span></div>`).join('')}</div>
+      <div class="actions"><button class="btn sm primary" data-act="bundle-run">重跑预演（人签）</button>
+        <button class="btn sm" data-act="bundle-files">看收包清单</button></div>
+    </div>
+    <div class="card"><div class="cardhead"><span class="tag info">build 状态</span></div>
+      <h3>PDF 编译</h3>
+      <dl class="kv"><dt>ran</dt><dd>${esc(bld.ran)}</dd><dt>ok</dt><dd>${esc(bld.ok)}</dd>
+        <dt>pdf_bytes</dt><dd>${esc(bld.pdf_bytes)}</dd>
+        <dt>pdf 读数</dt><dd>${esc(AU.pdf.file)} · checked=${esc(AU.pdf.checked)} · stale=${esc(AU.pdf.stale)} · ledger ${esc(AU.pdf.ledger)} · 白名单 ${esc(AU.pdf.whitelist)} · 结构性遮罩 ${esc(AU.pdf.structural_masked)}（页 ${esc((AU.pdf.structural_masked_by||{}).pages)} / 节 ${esc((AU.pdf.structural_masked_by||{}).sections)} / 年 ${esc((AU.pdf.structural_masked_by||{}).years)}）</dd></dl>
+      <div class="note" style="margin-top:8px">audit 时未跑编译（ran=false），所以 pdf_bytes=0 是实况而非失败。审计读数里 PDF 无红无黄、stale=false —— 徽章行的「PDF 常设态 1」指的就是这一条。</div>
+    </div>
+    ${(SNAP.bundle.manifest_head||[]).length?`<div class="card"><h3>包内清单（节选 ${SNAP.bundle.manifest_head.length} 条，共 ${SNAP.bundle.files_count} 件）</h3>
+      <table><thead><tr><th>路径</th><th>sha256</th><th>字节</th></tr></thead><tbody>
+      ${SNAP.bundle.manifest_head.map(f=>`<tr><td class="meta">${esc(f.path||'')}</td><td class="meta">${esc(f.sha256||'')}…</td><td>${esc(f.bytes)}</td></tr>`).join('')}
+      </tbody></table></div>`:''}`;
+}
+
+/* ================= 视图：报告 ================= */
+function renderReport(){
+  const ff = SNAP.fact_files;
+  const tot = ff.reduce((a,b)=>a+b.count,0);
+  return `<div class="viewhead"><div><h2>报告</h2>
+      <p>FACTS-B.md 是 facts/*.toml 的机械投影，与账本同义。这里预览总览与逐条索引。</p></div>
+      <div class="kbdhint">FACTS-B.md · ${tot} 条</div></div>
+    <div class="card"><div class="cardhead"><span class="tag ok">总览</span></div>
+      <h3>${ff.length} 个账文件，合计 ${tot} 条</h3>
+      <table><thead><tr><th>账文件</th><th>条数</th><th>schema</th></tr></thead><tbody>
+      ${ff.map(f=>`<tr><td class="meta">${esc(f.file)}</td><td>${f.count}</td><td class="meta">${esc(f.schema)}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="note" style="margin-top:8px">全部带 source＋source_sha256＋locator；audit 报 sha_pinned=${AU.sha_pinned}／${AU.facts_loaded||tot}。</div>
+    </div>
+    ${SNAP.index_diff.length?`<div class="card"><div class="cardhead"><span class="tag lit">索引滞后</span></div>
+      <h3>FACTS-B.md 与账本对不上的 ${SNAP.index_diff.length} 行</h3>
+      <table><thead><tr><th>id</th><th>FACTS-B.md 记</th><th>账本实为</th></tr></thead><tbody>
+      ${SNAP.index_diff.map(d=>`<tr><td class="id">${esc(d.id)}</td><td><span class="conf med">${esc(d.index)}</span></td><td><span class="conf ${esc(d.ledger)}">${esc(d.ledger)}</span></td></tr>`).join('')}
+      </tbody></table>
+      <div class="note" style="margin-top:8px">索引写 med、账本写 high。check 现跑的置信分布是 high ${CK.confidence.high}／med ${CK.confidence.med}／low ${CK.confidence.low} —— 以账本为准，索引待重生成。</div>
+    </div>`:''}
+    <div class="card"><div class="cardhead"><span class="tag info">入口</span></div>
+      <h3>audit / matrix 怎么用</h3>
+      <ul class="list">
+        <li><b>audit</b>：<code>${esc(M.audit_cmd)}</code> —— 内联绑定＋数字回账＋引用落稳定标识＋覆盖报告；本盘读数：status ${esc(SNAP.audit.status)}、exit ${esc(SNAP.audit.exit)}、红 ${AU.red}／黄 ${AU.yellow}。</li>
+        <li><b>matrix</b>：<code>python3 -m factscribe matrix &lt;项目&gt;</code> 生成 <code>audit/matrix.md</code> 追溯矩阵（fact ↔ 正文位置 ↔ 来源），是「报告」这一页的机器底稿。</li>
+        <li><b>report</b>：实验报告域的 check / lock / sign（归一化实验报告 factscribe/report@1）——与论文事实账分开管。</li>
+      </ul>
+      <div class="actions"><button class="btn sm" data-act="matrix-demo">看 matrix 的形状（演示）</button></div>
+    </div>`;
+}
+
+/* ================= 渲染总控 ================= */
+function render(){
+  let h='';
+  if(view==='todo') h=renderTodo();
+  else if(view==='facts') h=renderFacts();
+  else if(view==='audit') h=renderAudit();
+  else if(view==='refs') h=renderRefs();
+  else if(view==='mirror') h=renderMirror();
+  else if(view==='figures') h=renderFigures();
+  else if(view==='bundle') h=renderBundle();
+  else if(view==='report') h=renderReport();
+  $('#main').innerHTML=h;
+  wire();
+}
+function wire(){
+  $$('#f-file').forEach(s=>s.onchange=e=>{fFilter.file=e.target.value; render();});
+  $$('#f-conf').forEach(s=>s.onchange=e=>{fFilter.conf=e.target.value; render();});
+  $$('#f-kw').forEach(s=>s.oninput=e=>{fFilter.kw=e.target.value; const p=e.target.selectionStart;
+    render(); const n=$('#f-kw'); if(n){n.focus(); n.setSelectionRange(p,p);}});
+  $$('tbody tr[data-fid]').forEach(tr=>tr.onclick=e=>{
+    if(e.target.dataset.sign) return;
+    fSel = (fSel===tr.dataset.fid)?null:tr.dataset.fid; render();});
+  $$('[data-sign]').forEach(b=>b.onclick=e=>{ e.stopPropagation();
+    const id=b.dataset.sign, f=F.find(x=>x.id===id);
+    modal('签名复核：'+id,
+      `<p>你要人签复核这一条：</p><div class="detail"><dl><dt>id</dt><dd>${esc(f.id)}</dd>
+       <dt>断言</dt><dd class="txt">${esc(f.claim)}</dd><dt>值</dt><dd>${esc(f.value)}</dd>
+       <dt>source</dt><dd>${esc(f.source)}</dd><dt>source_sha256</dt><dd>${esc(f.source_sha256)}</dd>
+       <dt>locator</dt><dd>${esc(f.locator)}</dd></dl></div>
+       <p class="one">签名只表示「人看过这一条并认可」，机器不代签。复核记录会写回账本（原型内只改内存）。</p>`,
+      `<button class="btn" onclick="closeModal()">取消</button>
+       <button class="btn primary" onclick="signFact('${esc(id)}')">确认（人签）</button>`);
+  });
+  $$('[data-act]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); act(b.dataset.act,b.dataset.n); });
+}
+window.signFact=function(id){
+  closeModal(); const el=$(`[data-rev="${id}"]`); if(el){el.textContent='已复核(演示)'; el.classList.add('ok');}
+  toast('原型演示：正式版将写回账本');
+};
+window.closeModal=closeModal;
+
+/* ================= 动作 ================= */
+function act(a,n){
+  if(a==='toggle'){ const c=$('.card.sel'); if(c) c.classList.toggle('sel'); return; }
+  if(a==='fill-authors'){
+    const miss3 = RT.filter(r=>r.n<=2).flatMap(r=>r.bib_state);
+    modal('补 authors（人签）',
+      `<p>这 3 条已在 refs.bib 且已 \\citep，缺的是 <code>author</code> 字段。原文摘录与 bib 现状如下——请人填，作者名以原文献为准，机器不猜。</p>`+
+      miss3.map(m=>`<div class="detail"><dl><dt>${esc(m.key)}</dt><dd>${esc(m.group)}</dd>
+        <dt>现状</dt><dd class="txt">${esc((B.find(b=>b.key===m.key)||{}).title||'')}</dd>
+        <dt>缺</dt><dd>${esc(m.missing.join('、'))}</dd>
+        <dt>引用点</dt><dd>${esc((m.cites||[]).join(', ')||'—')}</dd></dl>
+        <div class="field miss" style="margin-top:6px"><label>authors（人填）</label><input type="text" placeholder="作者全名，逗号分隔"></div></div>`).join(''),
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">保存（人签）</button>`);
+    return;
+  }
+  if(a==='confirm-problem'){
+    const h1=SNAP.conflicts.find(c=>c.id==='H1')||{};
+    modal('确认是问题（人签）',
+      `<p>确认后，这条 <code>LEDGER_CONFLICT</code> 会记成「确认是问题」，进入写作侧的修订待办：正文若用 3×，必须同句给出 1.66× 与口径差别。</p>
+       <div class="detail"><dl><dt>${esc(h1.id||'H1')}</dt><dd class="txt">${esc(h1.claim||'')}</dd>
+       <dt>值</dt><dd>${esc(h1.value||'')}</dd><dt>metric/scope</dt><dd>${esc(h1.metric||'')} / ${esc(h1.scope||'')}</dd></dl></div>
+       <div class="field"><label>处理口径（人填）</label><input type="text" placeholder="例：正文统一用真实账单 1.66×，3× 只在口径说明里出现"></div>`,
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">确认（人签）</button>`);
+    return;
+  }
+  if(a==='ignore'){
+    modal('忽略（记原因）',
+      `<p>忽略必须留原因——否则下次审计还会把这条黄牌翻出来，而人已经忘了为什么放过它。</p>
+       <div class="field"><label>忽略原因（人填，必填）</label><textarea rows="3" placeholder="例：本轮论文不报 cost-per-task 口径，留待专项实验后统一改写"></textarea></div>`,
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">记原因并忽略（人签）</button>`);
+    return;
+  }
+  if(a==='to-exp'){
+    modal('转实验题',
+      `<p>这条会离开「挑刺队列」，进入<b>反向指导管线</b>立卡：</p>
+       <ul class="list">
+        <li>立一张实验卡，把口径差变成可测问题（两个口径各跑一遍，对齐分母）。</li>
+        <li>实验卡回填结果后，才允许正文引用任一口径。</li>
+        <li>立卡动作由人触发并人签——机器不自动立项。</li>
+       </ul>
+       <div class="field"><label>实验题标题（人填）</label><input type="text" value="成本口径统一：3× vs 1.66× 的分母对齐实验"></div>`,
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">立卡（人签）</button>`);
+    return;
+  }
+  if(a==='sign-manifest'){
+    const m=SNAP.manifest;
+    modal('人签复核：results/MANIFEST.toml',
+      `<p>现在清单的 <code>signed_by</code> 是 <code>${esc(m.signed_by)}</code>。人签复核＝你确认这 ${esc(m.files)} 份来源文件与正文对得上，然后把签署人换成你。</p>
+       <div class="detail"><dl><dt>signed_by</dt><dd>${esc(m.signed_by)}</dd><dt>signed_at</dt><dd>${esc(m.signed_at)}</dd>
+        <dt>[files]</dt><dd>${esc(m.files)} 份</dd><dt>路径</dt><dd>${esc(m.path)}</dd></dl></div>
+       <div class="field"><label>签署人（人填）</label><input type="text" placeholder="例：moc"></div>`,
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">签（人签）</button>`);
+    return;
+  }
+  if(a==='manifest'){
+    const m=SNAP.manifest;
+    modal('results/MANIFEST.toml',
+      `<pre>[manifest]\nsigned_by = "${esc(m.signed_by)}"\nsigned_at = "${esc(m.signed_at)}"\nversion = ${esc(m.version)}\n\n[files]\n… 共 ${esc(m.files)} 行 "路径" = "sha256" …</pre>
+       <p class="one">${esc(m.also)} —— 同一份清单在姊妹盘也有一份。清单是 agent 生成的，绿只证明「清单生成那刻起文件没被改」。</p>`);
+    return;
+  }
+  if(a==='open-batch'){
+    const f=SNAP.style_families;
+    modal('文风校准修订批（人签）',
+      `<p>口径已按 P-152 终审定案并落 <code>style-rules.toml</code>；这条待办是<b>正文修订批</b>还没跑。</p>
+       <ul class="list">${f.map(x=>`<li><b>${esc(x.family)}</b> — ${esc(x.action)}：${esc(x.readout)}</li>`).join('')}</ul>
+       <div class="note">回归门实况：paper-b / paper-b-zh 仍 0 findings；batch69 裸稿仍被 6 个留存族咬中（guided 仍 0）。</div>`,
+      `<button class="btn" onclick="closeModal()">关闭</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">开批（人签）</button>`);
+    return;
+  }
+  if(a==='scan'){
+    modal('复扫读数（28 篇语料）',
+      `<div class="grid2">${SNAP.style_families.map(x=>`<div class="stat"><div class="l">${esc(x.family)}</div><div class="n" style="font-size:17px">${esc(x.readout)}</div></div>`).join('')}</div>
+       <ul class="list"><li>中位 triggered 3.5 → 1</li><li>中位 findings/千词 1.255 → 0.381</li></ul>`);
+    return;
+  }
+  if(a==='register'||a==='register-one'){
+    const r = a==='register'?null:RT.find(x=>String(x.n)===String(n));
+    modal('登记文献（人签）',
+      `<p>${r?('这一条：#'+r.n+' '+esc(r.text)):'7 条逐条登记'}</p>
+       <div class="note">登记只写待补登记表 <code>refs/todo.toml</code>；<b>入正式 <code>refs.bib</code> 必须人采</b>——机器不代签（factscribe/refs.py:22）。当前项目还没有 <code>refs/todo.toml</code>（实测 ${esc(SNAP.refs_register.code||'')}），这一步就是建表。</div>
+       <div class="detail"><dl><dt>登记表必填</dt><dd>slug / title / authors / year / venue_or_id / planned_key / section</dd>
+        <dt>机器会点名</dt><dd>缺哪个字段、planned_key 撞不撞既有 bib key、落点节在不在</dd></dl></div>`,
+      `<button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="closeModal();toast('原型演示：正式版将写回账本')">登记（人签）</button>`);
+    return;
+  }
+  if(a==='search'){
+    modal('检索候选',
+      demoBanner('以下为模拟题录，原型不联网；正式版走 factscribe refs search（唯一联网面），候选落 refs/candidates/ 并钉 sha256。')+
+      `<div class="rowitem"><span class="k">候选 1</span><span class="grow">
+        <b>Artifact Review Badges: A Survey of Open Artifact Evaluation Practices</b><br>
+        <span class="meta">DOI: 10.1145/0000000.0000000（示例） · arXiv: 0000.00000（示例）</span><br>
+        <span class="tag">查重：与既有 refs.bib 未撞（示例）</span></span>
+        <button class="btn sm" onclick="toast('原型演示：正式版将写回账本')">采纳（人签）</button></div>
+      <div class="rowitem"><span class="k">候选 2</span><span class="grow">
+        <b>A Workflow Provenance Model for Reproducible Research Pipelines</b><br>
+        <span class="meta">DOI: 10.1145/1111111.1111111（示例） · venue: 示例期刊（示例）</span><br>
+        <span class="tag lit">查重：与既有条目同 arXiv id 家族，重复，不给采纳号（示例）</span></span>
+        <button class="btn sm" disabled>不可采纳</button></div>
+      <div class="rowitem"><span class="k">候选 3</span><span class="grow">
+        <b>Inter-Rater Agreement for A/B Blind Evaluation of LLM-Written Prose</b><br>
+        <span class="meta">DOI: 10.5555/0000000.0000000（示例） · venue: 示例会议（示例）</span><br>
+        <span class="tag">查重：未撞（示例）</span></span>
+        <button class="btn sm" onclick="toast('原型演示：正式版将写回账本')">采纳（人签）</button></div>`,
+      `<button class="btn" onclick="closeModal()">关闭</button>`);
+    return;
+  }
+  if(a==='cite-check'){
+    const d=SNAP.refs_dedupe;
+    modal('查重 / 引用核对',
+      `<dl class="kv"><dt>bib 条目</dt><dd>${esc(d.summary.entries)}</dd>
+       <dt>有唯一键</dt><dd>${esc(d.summary.with_unique_key)}</dd>
+       <dt>缺唯一键</dt><dd>${esc(d.summary.without_unique_key)}</dd>
+       <dt>重复组</dt><dd>${esc(d.summary.dup_groups)}</dd></dl>
+       <ul class="list">${(d.without_unique_key||[]).map(x=>`<li><code>${esc(x.key)}</code>（${esc(x.file)}:${esc(x.line)}）—— 缺 DOI/arXiv 唯一标识</li>`).join('')||'<li>全部条目都有唯一键</li>'}</ul>
+       <div class="note" style="margin-top:8px">audit 侧：cites_unique ${AU.cites_unique}、bib_entries ${AU.bib_entries}、bib_unused ${(AU.bib_unused||[]).length} —— 引用都落得到。</div>`);
+    return;
+  }
+  if(a==='fig-demo'){
+    modal('图规格长什么样（演示）',
+      demoBanner('以下为演示规格，不是 paper-b 里的真实文件。')+
+      `<pre># figures/rounds.fig.toml（演示）
+[figure]
+kind = "bar"          # bar / line / table
+x_label = "轮次"
+y_label = "改写胜率"
+caption = "三轮盲评的改写/引导稿胜率"
+caption_source_fact = "S3a"
+
+[[point]]
+label = "第一轮"
+fact_id = "S1d"       # 只许引 fact id，不许写裸数字
+[[point]]
+label = "第三轮"
+fact_id = "S3a"</pre>
+      <ul class="list"><li>规格里出现裸数字即配置错（exit 2）。</li>
+       <li>生成产物三件套：.tex ＋ 随图 .csv ＋ .bind.toml（每点记 fact_id、生成时的值与 source_sha256）。</li>
+       <li>check 四面对账：规格 ↔ 绑定表 ↔ 随图 CSV ↔ 现行账本。</li></ul>`);
+    return;
+  }
+  if(a==='bundle-run'){
+    toast('原型演示：正式版将写回账本');
+    return;
+  }
+  if(a==='bundle-files'){
+    const mf=SNAP.bundle.manifest_head||[];
+    modal('收包清单（节选）',
+      `<p>包目录共 ${esc(SNAP.bundle.files_count)} 件，导出 <code>MANIFEST.sha256</code>（逐文件 sha256 行，收包方 <code>shasum -c</code> 可验）＋ <code>BUNDLE-MANIFEST.json</code>。</p>
+       <table><thead><tr><th>路径</th><th>sha256</th><th>字节</th></tr></thead><tbody>
+       ${mf.map(f=>`<tr><td class="meta">${esc(f.path||'')}</td><td class="meta">${esc(f.sha256||'')}…</td><td>${esc(f.bytes)}</td></tr>`).join('')}</tbody></table>`);
+    return;
+  }
+  if(a==='matrix-demo'){
+    modal('audit/matrix.md 的形状（演示）',
+      demoBanner('以下为演示版式；正式版由 factscribe matrix 生成。')+
+      `<pre># 追溯矩阵（演示）
+
+| fact | 值 | 正文位置 | 来源 | sha256 | locator |
+|---|---|---|---|---|---|
+| S3a | 9/10（评审一，引导胜） | sections/05_blind.tex:12 | runs/batch72/blind69-summary.json | f176008a… | reviewers.JUDGE-1.guided_wins |
+| B2  | 11/12（首跑，#7）      | sections/04_style_case.tex:21 | runs/batch72/STYLE-EVIDENCE.md | 8f01a773… | E1 总表 #7 |</pre>`);
+    return;
+  }
+}
+
+/* ================= 顶栏模拟动作 ================= */
+$$('[data-sim]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.sim;
+  if(k==='audit'){
+    const s=SNAP.audit.summary||{};
+    modal('跑 audit（原型演示）',
+      demoBanner('下面是 paper-b 上真实跑过一次的读数快照；原型内不真跑。')+
+      `<pre>status=${esc(SNAP.audit.status)}  exit=${esc(SNAP.audit.exit)}  severity=${esc(SNAP.audit.severity)}
+facts=${esc(s.facts)}  sections=${esc(s.sections)}
+numbers_total=${esc(s.numbers_total)}  matched=${esc(s.numbers_matched)}  bound=${esc(s.numbers_bound)}  unbound=${esc(s.numbers_unbound)}
+cites_total=${esc(s.cites_total)}  cites_unique=${esc(s.cites_unique)}  bib_entries=${esc(s.bib_entries)}  bib_unused=${(s.bib_unused||[]).length}
+red=${esc(s.red)}  yellow=${esc(s.yellow)}  hints=${esc(s.hints)}
+confidence: high=${esc((s.confidence||{}).high)} med=${esc((s.confidence||{}).med)} low=${esc((s.confidence||{}).low)}
+pdf: ${esc((s.pdf||{}).file)} checked=${esc((s.pdf||{}).checked)} stale=${esc((s.pdf||{}).stale)} ledger=${esc((s.pdf||{}).ledger)}</pre>`);
+  }
+  if(k==='check'){
+    const s=SNAP.check.summary||{};
+    modal('跑 check（原型演示）',
+      demoBanner('下面是 paper-b 上真实跑过一次的读数快照；原型内不真跑。')+
+      `<pre>status=${esc(SNAP.check.status)}  exit=${esc(SNAP.check.exit)}
+facts=${esc(s.facts)}  ids=${esc(s.ids)}  sources_ok=${esc(s.sources_ok)}  sha_pinned=${esc(s.sha_pinned)}
+conflicts=${esc(s.conflicts)}  red=${esc(s.red)}  yellow=${esc(s.yellow)}  derived=${esc(s.derived)}
+confidence: high=${esc((s.confidence||{}).high)} med=${esc((s.confidence||{}).med)} low=${esc((s.confidence||{}).low)}
+attestation.facts_sha256=${esc((s.attestation||{}).facts_sha256)}</pre>
+      <p class="one">姊妹盘 paper 上跑 check 是 status=yellow、exit=3、conflicts=1（LEDGER_CONFLICT D1/H1）——就是徽章行的「黄牌 1」。</p>`);
+  }
+  if(k==='bundle'){
+    const g=SNAP.bundle.gate||[];
+    modal('打包预演（原型演示）',
+      demoBanner('下面是 paper-b 上真实跑过一次的清单门读数快照；原型内不真打包。')+
+      `<pre>status=${esc(SNAP.bundle.status)}  exit=${esc(SNAP.bundle.exit)}  files=${esc(SNAP.bundle.files_count)}</pre>
+       <div>${g.map(x=>`<div class="rowitem"><span class="k">${esc(x.status_text)}</span><span class="grow">
+        <b>${esc(x.name)}</b><br><span class="meta">${esc(x.code)}</span> — ${esc(x.detail)}</span></div>`).join('')}</div>`);
+  }
+});
+
+/* ================= 键盘流 ================= */
+let cardIdx=0, factIdx=0;
+document.addEventListener('keydown', e=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select') return;
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  if($('#mask').classList.contains('on')) return;
+  if(view==='todo'){
+    const cards=$$('#main .card');
+    if(!cards.length) return;
+    if(e.key==='j'||e.key==='ArrowDown'){ e.preventDefault(); cardIdx=Math.min(cardIdx+1,cards.length-1); }
+    else if(e.key==='k'||e.key==='ArrowUp'){ e.preventDefault(); cardIdx=Math.max(cardIdx-1,0); }
+    else if(e.key==='Enter'){ e.preventDefault(); cards[cardIdx].classList.toggle('sel'); }
+    else return;
+    cards.forEach((c,i)=>c.classList.toggle('sel', i===cardIdx));
+    cards[cardIdx].scrollIntoView({block:'nearest'});
+  }
+  if(view==='facts'){
+    const rows=$$('#main tbody tr[data-fid]');
+    if(!rows.length) return;
+    if(e.key==='j'||e.key==='ArrowDown'){ e.preventDefault(); factIdx=Math.min(factIdx+1,rows.length-1); }
+    else if(e.key==='k'||e.key==='ArrowUp'){ e.preventDefault(); factIdx=Math.max(factIdx-1,0); }
+    else if(e.key==='Enter'){ e.preventDefault(); rows[factIdx].click(); return; }
+    else return;
+    rows.forEach((r,i)=>r.classList.toggle('sel', i===factIdx));
+    rows[factIdx].scrollIntoView({block:'nearest'});
+  }
+});
+
+/* ================= 启动 ================= */
+$('#foot-meta').innerHTML = `<b>数据快照</b>：${esc(M.generated_at)} 生成于 ${esc(M.repo)}（${esc(M.head_commit)}），factscribe ${esc(M.tool_version)}。
+  账本 ${F.length} 条、bib ${B.length} 条、REFS-TODO ${RT.length} 条，全部取自 ${esc(M.paper_b)}（只读）与姊妹盘 ${esc(M.sibling_paper)}。`;
+if(location.hash && VIEWS.some(v=>v.id===location.hash.slice(1))) view=location.hash.slice(1);
+window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1);
+  if(VIEWS.some(v=>v.id===h)){ view=h; nav(); render(); } });
+badges(); nav(); render();
+</script>
+</body>
+</html>

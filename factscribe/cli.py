@@ -17,6 +17,7 @@ from . import bundle
 from . import mirror
 from . import mdscan
 from . import refs
+from . import textreuse
 from .audit import _aggregate_exit, run_audit, run_check, source_base
 from .checks import aggregate_exit as checks_aggregate_exit
 from .checks import run_packages
@@ -393,6 +394,33 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--runs-mode", choices=("signed", "full"), default="signed",
                     help="runs/ 收哪些：signed＝只收已签收副本（默认，组内有 "
                          "*.signoff.toml）；full＝全收")
+    sp.add_argument("--json", action="store_true",
+                    help="机器可读输出（stdout 只出 JSON）")
+    sp = sub.add_parser(
+        "textreuse",
+        help="双目录字面重合检测：查重的字面层 MVP（CARD-G6）",
+        description="双目录字面重合检测（零 LLM、零网络、纯标准库）。"
+                    "递归收 .tex/.md/.txt（--ext 可扩），归一（空白折叠、"
+                    "LaTeX 注释行默认去、LaTeX 命令去、大小写折叠），"
+                    "词级 n-gram 镶嵌（默认 n=8，--n 可调 5–20），"
+                    "跨两侧找重合段（相邻命中聚成段），逐段给两侧"
+                    "「文件:行-行」与重合词数，并汇总各文件对的重合词数"
+                    "与 A 侧占比。零配置：裸目录也能跑，不读项目声明。"
+                    "能力边界：改写／洗稿／AI 拼装属语义层，本卡不覆盖——"
+                    "漏检属语义层，本卡不覆盖。"
+                    "退出码 0＝无超阈重合、1＝发现重合（逐段列）、"
+                    "2＝用法错（目录不存在、n 越界、两侧同一目录）。")
+    sp.add_argument("dir_a", metavar="目录A", help="第一个目录（比较侧）")
+    sp.add_argument("dir_b", metavar="目录B", help="第二个目录（比较侧）")
+    sp.add_argument("--n", type=int, default=8, metavar="N",
+                    help="n-gram 长度（5–20，默认 8）")
+    sp.add_argument("--ext", action="append", default=None, metavar="EXT",
+                    help="扩收的文件类型（可重复；如 --ext .rst）")
+    sp.add_argument("--min-tokens", type=int, default=8, metavar="N",
+                    help="小段过滤阈值：重合词数少于它不报（默认 8）")
+    sp.add_argument("--strip-comments", action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="去 LaTeX 注释行（默认开；--no-strip-comments 保留）")
     sp.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
     sp = sub.add_parser(
@@ -1264,6 +1292,28 @@ def cmd_bundle(args) -> int:
     return int(result.get("exit_code", EXIT_RED))
 
 
+def cmd_textreuse(args) -> int:
+    """双目录字面重合检测（CARD-G6）：只读，零配置。
+
+    用法错（目录不存在、n 越界、两侧同一目录）由 ConfigError 走 exit 2。
+    """
+    result = textreuse.scan(
+        Path(args.dir_a), Path(args.dir_b),
+        n=args.n, min_tokens=args.min_tokens,
+        exts=textreuse.parse_exts(args.ext),
+        strip_comments=args.strip_comments)
+    code = result.exit_code
+    payload = _payload("textreuse",
+                       "ok" if code == EXIT_OK else "violation", code,
+                       summary=result.summary(),
+                       dir_a=str(result.dir_a), dir_b=str(result.dir_b),
+                       segments=textreuse.segment_dicts(result),
+                       pairs=textreuse.pair_dicts(result),
+                       boundary=result.boundary)
+    _emit(payload, textreuse.render(result), args.json)
+    return code
+
+
 def cmd_refs_dedupe(args) -> int:
     """bib 跨条目查重（CARD-G1）：只读、离线。"""
     result = refs.dedupe(Path(args.project))
@@ -2030,6 +2080,7 @@ def main(argv=None) -> int:
     handlers = {"check": cmd_check, "audit": cmd_audit, "matrix": cmd_matrix,
                 "mirror-check": cmd_mirror_check,
                 "bundle": cmd_bundle,
+                "textreuse": cmd_textreuse,
                 "figures": cmd_figures,
                 "refs": cmd_refs,
                 "build": cmd_build, "preamble": cmd_preamble,

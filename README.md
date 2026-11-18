@@ -19,7 +19,7 @@ FactScribe 是一道机械闸门，专门拦 AI 写论文时最危险的两类�
 - 结论对不对，不管。
 - 写得好不好读，不管。
 - 审稿人喜不喜欢，不管。
-- 抄没抄别人，不管。
+- 抄没抄别人——只查字面层：逐字照搬的段落由 `textreuse` 机械列出；改写、洗稿、AI 拼装属语义层，不在口径内（漏检属语义层）。
 
 一句话记住：**它保证账、据、文三者自洽，且据未被改；它不保证论文的结论为真。** 完整的逐条口径见 [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md)，设计侧见 [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md)。
 
@@ -76,9 +76,9 @@ python3 -m factscribe build .    # 编 PDF（要 tectonic）
 
 每一步的细节见 [`docs/QUICKSTART.md`](docs/QUICKSTART.md)，跑出一片红先看 [`docs/TRIAGE.md`](docs/TRIAGE.md)，已有论文要接进来先看 [`docs/ADOPT.md`](docs/ADOPT.md)。
 
-## 二十七个命令
+## 二十八个命令
 
-`factscribe` 一共二十七个子命令。下面按写论文的流程分组，不是按内部模块分组。
+`factscribe` 一共二十八个子命令。下面按写论文的流程分组，不是按内部模块分组。
 
 ### 上手
 
@@ -109,6 +109,7 @@ python3 -m factscribe build .    # 编 PDF（要 tectonic）
 | `report` | 归一化实验报告：`check` 跑探针取数、`lock` 写锁、`sign` 出审阅卡并签收（见 [`docs/design/SPEC-REPORT-SYNC.md`](docs/design/SPEC-REPORT-SYNC.md)） |
 | `verify-pdf` | PDF 回检：文本层、栅格页、双向多重集、stamp 验签 |
 | `mirror-check` | 双语双盘账本逐条比对：facts 承重字段＋bib 条目级，漂移逐条列 |
+| `textreuse` | 双目录字面重合检测：逐字照搬的段落逐段列出两侧行区间与重合词数；只查字面层，改写与洗稿不在口径内 |
 
 ### 改稿
 
@@ -268,7 +269,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1595 例，全离线
+python3 -m unittest discover -s tests     # 1625 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

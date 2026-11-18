@@ -1,0 +1,26 @@
+{
+  "note": "P-157 eval 档（none+clean）已跑过——评测集只许跑一次，读数不得回头调参。",
+  "tiers_run": [
+    "none",
+    "clean",
+    "random"
+  ],
+  "n_cases": 50,
+  "verdicts": {
+    "none": {
+      "cov_ge_0.8": 4,
+      "need": ">=18",
+      "distractor_fp_cases": 2,
+      "need_fp": "<=1",
+      "verdict": "FAIL"
+    },
+    "clean": {
+      "any_report_cases": 0,
+      "need": "0",
+      "verdict": "PASS"
+    },
+    "random": {
+      "verdict": "参考（不设门；random 档为 dev 集）"
+    }
+  }
+}

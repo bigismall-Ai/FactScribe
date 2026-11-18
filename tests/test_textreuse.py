@@ -51,6 +51,20 @@ REWRITTEN = ("the empirical layout stage of this paper depends on a constant "
              "described in the next passage of the findings portion of the "
              "document")
 
+# 词级扰动版：模拟「插入段落被随机插入拉丁词打断」——固定 8 词窗切不中
+# （逐字段最长 5 词），但句子级词集包含仍成立（P-165 改进批的核心场景）。
+PERTURBED = ("the experimental design phase of sic this manuscript relies on a "
+             "jubeo fixed and publicly documented sampling positis protocol "
+             "that has been applied quidem unchanged across every arm of the "
+             "omen comparative study reported in the tempus the following "
+             "paragraph of the results section")
+
+# 换词版：四个词被换成别的词 → 句级包含率落在 0.8–0.9 之间（阈值旋钮可测）。
+REPLACED = ("the experimental consilium phase of this manuscript relies on a "
+            "fixed and publice documented sampling protocol that has been "
+            "applied unchanged across every brachium of the comparative study "
+            "reported in the subsequens paragraph of the results section")
+
 
 def write_side(root: Path, name: str, docs: dict) -> Path:
     root.mkdir(parents=True, exist_ok=True)
@@ -289,6 +303,137 @@ class Thresholds(TextReuseFixture):
                          (".rst", ".md"))
         self.assertEqual(textreuse.parse_exts([".a,.b"]), (".a", ".b"))
         self.assertEqual(textreuse.parse_exts(None), ())
+
+
+# --------------------------------------------------------------------------
+# 多尺度窗 ＋ 句级包含（P-165 改进批）
+# --------------------------------------------------------------------------
+class MultiScaleAndSentenceLayer(TextReuseFixture):
+    """词级扰动打断固定词窗时，多尺度与句级包含层要能接住。"""
+
+    def test_perturbed_passage_is_caught_by_sentence_layer(self):
+        """插入几个词之后仍要红——句级包含层兜住。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + PERTURBED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        result = textreuse.scan(a, b)
+        self.assertEqual(result.exit_code, 1)
+        sources = {s.match_source for s in result.segments}
+        self.assertIn(textreuse.SRC_SENTENCE, sources)
+
+    def test_perturbed_passage_is_green_when_sentence_layer_off(self):
+        """关掉句级层就红不了——证明命中确实来自句级层（口径可关＝可归因）。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + PERTURBED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        result = textreuse.scan(a, b, sentences=False)
+        self.assertEqual(result.exit_code, 0)
+
+    def test_single_window_mode_keeps_verbatim_detection(self):
+        """--n 单窗模式仍按旧口径工作（向后兼容）。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + PLANTED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        result = textreuse.scan(a, b, n=8)
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.scales, (8,))
+        self.assertEqual(result.n, 8)
+
+    def test_default_is_multi_scale(self):
+        a = self.side("A", {"a1.md": "# A\n\n" + PLANTED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        result = textreuse.scan(a, b)
+        self.assertEqual(result.scales, (8, 5))
+        self.assertTrue(result.sentences)
+
+    def test_short_overlap_found_only_by_small_scale(self):
+        """6 词逐字重合：n=8 切不中，n=5 切得中（多尺度的意义）。"""
+        short = "alpha beta gamma delta epsilon zeta"
+        a = self.side("A", {"a1.md": "# A\n\n" + short + "\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + short + "\n"})
+        self.assertEqual(textreuse.scan(a, b, n=8, min_tokens=6).exit_code, 0)
+        self.assertEqual(textreuse.scan(a, b, min_tokens=6).exit_code, 1)
+
+    def test_match_source_is_reported_and_in_json(self):
+        """每段带匹配来源：人读报告与 JSON 都要有，便于归因。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + PERTURBED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        result = textreuse.scan(a, b)
+        seg = result.segments[0]
+        self.assertIn(seg.match_source,
+                      (textreuse.SRC_WORD_WINDOW, textreuse.SRC_SENTENCE))
+        text = textreuse.render(result)
+        self.assertIn(seg.match_source, text)
+        payload = json.loads(run_textreuse(a, b, "--json").stdout)
+        self.assertIn("match_source", payload["segments"][0])
+        self.assertIn("scales", payload["summary"])
+        self.assertIn("sentences", payload["summary"])
+
+    def test_sentence_layer_does_not_fire_on_unrelated_pair(self):
+        """负例：无关文档对不红（句级层也不能乱报）。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + CLEAN_A + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + CLEAN_B + ".\n"})
+        self.assertEqual(textreuse.scan(a, b).exit_code, 0)
+
+    def test_short_common_sentence_is_not_flagged(self):
+        """短句整句撞车（共享 6 词）不得报——最少共享词数护栏。"""
+        a = self.side("A", {"a1.md": "# A\n\nthe committee met on tuesday.\n"})
+        b = self.side("B", {"b1.md": "# B\n\nthe committee met on tuesday.\n"})
+        self.assertEqual(textreuse.scan(a, b).exit_code, 0)
+
+    def test_sentence_threshold_is_configurable(self):
+        """阈值可配：阈值以下的句级命中不再成立（旋钮真能拧）。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + REPLACED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        loose = textreuse.scan(a, b, sentence_threshold=0.8)
+        strict = textreuse.scan(a, b, sentence_threshold=0.9)
+        loose_sent = [s for s in loose.segments
+                      if s.match_source == textreuse.SRC_SENTENCE]
+        strict_sent = [s for s in strict.segments
+                       if s.match_source == textreuse.SRC_SENTENCE]
+        self.assertTrue(loose_sent)
+        self.assertEqual(strict_sent, [])
+
+    def test_bad_sentence_threshold_is_usage_error(self):
+        a = self.side("A", {"a1.md": "# A\n\n" + CLEAN_A + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + CLEAN_B + ".\n"})
+        with self.assertRaises(ConfigError) as ctx:
+            textreuse.scan(a, b, sentence_threshold=1.5)
+        self.assertEqual(ctx.exception.code,
+                         textreuse.CODE_SENTENCE_THRESHOLD_RANGE)
+        proc = run_textreuse(a, b, "--sentence-threshold", "0")
+        self.assertEqual(proc.returncode, 2)
+
+    def test_cli_no_sentences_switch(self):
+        """CLI 开关：--no-sentences 关掉句级层。"""
+        a = self.side("A", {"a1.md": "# A\n\n" + PERTURBED + ".\n"})
+        b = self.side("B", {"b1.md": "# B\n\n" + PLANTED + ".\n"})
+        self.assertEqual(run_textreuse(a, b).returncode, 1)
+        self.assertEqual(run_textreuse(a, b, "--no-sentences").returncode, 0)
+
+
+# --------------------------------------------------------------------------
+# 分句口径
+# --------------------------------------------------------------------------
+class SentenceSplitting(unittest.TestCase):
+    def test_sentences_split_on_terminal_punctuation(self):
+        sents = textreuse.sentences("one two three. four five six!")
+        self.assertEqual(len(sents), 2)
+        self.assertEqual(sents[0], ["one", "two", "three"])
+        self.assertEqual(sents[1], ["four", "five", "six"])
+
+    def test_hard_wrap_does_not_split_sentence(self):
+        sents = textreuse.sentences("one two\nthree four\nfive.")
+        self.assertEqual(len(sents), 1)
+
+    def test_blank_line_breaks_sentence(self):
+        sents = textreuse.sentences("one two\n\nthree four")
+        self.assertEqual(len(sents), 2)
+
+    def test_abbreviation_and_decimal_do_not_split(self):
+        sents = textreuse.sentences("Dr. Smith paid 3.5 dollars for it.")
+        self.assertEqual(len(sents), 1)
+
+    def test_initials_do_not_split(self):
+        sents = textreuse.sentences("J. R. Smith arrived late.")
+        self.assertEqual(len(sents), 1)
 
 
 # --------------------------------------------------------------------------

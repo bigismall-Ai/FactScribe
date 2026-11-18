@@ -402,22 +402,40 @@ def build_parser() -> argparse.ArgumentParser:
         description="双目录字面重合检测（零 LLM、零网络、纯标准库）。"
                     "递归收 .tex/.md/.txt（--ext 可扩），归一（空白折叠、"
                     "LaTeX 注释行默认去、LaTeX 命令去、大小写折叠），"
-                    "词级 n-gram 镶嵌（默认 n=8，--n 可调 5–20），"
-                    "跨两侧找重合段（相邻命中聚成段），逐段给两侧"
-                    "「文件:行-行」与重合词数，并汇总各文件对的重合词数"
-                    "与 A 侧占比。零配置：裸目录也能跑，不读项目声明。"
-                    "能力边界：改写／洗稿／AI 拼装属语义层，本卡不覆盖——"
+                    "词级 n-gram 镶嵌（默认多尺度 n=8/5，--n 走单窗模式，"
+                    "--scales 自定义尺度集），"
+                    "跨两侧找重合段（相邻命中聚成段，跨尺度取并集区间），"
+                    "逐段给两侧「文件:行-行」与重合词数，并汇总各文件对的重合词数"
+                    "与 A 侧占比。另有句级包含层（默认开，--no-sentences 关）："
+                    "分句后按词集重合率判近字面机械重合，"
+                    "报告与 JSON 每段带匹配来源（word-window／sentence-containment）。"
+                    "零配置：裸目录也能跑，不读项目声明。"
+                    "能力边界：本卡只查字面层（逐字照搬与近字面机械重合），"
+                    "改写／洗稿／AI 拼装属语义层，本卡不覆盖——"
                     "漏检属语义层，本卡不覆盖。"
                     "退出码 0＝无超阈重合、1＝发现重合（逐段列）、"
                     "2＝用法错（目录不存在、n 越界、两侧同一目录）。")
     sp.add_argument("dir_a", metavar="目录A", help="第一个目录（比较侧）")
     sp.add_argument("dir_b", metavar="目录B", help="第二个目录（比较侧）")
-    sp.add_argument("--n", type=int, default=8, metavar="N",
-                    help="n-gram 长度（5–20，默认 8）")
+    sp.add_argument("--n", type=int, default=None, metavar="N",
+                    help="n-gram 长度（5–20）——给了就是**单窗模式**；"
+                         "不给＝多尺度默认 8/5")
+    sp.add_argument("--scales", action="append", default=None, metavar="N,N",
+                    help="词窗尺度集（可重复／逗号分隔，如 --scales 30,15,8,5；"
+                         "默认 8,5；给了 --n 则本项忽略）")
     sp.add_argument("--ext", action="append", default=None, metavar="EXT",
                     help="扩收的文件类型（可重复；如 --ext .rst）")
     sp.add_argument("--min-tokens", type=int, default=8, metavar="N",
                     help="小段过滤阈值：重合词数少于它不报（默认 8）")
+    sp.add_argument("--sentences", action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help="句级包含层（默认开；--no-sentences 关）")
+    sp.add_argument("--sentence-threshold", type=float, default=0.7, metavar="T",
+                    help="句级包含的词集重合率阈值（0, 1]，默认 0.7")
+    sp.add_argument("--sentence-min-words", type=int, default=16, metavar="N",
+                    help="句级包含的最少共享词数（防短句整句撞车型误报，默认 16）")
+    sp.add_argument("--sentence-anchor-n", type=int, default=5, metavar="N",
+                    help="句级粗筛的锚点词窗长度（默认 5；调小＝候选更全、更慢）")
     sp.add_argument("--strip-comments", action=argparse.BooleanOptionalAction,
                     default=True,
                     help="去 LaTeX 注释行（默认开；--no-strip-comments 保留）")
@@ -1299,9 +1317,14 @@ def cmd_textreuse(args) -> int:
     """
     result = textreuse.scan(
         Path(args.dir_a), Path(args.dir_b),
-        n=args.n, min_tokens=args.min_tokens,
+        n=args.n, scales=textreuse.parse_scales(args.scales) if args.scales else None,
+        min_tokens=args.min_tokens,
         exts=textreuse.parse_exts(args.ext),
-        strip_comments=args.strip_comments)
+        strip_comments=args.strip_comments,
+        sentences=args.sentences,
+        sentence_threshold=args.sentence_threshold,
+        sentence_min_words=args.sentence_min_words,
+        sentence_anchor_n=args.sentence_anchor_n)
     code = result.exit_code
     payload = _payload("textreuse",
                        "ok" if code == EXIT_OK else "violation", code,

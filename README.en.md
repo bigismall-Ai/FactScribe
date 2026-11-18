@@ -19,7 +19,7 @@ Four other things are none of its business:
 - Whether the conclusions hold: not its job.
 - Whether the text reads well: not its job.
 - Whether a reviewer likes it: not its job.
-- Whether it was plagiarised: the literal layer only — `textreuse` lists passages copied word for word; rewrites, laundering and AI assembly are semantic-layer and out of scope (a miss belongs to the semantic layer).
+- Whether it was plagiarised: the literal layer only — `textreuse` lists passages copied word for word **and near-literal mechanical overlaps** (multi-scale word windows plus sentence containment); rewrites, laundering and AI assembly are semantic-layer and out of scope (a miss belongs to the semantic layer).
 
 One sentence to keep: **the tool keeps ledger, evidence and prose consistent, and it proves the evidence was not changed; it does not prove the paper's conclusions.** The full wording is in [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md), the design side in [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md).
 
@@ -109,7 +109,7 @@ Step by step lives in [`docs/QUICKSTART.md`](docs/QUICKSTART.md). Read [`docs/TR
 | `report` | Normalised experiment reports: `check` runs the probes, `lock` writes the lock, `sign` renders a review card and records the sign-off (see [`docs/design/SPEC-REPORT-SYNC.md`](docs/design/SPEC-REPORT-SYNC.md)) |
 | `verify-pdf` | PDF check: text layer, raster pages, bidirectional multiset, stamp signature |
 | `mirror-check` | Bilingual dual-disk ledger comparison: load-bearing fact fields plus bib entries, every drift listed |
-| `textreuse` | Dual-directory literal overlap: passages copied word for word, listed per segment with both sides' line ranges and token counts; literal layer only, rewrites are out of scope |
+| `textreuse` | Dual-directory literal overlap: passages copied word for word **and near-literal mechanical overlaps** (multi-scale word windows plus sentence containment), listed per segment with both sides' line ranges, token counts and match source; literal layer only, rewrites are out of scope |
 
 ### Revising
 
@@ -271,7 +271,7 @@ All three limits point at the same promise: the account, the material and the te
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1621 tests, fully offline
+python3 -m unittest discover -s tests     # 1637 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

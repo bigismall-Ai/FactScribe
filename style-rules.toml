@@ -51,13 +51,6 @@ heading_relation_words = ["versus", "vs", "not", "without",
 punctuation = ["、", "，", ",", "（", "）"]
 prepositions = ["as", "with", "for", "of"]
 
-# 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾的
-# 标题不算「带句号」——句点是缩写的一部分，不是句子终止符。大小写不敏感。
-# 批 113：\paragraph / \subparagraph 是行内标题（run-in heading），末尾句点
-# 属 LaTeX 惯例，代码层直接放行，不查本表；本表只对其它标题生效。
-heading_period_exempt = ["al.", "e.g.", "i.e.", "vs.", "etc.", "Fig.",
-                         "Eq.", "No.", "cf.", "Dr.", "et al."]
-
 [thresholds]
 # 每千词（中文按字）套话连接词数；> 触发
 connective_density = 8.0
@@ -91,6 +84,13 @@ rhythm_plateau_window = 10
 # 英文轻动词＋名义化：make a distinction / perform an analysis。
 # 单位＝条，不做每千词密度（低频高信）。
 light_verb_nominalization = 1
+# P-152：轻动词收紧到「重度」——同一篇里轻动词＋名义化命中达到这么多次，
+# 才算系统性写法并报出；达不到只当个别措辞。依据：盲评 R1 轴双席一致成立
+# 2/20（正例锚：2103.00020「perform prediction」、2407.21783「perform
+# experiments」），其余 18 条双洁＋3 条分歧全判「不别扭、无缺陷」；且同样
+# 的「perform experiments」在一篇里只出现 1 次时（1910.10683）判无缺陷，
+# 在一篇里出现 15 次时判有缺陷——只有按篇累计才能分开这两条。
+light_verb_doc_min = 5
 # 英文膨胀短语：due to the fact that 等固定说法，逐处给直接替代。
 wordiness_bloat = 1
 # 中文后置条件从句：……，如果/若 B。（语序级，出现即异常）。
@@ -149,13 +149,19 @@ colloquial_triad_repeats = 2
 term_variant_min_forms = 2
 
 # ---- v5 新增（SPEC-V3.0 §15 改写后复检）----
-# 首句去掉停用词后，至少要引入这么多个标题里没有的实义词；
-# 少于该数视为「首句只是复述标题」（HEADING_ECHO）。
-heading_echo_min_new_terms = 1
+# P-152：HEADING_ECHO 收紧为「字面高度重复」——首句相对标题新引入的实义词
+# 不得超过这个数（首句基本就是标题的回声，没有实质增量，才算回声）。
+# 依据：盲评 R2 轴正例锚 F037（标题「Experimental Setup」，首句「In this
+# section, we describe the experimental setup …」新引入 3 个实义词）。
+heading_echo_max_new_terms = 3
 
 # HEADING_ECHO 的辅助词表：泛化词不算「新实义」；标题后紧跟这些垫话
 # 开头视为复述式。只影响 v5 判据，顺序无关。
 [heading_echo]
+# P-152：字面回声口径——标题至少要有这么多个实义词（单词标题如「Discussion」
+# 不构成回声）。标题的实义词要在节首句里成团连续出现（字面重复，不是同义
+# 改写），且首句相对标题新引入的实义词 ≤ thresholds.heading_echo_max_new_terms。
+literal_min_terms = 2
 generic_terms_en = ["limitation", "problem", "issue", "result", "question",
                     "thing", "aspect", "case", "point", "claim", "matter",
                     "area", "topic", "subject", "part", "example", "work",
@@ -251,17 +257,11 @@ english = ["perform", "performs", "performed", "performing",
            "undertake", "undertakes", "undertook", "undertaking",
            "provide", "provides", "provided", "providing",
            "offer", "offers", "offered", "offering"]
-# 乙组：低精度，只认「a/an＋名词」或复数名词。
-# 排除 "make the section more uniform"（宾语补足语）与
-# "take the decision away"（短语动词）这类非名义化用法。
-article_verbs = ["make", "makes", "made", "making",
-                 "give", "gives", "gave", "giving",
-                 "take", "takes", "took", "taking",
-                 "have", "has", "had", "having",
-                 "do", "does", "did", "doing",
-                 "reach", "reaches", "reached", "reaching",
-                 "achieve", "achieves", "achieved", "achieving",
-                 "establish", "establishes", "established", "establishing"]
+# 乙组：P-152 整体退场（空表＝不建乙组模式）。依据：盲评 R1 轴里乙组命中的
+# 样本（make predictions / make decisions / have a projection / has $n$
+# dimensions / achieve a translation / establishes a connection）双席全判
+# 「无缺陷」——乙组精度不足以单条成立。只留甲组（english）。
+article_verbs = []
 # 名义化后缀；不含裸 -al（several / partial / beneficial 会误命中）。
 suffixes = ["tion", "sion", "ment", "ance", "ence", "ity", "ness", "sis"]
 # 正常搭配，不报。

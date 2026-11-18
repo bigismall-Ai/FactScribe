@@ -402,11 +402,12 @@ ECHO_SYNONYM_NEG = (
 
 class TestCanonicalHeadingRules(unittest.TestCase):
     def test_heading_echo_with_paper_blocked_variant(self):
+        # P-152：HEADING_ECHO 收紧为「字面高度重复」——同义改写（预注册 →
+        # 事前登记）不再算回声；字面一致时仍然报（见下面两条）。
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(Path(tmp), ECHO_SYNONYM,
                                   glossary=PAPER_GLOSSARY)
-        self.assertIn("HEADING_ECHO", codes(result))
-        self.assertEqual(result.exit_code, 3)
+        self.assertNotIn("HEADING_ECHO", codes(result))
 
     def test_heading_echo_paper_variant_with_new_info_not_reported(self):
         body = ("\\section{预注册}\n\n"
@@ -419,13 +420,22 @@ class TestCanonicalHeadingRules(unittest.TestCase):
     def test_heading_echo_still_caught_after_synonym(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(Path(tmp), ECHO_SYNONYM)
+        self.assertNotIn("HEADING_ECHO", codes(result))
+
+    def test_heading_echo_literal_repeat_still_caught(self):
+        # 字面一致（标题「预注册」，首句「预注册要求……」）→ 仍然报。
+        body = ("\\section{预注册}\n\n"
+                "预注册要先冻结。\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = analyze_text(Path(tmp), body)
         self.assertIn("HEADING_ECHO", codes(result))
         self.assertEqual(result.exit_code, 3)
 
     def test_heading_echo_meta_synonym(self):
+        # P-152：同义垫话开头但没有字面复述标题 → 不再报。
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(Path(tmp), ECHO_SYNONYM_META)
-        self.assertIn("HEADING_ECHO", codes(result))
+        self.assertNotIn("HEADING_ECHO", codes(result))
 
     def test_heading_echo_negative_with_new_info(self):
         with tempfile.TemporaryDirectory() as tmp:

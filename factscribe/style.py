@@ -108,8 +108,9 @@ DEFAULT_RULES: dict = {
         "heading_max_chars_zh": 12,
         "heading_max_words_en": 8,
         "colloquial_triad_repeats": 2,
-        # v5 改写后复检：首句至少要引入这么多个新实义词，否则视为复述标题
-        "heading_echo_min_new_terms": 1,
+        # P-152：HEADING_ECHO 收紧为「字面高度重复」——首句相对标题新引入的
+        # 实义词不得超过这个数（首句基本就是标题的回声，才算回声）。
+        "heading_echo_max_new_terms": 3,
         # 术语层：同一 canonical 在一篇里出现多少种不同表面形式才报 TERM_VARIANT
         "term_variant_min_forms": 2,
         # 批 99：解释性套语密度（每千词/字，> 触发）与反射式解释链
@@ -118,6 +119,9 @@ DEFAULT_RULES: dict = {
         "justify_chain_min_paragraphs": 2,
         # 批 102：句法级判据。数字型指标按条计，>= 1 触发，无密度闸。
         "light_verb_nominalization": 1,
+        # P-152：轻动词＋名义化收紧到「重度」——同一篇里命中达到这么多次，
+        # 才算系统性写法（个别措辞不报）。
+        "light_verb_doc_min": 5,
         "wordiness_bloat": 1,
         "zh_postposed_condition": 1,
         "zh_due_to_make": 1,
@@ -226,13 +230,10 @@ DEFAULT_RULES: dict = {
         "punctuation": ["、", "，", ",", "（", "）"],
         "prepositions": ["as", "with", "for", "of"],
     },
-    # 批 112：标题末尾英文句点（HEADING_MALFORMED）。以这些常见缩写结尾
-    # 的标题不算「带句号」——句点是缩写的一部分，不是句子终止符。
-    # 大小写不敏感；表可在项目根 style-rules.toml 覆盖。
-    "heading_period_exempt": ["al.", "e.g.", "i.e.", "vs.", "etc.", "Fig.",
-                              "Eq.", "No.", "cf.", "Dr.", "et al."],
     # v5：HEADING_ECHO 的可配词表（泛化词不算「新实义」；垫话开头视为复述式）
     "heading_echo": {
+        # P-152：字面回声口径——标题至少要有这么多个实义词（单词标题不算回声）。
+        "literal_min_terms": 2,
         "generic_terms_en": ["limitation", "problem", "issue", "result",
                              "question", "thing", "aspect", "case", "point",
                              "claim", "matter", "area", "topic", "subject",
@@ -456,7 +457,6 @@ DIRECTIONS = {
     # v4
     "dash_parenthetical": "above",
     "heading_too_long": "at_least",
-    "heading_malformed": "at_least",
     "term_first_in_heading": "at_least",
     "colloquial_triad": "at_least",
     # v5 改写后复检
@@ -502,7 +502,6 @@ CODE_OF = {
     # v4
     "dash_parenthetical": "DASH_PARENTHETICAL",
     "heading_too_long": "HEADING_TOO_LONG",
-    "heading_malformed": "HEADING_MALFORMED",
     "term_first_in_heading": "TERM_FIRST_IN_HEADING",
     "colloquial_triad": "COLLOQUIAL_TRIAD",
     # v5 改写后复检
@@ -536,7 +535,7 @@ CODE_OF = {
 
 FINDING_ORDER = ["REQUIRED_EVIDENCE_MISSING", "EVIDENCE_DROPPED",
                  "SENTENCE_LENGTH_EXTREME", "DASH_PARENTHETICAL",
-                 "HEADING_TOO_LONG", "HEADING_MALFORMED",
+                 "HEADING_TOO_LONG",
                  "HEADING_ECHO", "HEADING_RELATION_CHANGED",
                  "HEADING_SUBJECT_LOST", "HEADING_SUBSTITUTED",
                  "TERM_FIRST_IN_HEADING",
@@ -1277,7 +1276,6 @@ _EM_DASH_RE = re.compile(r"——|—")
 _HEADING_CMD_RE = re.compile(
     r"\\(part|chapter|section|subsection|subsubsection|paragraph|subparagraph)\*?"
     r"\s*(?:\[[^\]]*\])?\s*\{")
-_HEADING_MALFORMED_RE = re.compile(r"[：:？?。！!]|——|—|[（(][^）)]*[）)]")
 _TERM_SEP_RE = re.compile(r"[的和与及在对从为是]")
 _TERM_STOP = {
     "a", "an", "the", "of", "for", "and", "or", "to", "in", "on", "with",
@@ -1311,24 +1309,6 @@ def _is_range_dash(prose: str, start: int, end: int) -> bool:
         if re.search(r"第\s*\d+\s*$", left) and re.match(r"\s*\d+\s*页", right):
             return True
     return False
-
-
-def _period_exempt_words(rules: dict) -> list[str]:
-    """标题句点豁免表（缩写）。缺省时用内置默认值；大小写不敏感。"""
-    raw = rules.get("heading_period_exempt")
-    if raw is None:
-        raw = DEFAULT_RULES["heading_period_exempt"]
-    if not isinstance(raw, (list, tuple)):
-        raw = [raw]
-    return [str(x).strip().lower() for x in raw if str(x).strip()]
-
-
-def _heading_period_bad(title: str, exempt: list[str]) -> bool:
-    """标题以英文句点结尾且不是常见缩写 → True。"""
-    if not title.endswith("."):
-        return False
-    low = title.lower()
-    return not any(low.endswith(word) for word in exempt)
 
 
 def _heading_title(tex: str, brace: int) -> tuple[str, int]:
@@ -1689,38 +1669,89 @@ def _echo_meta_openers(rules: dict) -> tuple[tuple, tuple]:
     return en, zh
 
 
-def _heading_echo(title: str, sentence: str, rules: dict,
-                  thresholds: dict,
-                  glossary: Glossary | None = None) -> bool:
-    """首句是否只是复述标题（复述 / 垫话 / 纯设问三种伪满足）。
+def _echo_title_words(title: str, rules: dict,
+                      glossary: Glossary | None = None) -> list[str]:
+    """标题的实义词（去停用词、去泛化词；术语按 canonical 归一）。
 
-    标题与首句先做术语归一（同义词视同同词），再走原有判据。
+    中文按实义字计（去停用字与泛化词），英文按实义词计。
     """
-    if not sentence:
+    generic_en, generic_zh = _echo_generic(rules)
+    # 计数用标题原字面：术语归一只用于「首句 vs 标题」的比较，
+    # 不用来判断标题本身是不是短语（否则在册术语会被剥掉）。
+    text = title
+    if _cjk_heavy(text):
+        return sorted(_cjk_content_chars(text, generic_zh))
+    return [t for t in _en_terms(text) if t not in generic_en]
+
+
+def _echo_literal_span(title: str, sentence: str) -> bool:
+    """标题的实义词是否在首句里成团连续出现（字面重复）。
+
+    口径：标题归一（标点→空格、小写）后整串出现在首句归一串里。中间夹了
+    别的实义词就不算「成团」——那是顺带提到，不是复述。
+    """
+    tkey = _heading_key(title)
+    if not tkey:
         return False
-    min_new = int(thresholds["heading_echo_min_new_terms"])
-    if len(_new_content_terms(title, sentence, rules, glossary)) < min_new:
-        return True
-    canon_title = glossary.canonicalize(title) if glossary else title
-    canon_sentence = glossary.canonicalize(sentence) if glossary else sentence
+    return tkey in _heading_key(sentence)
+
+
+def _echo_is_opener(title: str, sentence: str, rules: dict) -> bool:
+    """首句是不是「节首过渡句」（只报回声，不报正文里的同名表述）。"""
     meta_en, meta_zh = _echo_meta_openers(rules)
-    sent_key = _heading_key(canon_sentence)
-    # 「This section is about ...」「本节讨论……」这类垫话不依赖标题复述。
+    sent_key = _heading_key(sentence)
     if any(sent_key.startswith(op) for op in meta_en):
         return True
     stripped = sentence.strip()
     if any(stripped.startswith(op) for op in _DIRECT_META_ZH):
         return True
-    key = _heading_key(canon_title)
+    key = _heading_key(title)
     if key and sent_key.startswith(key):
         rest = sent_key[len(key):].lstrip()
         if any(rest.startswith(op) for op in meta_zh):
             return True
         if any(rest.startswith(op) for op in meta_en):
             return True
-    # 纯设问（「什么是 X？」「X 是什么？」）没有引入新实义，已被上面的
-    # 「新实义词 < 阈值」分支抓住；带新信息的设问式开场不算伪满足。
     return False
+
+
+def _heading_echo(title: str, sentence: str, rules: dict,
+                  thresholds: dict,
+                  glossary: Glossary | None = None) -> bool:
+    """节首句是否是节标题的「字面高度重复」（P-152 收紧口径）。
+
+    只报回声，标题的实义词必须在首句里成团连续出现（字面重复，不是同义
+    改写），且首句相对标题几乎不引入新实义：
+      ① 首句一个实义词都没引入 → 整句就是标题的复述；或
+      ② 首句是节首过渡句（「In this section, we …」「本节讨论…」这类开口）
+         且新引入的实义词 ≤ heading_echo_max_new_terms（默认 3）。
+
+    首句逐字等于标题的（解析把标题当正文的产物）不算回声。
+    旧口径「首句没有新实义词」已按校准证据撤掉：真实语料里那一档几乎
+    都是正常过渡，盲评 R2 轴成立的正例（F029/F036/F037/F039）全部是
+    「In this section, we …」这一类节首过渡句，且都以标题字面复述开头。
+    """
+    if not sentence:
+        return False
+    cfg = rules.get("heading_echo") or {}
+    min_terms = int(cfg.get("literal_min_terms", 2))
+    max_new = int(thresholds["heading_echo_max_new_terms"])
+    if _cjk_heavy(title) or _cjk_heavy(sentence):
+        max_new = max_new * 2      # 汉字是更小的单位，按两倍算
+    words = _echo_title_words(title, rules, glossary)
+    if len(words) < min_terms:
+        return False
+    if not _echo_literal_span(title, sentence):
+        return False
+    if _heading_key(sentence) == _heading_key(title):
+        return False
+    new_terms = _new_content_terms(title, sentence, rules, glossary)
+    if not new_terms:
+        # 首句没有引入任何新实义词：整句就是标题的复述。
+        return True
+    if not _echo_is_opener(title, sentence, rules):
+        return False
+    return len(new_terms) <= max_new
 
 
 def _relation_words(rules: dict) -> list[str]:
@@ -2276,7 +2307,7 @@ def _exempt_phrase_regex(phrases: list[str]) -> re.Pattern | None:
     return _phrase_regex(variants)
 
 
-def _light_verb_findings(sentences, rules: dict) -> list[Finding]:
+def _light_verb_findings(sentences, rules: dict, thresholds: dict) -> list[Finding]:
     pat_direct, pat_article = _light_verb_patterns(rules)
     group = rules.get("light_verbs") or {}
     actions = {str(k).lower(): str(v)
@@ -2310,6 +2341,11 @@ def _light_verb_findings(sentences, rules: dict) -> list[Finding]:
                     "「%s」是轻动词＋名义化：动词是空的，动作藏在名词里。%s"
                     % (_norm_space(m.group(0)), hint),
                     "light_verb_nominalization"))
+    # P-152：只报「重度」——同一篇里命中数达到 light_verb_doc_min 才算系统性
+    # 写法；个别措辞（盲评 R1 轴 18 条双洁＋3 条分歧全判无缺陷）不报。
+    doc_min = int(thresholds["light_verb_doc_min"])
+    if len(out) < doc_min:
+        return []
     return out
 
 
@@ -3138,7 +3174,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
 
     # ---- 批 102：句法级判据（各按条计，无密度闸）----
     instances["LIGHT_VERB_NOMINALIZATION"].extend(
-        _light_verb_findings(all_sentences, rules))
+        _light_verb_findings(all_sentences, rules, thresholds))
     instances["WORDINESS_BLOAT"].extend(
         _wordiness_bloat_findings(all_sentences, rules))
     instances["ZH_DE_STACK"].extend(
@@ -3301,11 +3337,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "dash_parenthetical"))
 
     # ---- 3b. 标题：过长 / 带解释 / 术语未在首句定义 / 首句复述标题 ----
-    heading_counts = {"HEADING_TOO_LONG": 0, "HEADING_MALFORMED": 0,
+    heading_counts = {"HEADING_TOO_LONG": 0,
                       "HEADING_ECHO": 0, "HEADING_RELATION_CHANGED": 0,
                       "HEADING_SUBJECT_LOST": 0, "HEADING_SUBSTITUTED": 0,
                       "TERM_FIRST_IN_HEADING": 0}
-    period_exempt = _period_exempt_words(rules)
     glossary = _glossary_for(rules, cfg.root)
     allow_keys, allow_canon = _term_allowlist(rules, cfg.root, glossary)
     seen_unregistered: set = set()
@@ -3328,19 +3363,6 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "标题压到 %s 以内：把副标题或解释移到正文首句，标题只留"
                     "名词短语；不改正文事实。" % limit_txt,
                     "heading_too_long"))
-            # 批 113：LaTeX 行内标题（run-in heading，\paragraph/\subparagraph）
-            # 惯例是标题与正文同段、以句点分隔，末尾英文句点不算缺陷；
-            # 冒号/问号/括号解释等其它问题照旧报。Markdown 标题的 cmd 是
-            # h1/h2/...，不在此列，末尾句点继续报。
-            period_bad = (head.get("cmd") not in ("paragraph", "subparagraph")
-                          and _heading_period_bad(title, period_exempt))
-            if (_HEADING_MALFORMED_RE.search(title) or period_bad):
-                heading_counts["HEADING_MALFORMED"] += 1
-                instances["HEADING_MALFORMED"].append(Finding(
-                    "HEADING_MALFORMED", doc.file, line, _clip(title, 160),
-                    "标题不用冒号/破折号/括号解释/问号/句号：把解释移到正文"
-                    "首句，标题只留名词短语；不改正文事实。",
-                    "heading_malformed"))
             # v5：首句只是复述标题（复述/垫话/设问）——只判本节自己的正文。
             # 下一标题若是行内 \paragraph，它的首句可能和标题同在一行，
             # 仍算本节正文，不能用 stop_line 跳过。
@@ -3627,7 +3649,6 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         "rhythm_plateau": plateau_hits,
         "dash_parenthetical": dash_hits,
         "heading_too_long": heading_counts["HEADING_TOO_LONG"],
-        "heading_malformed": heading_counts["HEADING_MALFORMED"],
         "heading_echo": heading_counts["HEADING_ECHO"],
         "heading_relation_changed": heading_counts["HEADING_RELATION_CHANGED"],
         "heading_subject_lost": heading_counts["HEADING_SUBJECT_LOST"],
@@ -3710,7 +3731,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             limit = 1
             hit = value >= limit
             shown = limit
-        elif metric in ("heading_too_long", "heading_malformed",
+        elif metric in ("heading_too_long",
                         "term_first_in_heading", "heading_echo",
                         "heading_relation_changed", "heading_subject_lost",
                         "heading_substituted"):
@@ -3913,7 +3934,6 @@ def render_human(result: StyleResult, project: Path) -> str:
         ("sentence_length_extreme", "SENTENCE_LENGTH_EXTREME", ">="),
         ("dash_parenthetical", "DASH_PARENTHETICAL", ">"),
         ("heading_too_long", "HEADING_TOO_LONG", ">="),
-        ("heading_malformed", "HEADING_MALFORMED", ">="),
         ("heading_echo", "HEADING_ECHO", ">="),
         ("heading_relation_changed", "HEADING_RELATION_CHANGED", ">="),
         ("heading_subject_lost", "HEADING_SUBJECT_LOST", ">="),
@@ -3998,7 +4018,7 @@ def render_human(result: StyleResult, project: Path) -> str:
         elif key == "we_action_density":
             threshold = ">%s%%" % _fmt(
                 result.thresholds.get("we_action_density", 0) * 100.0)
-        elif key in ("heading_malformed", "term_first_in_heading", "heading_echo",
+        elif key in ("term_first_in_heading", "heading_echo",
                      "heading_relation_changed", "heading_subject_lost",
                      "heading_substituted"):
             threshold = ">=1"

@@ -58,6 +58,15 @@ def findings(result, code: str):
 LIGHT_ARTICLE = (
     "We make a distinction between the two runtime paths in this section."
 )
+# P-152：乙组（make/give/take/have/do…）整体退场；轻动词只报「重度」——
+# 同一篇里命中达到 thresholds.light_verb_doc_min（默认 5）才报。
+LIGHT_HEAVY = (
+    "We performed an analysis of the failing runs before the rewrite. "
+    "The team carried out an evaluation of the gate on the frozen project. "
+    "We conducted a contamination analysis of the training corpus. "
+    "They carried out experiments on the frozen project. "
+    "We performed prediction of the next token on the sample. "
+)
 LIGHT_ANALYSIS = (
     "The team performed an analysis of the failing runs before the rewrite."
 )
@@ -134,24 +143,30 @@ DE_GAP_CONFIG = "[thresholds]\nzh_de_stack_max_gap = 7\n"
 # --------------------------------------------------------------------------
 
 class TestLightVerbNominalization(unittest.TestCase):
-    def test_make_a_distinction_reports_action_verb(self):
+    def test_article_group_is_retired(self):
+        # P-152：乙组（make/give/take/have/do…）整体退场——盲评 R1 轴里乙组
+        # 命中的样本（make predictions / make decisions / have a projection /
+        # achieve a translation）双席全判「无缺陷」。
         result = analyze_text(LIGHT_ARTICLE)
-        found = findings(result, "LIGHT_VERB_NOMINALIZATION")
-        self.assertEqual(len(found), 1)
-        self.assertIn("distinguish", found[0].suggestion)
+        self.assertNotIn("LIGHT_VERB_NOMINALIZATION", codes(result))
 
-    def test_perform_an_analysis_reports_analyze(self):
+    def test_single_hit_is_not_reported(self):
+        # 只报「重度」：单条命中＝个别措辞，不报。
         result = analyze_text(LIGHT_ANALYSIS)
+        self.assertNotIn("LIGHT_VERB_NOMINALIZATION", codes(result))
+
+    def test_heavy_document_reports_action_verb(self):
+        result = analyze_text(LIGHT_HEAVY)
         found = findings(result, "LIGHT_VERB_NOMINALIZATION")
-        self.assertEqual(len(found), 1)
+        self.assertEqual(len(found), 5)
         self.assertIn("analyze", found[0].suggestion)
 
     def test_carry_out_an_evaluation(self):
-        result = analyze_text(LIGHT_CARRY)
+        result = analyze_text(LIGHT_HEAVY)
         self.assertIn("LIGHT_VERB_NOMINALIZATION", codes(result))
 
     def test_direct_group_allows_missing_article(self):
-        result = analyze_text(LIGHT_BARE)
+        result = analyze_text(LIGHT_HEAVY)
         self.assertIn("LIGHT_VERB_NOMINALIZATION", codes(result))
 
     def test_plain_verb_negative(self):
@@ -170,10 +185,8 @@ class TestLightVerbNominalization(unittest.TestCase):
         self.assertNotIn("LIGHT_VERB_NOMINALIZATION", codes(result))
 
     def test_metric_is_item_count_not_density(self):
-        text = (LIGHT_ARTICLE + " " + LIGHT_ANALYSIS + " "
-                + LIGHT_CARRY + "\n")
-        result = analyze_text(text)
-        self.assertEqual(result.metrics["light_verb_nominalization"], 3)
+        result = analyze_text(LIGHT_HEAVY)
+        self.assertEqual(result.metrics["light_verb_nominalization"], 5)
 
 
 # --------------------------------------------------------------------------

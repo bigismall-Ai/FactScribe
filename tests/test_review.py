@@ -36,8 +36,12 @@ BASE = (
     "This run reports 53 tokens over 12 minutes in total, and the pipeline "
     "is stable.\n"
 )
-HEADING_BAD = BASE.replace("\\section{Results}",
-                           "\\section{Results: A New View}")
+# P-152：HEADING_MALFORMED 已撤除；改用仍然存在的 HEADING_TOO_LONG
+# 作为「改写后新增违规」的例子。
+HEADING_BAD = BASE.replace(
+    "\\section{Results}",
+    "\\section{Results and Discussion of the Full Experimental Pipeline "
+    "in Practice}")
 NUMBER_BAD = BASE.replace("53 tokens", "54 tokens")
 
 
@@ -105,7 +109,7 @@ class ReviewCase(unittest.TestCase):
         self.assertEqual(data["verdict"], "needs_review")
         self.assertEqual(data["style"]["new_findings"], 1)
         finding = data["style"]["findings"][0]
-        self.assertEqual(finding["code"], "HEADING_MALFORMED")
+        self.assertEqual(finding["code"], "HEADING_TOO_LONG")
         self.assertEqual(finding["file"], "sections/01.tex")
         self.assertEqual(finding["line"], 1)
 
@@ -244,7 +248,7 @@ class ReviewCase(unittest.TestCase):
                          {"sections/01.tex": HEADING_BAD})
         proc = self.review(b, a)
         self.assertEqual(proc.returncode, 3)
-        self.assertIn("HEADING_MALFORMED", proc.stdout)
+        self.assertIn("HEADING_TOO_LONG", proc.stdout)
         self.assertIn("sections/01.tex:1", proc.stdout)
         self.assertIn("判定：需复核", proc.stdout)
 

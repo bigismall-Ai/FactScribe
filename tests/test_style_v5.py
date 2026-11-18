@@ -89,14 +89,16 @@ def run_style(root: Path, *args: str):
 # 1. HEADING_ECHO
 # --------------------------------------------------------------------------
 
+# P-152：HEADING_ECHO 只报「节首过渡句 ＋ 字面高度重复」——三条同时成立
+# （过渡句开头、标题实义词成团复述、首句新增实义词不超阈值）。
 ECHO_EN = (
     "\\subsection{Known and not fixed}\n\n"
-    "These limitations are known and not fixed. The main comparison has "
-    "sixteen instances and a wide interval.\n"
+    "In this subsection, we describe the known and not fixed limitations "
+    "of the current setup.\n"
 )
 ECHO_ZH = (
     "\\subsection{已知且未修}\n\n"
-    "这些是已知且未修的限制。主对照有十六单，其中可判的十四单。\n"
+    "本节讨论已知且未修的限制。主对照有十六单，其中可判的十四单。\n"
 )
 ECHO_META_EN = (
     "\\section{Related work}\n\n"
@@ -121,7 +123,7 @@ ECHO_DEF_ZH = (
 )
 ECHO_ONE_NEW = (
     "\\section{Cost ledger}\n\n"
-    "Cost ledger records.\n"
+    "In this section, we describe the cost ledger.\n"
 )
 ECHO_NO_BODY = (
     "\\section{Method}\n"
@@ -144,15 +146,17 @@ class TestHeadingEcho(unittest.TestCase):
             result = analyze_text(tmp, ECHO_ZH)
         self.assertIn("HEADING_ECHO", codes(result))
 
-    def test_positive_english_meta_opener(self):
+    def test_negative_english_meta_opener_without_literal_echo(self):
+        # P-152：只以节首过渡句开头、但没有字面复述标题的，不再报。
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, ECHO_META_EN)
-        self.assertIn("HEADING_ECHO", codes(result))
+        self.assertNotIn("HEADING_ECHO", codes(result))
 
-    def test_positive_chinese_meta_opener(self):
+    def test_negative_chinese_meta_opener_without_literal_echo(self):
+        # P-152：中文同理——「相关工作里，……」只是过渡，没有字面复述标题。
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, ECHO_META_ZH)
-        self.assertIn("HEADING_ECHO", codes(result))
+        self.assertNotIn("HEADING_ECHO", codes(result))
 
     def test_positive_chinese_preamble_opener(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -169,17 +173,19 @@ class TestHeadingEcho(unittest.TestCase):
             result = analyze_text(tmp, ECHO_DEF_ZH)
         self.assertNotIn("HEADING_ECHO", codes(result))
 
-    def test_boundary_one_new_term_passes_at_default(self):
+    def test_literal_echo_with_one_new_term_is_reported(self):
+        # P-152 新口径：字面复述标题（"Cost ledger records."）就是回声，
+        # 首句只新增 1 个实义词也照报（旧口径按「新实义词个数」判）。
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, ECHO_ONE_NEW)
-        self.assertNotIn("HEADING_ECHO", codes(result))
+        self.assertIn("HEADING_ECHO", codes(result))
 
-    def test_threshold_raised_reports_one_new_term(self):
+    def test_threshold_zero_suppresses_one_new_term(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(
                 tmp, ECHO_ONE_NEW,
-                "[thresholds]\nheading_echo_min_new_terms = 2\n")
-        self.assertIn("HEADING_ECHO", codes(result))
+                "[thresholds]\nheading_echo_max_new_terms = 0\n")
+        self.assertNotIn("HEADING_ECHO", codes(result))
 
     def test_heading_without_own_body_is_not_judged(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -448,9 +454,11 @@ SAMPLE_EN_10_BEFORE = (
     "\\subsection{Known and not fixed}\n\n"
     "The main comparison has sixteen instances and a wide interval.\n"
 )
+# P-152：节首句要同时是过渡句并字面复述标题（与新口径对齐）。
 SAMPLE_EN_10_AFTER = (
     "\\subsection{Known and not fixed}\n\n"
-    "These limitations are known and not fixed.\n\n"
+    "In this subsection, we note that these limitations are known and "
+    "not fixed.\n\n"
     "The main comparison has sixteen instances and a wide interval.\n"
 )
 SAMPLE_ZH_08_BEFORE = (
@@ -459,7 +467,7 @@ SAMPLE_ZH_08_BEFORE = (
 )
 SAMPLE_ZH_08_AFTER = (
     "\\subsection{已知且未修}\n\n"
-    "这些是已知且未修的限制。主对照有十六单，其中可判的十四单。\n"
+    "本节讨论已知且未修的限制。主对照有十六单，其中可判的十四单。\n"
 )
 SAMPLE_ZH_06_BEFORE = (
     "\\subsection{成本记账}\n\n"
@@ -511,7 +519,13 @@ class TestBatch84Regressions(unittest.TestCase):
         self._run(SAMPLE_ZH_06_BEFORE, SAMPLE_ZH_06_AFTER, "HEADING_ECHO")
 
     def test_zh_09_related_work_preamble(self):
-        self._run(SAMPLE_ZH_09_BEFORE, SAMPLE_ZH_09_AFTER, "HEADING_ECHO")
+        # P-152：HEADING_ECHO 收紧为「字面高度重复」后，中文首句若在复述
+        # 标题之外还有大量实质信息（此处新增 25/29 字），不再算回声；
+        # 只在首句基本由标题词构成时才报（见 ZH-06 / ZH-08）。
+        with tempfile.TemporaryDirectory() as tmp:
+            new, _after, _before = analyze_pair(
+                tmp, SAMPLE_ZH_09_BEFORE, SAMPLE_ZH_09_AFTER)
+        self.assertNotIn("HEADING_ECHO", codes(new))
 
     def test_en_06_relation_word_replaced(self):
         self._run(SAMPLE_EN_06_BEFORE, SAMPLE_EN_06_AFTER,

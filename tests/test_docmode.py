@@ -378,7 +378,6 @@ class TexPathRegressionTest(unittest.TestCase):
         "empty_adjective": 0.0,
         "explainer_density": 0.0,
         "heading_echo": 0,
-        "heading_malformed": 0,
         "heading_relation_changed": 0,
         "heading_subject_lost": 0,
         "heading_substituted": 0,

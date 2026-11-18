@@ -218,61 +218,42 @@ HEAD_CLEAN_SHORT = (
 )
 
 
-class TestHeadingMalformed(unittest.TestCase):
-    def test_positive_colon(self):
+class TestHeadingMalformedRetired(unittest.TestCase):
+    """P-152：HEADING_MALFORMED 整族撤除。
+
+    校准证据（盲评 R3「标题格式是否合惯例」轴，n=20）：双席一致成立 0/20、
+    双席一致判「无毛病」14/20、分歧 6——命中全部是领域惯例格式（冒号主副题／
+    括号缩写／连字符复合／标题问句／末尾句点）。故整族撤除：判定逻辑、
+    读数（metrics.heading_malformed）与 style-rules.toml 的
+    heading_period_exempt 表一并移除。
+    """
+
+    def test_colon_heading_is_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, HEAD_COLON)
-        self.assertIn("HEADING_MALFORMED", codes(result))
+        self.assertNotIn("HEADING_MALFORMED", codes(result))
 
-    def test_positive_parenthetical(self):
+    def test_parenthetical_heading_is_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, HEAD_PAREN)
-        self.assertIn("HEADING_MALFORMED", codes(result))
-
-    def test_negative_clean_heading(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, HEAD_CLEAN)
         self.assertNotIn("HEADING_MALFORMED", codes(result))
 
-    def test_paper_title_is_exempt(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, TITLE_COLON)
-        self.assertNotIn("HEADING_MALFORMED", codes(result))
-
-    # ---- 批 112：英文句点与缩写豁免 ----
-    def test_positive_english_period_section(self):
+    def test_english_period_heading_is_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, HEAD_PERIOD_SECTION)
-        self.assertIn("HEADING_MALFORMED", codes(result))
-
-    def test_negative_runin_paragraph_period(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, HEAD_PERIOD_PARAGRAPH)
-        self.assertNotIn("HEADING_MALFORMED", codes(result))
-        self.assertEqual(result.metrics["heading_malformed"], 0)
-
-    def test_negative_runin_subparagraph_period(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, HEAD_PERIOD_SUBPARAGRAPH)
         self.assertNotIn("HEADING_MALFORMED", codes(result))
 
-    def test_positive_runin_paragraph_colon(self):
+    def test_runin_paragraph_colon_is_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             result = analyze_text(tmp, HEAD_PARAGRAPH_COLON)
-        self.assertIn("HEADING_MALFORMED", codes(result))
-        self.assertGreaterEqual(result.metrics["heading_malformed"], 1)
-
-    def test_negative_clean_heading_without_period(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, HEAD_CLEAN_SHORT)
         self.assertNotIn("HEADING_MALFORMED", codes(result))
 
-    def test_negative_abbreviation_period_is_exempt(self):
+    def test_metric_key_is_gone(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result = analyze_text(tmp, HEAD_PERIOD_ABBREV)
-        self.assertNotIn("HEADING_MALFORMED", codes(result))
+            result = analyze_text(tmp, HEAD_COLON)
+        self.assertNotIn("heading_malformed", result.metrics)
 
-    def test_markdown_heading_period(self):
+    def test_markdown_heading_period_is_not_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "doc.md"
             path.write_text("## Results.\n\nBody sentence.\n", encoding="utf-8")
@@ -282,26 +263,9 @@ class TestHeadingMalformed(unittest.TestCase):
                  "doc.md", "--json"],
                 cwd=tmp, env=env, capture_output=True, text=True)
         payload = json.loads(proc.stdout)
-        self.assertIn("HEADING_MALFORMED",
-                      {f["code"] for f in payload["findings"]})
-
-    def test_markdown_heading_without_period(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "doc.md"
-            path.write_text("## Results\n\nBody sentence.\n", encoding="utf-8")
-            env = dict(os.environ, PYTHONPATH=str(ROOT))
-            proc = subprocess.run(
-                [sys.executable, "-m", "factscribe", "style", "--doc",
-                 "doc.md", "--json"],
-                cwd=tmp, env=env, capture_output=True, text=True)
-        payload = json.loads(proc.stdout)
         self.assertNotIn("HEADING_MALFORMED",
                          {f["code"] for f in payload["findings"]})
 
-
-# --------------------------------------------------------------------------
-# 4. TERM_FIRST_IN_HEADING
-# --------------------------------------------------------------------------
 
 TERM_POS = (
     "\\section{Retrieval Augmented}\n"
@@ -321,6 +285,7 @@ TERM_GLOSSARY = (
     "Retrieval Augmented\tretrieval augmented\t\t写作\n"
     "稀疏检索增强\tsparse retrieval augmentation\t\t写作\n"
 )
+
 
 
 class TestTermFirstInHeading(unittest.TestCase):

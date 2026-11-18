@@ -270,7 +270,6 @@ body{background:#f6f5f1}
 .doc{flex:1 1 auto;min-width:0;padding:24px 26px 120px}
 .page{max-width:730px;margin:0 auto}
 body.ai-on .doc{padding-right:26px}
-body.lang-zh .page{max-width:640px}
 
 /* ---- 左栏：品牌 + 项目管理器 + 目录 + 机器视图 ---- */
 .brand{padding:0 4px 14px;border-bottom:1px solid #ebe7da;margin-bottom:14px}
@@ -429,7 +428,7 @@ body:not([data-view="workbench"]) .rc-collapse,body:not([data-view="workbench"])
              × Obsidian 侧栏纪律（窄、紧凑、分区清爽、图标化）
    ===================================================================== */
 body{background:#ffffff}
-.shell{max-width:1560px}
+.shell{max-width:none}
 /* ---- 三视图显隐（含条目7的实验报告视图） ---- */
 .mainview{flex:1 1 auto;min-width:0;display:none;background:#fff}
 body[data-view="projects"] #viewProjects{display:block}
@@ -498,7 +497,7 @@ body:not(.panel-en) #tocList .en{display:none}
 .topb:hover{background:#e3e2df;color:#37352f}
 .topb.tdel:hover{color:#9a3b1e;background:#f7ebe6}
 /* ---- 正文列（统一修批二·条目11：左对齐顶满，目录恢复纯浮层覆盖） ---- */
-.doc{background:#fff;padding:44px 48px 160px}
+.doc{background:#fff;padding:44px 16px 160px}
 .page{max-width:none;margin:0}
 .cover{background:none;border:none;box-shadow:none;border-radius:0;padding:6px 0 8px;margin-bottom:44px}
 .cover h1{font-size:30px;line-height:1.32}

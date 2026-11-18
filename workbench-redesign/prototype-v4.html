@@ -395,28 +395,40 @@ p{font-size:16.5px}
 .ai-input button{font-size:12px;padding:7px 12px}
 .msg .bub{font-size:12.5px;padding:8px 11px}
 
-/* ---- 右栏收起成窄条 ---- */
-.rc-collapse{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;
- font-family:inherit;font-size:11.5px;letter-spacing:2px;writing-mode:vertical-rl;padding:14px 7px;
+/* ---- 右栏边缘三竖标（统一修批三·A/D：同族样式一上一下，AI 对话可整栏替换） ---- */
+.side-rail{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:flex;flex-direction:column;gap:2px;align-items:stretch}
+.side-tab{writing-mode:vertical-rl;font-family:inherit;font-size:11.5px;letter-spacing:2px;padding:12px 7px;
  border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
- cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08)}
-.rc-collapse:hover{color:#1c1e22}
-.rp-entry{position:fixed;right:0;top:calc(50% - 78px);z-index:66;
- font-family:inherit;font-size:11.5px;letter-spacing:2px;writing-mode:vertical-rl;padding:14px 7px 10px;
- border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#2f5279;
- cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;gap:6px}
-.rp-entry:hover{color:#1c3d5c;background:#f4f8fc}
-body:not([data-view="workbench"]) .rp-entry{display:none}
-body.rc-collapsed .rp-entry{display:flex}
+ cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.5}
+.side-tab:hover{color:#1c1e22;background:#f4f2ea}
+.side-tab.on{background:#2f2e2b;color:#fff;border-color:#2f2e2b}
+.side-tab svg{flex:0 0 auto}
+body:not([data-view="workbench"]) .side-rail{display:none}
+body.rc-collapsed .side-rail{display:none}
+.side-alone{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:none;
+ writing-mode:vertical-rl;font-family:inherit;font-size:11.5px;letter-spacing:2px;padding:12px 7px;
+ border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
+ cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);line-height:1.5}
+.side-alone:hover{color:#1c1e22;background:#f4f2ea}
+body.rc-collapsed .side-alone{display:block}
+body:not([data-view="workbench"]) .side-alone{display:none}
 body.rc-collapsed .colright{flex-basis:0;width:0;padding:0;overflow:hidden;border-left:none}
-body.rc-collapsed .rc-collapse{right:0;letter-spacing:2px}
-.rc-open{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:none;
- font-family:inherit;font-size:11.5px;letter-spacing:2px;writing-mode:vertical-rl;padding:14px 7px;
- border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
- cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08)}
-body.rc-collapsed .rc-open{display:block}
-body.rc-collapsed .rc-collapse{display:none}
-body:not([data-view="workbench"]) .rc-collapse,body:not([data-view="workbench"]) .rc-open{display:none}
+/* ---- D：AI 对话独占模式（整栏替换） ---- */
+body.ai-full .rtabs{display:none}
+body.ai-full #pane-report,body.ai-full #pane-machine{display:none}
+body.ai-full #pane-ai{display:flex}
+/* ---- C：检查报告卡片折叠 ---- */
+.rcard.fold{padding:0}
+.rc-fold-h{display:flex;align-items:center;gap:8px;width:100%;padding:12px 14px;border:none;background:none;
+ font-family:inherit;cursor:pointer;text-align:left}
+.rc-fold-h:hover{background:#fbfbfa}
+.rc-fold-h .rc-t{font-size:13px;font-weight:650;color:#37352f}
+.fold-badge{font-size:11px;color:#8f8d86;background:#f1f0ee;border-radius:999px;padding:2px 8px;margin-left:auto;white-space:nowrap}
+.fold-badge.warn{background:#fdf3e3;color:#8a5a10}
+.fold-chev{color:#a3a29c;transition:transform .15s;flex:0 0 auto}
+.rcard.fold.open .fold-chev{transform:rotate(180deg)}
+.rcard.fold .rc-fold-b{display:none;padding:0 14px 13px}
+.rcard.fold.open .rc-fold-b{display:block}
 
 /* ---- 报告卡在窄屏下移到正文下方 ---- */
 @media (max-width:1180px){
@@ -1184,11 +1196,10 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
       <button type="button" class="rtab-btn" id="tocToggle" data-i18n-title="toc.toggle" title="显示/隐藏目录">
         <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg>
       </button>
-      <button type="button" class="rtab on" data-rtab="ai" data-i18n="tab.ai">AI 对话</button>
-      <button type="button" class="rtab" data-rtab="report" data-i18n="tab.report">检查报告</button>
+      <button type="button" class="rtab on" data-rtab="report" data-i18n="tab.report">检查报告</button>
       <button type="button" class="rtab" data-rtab="machine" data-i18n="tab.machine">机器视图</button>
     </div>
-    <div class="rpane rpane-ai on" id="pane-ai">
+    <div class="rpane rpane-ai" id="pane-ai">
       <div class="ai-ctx" id="aiCtx"></div>
       <div class="ai-msgs" id="aiMsgs"></div>
       <div class="ai-quick">
@@ -1201,13 +1212,14 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
         <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
       </div>
     </div>
-    <div class="rpane rpane-report" id="pane-report">
+    <div class="rpane rpane-report on" id="pane-report">
       <button type="button" class="rp-read" id="askReportRead" data-i18n-title="rp.readT" title="AI 用大白话总评当前检查结果">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 3.5h11v7.5H8.2l-3.2 2.6v-2.6H2.5z"/></svg>
         <span data-i18n="rp.read">让 AI 解读这份报告</span>
       </button>
-      <section class="rcard">
-        <div class="rc-h"><span class="rc-t" data-i18n="hc.h">体检</span><span class="rc-x" data-i18n="hc.sub">随项目切换重算</span></div>
+      <section class="rcard fold" id="cardHealth">
+        <button type="button" class="rc-fold-h"><span class="rc-t" data-i18n="hc.h">体检</span><span class="fold-badge" id="hcBadge"></span><svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="rc-fold-b">
         <div class="st-row">
           <button type="button" class="st ok" id="st-ok">数据全有据可查 ✓</button>
           <button type="button" class="st warn" id="st-cost">0 条小提醒</button>
@@ -1227,15 +1239,21 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
         <div class="act-out" id="act-audit-out"></div>
         <div class="act-out" id="act-check-out"></div>
         <div class="act-out" id="act-bundle-out"></div>
+        </div>
       </section>
 
-      <section class="rcard">
-        <div class="rc-h"><span class="rc-t" data-i18n="fm.card">发现</span><button type="button" class="rc-demo" id="openFindings" data-i18n="fm.open">查看明细 ▸</button></div>
+      <section class="rcard fold" id="cardFindings">
+        <button type="button" class="rc-fold-h"><span class="rc-t" data-i18n="fm.card">发现</span><span class="fold-badge" id="fmBadge"></span><svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="rc-fold-b">
+        <div class="act-row"><button type="button" class="rc-demo" id="openFindings" data-i18n="fm.open" data-i18n-title="fm.openT" title="列出所有还没处理的发现">查看明细 ▸</button></div>
         <div id="findingsList"></div>
+        </div>
       </section>
 
-      <section class="rcard" id="reportCard">
-        <div class="rc-h"><span class="rc-t" id="rptTitle">实验报告</span><span class="rc-x" data-i18n="rc.chain">四步链</span></div>
+      <section class="rcard fold" id="reportCard">
+        <button type="button" class="rc-fold-h"><span class="rc-t" data-i18n="rc.fold">实验报告 · 四步链</span><span class="fold-badge" id="rsBadge"></span><svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <div class="rc-fold-b">
+        <div class="rc-h"><span class="rc-t" id="rptTitle">实验报告</span></div>
         <div class="rpt-meta" id="rptMeta"></div>
         <div class="rstep" id="rs1">
           <div class="rstep-h"><span class="rstep-no">1</span><span data-i18n="rs1.t">核对报告数字</span><span class="badge todo">待办</span></div>
@@ -1263,6 +1281,7 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
           <div class="rstep-out" id="rs4out"></div>
         </div>
         <div class="rnote" data-i18n="rpt.note">原型内内存模拟：四个按钮只改本页内存状态，不写任何文件；toast 统一标「原型演示」。</div>
+        </div>
       </section>
 
       <details class="mdrawer">
@@ -1328,12 +1347,15 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
   <ul id="tocList"></ul>
 </nav>
 
-<button type="button" class="rp-entry" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理">
-  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></svg>
-  <span data-i18n="rp.side">实验报告</span>
-</button>
-<button class="rc-collapse" id="rcCollapse">收起右栏</button>
-<button class="rc-open" id="rcOpen">展开右栏</button>
+<div class="side-rail" id="sideRail">
+  <button type="button" class="side-tab" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></svg>
+    <span data-i18n="rp.side">实验报告</span>
+  </button>
+  <button type="button" class="side-tab" id="rcCollapse" data-i18n="side.collapse">收起右栏</button>
+  <button type="button" class="side-tab" id="aiEntry" data-i18n="tab.ai">AI 对话</button>
+</div>
+<button type="button" class="side-alone" id="rcOpen" data-i18n="side.expand">展开右栏</button>
 
 <div class="modal-backdrop" id="modalBackdrop"></div>
 
@@ -1556,6 +1578,7 @@ zh:{
  'th.id':'id','th.claim':'断言','th.value':'值','th.conf':'置信','th.src':'出处文件','th.sha':'指纹（sha256）','th.fp':'短指纹','th.loc':'定位',
  'rp.title':'实验报告','rp.sub':'每个项目的实验报告：导入、字段映射、数字绑定与签收状态。',
  'rp.projA':'论文 A','rp.projB':'论文 B','rp.back':'返回列表','rp.side':'实验报告','rp.sideT':'打开实验报告管理','rp.backWs':'返回工作台',
+ 'side.collapse':'收起右栏','side.expand':'展开右栏','hc.badge':'红 {r} · 黄 {y}','rc.fold':'实验报告 · 四步链',
  'rp.card.time':'导入时间','rp.card.bound':'绑定 {n} 个数字',
  'rp.st.draft':'待核对','rp.st.signed':'已签收','rp.st.confirmed':'已确认',
  'rp.empty':'该项目还没有报告，点右上角「导入实验报告」。',
@@ -1688,6 +1711,7 @@ en:{
  'th.id':'id','th.claim':'Claim','th.value':'Value','th.conf':'Conf','th.src':'Source file','th.sha':'Hash (sha256)','th.fp':'Short fp','th.loc':'Locator',
  'rp.title':'Experiment reports','rp.sub':'Per project: import, field mapping, bound numbers and signoff status.',
  'rp.projA':'Paper A','rp.projB':'Paper B','rp.back':'Back to list','rp.side':'Reports','rp.sideT':'Open experiment-report management','rp.backWs':'Back to workspace',
+ 'side.collapse':'Collapse column','side.expand':'Expand column','hc.badge':'red {r} · yellow {y}','rc.fold':'Report · 4-step chain',
  'rp.card.time':'Imported','rp.card.bound':'{n} numbers bound',
  'rp.st.draft':'To check','rp.st.signed':'Signed off','rp.st.confirmed':'Confirmed',
  'rp.empty':'No reports for this project yet — import one from the top-right button.',
@@ -1920,15 +1944,26 @@ $('#npCreate').addEventListener('click',()=>{
 });
 
 /* ---- 右栏互斥标签页 ---- */
-let RTAB='ai';
+let RTAB='report',RTAB_LAST='report';
 function setRTab(n){
+  if(n!=='ai') RTAB_LAST=n;
   RTAB=n;
   $$('.rtab').forEach(t=>t.classList.toggle('on',t.getAttribute('data-rtab')===n));
   $$('.rpane').forEach(p=>p.classList.toggle('on',p.id==='pane-'+n));
   if(n==='machine') renderTabs();
 }
 $$('.rtab').forEach(t=>t.addEventListener('click',()=>setRTab(t.getAttribute('data-rtab'))));
+/* D：AI 对话独占模式（整栏替换，浮钮激活态） */
+let AI_FULL=false;
+function setAIFull(on){
+  AI_FULL=on;
+  document.body.classList.toggle('ai-full',on);
+  const b=$('#aiEntry'); if(b) b.classList.toggle('on',on);
+  if(on) setRTab('ai'); else setRTab(RTAB_LAST);
+}
+$('#aiEntry').addEventListener('click',()=>setAIFull(!AI_FULL));
 function goMachine(tab){
+  setAIFull(false);
   setView('workbench'); setRTab('machine');
   const map={ledger:'ledger',index:'ledger',yellow:'scan',refs:'refs'};
   const card=document.querySelector('.acc-card[data-acc="'+(map[tab]||'ledger')+'"]');
@@ -1948,6 +1983,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&MODALS.length)close
 function refreshFindings(){
   const list=$('#findingsList'); if(!list) return;
   const notes=$$('#diskBody .note[data-state="open"]');
+  const fb=$('#fmBadge'); if(fb){fb.textContent=String(notes.length);fb.className='fold-badge'+(notes.length?' warn':'')}
   if(!notes.length){list.innerHTML='<div class="ff-empty">'+esc(T('fm.empty'))+'</div>';return}
   list.innerHTML=notes.map(n=>{
     const t=n.querySelector('.n-title');
@@ -2100,14 +2136,14 @@ function renderMachineDrawer(){
     '<br>'+esc(T('md.cliRef'));
 }
 $('#askReportRead').addEventListener('click',()=>{
-  setRTab('ai');
+  setAIFull(true);
   const q=T('ai.reportQ');
   $('#aiText').value=q;
   aiAsk(q);
 });
 function askFindingByNote(note){
   const t=note&&note.querySelector('.n-title')?note.querySelector('.n-title').textContent:'';
-  setRTab('ai');
+  setAIFull(true);
   const q=T('ai.findingQ',{t:t});
   $('#aiText').value=q; $('#aiText').focus();
 }
@@ -2358,6 +2394,8 @@ function secToolAct(b){
 /* 全局委托：项目卡（盘切换/打开）、把手菜单、节按钮组、目录增删移、明细跳转 */
 document.addEventListener('click',e=>{
   const t=e.target;
+  const fh=t.closest('.rc-fold-h');
+  if(fh){fh.closest('.rcard').classList.toggle('open');return}
   const mi=t.closest('#pmenu [data-mact]');
   if(mi){pmenuAct(mi.getAttribute('data-mact'));return}
   const pn=t.closest('.pnav');
@@ -2379,7 +2417,7 @@ document.addEventListener('click',e=>{
   const fa=t.closest('[data-fmask]');
   if(fa){const n=document.getElementById(fa.getAttribute('data-fmask'));
     const title=n&&n.querySelector('.n-title')?n.querySelector('.n-title').textContent:'';
-    setRTab('ai');const q=T('ai.findingQ',{t:title});
+    setAIFull(true);const q=T('ai.findingQ',{t:title});
     $('#aiText').value=q;$('#aiText').focus();return}
   const pj=t.closest('.pj-open');
   if(pj){const card=pj.closest('.pj-card,.pj-row-item');openProject(card?card.getAttribute('data-pcard'):null);return}
@@ -2826,7 +2864,7 @@ function openAI(pid){
       aiCtx.classList.add('on');
     }
   }else{ aiCtx.classList.remove('on'); aiCtx.innerHTML=''; }
-  setRTab('ai');
+  setAIFull(true);
   if(!aiMsgs.children.length) pushMsg('ai',T('ai.intro'));
 }
 
@@ -3045,6 +3083,9 @@ function refreshHealth(){
   // 封面说明行（chrome 而非内容：随面板语言重写）
   const meta=$('#diskBody .cover .meta');
   if(meta) meta.innerHTML=T('cover.meta',{p:D.project,d:D.disk,l:D.label})+'<br>'+esc(T('cover.hint1'))+'<br>'+esc(T('cover.hint2'));
+  // 体检卡徽标（折叠态关键读数）
+  const hb=$('#hcBadge');
+  if(hb){hb.textContent=T('hc.badge',{r:H.red,y:H.yellow});hb.className='fold-badge'+((H.red||H.yellow)?' warn':'')}
   // 双语对账：只在中文盘显示
   const rc=$('#recon');
   if(rc){
@@ -3187,6 +3228,8 @@ function refreshReportCard(){
     el.querySelector('.badge').className='badge '+(ok?'done':'todo');
   };
   set(1,S.check); set(2,S.lock); set(3,S.sign); set(4,S.import);
+  const done=(S.check?1:0)+(S.lock?1:0)+(S.sign?1:0)+(S.import?1:0);
+  const rb=$('#rsBadge'); if(rb){rb.textContent=done+' / 4';rb.className='fold-badge'+(done===4?'':' warn')}
   $('#rs1').querySelector('.rstep-no').textContent=S.check?'✓':'1';
   $('#rs2').querySelector('.rstep-no').textContent=S.lock?'✓':'2';
   $('#rs3').querySelector('.rstep-no').textContent=S.sign?'✓':'3';

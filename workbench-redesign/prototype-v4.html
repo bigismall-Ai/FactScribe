@@ -464,6 +464,11 @@ body[data-view="new"] .doc,body[data-view="new"] .colright{display:none}
 .toc-new{display:flex;align-items:center;gap:6px;margin:0 6px 8px;padding:5px 9px;font-family:inherit;font-size:12px;
  color:#8a8577;background:transparent;border:none;border-radius:6px;cursor:pointer;text-align:left}
 .toc-new:hover{background:#ececeb;color:#37352f}
+.toc-todo{display:none;margin:2px 8px 0;font-size:11.5px;color:#9b9a96;line-height:1.7}
+body:not([data-view="workbench"]) .toc .rail-h,
+body:not([data-view="workbench"]) .toc-new,
+body:not([data-view="workbench"]) #tocList{display:none}
+body:not([data-view="workbench"]) .toc-todo{display:block}
 .rail .rail-h{margin:0 0 8px 8px;font-size:10.5px;letter-spacing:1.2px;color:#a3a29c}
 .rail li a{padding:4px 8px;border-radius:6px;font-size:12.8px;line-height:1.5;color:#5f5e5b}
 .rail li a:hover{background:#ececeb;color:#37352f}
@@ -694,6 +699,7 @@ table.mt th{background:#fff}
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
         <span data-i18n="toc.new">新建章节</span>
       </button>
+      <div class="toc-todo" data-i18n="toc.todo">打开一篇论文后，这里显示它的目录</div>
       <ul id="tocList"></ul>
     </div>
   </nav>
@@ -1179,6 +1185,7 @@ const ICONS={
 const I18N={
 zh:{
  'nav.projects':'项目管理','nav.new.title':'新建论文项目','toc.h':'目录','toc.new':'新建章节',
+ 'toc.todo':'打开一篇论文后，这里显示它的目录',
  'st.up':'上移','st.down':'下移','st.del':'删除本节','st.edit':'编辑标题','st.ask':'问 AI','st.drag':'拖动调序',
  'pnav.title':'段落操作','pm.edit':'编辑','pm.ask':'问 AI','pm.close':'收起菜单',
  'pg.title':'论文项目','pg.sub':'打开一篇论文继续写，或新建一个项目。','pg.new':'新建论文项目','pg.searchPh':'搜索项目名…',
@@ -1286,6 +1293,7 @@ zh:{
 },
 en:{
  'nav.projects':'Projects','nav.new.title':'New paper project','toc.h':'Contents','toc.new':'New section',
+ 'toc.todo':'Open a paper to see its outline here',
  'st.up':'Move up','st.down':'Move down','st.del':'Delete section','st.edit':'Edit title','st.ask':'Ask AI','st.drag':'Drag to reorder',
  'pnav.title':'Paragraph actions','pm.edit':'Edit','pm.ask':'Ask AI','pm.close':'Close menu',
  'pg.title':'Paper projects','pg.sub':'Open a paper to keep writing, or start a new project.','pg.new':'New paper project','pg.searchPh':'Search projects…',

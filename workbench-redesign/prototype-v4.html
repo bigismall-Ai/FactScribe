@@ -397,12 +397,11 @@ p{font-size:16.5px}
 
 /* ---- 右栏边缘三竖标（统一修批三·A/D：同族样式一上一下，AI 对话可整栏替换） ---- */
 .side-rail{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:flex;flex-direction:column;gap:2px;align-items:stretch}
-.side-tab{writing-mode:vertical-rl;font-family:inherit;font-size:11.5px;letter-spacing:2px;padding:12px 7px;
+.side-tab{writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:2px;padding:14px 8px;
  border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
- cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;gap:5px;line-height:1.5}
+ cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;line-height:1.5}
 .side-tab:hover{color:#1c1e22;background:#f4f2ea}
 .side-tab.on{background:#2f2e2b;color:#fff;border-color:#2f2e2b}
-.side-tab svg{flex:0 0 auto}
 body:not([data-view="workbench"]) .side-rail{display:none}
 body.rc-collapsed .side-rail{display:none}
 .side-alone{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:none;
@@ -1349,7 +1348,6 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
 
 <div class="side-rail" id="sideRail">
   <button type="button" class="side-tab" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理">
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></svg>
     <span data-i18n="rp.side">实验报告</span>
   </button>
   <button type="button" class="side-tab" id="rcCollapse" data-i18n="side.collapse">收起右栏</button>

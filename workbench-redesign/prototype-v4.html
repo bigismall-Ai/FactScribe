@@ -401,6 +401,13 @@ p{font-size:16.5px}
  border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
  cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08)}
 .rc-collapse:hover{color:#1c1e22}
+.rp-entry{position:fixed;right:0;top:calc(50% - 78px);z-index:66;
+ font-family:inherit;font-size:11.5px;letter-spacing:2px;writing-mode:vertical-rl;padding:14px 7px 10px;
+ border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#2f5279;
+ cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;gap:6px}
+.rp-entry:hover{color:#1c3d5c;background:#f4f8fc}
+body:not([data-view="workbench"]) .rp-entry{display:none}
+body.rc-collapsed .rp-entry{display:flex}
 body.rc-collapsed .colright{flex-basis:0;width:0;padding:0;overflow:hidden;border-left:none}
 body.rc-collapsed .rc-collapse{right:0;letter-spacing:2px}
 .rc-open{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:none;
@@ -457,7 +464,7 @@ body{padding-top:52px}
 .lang-seg button:disabled{opacity:.38;cursor:default;background:transparent;box-shadow:none;color:#a3a29c}
 .lang-seg button:disabled:hover{color:#a3a29c}
 /* ---- 悬浮目录面板（条目3：半透明＋blur，仅 workbench；可收成左缘圆钮） ---- */
-.toc-float{position:fixed;left:16px;top:68px;width:238px;max-height:calc(100vh - 120px);z-index:65;
+.toc-float{position:fixed;right:392px;top:68px;width:238px;max-height:calc(100vh - 120px);z-index:65;
  display:flex;flex-direction:column;padding:10px 10px 12px;
  background:rgba(255,255,255,.72);backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);
  border:1px solid rgba(15,15,15,.06);border-radius:14px;box-shadow:0 8px 30px rgba(15,15,15,.10);overflow:hidden}
@@ -472,15 +479,8 @@ body{padding-top:52px}
 .toc-float li a:hover{background:#ececeb;color:#37352f}
 .toc-float li a.on{background:#e8e8e6;color:#37352f;font-weight:600}
 .toc-float li a .en{font-size:10.5px;color:#aaa69c}
-.toc-fab{position:fixed;left:16px;top:68px;width:42px;height:42px;z-index:65;display:none;
- align-items:center;justify-content:center;border-radius:50%;cursor:pointer;color:#5f5e5b;
- background:rgba(255,255,255,.8);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
- border:1px solid rgba(15,15,15,.08);box-shadow:0 4px 16px rgba(15,15,15,.12)}
-.toc-fab:hover{color:#37352f;background:rgba(255,255,255,.95)}
 body.toc-hidden .toc-float{display:none}
-body.toc-hidden .toc-fab{display:flex}
-body:not([data-view="workbench"]) .toc-float,
-body:not([data-view="workbench"]) .toc-fab{display:none}
+body:not([data-view="workbench"]) .toc-float{display:none}
 #tocList li{display:flex;align-items:center;gap:2px;border-radius:6px;padding-right:2px}
 #tocList li a{flex:1 1 auto;min-width:0}
 #tocList .cn{display:block}
@@ -541,10 +541,22 @@ section.flash-sec{animation:flashsec 1.8s ease}
 .btn-ghost{font-family:inherit;font-size:13px;padding:8px 14px;border:none;border-radius:8px;background:transparent;color:#5f5e5b;cursor:pointer}
 .btn-ghost:hover{background:#f1f0ee;color:#37352f}
 .pv-head .btn-primary{margin-left:auto;flex:0 0 auto}
+.pv-head-btns{margin-left:auto;display:flex;gap:10px;align-items:center}
+.pv-head-btns .btn-primary{margin-left:0}
 .pv-search{display:flex;align-items:center;gap:8px;max-width:360px;padding:7px 12px;border:1px solid #e6e6e4;border-radius:8px;
  color:#9b9a96;margin-bottom:28px;background:#fbfbfa}
 .pv-search input{flex:1;border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:#37352f}
-.pv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+.pj-list{background:#fff;border:1px solid #e9e9e7;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(15,15,15,.03)}
+.pj-row-item{display:flex;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid #efefee;background:#fff}
+.pj-row-item:last-child{border-bottom:none}
+.pj-row-item:hover{background:#fafaf8}
+.pj-r-name{font-size:14px;font-weight:650;color:#37352f;white-space:nowrap}
+.pj-r-disks{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9b9a96;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-r-status{flex:0 0 auto}
+.pj-r-time{font-size:11.5px;color:#8f8d86;font-family:ui-monospace,Menlo,monospace;flex:0 0 auto}
+.pj-r-prog{display:flex;align-items:center;gap:7px;width:150px;flex:0 0 150px}
+.pj-r-actions{display:flex;gap:8px;flex:0 0 auto}
+.pj-row-item .pj-open{padding:6px 16px}
 .pj-card{background:#fff;border:1px solid #e6e6e4;border-radius:10px;padding:16px 16px 14px;box-shadow:0 1px 2px rgba(15,15,15,.04);
  display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,transform .15s}
 .pj-card:hover{box-shadow:0 6px 20px rgba(15,15,15,.08);transform:translateY(-1px)}
@@ -569,7 +581,15 @@ section.flash-sec{animation:flashsec 1.8s ease}
 .pmbtn:hover{border-color:#b8b5ac;color:#37352f}
 .pmbtn.on{background:#2f2e2b;color:#fff;border-color:#2f2e2b;font-weight:600}
 /* 新建页 */
-.np-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:40px;align-items:start}
+.np-layout{display:block;max-width:820px}
+.np-dir-row{display:flex;gap:8px;align-items:center}
+.np-dir-row input{flex:1 1 auto}
+.np-readonly{color:#9b9a96;background:#fbfbfa}
+.np-link{border:none;background:none;color:#2f5279;text-decoration:underline;padding:0 4px;font-size:12px}
+.np-link:hover{background:none;color:#1c3d5c}
+.req-star{color:#d0342c;margin-right:3px}
+.ed-ro{display:flex;align-items:center;gap:10px}
+.np-rpt-note{font-size:12.5px;color:#5f5e5b;display:flex;align-items:center;gap:8px}
 .np-block{margin-bottom:32px}
 .np-block-h{font-size:11px;letter-spacing:1.2px;color:#9b9a96;text-transform:uppercase;margin-bottom:16px}
 .np-field{margin-bottom:20px}
@@ -593,7 +613,6 @@ section.flash-sec{animation:flashsec 1.8s ease}
 .np-prev-h{font-size:12px;font-weight:600;color:#5f5e5b;margin-bottom:12px}
 .np-prev-card{box-shadow:none;transform:none;pointer-events:none}
 .np-prev-note{font-size:11px;color:#9b9a96;margin:12px 0 0;line-height:1.6}
-@media (max-width:1100px){.np-layout{grid-template-columns:1fr}}
 /* ---- 右栏（互斥标签页） ---- */
 .colright{flex:0 0 384px;width:384px;background:#fafaf9;border-left:1px solid #ececec;display:flex;flex-direction:column;
  overflow:hidden;padding:12px 12px 0;position:sticky;top:52px;height:calc(100vh - 52px)}
@@ -602,6 +621,10 @@ section.flash-sec{animation:flashsec 1.8s ease}
  border-bottom:2px solid transparent;margin-bottom:-1px}
 .rtab.on{color:#37352f;font-weight:600;border-bottom-color:#2f2e2b}
 .rtab:hover{color:#37352f}
+.rtab-btn{width:28px;height:26px;display:flex;align-items:center;justify-content:center;margin-right:8px;
+ border:1px solid #e6e6e4;border-radius:6px;background:#fff;color:#8f8d86;cursor:pointer;padding:0}
+.rtab-btn:hover{color:#37352f;background:#f1f0ee}
+body.toc-hidden .rtab-btn{background:#f1f0ee;color:#37352f}
 .rpane{display:none;flex:1 1 auto;min-height:0;flex-direction:column}
 .rpane.on{display:flex}
 .rpane-report,.rpane-machine{overflow:auto;padding:2px 2px 16px}
@@ -955,7 +978,7 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
         <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.2"/><path d="M10.4 10.4L14 14"/></svg>
         <input id="pjSearch" type="text" data-i18n-ph="pg.searchPh" placeholder="搜索项目名…" autocomplete="off">
       </div>
-      <div class="pv-grid" id="pjGrid"></div>
+      <div class="pj-list" id="pjGrid"></div>
     </div>
   </main>
 
@@ -973,12 +996,12 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
           <div class="np-block">
             <div class="np-block-h" data-i18n="np.req">必填</div>
             <div class="np-field">
-              <label class="np-label" for="npTitle" data-i18n="np.f.title">论文标题（工作名）</label>
+              <label class="np-label" for="npTitle"><span class="req-star">*</span><span data-i18n="np.f.title">论文标题（工作名）</span></label>
               <input id="npTitle" type="text" data-i18n-ph="np.f.title.ph" placeholder="如：Evidence-bound writing with mechanical gates" autocomplete="off">
               <div class="np-hint" data-i18n="np.f.title.h">先起个工作名，之后随时可改。</div>
             </div>
             <div class="np-field">
-              <div class="np-label" data-i18n="np.f.lang">写作语言</div>
+              <div class="np-label"><span class="req-star">*</span><span data-i18n="np.f.lang">写作语言</span></div>
               <div class="np-seg" id="npLangSeg">
                 <label><input type="radio" name="npLang" value="zh"><span data-i18n="np.lang.zh">中文</span></label>
                 <label><input type="radio" name="npLang" value="en"><span data-i18n="np.lang.en">英文</span></label>
@@ -989,6 +1012,22 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
           </div>
           <div class="np-block">
             <div class="np-block-h" data-i18n="np.opt">可选（可跳过，之后随时补）</div>
+            <div class="np-field">
+              <label class="np-label" for="npDir" data-i18n="np.f.dir">项目目录</label>
+              <div class="np-dir-row">
+                <input id="npDir" type="text" data-i18n-ph="np.f.dir.ph" placeholder="papers/my-new-paper" autocomplete="off">
+                <button type="button" class="rbtn" id="npDirBrowse" data-i18n="np.f.dir.browse">浏览…</button>
+              </div>
+              <div class="np-hint" data-i18n="np.f.dir.h">项目在磁盘上的家；正式版会真创建目录。</div>
+            </div>
+            <div class="np-field">
+              <div class="np-label" data-i18n="np.f.rdir">实验报告目录</div>
+              <div class="np-dir-row">
+                <input id="npRdir" type="text" readonly class="np-readonly" value="papers/my-new-paper/reports">
+                <button type="button" class="rbtn np-link" id="npRdirCustom" data-i18n="np.f.rdir.custom">自定义实验报告目录</button>
+              </div>
+              <div class="np-hint" data-i18n="np.f.rdir.h">默认随项目目录推导（〈项目目录〉/reports），点「自定义」可改。</div>
+            </div>
             <div class="np-field">
               <label class="np-label" for="npVenue" data-i18n="np.f.venue">目标期刊或会议</label>
               <input id="npVenue" type="text" list="venueList" data-i18n-ph="np.f.venue.ph" placeholder="下拉选或直接输入" autocomplete="off">
@@ -1030,17 +1069,75 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
             <button type="button" class="btn-ghost" id="npCancel" data-i18n="np.cancel">取消</button>
           </div>
         </form>
-        <aside class="np-preview">
-          <div class="np-prev-h" data-i18n="np.prev.h">创建后你会得到</div>
-          <div class="pj-card np-prev-card">
-            <div class="pj-top"><span class="pj-name" id="npPrevName">（未命名）</span><span class="pj-badge" id="npPrevBadge">中英双盘</span></div>
-            <div class="pj-disks" id="npPrevDisks">paper-new ／ paper-new-zh</div>
-            <div class="pj-row"><span data-i18n="card.status">状态</span><span class="pj-chip pj-draft" data-i18n="status.draft">草稿</span></div>
-            <div class="pj-prog"><div class="pj-prog-bar"><i style="width:4%"></i></div><span class="pj-prog-n">4%</span></div>
-          </div>
-          <p class="np-prev-note" data-i18n="np.prev.note">原型演示：新项目只存在本页内存，刷新即失。</p>
-        </aside>
       </div>
+    </div>
+  </main>
+
+  <!-- v4 统一修批三：编辑项目（复用新建页骨架，条目24） -->
+  <main class="mainview" id="viewEdit">
+    <div class="pv-wrap">
+      <div class="pv-head">
+        <div class="pv-head-txt">
+          <h1 data-i18n="ed.title">编辑项目</h1>
+          <p class="pv-sub" id="edMeta"></p>
+        </div>
+      </div>
+      <form class="np-form" id="edForm" onsubmit="return false">
+        <div class="np-block">
+          <div class="np-block-h" data-i18n="np.req">必填</div>
+          <div class="np-field">
+            <label class="np-label" for="edTitle"><span class="req-star">*</span><span data-i18n="np.f.title">论文标题（工作名）</span></label>
+            <input id="edTitle" type="text" autocomplete="off">
+            <div class="np-hint" data-i18n="np.f.title.h">先起个工作名，之后随时可改。</div>
+          </div>
+        </div>
+        <div class="np-block">
+          <div class="np-block-h" data-i18n="np.opt">可选（可跳过，之后随时补）</div>
+          <div class="np-field">
+            <div class="np-label" data-i18n="ed.dir">项目目录</div>
+            <input id="edDir" type="text" readonly class="np-readonly">
+            <div class="np-hint" data-i18n="ed.dir.lock">项目身份锚，不可修改。</div>
+          </div>
+          <div class="np-field">
+            <div class="np-label" data-i18n="ed.langRO">写作语言与盘集合</div>
+            <div class="ed-ro"><span class="pj-badge" id="edLangBadge"></span><span class="pj-disks" id="edDisks"></span></div>
+            <div class="np-hint" data-i18n="ed.langRO.h">创建时定下的重操作，原型不可改。</div>
+          </div>
+          <div class="np-field">
+            <div class="np-label" data-i18n="ep.curDisk">当前盘</div>
+            <div class="np-seg" id="edDiskSeg"></div>
+            <div class="np-hint" data-i18n="ep.disk.h">打开与顶栏语言开关都从这里取盘。</div>
+          </div>
+          <div class="np-field">
+            <label class="np-label" for="edVenue" data-i18n="np.f.venue">目标期刊或会议</label>
+            <input id="edVenue" type="text" autocomplete="off">
+          </div>
+          <div class="np-field">
+            <label class="np-label" for="edTmpl" data-i18n="np.f.tmpl">参考模板</label>
+            <input id="edTmpl" type="text" autocomplete="off">
+          </div>
+          <div class="np-field">
+            <div class="np-label" data-i18n="np.f.rdir">实验报告目录</div>
+            <div class="np-dir-row">
+              <input id="edRdir" type="text" readonly class="np-readonly">
+              <button type="button" class="rbtn np-link" id="edRdirCustom" data-i18n="np.f.rdir.custom">自定义实验报告目录</button>
+            </div>
+            <div class="np-hint" data-i18n="np.f.rdir.h">默认随项目目录推导（〈项目目录〉/reports），点「自定义」可改。</div>
+          </div>
+          <div class="np-field">
+            <label class="np-label" for="edRq" data-i18n="np.f.rq">一句话研究问题</label>
+            <input id="edRq" type="text" autocomplete="off">
+          </div>
+          <div class="np-field np-rpt-note">
+            <span data-i18n="ed.rptNote">实验报告在「实验报告」页管理。</span>
+            <button type="button" class="rbtn np-link" id="edGoReports" data-i18n="ed.rptGo">前往管理 →</button>
+          </div>
+        </div>
+        <div class="np-actions">
+          <button type="button" class="btn-primary" id="edSave" data-i18n="ep.save">保存</button>
+          <button type="button" class="btn-ghost" id="edCancel" data-i18n="np.cancel">取消</button>
+        </div>
+      </form>
     </div>
   </main>
 
@@ -1052,10 +1149,13 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
           <h1 data-i18n="rp.title">实验报告</h1>
           <p class="pv-sub" data-i18n="rp.sub">每个项目的实验报告：导入、字段映射、数字绑定与签收状态。</p>
         </div>
-        <button type="button" class="btn-primary" id="rpImportBtn">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-          <span data-i18n="wz.open">导入实验报告</span>
-        </button>
+        <div class="pv-head-btns">
+          <button type="button" class="btn-ghost" id="rpBackWs" data-i18n="rp.backWs">返回工作台</button>
+          <button type="button" class="btn-primary" id="rpImportBtn">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+            <span data-i18n="wz.open">导入实验报告</span>
+          </button>
+        </div>
       </div>
       <div class="rp-switch" id="rpSwitch">
         <button type="button" data-rproj="A" class="on" data-i18n="rp.projA">论文 A</button>
@@ -1081,6 +1181,9 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
 
   <aside class="colright" id="colright">
     <div class="rtabs">
+      <button type="button" class="rtab-btn" id="tocToggle" data-i18n-title="toc.toggle" title="显示/隐藏目录">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg>
+      </button>
       <button type="button" class="rtab on" data-rtab="ai" data-i18n="tab.ai">AI 对话</button>
       <button type="button" class="rtab" data-rtab="report" data-i18n="tab.report">检查报告</button>
       <button type="button" class="rtab" data-rtab="machine" data-i18n="tab.machine">机器视图</button>
@@ -1224,10 +1327,11 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
   </button>
   <ul id="tocList"></ul>
 </nav>
-<button type="button" class="toc-fab" id="tocFab" data-i18n-title="toc.expand" title="展开目录">
-  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 4.5h10M3 8h10M3 11.5h10"/></svg>
-</button>
 
+<button type="button" class="rp-entry" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理">
+  <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></svg>
+  <span data-i18n="rp.side">实验报告</span>
+</button>
 <button class="rc-collapse" id="rcCollapse">收起右栏</button>
 <button class="rc-open" id="rcOpen">展开右栏</button>
 
@@ -1245,45 +1349,6 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
   <div class="modal-b" id="noteModalBody"></div>
 </div>
 
-<div class="modal modal-sm" id="editModal" role="dialog" aria-modal="true" aria-label="项目设置">
-  <div class="modal-h"><span class="t" data-i18n="ep.title">项目设置</span><button type="button" class="m-close" data-i18n="m.close">关闭</button></div>
-  <div class="modal-b">
-    <div class="np-field">
-      <label class="np-label" for="epTitle" data-i18n="np.f.title">论文标题（工作名）</label>
-      <input id="epTitle" type="text" autocomplete="off">
-    </div>
-    <div class="np-field">
-      <div class="np-label" data-i18n="np.f.lang">写作语言</div>
-      <div class="np-seg" id="epLangSeg">
-        <label><input type="radio" name="epLang" value="zh"><span data-i18n="np.lang.zh">中文</span></label>
-        <label><input type="radio" name="epLang" value="en"><span data-i18n="np.lang.en">英文</span></label>
-        <label><input type="radio" name="epLang" value="both"><span data-i18n="np.lang.both">中英双盘</span></label>
-      </div>
-      <div class="np-hint" data-i18n="ep.lang.h">语言决定可用盘与徽标。</div>
-    </div>
-    <div class="np-field">
-      <div class="np-label" data-i18n="ep.curDisk">当前盘</div>
-      <div class="np-seg" id="epDiskSeg"></div>
-      <div class="np-hint" data-i18n="ep.disk.h">打开与顶栏语言开关都从这里取盘。</div>
-    </div>
-    <div class="np-field">
-      <label class="np-label" for="epVenue" data-i18n="np.f.venue">目标期刊或会议</label>
-      <input id="epVenue" type="text" autocomplete="off">
-    </div>
-    <div class="np-field">
-      <label class="np-label" for="epTmpl" data-i18n="np.f.tmpl">参考模板</label>
-      <input id="epTmpl" type="text" autocomplete="off">
-    </div>
-    <div class="np-field">
-      <label class="np-label" for="epRq" data-i18n="np.f.rq">一句话研究问题</label>
-      <input id="epRq" type="text" autocomplete="off">
-    </div>
-  </div>
-  <div class="modal-f">
-    <button type="button" class="rbtn" id="epCancel" data-i18n="np.cancel">取消</button>
-    <button type="button" class="btn-primary" id="epSave" data-i18n="ep.save">保存</button>
-  </div>
-</div>
 
 <div class="modal" id="findingsModal" role="dialog" aria-modal="true" aria-label="检查发现明细">
   <div class="modal-h"><span class="t" data-i18n="fm.title">检查发现明细</span><button type="button" class="m-close" data-i18n="m.close">关闭</button></div>
@@ -1378,16 +1443,20 @@ const ICONS={
 };
 const I18N={
 zh:{
- 'nav.projects':'项目管理','nav.new.title':'新建论文项目','tb.new':'新建','toc.h':'目录','toc.new':'新建章节','toc.collapse':'收起目录','toc.expand':'展开目录',
+ 'nav.projects':'项目管理','nav.new.title':'新建论文项目','tb.new':'新建','toc.h':'目录','toc.new':'新建章节','toc.collapse':'收起目录','toc.toggle':'显示/隐藏目录',
  'lang.noZh':'该论文无中文版','lang.noEn':'该论文无英文版',
- 'ep.title':'项目设置','ep.curDisk':'当前盘','ep.disk.h':'打开与顶栏语言开关都从这里取盘。','ep.lang.h':'语言决定可用盘与徽标。','ep.save':'保存','ep.saved':'已保存（原型演示：内存级）',
+ 'ed.title':'编辑项目','ed.created':'创建于','ed.dir':'项目目录','ed.dir.lock':'项目身份锚，不可修改。',
+ 'ed.langRO':'写作语言与盘集合','ed.langRO.h':'创建时定下的重操作，原型不可改。',
+ 'ed.rptNote':'实验报告在「实验报告」页管理。','ed.rptGo':'前往管理 →','card.openT':'打开这篇论文的当前盘','ep.curDisk':'当前盘','ep.disk.h':'打开与顶栏语言开关都从这里取盘。','ep.lang.h':'语言决定可用盘与徽标。','ep.save':'保存','ep.saved':'已保存（原型演示：内存级）',
  'st.up':'上移','st.down':'下移','st.del':'删除本节','st.edit':'编辑标题','st.ask':'问 AI','st.drag':'拖动调序',
  'pnav.title':'段落操作','pm.ask':'问 AI','pm.inline':'就地编辑','pm.copy':'复制段落','pm.close':'收起菜单',
  'pg.title':'论文项目','pg.sub':'打开一篇论文继续写，或新建一个项目。','pg.new':'新建论文项目','pg.searchPh':'搜索项目名…',
  'card.status':'状态','card.last':'最近打开','card.open':'打开','card.edit':'编辑','card.editT':'编辑项目设置',
  'status.draft':'草稿','status.checking':'检查中','status.released':'已放行',
  'badge.lang.both':'中英双盘','badge.lang.zh':'中文','badge.lang.en':'英文',
- 'disk.en':'英文版','disk.zh':'中文版',
+ 'np.f.dir':'项目目录','np.f.dir.ph':'papers/my-new-paper','np.f.dir.browse':'浏览…','np.f.dir.h':'项目在磁盘上的家；正式版会真创建目录。',
+ 'np.f.rdir':'实验报告目录','np.f.rdir.custom':'自定义实验报告目录','np.f.rdir.restore':'恢复默认','np.f.rdir.h':'默认随项目目录推导（〈项目目录〉/reports），点「自定义」可改。',
+ 't.noBrowse':'原型不支持真浏览',
  'np.title':'新建论文项目','np.sub':'必填只有两项，其余之后随时补。','np.req':'必填','np.opt':'可选（可跳过，之后随时补）',
  'np.f.title':'论文标题（工作名）','np.f.title.ph':'如：Evidence-bound writing with mechanical gates','np.f.title.h':'先起个工作名，之后随时可改。',
  'np.f.lang':'写作语言','np.f.lang.h':'语言决定整个面板与写作规范。',
@@ -1397,7 +1466,6 @@ zh:{
  'np.tmpl.fs':'FactScribe 学术模板','np.tmpl.pre':'预印本模板','np.tmpl.none':'不使用模板',
  'np.f.rpt':'实验报告导入','np.f.rpt.choose':'选择文件…','np.f.rpt.h':'上传或选择已有报告文件；可留空后补。',
  'np.f.rq':'一句话研究问题','np.f.rq.ph':'如：数字能不能自带出处？','np.f.rq.h':'作为 AI 引导锚点。',
- 'np.prev.h':'创建后你会得到','np.prev.ph':'（未命名）','np.prev.note':'原型演示：新项目只存在本页内存，刷新即失。',
  'np.create':'创建项目','np.cancel':'取消','toast.created':'已创建（原型演示：内存模拟，未写盘）——已跳进工作台',
  'tab.ai':'AI 对话','tab.report':'检查报告','tab.machine':'机器视图',
  'hc.h':'体检','hc.sub':'随项目切换重算',
@@ -1487,7 +1555,7 @@ zh:{
  'd.na':'缺',
  'th.id':'id','th.claim':'断言','th.value':'值','th.conf':'置信','th.src':'出处文件','th.sha':'指纹（sha256）','th.fp':'短指纹','th.loc':'定位',
  'rp.title':'实验报告','rp.sub':'每个项目的实验报告：导入、字段映射、数字绑定与签收状态。',
- 'rp.projA':'论文 A','rp.projB':'论文 B','rp.back':'返回列表','rp.open':'实验报告',
+ 'rp.projA':'论文 A','rp.projB':'论文 B','rp.back':'返回列表','rp.side':'实验报告','rp.sideT':'打开实验报告管理','rp.backWs':'返回工作台',
  'rp.card.time':'导入时间','rp.card.bound':'绑定 {n} 个数字',
  'rp.st.draft':'待核对','rp.st.signed':'已签收','rp.st.confirmed':'已确认',
  'rp.empty':'该项目还没有报告，点右上角「导入实验报告」。',
@@ -1507,16 +1575,20 @@ zh:{
  'ai.ctxHead':'当前段落 · {sec}'
 },
 en:{
- 'nav.projects':'Projects','nav.new.title':'New paper project','tb.new':'New','toc.h':'Contents','toc.new':'New section','toc.collapse':'Collapse outline','toc.expand':'Expand outline',
+ 'nav.projects':'Projects','nav.new.title':'New paper project','tb.new':'New','toc.h':'Contents','toc.new':'New section','toc.collapse':'Collapse outline','toc.toggle':'Show or hide outline',
  'lang.noZh':'No Chinese version for this paper','lang.noEn':'No English version for this paper',
- 'ep.title':'Project settings','ep.curDisk':'Current disk','ep.disk.h':'Both Open and the header language switch take the disk from here.','ep.lang.h':'Language decides available disks and the badge.','ep.save':'Save','ep.saved':'Saved (prototype, in-memory)',
+ 'ed.title':'Edit project','ed.created':'Created','ed.dir':'Project folder','ed.dir.lock':'Identity anchor of the project — not editable.',
+ 'ed.langRO':'Writing language & disks','ed.langRO.h':'Fixed at creation — heavy operation, not editable in the prototype.',
+ 'ed.rptNote':'Experiment reports are managed on the “Experiment reports” page.','ed.rptGo':'Manage →','card.openT':'Open this paper\'s current disk','ep.curDisk':'Current disk','ep.disk.h':'Both Open and the header language switch take the disk from here.','ep.lang.h':'Language decides available disks and the badge.','ep.save':'Save','ep.saved':'Saved (prototype, in-memory)',
  'st.up':'Move up','st.down':'Move down','st.del':'Delete section','st.edit':'Edit title','st.ask':'Ask AI','st.drag':'Drag to reorder',
  'pnav.title':'Paragraph actions','pm.ask':'Ask AI','pm.inline':'Edit in place','pm.copy':'Copy paragraph','pm.close':'Close menu',
  'pg.title':'Paper projects','pg.sub':'Open a paper to keep writing, or start a new project.','pg.new':'New paper project','pg.searchPh':'Search projects…',
  'card.status':'Status','card.last':'Last opened','card.open':'Open','card.edit':'Edit','card.editT':'Project settings',
  'status.draft':'Draft','status.checking':'In review','status.released':'Released',
  'badge.lang.both':'Bilingual','badge.lang.zh':'Chinese','badge.lang.en':'English',
- 'disk.en':'English','disk.zh':'中文',
+ 'np.f.dir':'Project folder','np.f.dir.ph':'papers/my-new-paper','np.f.dir.browse':'Browse…','np.f.dir.h':'Where the project lives on disk — the real version will create it.',
+ 'np.f.rdir':'Experiment-report folder','np.f.rdir.custom':'Customize report folder','np.f.rdir.restore':'Restore default','np.f.rdir.h':'Derived from the project folder (〈folder〉/reports) by default — click “Customize” to change.',
+ 't.noBrowse':'Prototype — real folder browsing is not supported',
  'np.title':'New paper project','np.sub':'Only two fields are required; fill the rest in later.','np.req':'Required','np.opt':'Optional — skip now, add any time',
  'np.f.title':'Paper title (working name)','np.f.title.ph':'e.g. Evidence-bound writing with mechanical gates','np.f.title.h':'A working name; rename it any time.',
  'np.f.lang':'Writing language','np.f.lang.h':'The language sets the panel language and writing conventions.',
@@ -1526,7 +1598,6 @@ en:{
  'np.tmpl.fs':'FactScribe academic template','np.tmpl.pre':'Preprint template','np.tmpl.none':'No template',
  'np.f.rpt':'Import experiment report','np.f.rpt.choose':'Choose file…','np.f.rpt.h':'Attach an existing report file, or leave it empty for now.',
  'np.f.rq':'Research question in one sentence','np.f.rq.ph':'e.g. Can every number carry its own evidence?','np.f.rq.h':'Used as the AI guidance anchor.',
- 'np.prev.h':'What you\'ll get','np.prev.ph':'(untitled)','np.prev.note':'Prototype: stored in this page\'s memory only.',
  'np.create':'Create project','np.cancel':'Cancel','toast.created':'Created (prototype, in-memory) — opening the workspace',
  'tab.ai':'AI chat','tab.report':'Check report','tab.machine':'Machine view',
  'hc.h':'Health','hc.sub':'Recalculated per disk',
@@ -1616,7 +1687,7 @@ en:{
  'd.na':'missing',
  'th.id':'id','th.claim':'Claim','th.value':'Value','th.conf':'Conf','th.src':'Source file','th.sha':'Hash (sha256)','th.fp':'Short fp','th.loc':'Locator',
  'rp.title':'Experiment reports','rp.sub':'Per project: import, field mapping, bound numbers and signoff status.',
- 'rp.projA':'Paper A','rp.projB':'Paper B','rp.back':'Back to list','rp.open':'Reports',
+ 'rp.projA':'Paper A','rp.projB':'Paper B','rp.back':'Back to list','rp.side':'Reports','rp.sideT':'Open experiment-report management','rp.backWs':'Back to workspace',
  'rp.card.time':'Imported','rp.card.bound':'{n} numbers bound',
  'rp.st.draft':'To check','rp.st.signed':'Signed off','rp.st.confirmed':'Confirmed',
  'rp.empty':'No reports for this project yet — import one from the top-right button.',
@@ -1694,26 +1765,26 @@ $('#btnNewProject').addEventListener('click',()=>{resetNewForm();setView('new')}
 
 /* ---- 项目管理页：数据与渲染（统一修批二：lastDisk 模型＋论文C 单语言示例） ---- */
 const PROJECTS=[
- {id:'A',name:'论文 A',lang:'both',disks:['a-en','a-zh'],diskLabel:'paper ／ paper-zh',lastDisk:'a-en',status:'checking',opened:'2026-11-18 14:20',progress:68},
- {id:'B',name:'论文 B',lang:'both',disks:['b-en','b-zh'],diskLabel:'paper-b ／ paper-b-zh',lastDisk:'b-en',status:'draft',opened:'2026-11-18 15:46',progress:42},
- {id:'C',name:'论文 C（仅英文盘·演示）',lang:'en',disks:['c-en'],diskLabel:'paper-c',lastDisk:'c-en',status:'draft',opened:'2026-11-18 09:30',progress:15}
+ {id:'A',name:'论文 A',lang:'both',disks:['a-en','a-zh'],diskLabel:'paper ／ paper-zh',lastDisk:'a-en',dir:'papers/paper-a',rdir:'papers/paper-a/reports',created:'2026-11-10',status:'checking',opened:'2026-11-18 14:20',progress:68},
+ {id:'B',name:'论文 B',lang:'both',disks:['b-en','b-zh'],diskLabel:'paper-b ／ paper-b-zh',lastDisk:'b-en',dir:'papers/paper-b',rdir:'papers/paper-b/reports',created:'2026-11-14',status:'draft',opened:'2026-11-18 15:46',progress:42},
+ {id:'C',name:'论文 C（仅英文盘·演示）',lang:'en',disks:['c-en'],diskLabel:'paper-c',lastDisk:'c-en',dir:'papers/paper-c',rdir:'papers/paper-c/reports',created:'2026-11-18',status:'draft',opened:'2026-11-18 09:30',progress:15}
 ];
 let npSeq=1;
 function renderProjects(){
   const q=($('#pjSearch').value||'').trim().toLowerCase();
   const list=PROJECTS.filter(p=>!q||p.name.toLowerCase().indexOf(q)>=0);
   $('#pjGrid').innerHTML=list.map(p=>{
-    return '<div class="pj-card" data-pcard="'+p.id+'">'+
-      '<div class="pj-top"><span class="pj-name">'+esc(p.name)+'</span><span class="pj-badge">'+esc(T('badge.lang.'+p.lang))+'</span></div>'+
-      '<div class="pj-disks">'+esc(p.diskLabel)+'</div>'+
-      '<div class="pj-row"><span>'+esc(T('card.status'))+'</span><span class="pj-chip pj-'+p.status+'">'+esc(T('status.'+p.status))+'</span></div>'+
-      '<div class="pj-row"><span>'+esc(T('card.last'))+'</span><span class="pj-v">'+esc(p.opened)+'</span></div>'+
-      '<div class="pj-prog"><div class="pj-prog-bar"><i style="width:'+p.progress+'%"></i></div><span class="pj-prog-n">'+p.progress+'%</span></div>'+
-      '<div class="pj-foot">'+
-      '<button type="button" class="rbtn pj-reports" data-reports="'+p.id+'" title="'+esc(T('rp.sub'))+'">'+esc(T('rp.open'))+'</button>'+
+    return '<div class="pj-row-item" data-pcard="'+p.id+'">'+
+      '<span class="pj-r-name">'+esc(p.name)+'</span>'+
+      '<span class="pj-badge">'+esc(T('badge.lang.'+p.lang))+'</span>'+
+      '<span class="pj-r-disks" title="'+esc(p.diskLabel)+'">'+esc(p.diskLabel)+'</span>'+
+      '<span class="pj-r-status"><span class="pj-chip pj-'+p.status+'">'+esc(T('status.'+p.status))+'</span></span>'+
+      '<span class="pj-r-time" title="'+esc(T('card.last'))+'">'+esc(p.opened)+'</span>'+
+      '<span class="pj-r-prog"><div class="pj-prog-bar"><i style="width:'+p.progress+'%"></i></div><span class="pj-prog-n">'+p.progress+'%</span></span>'+
+      '<span class="pj-r-actions">'+
       '<button type="button" class="rbtn pj-edit" data-pedit="'+p.id+'" title="'+esc(T('card.editT'))+'">'+esc(T('card.edit'))+'</button>'+
-      '<button type="button" class="btn-primary pj-open">'+esc(T('card.open'))+'</button></div>'+
-      '</div>';
+      '<button type="button" class="btn-primary pj-open" title="'+esc(T('card.openT'))+'">'+esc(T('card.open'))+'</button>'+
+      '</span></div>';
   }).join('');
 }
 $('#pjSearch').addEventListener('input',()=>{renderProjects();refreshHealth()});
@@ -1732,7 +1803,7 @@ function openProject(pid){
   if(!disk) return;
   openDisk(disk);
 }
-/* 条目13：编辑模态＝项目设置（语言/当前盘/标题/期刊/模板/研究问题，内存级可改可存） */
+/* 条目24：编辑＝复用新建页骨架的整页视图（锁死目录/语言盘集合，当前盘可切，其余可改） */
 function disksForLang(p,lang){
   const en=p.disks.filter(d=>DISKS_V3[d]&&diskLang(d)==='en');
   const zh=p.disks.filter(d=>DISKS_V3[d]&&diskLang(d)==='zh');
@@ -1741,55 +1812,56 @@ function disksForLang(p,lang){
   const both=en.concat(zh.filter(d=>en.indexOf(d)<0));
   return both.length?both:p.disks.slice(0,1);
 }
-let EP=null;
+let EDIT_ID=null, ED_RDIR_CUSTOM=false;
+function edDeriveRdir(p){return (p.dir||'').replace(/\/+$/,'')+'/reports'}
+function setEdRdir(){
+  const p=PROJECTS.filter(x=>x.id===EDIT_ID)[0]; if(!p) return;
+  const b=$('#edRdirCustom');
+  if(ED_RDIR_CUSTOM){$('#edRdir').removeAttribute('readonly');$('#edRdir').classList.remove('np-readonly');
+    $('#edRdir').value=p.rdir||edDeriveRdir(p);b.textContent=T('np.f.rdir.restore')}
+  else{$('#edRdir').setAttribute('readonly','');$('#edRdir').classList.add('np-readonly');
+    $('#edRdir').value=p.dir?edDeriveRdir(p):'';b.textContent=T('np.f.rdir.custom')}
+}
 function openEditProject(pid){
   const p=PROJECTS.filter(x=>x.id===pid)[0]; if(!p) return;
-  EP=pid;
-  $('#epTitle').value=p.name;
-  $('#epVenue').value=p.venue||'';
-  $('#epTmpl').value=p.tmpl||T('np.tmpl.fs');
-  $('#epRq').value=p.rq||'';
-  $$('#epLangSeg input').forEach(r=>{r.checked=r.value===p.lang});
-  syncEpLang();
-  openModal('editModal');
-}
-function syncEpLang(){
-  const p=PROJECTS.filter(x=>x.id===EP)[0]; if(!p) return;
-  $$('#epLangSeg label').forEach(l=>l.classList.toggle('sel',!!l.querySelector('input').checked));
-  const r=$('input[name="epLang"]:checked');
-  const lang=r?r.value:p.lang;
-  const disks=disksForLang(p,lang).filter(d=>DISKS_V3[d]);
-  if(!disks.length) disks.push(p.disks[0]);
-  if(p.disks.indexOf(p.lastDisk)<0||disks.indexOf(p.lastDisk)<0) p.lastDisk=disks[0];
-  $('#epDiskSeg').innerHTML=disks.map(d=>
-    '<label'+(d===p.lastDisk?' class="sel"':'')+'><input type="radio" name="epDisk" value="'+esc(d)+'"'+(d===p.lastDisk?' checked':'')+
+  EDIT_ID=pid;
+  $('#edTitle').value=p.name;
+  $('#edMeta').textContent=p.name+' · '+T('ed.created')+' '+(p.created||p.opened);
+  $('#edDir').value=p.dir||'';
+  $('#edLangBadge').textContent=T('badge.lang.'+p.lang);
+  $('#edDisks').textContent=p.diskLabel;
+  $('#edDiskSeg').innerHTML=p.disks.filter(d=>DISKS_V3[d]).map(d=>
+    '<label'+(d===p.lastDisk?' class="sel"':'')+'><input type="radio" name="edDisk" value="'+esc(d)+'"'+(d===p.lastDisk?' checked':'')+
     '><span><code>'+esc(DISKS_V3[d].disk)+'</code></span></label>').join('');
+  $('#edVenue').value=p.venue||''; $('#edTmpl').value=p.tmpl||''; $('#edRq').value=p.rq||'';
+  ED_RDIR_CUSTOM=!!(p.dir&&p.rdir&&p.rdir!==edDeriveRdir(p));
+  setEdRdir();
+  $('#edSave').disabled=!$('#edTitle').value.trim();
+  setView('edit');
 }
-$('#epLangSeg').addEventListener('change',syncEpLang);
-$('#epDiskSeg').addEventListener('change',()=>{
-  const r=$('input[name="epDisk"]:checked');
-  $$('#epDiskSeg label').forEach(l=>l.classList.toggle('sel',!!l.querySelector('input').checked));
-  if(r){const p=PROJECTS.filter(x=>x.id===EP)[0];if(p)p.lastDisk=r.value}
+$('#edTitle').addEventListener('input',()=>{$('#edSave').disabled=!$('#edTitle').value.trim()});
+$('#edRdirCustom').addEventListener('click',()=>{ED_RDIR_CUSTOM=!ED_RDIR_CUSTOM;setEdRdir()});
+$('#edDiskSeg').addEventListener('change',()=>{
+  const r=$('input[name="edDisk"]:checked');
+  $$('#edDiskSeg label').forEach(l=>l.classList.toggle('sel',!!l.querySelector('input').checked));
+  if(r){const p=PROJECTS.filter(x=>x.id===EDIT_ID)[0];if(p)p.lastDisk=r.value}
 });
-$('#epCancel').addEventListener('click',closeModal);
-$('#epSave').addEventListener('click',()=>{
-  const p=PROJECTS.filter(x=>x.id===EP)[0];
+$('#edGoReports').addEventListener('click',()=>{
+  RP.proj=EDIT_ID||RP.proj; RP.detail=null; renderReports(); setView('reports');
+});
+$('#edCancel').addEventListener('click',()=>setView('projects'));
+$('#edSave').addEventListener('click',()=>{
+  const p=PROJECTS.filter(x=>x.id===EDIT_ID)[0];
   if(p){
-    const name=$('#epTitle').value.trim(); if(name) p.name=name;
-    const r=$('input[name="epLang"]:checked'); if(r) p.lang=r.value;
-    p.disks=disksForLang(p,p.lang).filter(d=>DISKS_V3[d]);
-    if(!p.disks.length) p.disks=[p.lastDisk&&DISKS_V3[p.lastDisk]?p.lastDisk:p.disks[0]];
-    if(p.disks.indexOf(p.lastDisk)<0||!DISKS_V3[p.lastDisk]) p.lastDisk=p.disks[0];
-    const d=$('input[name="epDisk"]:checked');
-    if(d&&p.disks.indexOf(d.value)>=0&&DISKS_V3[d.value]) p.lastDisk=d.value;
-    p.venue=$('#epVenue').value.trim();
-    p.tmpl=$('#epTmpl').value.trim();
-    p.rq=$('#epRq').value.trim();
-    p.diskLabel=p.disks.map(x=>DISKS_V3[x]?DISKS_V3[x].disk:x).join(' ／ ');
+    const name=$('#edTitle').value.trim(); if(name) p.name=name;
+    p.venue=$('#edVenue').value.trim(); p.tmpl=$('#edTmpl').value.trim(); p.rq=$('#edRq').value.trim();
+    p.rdir=ED_RDIR_CUSTOM?$('#edRdir').value.trim():(p.dir?edDeriveRdir(p):'');
+    const r=$('input[name="edDisk"]:checked'); if(r&&p.disks.indexOf(r.value)>=0) p.lastDisk=r.value;
     renderProjects(); updateLangSeg();
   }
-  closeModal(); toast(T('ep.saved'));
+  toast(T('ep.saved')); setView('projects');
 });
+
 
 /* ---- 新建论文项目页 ---- */
 function npUpdate(){
@@ -1797,20 +1869,31 @@ function npUpdate(){
   const lang=$('input[name="npLang"]:checked');
   $$('#npLangSeg label').forEach(l=>l.classList.toggle('sel',!!l.querySelector('input').checked));
   $('#npCreate').disabled=!(title&&lang);
-  $('#npPrevName').textContent=title||T('np.prev.ph');
-  const lv=lang?lang.value:'both';
-  $('#npPrevBadge').textContent=T('badge.lang.'+lv);
-  $('#npPrevDisks').textContent=lv==='zh'?'paper-new-zh':(lv==='en'?'paper-new':'paper-new ／ paper-new-zh');
+}
+/* 条目20/21：项目目录＋实验报告目录（默认锁定随项目目录推导，可自定义） */
+let RDIR_CUSTOM=false;
+function npDeriveRdir(){
+  const dir=$('#npDir').value.trim()||'papers/my-new-paper';
+  return dir.replace(/\/+$/,'')+'/reports';
+}
+function npSyncRdir(){
+  const b=$('#npRdirCustom');
+  if(RDIR_CUSTOM){$('#npRdir').removeAttribute('readonly');$('#npRdir').classList.remove('np-readonly');b.textContent=T('np.f.rdir.restore')}
+  else{$('#npRdir').value=npDeriveRdir();$('#npRdir').setAttribute('readonly','');$('#npRdir').classList.add('np-readonly');b.textContent=T('np.f.rdir.custom')}
 }
 function resetNewForm(){
   $('#npTitle').value=''; $('#npVenue').value=''; $('#npRq').value='';
   $$('#npLangSeg input').forEach(r=>r.checked=false);
   $('#npTmpl').selectedIndex=0; $('#npRptName').textContent='';
   const f=$('#npRptFile'); if(f) f.value='';
+  $('#npDir').value=''; RDIR_CUSTOM=false; npSyncRdir();
   npUpdate();
 }
 $('#npTitle').addEventListener('input',npUpdate);
 $('#npLangSeg').addEventListener('change',npUpdate);
+$('#npDir').addEventListener('input',()=>{if(!RDIR_CUSTOM)$('#npRdir').value=npDeriveRdir()});
+$('#npDirBrowse').addEventListener('click',()=>toast(T('t.noBrowse')));
+$('#npRdirCustom').addEventListener('click',()=>{RDIR_CUSTOM=!RDIR_CUSTOM;npSyncRdir()});
 $('#npRptBtn').addEventListener('click',()=>$('#npRptFile').click());
 $('#npRptFile').addEventListener('change',()=>{const f=$('#npRptFile').files[0];$('#npRptName').textContent=f?f.name:''});
 $('#npCancel').addEventListener('click',()=>setView('projects'));
@@ -1822,8 +1905,11 @@ $('#npCreate').addEventListener('click',()=>{
   const disk=lv==='zh'?'a-zh':'b-en';
   const d=new Date(),pad=n=>(n<10?'0':'')+n;
   const dlabel=DISKS_V3[disk].disk+(lv==='both'?' ／ paper-new-zh':'');
+  const dir=$('#npDir').value.trim()||'papers/my-new-paper';
+  const rdir=RDIR_CUSTOM?($('#npRdir').value.trim()||npDeriveRdir()):npDeriveRdir();
   PROJECTS.unshift({id:'N'+(npSeq++),name:title,lang:lv,disks:[disk],diskLabel:dlabel,lastDisk:disk,
     status:'draft',opened:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes()),progress:4,
+    dir:dir,rdir:rdir,created:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),
     venue:$('#npVenue').value.trim(),tmpl:$('#npTmpl').value,rq:$('#npRq').value.trim()});
   renderProjects();
   renderDisk(disk,true,false);
@@ -2286,8 +2372,6 @@ document.addEventListener('click',e=>{
       if(!hasSel) enterEdit(pe.getAttribute('data-pid'));
     }
   }
-  const pr=t.closest('.pj-reports');
-  if(pr){RP.proj=pr.getAttribute('data-reports');RP.detail=null;syncRpSwitch();renderReports();setView('reports');return}
   const rcCard=t.closest('.rp-card');
   if(rcCard){openReport(rcCard.getAttribute('data-rp'));return}
   const cn=t.closest('[data-costnote]');
@@ -2298,7 +2382,7 @@ document.addEventListener('click',e=>{
     setRTab('ai');const q=T('ai.findingQ',{t:title});
     $('#aiText').value=q;$('#aiText').focus();return}
   const pj=t.closest('.pj-open');
-  if(pj){const card=pj.closest('.pj-card');openProject(card?card.getAttribute('data-pcard'):null);return}
+  if(pj){const card=pj.closest('.pj-card,.pj-row-item');openProject(card?card.getAttribute('data-pcard'):null);return}
   const pej=t.closest('.pj-edit');
   if(pej){openEditProject(pej.getAttribute('data-pedit'));return}
   const stk=t.closest('.stk');
@@ -2324,6 +2408,17 @@ document.addEventListener('click',e=>{
     closeModal();return}
 });
 /* ---- 目录 ---- */
+const COVER_FIX={
+ 'a-en':{h1:'Deliver the Evidence, Not the Rules',sub:'Context Compilation for Long-Horizon Coding Agents'},
+ 'a-zh':{h1:'送达证据，而非规则',sub:'面向长程编程智能体的上下文编译'}
+};
+function applyCoverFix(){
+  const fix=COVER_FIX[CUR]; if(!fix) return;
+  const h1=document.querySelector('#diskBody .cover h1');
+  const sub=document.querySelector('#diskBody .cover .sub');
+  if(h1) h1.textContent=fix.h1;
+  if(sub) sub.textContent=fix.sub;
+}
 let toc=$$('.toc-float li a');
 let secs=$$('[data-sec]');
 function onScroll(){
@@ -2920,6 +3015,7 @@ function renderDisk(id,silent,follow){
   onScroll();
   enhanceDom();
   convertCostNotes();
+  applyCoverFix();
   if(RTAB==='machine') renderTabs();
   aiCtxPid=null; aiCtx.classList.remove('on');
   if(follow!==false) setLang(D.label==='中文版'?'zh':'en');
@@ -3030,7 +3126,12 @@ function renderTabs(){
 }
 $$('.acc-h').forEach(b=>b.addEventListener('click',()=>{b.closest('.acc-card').classList.toggle('on')}));
 $('#tocCollapse').addEventListener('click',()=>document.body.classList.add('toc-hidden'));
-$('#tocFab').addEventListener('click',()=>document.body.classList.remove('toc-hidden'));
+$('#tocToggle').addEventListener('click',()=>document.body.classList.toggle('toc-hidden'));
+$('#rpSideBtn').addEventListener('click',()=>{
+  const p=projectOfDisk(CUR); if(p) RP.proj=p.id;
+  RP.detail=null; renderReports(); setView('reports');
+});
+$('#rpBackWs').addEventListener('click',()=>setView('workbench'));
 
 /* ---- 动作按钮：跑 audit／跑 check／打包预演（原型内模拟） ---- */
 function actOut(id,txt){const e=$('#'+id);e.innerHTML=txt;e.classList.add('on');}

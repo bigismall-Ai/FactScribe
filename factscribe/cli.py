@@ -195,6 +195,26 @@ def build_parser() -> argparse.ArgumentParser:
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
     sp = sub.add_parser(
+        "workbench",
+        help="工作台网页：扫根目录聚合论文项目，起本地只读服务",
+        description="在 --root 下面（深度受限）找出所有含 factscribe.toml 的目录，"
+                    "把同根名的两语言盘（paper 与 paper-zh）聚合成一个项目，"
+                    "起一个只绑回环的本地服务：项目列表、章节渲染、状态行都是真数据。"
+                    "只读：不提供任何写接口。")
+    sp.add_argument("--root", default=".",
+                    help="扫描根目录（默认当前目录；深度受限，找 factscribe.toml）")
+    sp.add_argument("--host", default="127.0.0.1",
+                    choices=sorted(LOOPBACK_HOSTS),
+                    help="监听地址（只允许回环；默认 127.0.0.1）")
+    sp.add_argument("--port", type=int, default=0,
+                    help="端口（默认 0＝让系统分配，启动时打印实际端口）")
+    sp.add_argument("--max-depth", type=int, default=3,
+                    help="扫描深度（默认 3；只数目录层数）")
+    sp.add_argument("--no-browser", dest="no_browser", action="store_true",
+                    help="不自动打开浏览器")
+    sp.add_argument("--json", action="store_true", help="启动行只出 JSON（服务仍阻塞）")
+
+    sp = sub.add_parser(
         "mcp",
         help="MCP stdio 服务器：把 status/project/brief/audit（可选写）暴露给 agent",
         description="以 MCP stdio 协议暴露本地工作台：status / project / brief / audit；"
@@ -793,6 +813,51 @@ def cmd_web(args) -> int:
     args.ui = True
     args.web = True
     return cmd_serve(args)
+
+
+def cmd_workbench(args) -> int:
+    """工作台网页：发现项目 → 起本地只读服务 → 阻塞到 Ctrl+C。"""
+    from .workbench.server import create_server
+
+    root = Path(args.root).expanduser()
+    if not root.exists():
+        raise ConfigError("根目录不存在：%s" % root, code="PROJECT_INVALID")
+    if not root.is_dir():
+        raise ConfigError("根目录不是文件夹：%s" % root, code="PROJECT_INVALID")
+    server, index = create_server(root, host=args.host, port=args.port,
+                                  max_depth=int(getattr(args, "max_depth", 3)))
+    host, port = server.server_address[0], server.server_address[1]
+    url = "http://%s:%d/" % (host, port)
+    projects = index.projects(refresh=True)
+    if args.json:
+        print(json.dumps({
+            "event": "listening", "ok": True, "command": "workbench",
+            "url": url, "root": str(root), "projects": len(projects),
+            "api": ["/api/projects",
+                    "/api/disk/<project>/<disk>/sections",
+                    "/api/disk/<project>/<disk>/meta"],
+            "write": False,
+        }, ensure_ascii=False), flush=True)
+    else:
+        print("== factscribe workbench ==")
+        print("根目录：%s" % root)
+        print("项目：%d 个（只读）" % len(projects))
+        print("URL：%s" % url)
+        print("接口：/api/projects  /api/disk/<project>/<disk>/sections  "
+              "/api/disk/<project>/<disk>/meta")
+        print("只绑回环；只读；按 Ctrl+C 停止。", flush=True)
+    if not getattr(args, "no_browser", False):
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001 - 打不开浏览器不影响服务
+            pass
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")
+    finally:
+        server.server_close()
+    return EXIT_OK
 
 
 def cmd_mcp(args) -> int:
@@ -2110,6 +2175,7 @@ def main(argv=None) -> int:
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,
                 "serve": cmd_serve,
+                "workbench": cmd_workbench,
                 "web": cmd_web,
                 "mcp": cmd_mcp,
                 "report": cmd_report,

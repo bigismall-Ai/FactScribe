@@ -136,6 +136,7 @@ python3 -m factscribe build .    # 编 PDF（要 tectonic）
 | `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；默认只读，`--allow-write` 才开放写，`--allow-build` 才允许编译 PDF |
 | `mcp` | MCP stdio 服务器：把 `status`、`project`、`brief`、`audit` 暴露给 agent；`--allow-write` 才开放写章节与追加事实 |
 | `web` | 本地工作台页面：`serve` 同款后端加工作台界面；默认只读，`--allow-write` 才可写，`--allow-build` 才可编译 PDF |
+| `workbench` | 工作台网页：扫 `--root` 下的 `factscribe.toml`，把同根名的两语言盘（`paper` 配 `paper-zh`）聚合成项目，起本地只读服务；正文与状态行读的是真文件 |
 
 接口契约见 [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md) 与 [`docs/design/SPEC-MCP.md`](docs/design/SPEC-MCP.md)。
 
@@ -269,7 +270,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1637 例，全离线
+python3 -m unittest discover -s tests     # 1657 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

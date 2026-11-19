@@ -136,6 +136,7 @@ Step by step lives in [`docs/QUICKSTART.md`](docs/QUICKSTART.md). Read [`docs/TR
 | `serve` | Local workbench HTTP API: loopback only, random token by default; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
 | `mcp` | MCP stdio server exposing `status`, `project`, `brief` and `audit` to agents; writes need `--allow-write` |
 | `web` | Local workbench page: the `serve` backend plus the workbench UI; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
+| `workbench` | Workbench page: scans `--root` for `factscribe.toml`, groups disks that share a root name into one project (`paper` pairs with `paper-zh`), and serves it read-only; body text and the status line come from the real files |
 
 The contracts live in [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md) and [`docs/design/SPEC-MCP.md`](docs/design/SPEC-MCP.md).
 
@@ -271,7 +272,7 @@ All three limits point at the same promise: the account, the material and the te
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1637 tests, fully offline
+python3 -m unittest discover -s tests     # 1657 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

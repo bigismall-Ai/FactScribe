@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FactScribe 工作台</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body data-view="projects">
+
+<header class="topbar">
+  <span class="tb-brand">FactScribe</span>
+  <button type="button" class="tb-btn" id="goProjects">
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
+    <span data-i18n="nav.projects">项目管理</span>
+  </button>
+  <button type="button" class="tb-btn" id="goNew" hidden>
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+    <span data-i18n="tb.new">新建</span>
+  </button>
+  <div class="lang-seg" id="langSeg" role="group" aria-label="panel language">
+    <button type="button" data-lang="zh" class="on">中</button>
+    <button type="button" data-lang="en">EN</button>
+  </div>
+</header>
+
+<div class="shell">
+
+  <!-- ============ 项目列表页 ============ -->
+  <main class="mainview" id="viewProjects">
+    <div class="pv-wrap">
+      <div class="pv-head">
+        <div class="pv-head-txt">
+          <h1 data-i18n="pg.title">论文项目</h1>
+          <p class="pv-sub" data-i18n="pg.sub">打开一篇论文继续写，或新建一个项目。</p>
+        </div>
+      </div>
+      <div class="pv-search">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+        <input id="pjSearch" type="text" data-i18n-ph="pg.searchPh" placeholder="搜索项目名…" autocomplete="off">
+      </div>
+      <div class="pj-list" id="pjList"></div>
+      <p class="pv-sub" id="pjEmpty" hidden data-i18n="pg.empty">这个根目录下没有找到论文项目（含 factscribe.toml 的目录）。</p>
+    </div>
+  </main>
+
+  <!-- ============ 论文工作台 ============ -->
+  <main class="doc" id="viewWorkbench">
+    <div class="progwrap"><div id="prog"></div></div>
+    <div class="page" id="diskBody">
+      <section class="cover">
+        <h1 id="coverTitle">—</h1>
+        <div class="sub" id="coverSub"></div>
+        <div class="st-line" id="coverSt">—</div>
+        <div class="meta" id="coverMeta"></div>
+      </section>
+      <div id="bodyBlocks"></div>
+    </div>
+  </main>
+
+  <!-- ============ 右栏（互斥标签页） ============ -->
+  <aside class="colright" id="colright">
+    <div class="rtabs">
+      <button type="button" class="rtab-btn" id="tocToggle" data-i18n-title="toc.toggle" title="显示/隐藏目录">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg>
+      </button>
+      <button type="button" class="rtab on" data-rtab="report" data-i18n="tab.report">检查报告</button>
+      <button type="button" class="rtab" data-rtab="machine" data-i18n="tab.machine">机器视图</button>
+    </div>
+
+    <div class="rpane rpane-report on" id="pane-report">
+      <section class="rcard">
+        <div class="rc-h"><span class="rc-t" data-i18n="hc.h">体检</span></div>
+        <div class="st-row">
+          <div class="st ok" id="stFacts">—</div>
+          <div class="st warn" id="stSections">—</div>
+          <div class="st warn" id="stBuild">—</div>
+        </div>
+        <div class="st-sub" id="stNote"></div>
+      </section>
+      <section class="rcard">
+        <div class="rc-h"><span class="rc-t" data-i18n="seg3">检查报告 / 机器视图</span></div>
+        <div class="st-sub" id="seg3Note"></div>
+      </section>
+    </div>
+
+    <div class="rpane rpane-machine" id="pane-machine">
+      <div class="mv-head">
+        <div class="t" data-i18n="mv.h">机器视图</div>
+        <div class="sub" data-i18n="mv.sub">这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。</div>
+      </div>
+      <div class="acc">
+        <section class="acc-card on">
+          <div class="acc-b" style="display:block">
+            <div class="acc-note" id="seg3Note2"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="rpane rpane-ai" id="pane-ai">
+      <div class="ai-head">
+        <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
+        <button type="button" class="ai-fab" id="aiFab" data-i18n="tab.ai">AI 对话</button>
+      </div>
+      <div class="ai-msgs">
+        <div class="msg">
+          <div class="who">FactScribe</div>
+          <div class="bub" id="seg4Note"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ 悬浮目录（停靠右栏左侧） ============ -->
+  <nav class="toc-float" id="tocFloat" aria-label="目录">
+    <div class="tf-head">
+      <span class="rail-h" data-i18n="toc.h">目录</span>
+      <button type="button" class="tf-collapse" id="tocCollapse" data-i18n-title="toc.collapse" title="收起目录">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+      </button>
+    </div>
+    <ul id="tocList"></ul>
+  </nav>
+
+  <!-- ============ 右缘三竖标 ============ -->
+  <div class="side-rail" id="sideRail">
+    <button type="button" class="side-tab" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理" data-i18n="side.reports">实验报告</button>
+    <button type="button" class="side-tab" id="rcCollapse" data-i18n="side.collapse">收起右栏</button>
+    <button type="button" class="side-tab" id="aiEntry" data-i18n="tab.ai">AI 对话</button>
+  </div>
+  <button type="button" class="side-alone" id="rcOpen" data-i18n="side.expand">展开右栏</button>
+
+</div>
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

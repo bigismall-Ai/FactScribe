@@ -384,5 +384,129 @@ class HttpWriteTest(WriteBase):
         self.assertFalse(result.get("ok", False))
 
 
+# --------------------------------------------------------------------------
+# 4. 写回保真（段二验收打回）：保护面残渣回归
+# --------------------------------------------------------------------------
+
+#: 验收打回的用例原文：两行一行散文一行待改，尾部有转义百分号 `\%`。
+VERBATIM_TEX = """\\section{逐字保真}
+
+解决 10 道\\fact{A5} 题，正确率 56.25\\%，见 \\cite{key2024}。
+这是第二句话，将被修改。
+"""
+
+#: A5 的 value＝"10"：正文里的 10 因此是「已绑定数字令牌」（保护面）。
+VERBATIM_FACTS = """[[fact]]
+id = "A5"
+claim = "解出"
+value = "10"
+source = "results/data.md"
+source_sha256 = "%s"
+locator = "汇总表"
+""" % ("0" * 64)
+
+
+class VerbatimFidelityTest(WriteBase):
+    """写回必须字节级保真：保护面残渣回归（段二验收打回）。
+
+    打回用例：段落两行，第一行含 `\\fact{}`、绑定数字、`\\%` 与 `\\cite{}`；
+    客户端把第一行**原样**回写（raw LaTeX，不是占位符）时，旧实现把原样
+    回写的保护面当成「凭空新写」剥掉，再把原文保护面补回来 → 写出重复内容
+    （残渣 `%，见 。`）。修法：原样回写逐字相同就认回来，只剥真正新写的。
+    """
+
+    REL = "sections/03-verbatim.tex"
+
+    def setUp(self):
+        super().setUp()
+        (self.root / self.REL).write_text(VERBATIM_TEX, encoding="utf-8")
+        (self.root / "facts" / "02-verbatim.toml").write_text(
+            VERBATIM_FACTS, encoding="utf-8")
+
+    def original(self) -> str:
+        return (self.root / self.REL).read_text(encoding="utf-8")
+
+    def para(self) -> dict:
+        blocks = disk_sections(self.root)["blocks"]
+        hits = [b for b in blocks
+                if b.get("file") == self.REL and b["kind"] == "para"]
+        return hits[0]
+
+    def model(self, block: dict) -> dict:
+        return wb.editable_model(self.root, wb.Block(
+            file=self.REL, block_id=block["id"], kind=block["kind"],
+            start=block["start"], end=block["end"], raw=block["raw"]))
+
+    def test_1_verbatim_resubmit_is_byte_identical(self):
+        """① 保护面原样重提交：除被改的散文行外逐字节一致，零残渣。"""
+        block = self.para()
+        submitted = ("解决 10 道\\fact{A5} 题，正确率 56.25\\%，见 \\cite{key2024}。\n"
+                     "这是第二句话，已被工作台改写。")
+        result = wb.save_block(self.root, self.REL, block["id"], submitted)
+        after = self.original()
+        expected = VERBATIM_TEX.replace("这是第二句话，将被修改。",
+                                        "这是第二句话，已被工作台改写。")
+        self.assertEqual(after, expected)
+        self.assertEqual(result["warnings"], [])
+        # 零残渣：每个保护面各一次，数字不被复制
+        self.assertEqual(after.count("\\fact{A5}"), 1)
+        self.assertEqual(after.count("\\cite{key2024}"), 1)
+        self.assertEqual(after.count("解决 10 道"), 1)
+        self.assertNotIn("，见 。", after)
+
+    def test_2_moved_protected_surface_follows_client_order(self):
+        """② 保护面换位置：跟着客户端走，只留一处，无残渣。"""
+        block = self.para()
+        submitted = ("解决 10 道\\fact{A5} 题，正确率 56.25\\%。\n"
+                     "这是第二句话，已被工作台改写。见 \\cite{key2024}")
+        wb.save_block(self.root, self.REL, block["id"], submitted)
+        after = self.original()
+        self.assertEqual(after.count("\\cite{key2024}"), 1)
+        self.assertEqual(after.count("\\fact{A5}"), 1)
+        self.assertEqual(after.count("解决 10 道"), 1)
+        # 引用确实挪到了段尾，旧位置不再留残渣
+        self.assertNotIn("，见 \\cite{key2024}", after)
+        self.assertIn("已被工作台改写。见 \\cite{key2024}", after)
+        self.assertLess(after.index("\\fact{A5}"), after.index("\\cite{key2024}"))
+
+    def test_3_deleted_protected_surface_is_restored(self):
+        """③ 保护面被删除：按原文位置补回，有告警，无残渣。"""
+        block = self.para()
+        model = self.model(block)
+        cite_chip = [c for c in model["chips"] if c["label"] == "cite"][0]
+        stripped = model["plain"].replace("\ue000P%d\ue001" % cite_chip["i"], "")
+        result = wb.save_block(self.root, self.REL, block["id"], stripped)
+        after = self.original()
+        self.assertEqual(after.count("\\cite{key2024}"), 1)
+        self.assertEqual(after.count("\\fact{A5}"), 1)
+        self.assertEqual(after.count("解决 10 道"), 1)
+        # 补回到原文位置（不是段尾）
+        self.assertIn("56.25\\%，见 \\cite{key2024}。", after)
+        self.assertTrue(any("补回" in w for w in result["warnings"]), result["warnings"])
+
+    def test_4_duplicated_protected_surface_is_deduplicated(self):
+        """④ 保护面被复制两份：只留一份，有告警，无残渣。"""
+        block = self.para()
+        model = self.model(block)
+        cite_chip = [c for c in model["chips"] if c["label"] == "cite"][0]
+        token = "\ue000P%d\ue001" % cite_chip["i"]
+        duplicated = model["plain"].replace(token, token + token)
+        result = wb.save_block(self.root, self.REL, block["id"], duplicated)
+        after = self.original()
+        self.assertEqual(after.count("\\cite{key2024}"), 1)
+        self.assertEqual(after.count("\\fact{A5}"), 1)
+        self.assertEqual(after.count("解决 10 道"), 1)
+        self.assertTrue(any("复制" in w for w in result["warnings"]), result["warnings"])
+
+        # 原样（raw）抄回时抄两份也一样：只留一份
+        raw_dup = ("解决 10 道\\fact{A5} 题，正确率 56.25\\%，见 \\cite{key2024}。\n"
+                   "这是第二句话，已被工作台改写。\\cite{key2024}")
+        wb.save_block(self.root, self.REL, block["id"], raw_dup)
+        after2 = self.original()
+        self.assertEqual(after2.count("\\cite{key2024}"), 1)
+        self.assertEqual(after2.count("\\fact{A5}"), 1)
+        self.assertEqual(after2.count("解决 10 道"), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

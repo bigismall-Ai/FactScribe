@@ -190,8 +190,14 @@ def _scan_commands(text: str, start: int, end: int) -> list[Segment]:
         if char == "\\":
             parsed = _parse_command(text, index, end)
             if parsed is None:
+                # 不是命令＝转义字符（\%、\\、\&、\$_…）：反斜杠连下一个字符
+                # 一起当普通文本。**否则 \% 会被当成注释开头**，把这一行
+                # 剩下的东西（连同里面的 \cite）整段吞成「注释」保护面。
                 buffer.append(char)
                 index += 1
+                if index < end:
+                    buffer.append(text[index])
+                    index += 1
                 continue
             name, args, stop = parsed
             # 环境：整块保留 or 只留标记。
@@ -333,8 +339,10 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
     返回 (新文本, 告警列表)。规则：
 
     * 客户端把某个保护面删了 → 按原文的相对次序**补回来**（改不掉）；
-    * 客户端在散文里塞了新的 `\\fact{…}`/`\\cite{…}`/`\\ref{…}` → **剥掉**
-      （不许凭空造账本绑定），并记一条告警；
+    * 客户端在散文里**原样抄回**原文的保护面 → 认回来（当成本来的那个，
+      不当新写的），保证「保护面逐字相同」时写回是字节级一致的；
+    * 客户端在散文里塞了**原文没有**的 `\\fact{…}`/`\\cite{…}`/`\\ref{…}` →
+      **剥掉**（不许凭空造账本绑定），并记一条告警；
     * 客户端把保护面挪了位置 → 保留客户端的顺序（挪引用是合法的散文编辑）。
     """
     warnings: list[str] = []
@@ -350,12 +358,17 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
         free = parts[position]
         token = parts[position + 1] if position + 1 < len(parts) else None
         if free:
-            clean, dropped = _strip_injected(free)
-            if dropped:
-                warnings.append(
-                    "正文里新写的 %s 已被剥掉：工作台不让人凭空造账本绑定" % dropped)
-            if clean:
-                items.append(("text", clean))
+            # 先认回「原样抄回」的保护面，剩下的才当散文处理。
+            for kind, value in _absorb_verbatim(free, regions, seen):
+                if kind == "text":
+                    clean, dropped = _strip_injected(value)
+                    if dropped:
+                        warnings.append(
+                            "正文里新写的 %s 已被剥掉：工作台不让人凭空造账本绑定" % dropped)
+                    if clean:
+                        items.append(("text", clean))
+                else:
+                    items.append(("prot", value))
         if token is None:
             continue
         index = int(token)
@@ -399,6 +412,9 @@ def _anchor_spot(segments: list[Segment], seg: Segment,
 
     返回 (条目下标, 该条目内的切分位置)；找不到锚就返回 None（调用方退回
     「按保护面相对次序」插到下一个保护面之前）。
+
+    锚点要连**它后面的空白**一起找：原文里芯片紧跟在这段空白之后，漏掉
+    空白会把芯片插到空白前面（位置差一格：`见\\cite{x} 。`）。
     """
     anchor = ""
     for item in segments:
@@ -406,30 +422,71 @@ def _anchor_spot(segments: list[Segment], seg: Segment,
             break
         if item.kind == "text":
             anchor = item.text
-    tail = anchor.strip()
-    if len(tail) > 24:
-        tail = tail[-24:]
+    stripped = anchor.strip()
+    tail = stripped[-24:] if len(stripped) > 24 else stripped
     if not tail:
         return None
+    gap = anchor[len(anchor.rstrip()):]
     current = "".join(item[1].text if item[0] == "prot" else str(item[1])
                       for item in items)
-    spot = current.rfind(tail)
-    if spot < 0:
-        return None
-    target = spot + len(tail)
-    offset = 0
-    for index, item in enumerate(items):
-        if item[0] != "text":
-            length = len(item[1].text)
-            if offset < target < offset + length:
-                return None          # 锚点落在保护面里：别切它
-            offset += length
+    for probe in (tail + gap, tail):
+        spot = current.rfind(probe)
+        if spot < 0:
             continue
-        length = len(str(item[1]))
-        if offset + length > target:
-            return index, max(0, target - offset)
-        offset += length
+        target = spot + len(probe)
+        offset = 0
+        for index, item in enumerate(items):
+            if item[0] != "text":
+                length = len(item[1].text)
+                if offset < target < offset + length:
+                    return None          # 锚点落在保护面里：别切它
+                offset += length
+                continue
+            length = len(str(item[1]))
+            if offset + length > target:
+                return index, max(0, target - offset)
+            offset += length
     return None
+
+
+def _absorb_verbatim(text: str, regions: list[Segment],
+                     seen: list[int]) -> list[tuple[str, object]]:
+    """把散文里**原样抄回**的保护面认回来。
+
+    客户端有时不用占位符，而是把原文的保护面（`\\fact{A1}`、`\\cite{k}`…）
+    原样抄回正文。这样的回写必须认成「原来的那个保护面」——若当成
+    「凭空新写的命令」剥掉，再把原文的保护面补回来，就会写出重复内容
+    （残渣）。认回来的判据是**逐字相同**：与某个原文保护面完全一致。
+
+    返回 [("text", 片段) | ("prot", 保护面)]，按出现顺序。已被占位符认领过
+    的保护面（`seen`）不再重复认领——多出来的那份照旧按「新写的」剥掉。
+    """
+    out: list[tuple[str, object]] = []
+    buffer: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        best: Segment | None = None
+        for seg in regions:
+            if seg.index in seen or not seg.text:
+                continue
+            if text.startswith(seg.text, index):
+                # 同一位置命中多个时取最长的（短的可能嵌在长的里面）。
+                if best is None or len(seg.text) > len(best.text):
+                    best = seg
+        if best is not None:
+            if buffer:
+                out.append(("text", "".join(buffer)))
+                buffer.clear()
+            out.append(("prot", best))
+            seen.append(best.index)
+            index += len(best.text)
+            continue
+        buffer.append(text[index])
+        index += 1
+    if buffer:
+        out.append(("text", "".join(buffer)))
+    return out
 
 
 _INJECT_RE = re.compile(r"\\(fact|cite[a-zA-Z]*|ref|label|eqref|pageref|"

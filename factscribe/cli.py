@@ -196,11 +196,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser(
         "workbench",
-        help="工作台网页：扫根目录聚合论文项目，起本地只读服务",
+        help="工作台网页：扫根目录聚合论文项目，起本地服务",
         description="在 --root 下面（深度受限）找出所有含 factscribe.toml 的目录，"
                     "把同根名的两语言盘（paper 与 paper-zh）聚合成一个项目，"
                     "起一个只绑回环的本地服务：项目列表、章节渲染、状态行都是真数据。"
-                    "只读：不提供任何写接口。")
+                    "段二起带写接口：正文写回、章节调序/删除/新建、项目新建/编辑。")
     sp.add_argument("--root", default=".",
                     help="扫描根目录（默认当前目录；深度受限，找 factscribe.toml）")
     sp.add_argument("--host", default="127.0.0.1",
@@ -213,6 +213,26 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-browser", dest="no_browser", action="store_true",
                     help="不自动打开浏览器")
     sp.add_argument("--json", action="store_true", help="启动行只出 JSON（服务仍阻塞）")
+    sp_subs = sp.add_subparsers(dest="workbench_action")
+
+    sp_new = sp_subs.add_parser(
+        "new", help="新建论文项目：在 --root 下落目录骨架",
+        description="在 --root 下建论文项目目录：factscribe.toml（最小合法内容"
+                    "＋[workbench] 表）、sections/、facts/、README.md、main.tex；"
+                    "语言盘按 --lang 建（both＝英文盘＋中文盘各一个目录）。")
+    sp_new.add_argument("--root", default=".",
+                        help="落盘根目录（默认当前目录）")
+    sp_new.add_argument("--title", default="", help="论文标题")
+    sp_new.add_argument("--slug", default="",
+                        help="目录名（默认按标题生成；只允许字母数字点下划线连字符）")
+    sp_new.add_argument("--lang", default="en",
+                        choices=["en", "zh", "both"],
+                        help="写作语言：en / zh / both（默认 en）")
+    sp_new.add_argument("--project-dir", dest="project_dir", default="",
+                        help="项目目录字段（写进 [workbench].project_dir）")
+    sp_new.add_argument("--reports-dir", dest="reports_dir", default="",
+                        help="实验报告目录字段（默认〈项目目录〉/reports）")
+    sp_new.add_argument("--json", action="store_true", help="只出 JSON")
 
     sp = sub.add_parser(
         "mcp",
@@ -816,7 +836,9 @@ def cmd_web(args) -> int:
 
 
 def cmd_workbench(args) -> int:
-    """工作台网页：发现项目 → 起本地只读服务 → 阻塞到 Ctrl+C。"""
+    """工作台网页：发现项目 → 起本地服务 → 阻塞到 Ctrl+C。"""
+    if getattr(args, "workbench_action", None) == "new":
+        return cmd_workbench_new(args)
     from .workbench.server import create_server
 
     root = Path(args.root).expanduser()
@@ -835,17 +857,24 @@ def cmd_workbench(args) -> int:
             "url": url, "root": str(root), "projects": len(projects),
             "api": ["/api/projects",
                     "/api/disk/<project>/<disk>/sections",
-                    "/api/disk/<project>/<disk>/meta"],
-            "write": False,
+                    "/api/disk/<project>/<disk>/meta",
+                    "/api/disk/<project>/<disk>/assembly",
+                    "/api/disk/<project>/<disk>/block/<id>",
+                    "POST /api/disk/<project>/<disk>/edit",
+                    "POST /api/disk/<project>/<disk>/toc/{move,delete,create}",
+                    "POST /api/project/{new,update,opened}"],
+            "write": True,
         }, ensure_ascii=False), flush=True)
     else:
         print("== factscribe workbench ==")
         print("根目录：%s" % root)
-        print("项目：%d 个（只读）" % len(projects))
+        print("项目：%d 个" % len(projects))
         print("URL：%s" % url)
         print("接口：/api/projects  /api/disk/<project>/<disk>/sections  "
-              "/api/disk/<project>/<disk>/meta")
-        print("只绑回环；只读；按 Ctrl+C 停止。", flush=True)
+              "/api/disk/<project>/<disk>/meta  /api/disk/<project>/<disk>/assembly")
+        print("写接口：正文写回、章节调序/删除/新建、项目新建/编辑"
+              "（只写根目录下的项目；保存前留 .bak）")
+        print("只绑回环；按 Ctrl+C 停止。", flush=True)
     if not getattr(args, "no_browser", False):
         try:
             webbrowser.open(url)
@@ -857,6 +886,32 @@ def cmd_workbench(args) -> int:
         print("\n已停止。")
     finally:
         server.server_close()
+    return EXIT_OK
+
+
+def cmd_workbench_new(args) -> int:
+    """新建论文项目：落目录骨架（factscribe.toml ＋ sections/ ＋ facts/ ＋ README）。"""
+    from .workbench.write import create_paper_project
+
+    lang = str(getattr(args, "lang", "en") or "en")
+    langs = ["en", "zh"] if lang == "both" else [lang]
+    result = create_paper_project(
+        Path(args.root).expanduser(),
+        slug=str(getattr(args, "slug", "") or ""),
+        title=str(getattr(args, "title", "") or ""),
+        langs=langs,
+        project_dir=str(getattr(args, "project_dir", "") or ""),
+        reports_dir=str(getattr(args, "reports_dir", "") or ""))
+    if getattr(args, "json", False):
+        print(json.dumps({"ok": True, "command": "workbench new", **result},
+                         ensure_ascii=False, indent=2))
+        return EXIT_OK
+    print("已建项目（%d 个盘）：" % len(result["created"]))
+    for disk in result["disks"]:
+        print("  %s（%s 盘）→ %s" % (disk["id"], disk["lang"], disk["path"]))
+        print("    项目目录字段：%s" % disk["project_dir"])
+        print("    实验报告目录：%s" % disk["reports_dir"])
+    print("配置写在 factscribe.toml 的 [workbench] 表里。")
     return EXIT_OK
 
 

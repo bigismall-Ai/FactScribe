@@ -102,15 +102,55 @@ def discover_disks(root: str | Path, max_depth: int = MAX_DEPTH) -> list[Path]:
 
 # ---------------------------------------------------------------- 聚合
 
+_TITLE_CMD_RE = re.compile(r"\\title\s*\{")
+
+
+def _tex_title(path: Path) -> str:
+    """盘自己的标题：读这个盘 `main.tex` 的 `\\title{…}`。
+
+    段二起，标题**分盘取**：中文盘显示中文标题，不再统一挂英题。
+    """
+    for name in ("main.tex", "paper.tex", "root.tex"):
+        target = path / name
+        if not target.is_file():
+            continue
+        try:
+            text = target.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        match = _TITLE_CMD_RE.search(text)
+        if not match:
+            continue
+        body, _end = _balanced(text, match.end() - 1)
+        clean = body.strip()
+        if clean:
+            return clean.replace("\\%", "%").replace("\\&", "&").replace("\\_", "_")
+    return ""
+
+
 def _disk_title(path: Path) -> str:
-    """盘名：取项目声明里的标题，取不到退回目录名。"""
+    """盘名：先取这个盘自己的 `main.tex` 标题，再退回项目声明，最后目录名。"""
     from ..config import ConfigError, load_config
 
+    tex_title = _tex_title(path)
+    if tex_title:
+        return tex_title
     try:
         cfg = load_config(path)
     except (ConfigError, OSError, ValueError):
         return path.name
     return (cfg.name or cfg.title or "").strip() or path.name
+
+
+def _config_title(path: Path) -> str:
+    """项目声明里的标题（不分盘）。"""
+    from ..config import ConfigError, load_config
+
+    try:
+        cfg = load_config(path)
+    except (ConfigError, OSError, ValueError):
+        return ""
+    return (cfg.name or cfg.title or "").strip()
 
 
 def _disk_counts(path: Path) -> tuple[int, int]:
@@ -130,6 +170,57 @@ def _disk_counts(path: Path) -> tuple[int, int]:
     except Exception:  # noqa: BLE001
         facts = []
     return len(sections), len(facts)
+
+
+def _disk_progress(path: Path) -> dict:
+    """进度口径（写在这里，前端只显示，不另算）：
+
+    **进度 = 已绑事实数 / 定量事实总数**。
+    * 分母：账本（`facts/*.toml`）里 `value` 非空的事实数（定量事实）；
+    * 分子：其中在本盘正文里出现过 `\\fact{ID}` 标记的事实数（已绑）；
+    * 分母为 0（还没有定量事实）时进度记 0，界面显示「暂无定量事实」。
+    """
+    from ..config import ConfigError, load_config, load_facts
+
+    empty = {"bound": 0, "total": 0, "percent": 0}
+    try:
+        cfg = load_config(path)
+        facts = load_facts(cfg)
+    except (ConfigError, OSError, ValueError):
+        return empty
+    total = {f.id for f in facts if str(getattr(f, "value", "") or "").strip()}
+    if not total:
+        return empty
+    marked: set[str] = set()
+    for _name, text in _section_files(path):
+        for match in re.finditer(r"\\fact\s*\{([^{}]*)\}", text):
+            for fid in match.group(1).split(","):
+                fid = fid.strip()
+                if fid:
+                    marked.add(fid)
+    bound = len(total & marked)
+    return {"bound": bound, "total": len(total),
+            "percent": int(round(bound * 100 / len(total)))}
+
+
+def _workbench_table(path: Path) -> dict:
+    """项目配置里的 `[workbench]` 表（工作台自己的字段：目录、最近打开…）。"""
+    from ..config import load_toml
+
+    config = path / CONFIG_NAME
+    if not config.is_file():
+        return {}
+    try:
+        data = load_toml(config)
+    except Exception:  # noqa: BLE001 - 坏配置当没有
+        return {}
+    table = data.get("workbench")
+    return table if isinstance(table, dict) else {}
+
+
+def _disk_last_opened(path: Path) -> str:
+    """最近打开时间：项目配置 `factscribe.toml` 的 `[workbench].last_opened`。"""
+    return str(_workbench_table(path).get("last_opened") or "").strip()
 
 
 def aggregate(disks: list[Path]) -> list[dict]:
@@ -153,6 +244,7 @@ def aggregate(disks: list[Path]) -> list[dict]:
         disks_out = []
         for member in members:
             sections, facts = _disk_counts(member)
+            bench = _workbench_table(member)
             disks_out.append({
                 "id": member.name,
                 "lang": disk_language(member.name),
@@ -160,11 +252,17 @@ def aggregate(disks: list[Path]) -> list[dict]:
                 "path": str(member),
                 "sections": sections,
                 "facts": facts,
+                "progress": _disk_progress(member),
+                "last_opened": _disk_last_opened(member),
+                "project_dir": str(bench.get("project_dir") or member.name),
+                "reports_dir": str(bench.get("reports_dir")
+                                   or (bench.get("project_dir") or member.name)
+                                   + "/reports"),
             })
         primary = next((d for d in disks_out if d["lang"] == "en"), disks_out[0])
         projects.append({
             "id": project_id,
-            "name": primary["name"],
+            "name": _config_title(Path(primary["path"])) or primary["name"],
             "root": parent,
             "disks": disks_out,
         })
@@ -201,7 +299,7 @@ _INLINE_KEEP = ("url", "href")
 def _strip_comments(text: str) -> str:
     r"""去掉 `%` 注释（`\%` 是字面百分号，保留）。"""
     out: list[str] = []
-    for line in text.splitlines():
+    for line in text.splitlines(keepends=True):
         kept: list[str] = []
         index = 0
         length = len(line)
@@ -212,11 +310,14 @@ def _strip_comments(text: str) -> str:
                 index += 2
                 continue
             if char == "%":
-                break
+                while index < length and line[index] != "\n":
+                    kept.append(" ")
+                    index += 1
+                continue
             kept.append(char)
             index += 1
         out.append("".join(kept))
-    return "\n".join(out)
+    return "".join(out)
 
 
 def _balanced(text: str, start: int) -> tuple[str, int]:
@@ -283,21 +384,29 @@ def _inline(text: str) -> str:
 def render_tex(text: str, stem: str = "sec") -> list[dict]:
     """把一段 LaTeX 渲染成块列表。
 
-    块：`{"kind", "id", "level", "title", "title_en", "html"}`。
-    `kind` 取 abstract / section / subsection / para。
+    块：`{"kind", "id", "level", "title", "title_en", "html", "start", "end",
+    "raw"}`。`kind` 取 abstract / section / subsection / para。
+
+    `start`/`end` 是这一块在**原文**里的偏移（`_strip_comments` 等长替换，
+    偏移与原文一一对应），`raw` 是原文片段——段二的写回按偏移精确回填。
     """
     source = _strip_comments(text)
     blocks: list[dict] = []
     buffer: list[str] = []
+    buffer_start = 0
     in_abstract = False
     index = 0
     counter = 0
     length = len(source)
 
     def flush() -> None:
-        nonlocal buffer
-        chunk = "".join(buffer).strip()
+        nonlocal buffer, buffer_start
+        raw = "".join(buffer)
+        chunk = raw.strip()
+        start = buffer_start + (len(raw) - len(raw.lstrip()))
+        end = buffer_start + len(raw) - (len(raw) - len(raw.rstrip()))
         buffer = []
+        buffer_start = index
         if not chunk:
             return
         body = _inline(html.escape(chunk, quote=False))
@@ -310,6 +419,7 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
             "id": "%s-p%d" % (stem, len(blocks)),
             "level": 0, "title": "", "title_en": "",
             "html": "<p>%s</p>" % body,
+            "start": start, "end": end, "raw": text[start:end],
         })
 
     while index < length:
@@ -336,6 +446,8 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
                     "id": "%s-s%d" % (stem, counter),
                     "level": level, "title": clean, "title_en": "",
                     "html": "",
+                    "start": index, "end": index + end,
+                    "raw": text[index:index + end],
                 })
                 index += end
                 continue
@@ -343,6 +455,8 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
             flush()
             index += 2
             continue
+        if not buffer:
+            buffer_start = index
         buffer.append(char)
         index += 1
     flush()
@@ -427,6 +541,7 @@ def disk_sections(path: str | Path, lang: str = "") -> dict:
     for name, text in _section_files(root):
         stem = Path(name).stem
         for block in render_tex(text, stem=stem):
+            block["file"] = name
             if block["kind"] == "section" and not block["title_en"]:
                 block["title_en"] = paired.get(stem, "")
             blocks.append(block)

@@ -136,7 +136,8 @@ python3 -m factscribe build .    # 编 PDF（要 tectonic）
 | `serve` | 本地工作台 HTTP API：只绑回环，默认随机 token；默认只读，`--allow-write` 才开放写，`--allow-build` 才允许编译 PDF |
 | `mcp` | MCP stdio 服务器：把 `status`、`project`、`brief`、`audit` 暴露给 agent；`--allow-write` 才开放写章节与追加事实 |
 | `web` | 本地工作台页面：`serve` 同款后端加工作台界面；默认只读，`--allow-write` 才可写，`--allow-build` 才可编译 PDF |
-| `workbench` | 工作台网页：扫 `--root` 下的 `factscribe.toml`，把同根名的两语言盘（`paper` 配 `paper-zh`）聚合成项目，起本地只读服务；正文与状态行读的是真文件 |
+| `workbench` | 工作台网页：扫 `--root` 下的 `factscribe.toml`，把同根名的两语言盘（`paper` 配 `paper-zh`）聚合成项目，起本地服务；正文与状态行读的是真文件。段二起带写接口：正文就地编辑写回（`\fact`/`\cite`/`\ref` 与绑定数字原样保留，保存留 `.bak`）、目录调序/删除（挪 `sections/attic/`）/新建、项目新建与编辑 |
+| `workbench new` | 新建论文项目：在 `--root` 下落目录骨架（`factscribe.toml`＋`sections/`＋`facts/`＋`README.md`＋`main.tex`），项目目录与实验报告目录写进 `[workbench]` 表 |
 
 接口契约见 [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md) 与 [`docs/design/SPEC-MCP.md`](docs/design/SPEC-MCP.md)。
 

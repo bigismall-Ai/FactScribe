@@ -136,7 +136,8 @@ Step by step lives in [`docs/QUICKSTART.md`](docs/QUICKSTART.md). Read [`docs/TR
 | `serve` | Local workbench HTTP API: loopback only, random token by default; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
 | `mcp` | MCP stdio server exposing `status`, `project`, `brief` and `audit` to agents; writes need `--allow-write` |
 | `web` | Local workbench page: the `serve` backend plus the workbench UI; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
-| `workbench` | Workbench page: scans `--root` for `factscribe.toml`, groups disks that share a root name into one project (`paper` pairs with `paper-zh`), and serves it read-only; body text and the status line come from the real files |
+| `workbench` | Workbench page: scans `--root` for `factscribe.toml`, groups disks that share a root name into one project (`paper` pairs with `paper-zh`); body text and the status line come from the real files. Since stage 2 it also writes: in-place paragraph editing (with `\fact`/`\cite`/`\ref` and bound numbers kept verbatim, `.bak` kept on save), section reorder/delete (moved to `sections/attic/`)/create, project create and edit |
+| `workbench new` | Create a paper project: writes the skeleton under `--root` (`factscribe.toml` + `sections/` + `facts/` + `README.md` + `main.tex`); project directory and experiment report directory go into the `[workbench]` table |
 
 The contracts live in [`docs/design/SPEC-SERVE.md`](docs/design/SPEC-SERVE.md) and [`docs/design/SPEC-MCP.md`](docs/design/SPEC-MCP.md).
 

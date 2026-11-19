@@ -278,7 +278,7 @@ pkill -f "factscribe.*workbench"
 python3 -m factscribe workbench --root /path/to/papers
 ```
 
-规矩三条：
+规矩四条：
 
 1. **改完 Python 或前端代码，一律重启服务再验收**——否则测的是旧进程；
 2. 前端静态文件带 `Cache-Control: no-store`，但浏览器仍可能缓存 CSS/JS，
@@ -287,7 +287,17 @@ python3 -m factscribe workbench --root /path/to/papers
    `/api/disk/<项目>/<盘>/machine`），
    `POST /api/disk/<项目>/<盘>/report/rerun` 是**只读重跑**真闸：
    subprocess 跑 `factscribe audit --json`（不加 `--build`，不编译不落盘），
-   限时 120 秒，跑前跑后对项目目录做哈希对比，**保证零写入**。
+   限时 120 秒，跑前跑后对项目目录做哈希对比，**保证零写入**；
+4. 段五起，框架改成「左正文 ＋ 右固定导航面板（320px，可整体收起）」，
+   右缘三竖标与右栏三标签退役。新增端点：
+   `POST /api/disk/<项目>/<盘>/action`（`action=pdf|bundle|open_dir`，
+   分别走 `buildpdf.auto_build` 真编译、`bundle.run_bundle` 真导出、
+   macOS `open` 唤起访达）、
+   `GET /api/disk/<项目>/<盘>/pdf`（回传盘里的 `main.pdf` 供预览/下载）、
+   `POST /api/project/<项目>/reports/delete`（删导入草稿记录，
+   **报告源文件不动**）；`POST /api/disk/<项目>/<盘>/edit` 的
+   `block=cover-abstract` 写封面摘要（根文件 `abstract` 环境），
+   走段二同一条保护通道（`\fact` 芯片原样保留、原子写、留 `.bak`）。
 
 ## 已知缺口
 

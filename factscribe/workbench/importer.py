@@ -298,13 +298,19 @@ def _toml_str(text: str) -> str:
 
 
 def draft_path(disk_path: str | Path, report_name: str) -> Path:
-    """草稿落盘位置：`<盘>/facts/draft/<报告名>.draft.toml`。"""
+    """草稿落盘位置：`<盘>/facts/draft/<报告名>.draft.toml`。
+
+    报告名可以带报告后缀（`.toml`/`.csv`…）或草稿后缀（`.draft`）——
+    两种写法都落到同一个草稿文件。
+    """
     disk = Path(disk_path).expanduser()
     stem = Path(str(report_name)).name
     for suffix in REPORT_SUFFIXES:
         if stem.lower().endswith(suffix):
             stem = stem[: -len(suffix)]
             break
+    if stem.lower().endswith(".draft"):
+        stem = stem[: -len(".draft")]
     stem = stem or "report"
     return disk / "facts" / DRAFT_SUBDIR / ("%s.draft.toml" % stem)
 
@@ -394,3 +400,35 @@ def list_drafts(disk_path: str | Path) -> list[dict]:
             "bound": _draft_fact_count(entry),
         })
     return out
+
+
+def delete_draft(disk_path: str | Path, report_name: str) -> dict:
+    """删掉一条导入草稿（报告记录）。
+
+    只删 `facts/draft/<名>.draft.toml` 这条草稿记录；**报告源文件不动**
+    （源文件在 reports/ 目录里，是人自己的材料）。
+    """
+    disk = Path(disk_path).expanduser()
+    name = str(report_name or "").strip()
+    if not name:
+        raise ImportError_("要删的报告名要给", "REPORT_NAME_REQUIRED")
+    target = draft_path(disk, name)
+    if not target.is_file():
+        raise ImportError_("没有这条导入记录：%s" % name, "DRAFT_MISSING")
+    source = ""
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    for line in text.splitlines():
+        if line.startswith("report = "):
+            source = line.split("=", 1)[1].strip().strip('"')
+            break
+    try:
+        target.unlink()
+    except OSError as exc:
+        raise ImportError_("删不掉这条导入记录：%s" % exc,
+                           "DRAFT_DELETE_FAILED") from exc
+    return {"ok": True, "deleted": str(target), "name": name,
+            "source_file": source, "source_untouched": True}
+

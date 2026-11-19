@@ -971,3 +971,146 @@ body[data-view="form"] .toc-float{display:none}
 .wz-f-line{flex:0 0 52px;font-family:ui-monospace,Menlo,monospace}
 .wz-f-raw{flex:1 1 auto;min-width:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all}
 .wz-f-err{flex:0 0 auto;color:#c07a63}
+
+/* ================= 段五：框架重排（左正文 ＋ 右导航面板） ================= */
+/* 旧右栏三标签（.colright/.rtabs/.rpane）与右缘三竖标（.side-rail/.side-alone）
+   随旧结构一起退役；目录不再悬浮（.toc-float 退役），住进导航面板。 */
+
+/* ---- 导航面板（fixed · 320px · 可整体收起） ---- */
+.navpanel{position:fixed;right:0;top:52px;width:320px;height:calc(100vh - 52px);background:#fafaf9;
+ border-left:1px solid #ececec;display:flex;flex-direction:column;overflow:hidden;z-index:60;
+ transition:transform .22s ease}
+body.nav-collapsed .navpanel{transform:translateX(100%)}
+.shell{padding-right:336px;transition:padding-right .22s ease}
+body.nav-collapsed .shell{padding-right:0}
+/* 收起后：左缘只剩一枚竖排「展开导航」钮 */
+.nav-open{display:none;position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:61;
+ writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:3px;padding:14px 7px;
+ border:1px solid #e6e6e4;border-left:none;border-radius:0 8px 8px 0;background:#fafaf9;color:#8f8d86;cursor:pointer}
+.nav-open:hover{color:#37352f;background:#f4f2ea}
+body.nav-collapsed .nav-open{display:block}
+
+/* ---- 头部行：项目管理 ＋ 中/EN ---- */
+.np-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
+.np-projects{flex:1 1 auto;min-width:0;justify-content:flex-start}
+.np-head .lang-seg{flex:0 0 auto}
+/* 单语言项目：中/EN 切换整组隐藏（hidden 属性要压得住 display:flex） */
+.lang-seg[hidden]{display:none}
+
+/* ---- 常用功能行 ---- */
+.np-tools{display:flex;gap:4px;padding:9px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
+.np-tool{flex:1 1 0;min-width:0;font-family:inherit;font-size:11px;line-height:1.35;color:#5f5e5b;
+ border:1px solid #e3e2df;border-radius:7px;background:#fff;padding:6px 3px;cursor:pointer;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.np-tool:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+
+/* ---- 切换按钮组（四枚纵排） ---- */
+.np-switches{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
+.np-switch{width:100%;text-align:left;font-family:inherit;font-size:12.5px;color:#5f5e5b;padding:7px 10px;
+ border:none;border-radius:7px;background:none;cursor:pointer}
+.np-switch:hover{background:#f1f0ee;color:#37352f}
+.np-switch.on{background:#2f2e2b;color:#fff}
+
+/* ---- 面板内容区 ---- */
+.np-body{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 12px 24px}
+.np-pane{display:none}
+.np-pane.on{display:block}
+.np-pane-h{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1.2px;color:#a3a29c;margin-bottom:8px}
+.np-mini{margin-left:auto;font-family:inherit;font-size:11px;color:#2f5279;background:none;border:none;
+ cursor:pointer;padding:0;text-decoration:underline}
+.np-mini:hover{color:#1c3d5c}
+
+/* ---- 目录（章节管理并入：条目行内 ↑↓/删除，末尾新建） ---- */
+.toc-list{list-style:none;margin:0;padding:0}
+.toc-item{display:flex;align-items:center;gap:4px;border-radius:7px}
+.toc-item:hover{background:#f1f0ee}
+.toc-item a{flex:1 1 auto;min-width:0;padding:5px 6px;border-radius:6px;font-size:12.8px;line-height:1.5;
+ color:#5f5e5b;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.toc-item a:hover{color:#37352f}
+.toc-item.sub a{padding-left:18px;font-size:12px;color:#8f8d86}
+.toc-item .tm-ops{flex:0 0 auto;display:flex;gap:2px;opacity:.3}
+.toc-item:hover .tm-ops{opacity:1}
+.toc-add{margin-top:8px}
+.toc-add button{width:100%;font-family:inherit;font-size:12px;color:#5f5e5b;background:none;
+ border:1px dashed #e3e2df;border-radius:7px;padding:6px;cursor:pointer}
+.toc-add button:hover{border-color:#b8b5ac;color:#37352f}
+.toc-empty{font-size:11.5px;color:#9b9a96;padding:6px 2px}
+.tm-btn{width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-family:inherit;
+ font-size:11px;color:#8f8d86;background:#fff;border:1px solid #e6e6e4;border-radius:5px;padding:0;cursor:pointer}
+.tm-btn:hover{color:#37352f;background:#f1f0ee}
+.tm-btn:disabled{opacity:.32;cursor:default}
+.tm-btn.tm-del:hover{color:#9a3b1e;border-color:#e7c4b8;background:#fdf3f0}
+
+/* ---- 智能助手：半透明悬浮层（浮在正文上方） ---- */
+.ai-float{position:fixed;right:340px;bottom:22px;width:min(420px,44vw);height:min(560px,calc(100vh - 110px));
+ display:flex;flex-direction:column;overflow:hidden;z-index:80;border-radius:14px;
+ background:rgba(252,251,248,.82);backdrop-filter:blur(14px) saturate(1.08);
+ -webkit-backdrop-filter:blur(14px) saturate(1.08);
+ border:1px solid rgba(230,229,224,.92);box-shadow:0 18px 48px rgba(15,15,15,.16)}
+body.nav-collapsed .ai-float{right:22px}
+.ai-float[hidden]{display:none}
+.ai-float .ai-msgs{flex:1 1 auto;min-height:0;overflow:auto}
+.ai-float .ai-input{align-items:flex-end}
+.ai-float .ai-input textarea{flex:1 1 auto;min-width:0;min-height:66px;resize:vertical;font-family:inherit;
+ font-size:13.5px;line-height:1.6;padding:9px 11px;border:1px solid #ddd8c6;border-radius:8px;
+ background:rgba(255,255,255,.92);color:#1c1e22}
+.ai-float .ai-input textarea:focus{outline:none;border-color:#b6b0a0}
+
+/* ---- 封面摘要（可编辑） ---- */
+.cover-abstract{margin-top:16px;padding-top:12px;border-top:1px solid #ebe7da}
+.cover-abstract .ab-label{font-size:10.5px;letter-spacing:1.2px;color:#a3a29c;margin-bottom:6px}
+.cover-abstract .ab-body{font-size:13.8px;line-height:1.95;color:#4a463c;cursor:text;border-radius:6px;padding:2px 4px}
+.cover-abstract .ab-body:hover{background:#fbfaf6}
+.fc-fact{cursor:pointer}
+.fc-fact:hover{background:#bfe3cf}
+
+/* ---- 证据卡（正文数字芯片下钻） ---- */
+.fact-card[hidden]{display:none}
+.fact-card{position:fixed;z-index:95;width:320px;max-width:92vw;background:#fff;border:1px solid #e9e9e7;
+ border-radius:12px;box-shadow:0 14px 40px rgba(15,15,15,.16);padding:12px 14px;font-size:12.5px}
+.fact-card .fc-h{display:flex;align-items:center;gap:8px;font-weight:650;color:#1c6b4c;margin-bottom:7px;font-size:12.5px}
+.fact-card .fc-row{display:flex;gap:8px;color:#4a463c;margin-top:4px}
+.fact-card .fc-row .k{color:#9b9585;flex:0 0 42px}
+.fact-card .fc-v{font-weight:600;color:#23262b;word-break:break-all}
+.fact-card .fc-v.mono{font-family:ui-monospace,Menlo,monospace;font-weight:400;font-size:11.5px}
+.fact-card .fc-foot{margin-top:9px;padding-top:8px;border-top:1px solid #efecdf;font-size:11px;color:#9b9585;word-break:break-all}
+.fact-card .fc-close{margin-left:auto;cursor:pointer;color:#9b9585;font-size:14px;line-height:1}
+.fact-card .fc-close:hover{color:#37352f}
+.fc-empty{font-size:12px;color:#9b9585}
+
+/* ---- 全检模态：检查报告 ＋ 机器底账 ---- */
+.modal-t{display:flex;align-items:center;gap:10px}
+.mt-tabs{margin-left:auto;display:inline-flex;gap:2px;border:1px solid #e6e6e4;border-radius:7px;padding:2px}
+.mt-tab{font-family:inherit;font-size:12px;color:#8f8d86;background:none;border:none;border-radius:5px;
+ padding:4px 10px;cursor:pointer}
+.mt-tab.on{background:#f1f0ee;color:#37352f;font-weight:600}
+.mt-pane{display:none}
+.mt-pane.on{display:block}
+
+/* ---- 常用功能的结果 ---- */
+.act-ok{font-size:13px;color:#1c6b4c;font-weight:600;margin-bottom:8px}
+.act-fail{font-size:13px;color:#9a3b1e;font-weight:600;margin-bottom:8px}
+.act-kv{display:flex;gap:10px;font-size:12.5px;color:#5f5e5b;margin:4px 0;align-items:baseline}
+.act-kv code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#54514a;word-break:break-all}
+.act-links{display:flex;gap:14px;margin:10px 0 4px}
+.act-links a{font-size:12px;color:#2f5279;text-decoration:underline}
+.act-preview{margin-top:10px;border:1px solid #ececeb;border-radius:8px;overflow:hidden;background:#fafaf9}
+.act-preview iframe{width:100%;height:min(460px,52vh);border:none;display:block}
+.act-gate{font-size:11px;color:#8f8d86}
+
+/* ---- 导航面板里的实验报告行 ---- */
+.np-rp-row{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px dashed #ececeb}
+.np-rp-main{flex:1 1 auto;min-width:0}
+.np-rp-name{font-size:12.5px;font-weight:600;color:#37352f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.np-rp-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:#9b9a96;margin-top:3px}
+.np-rp-del{flex:0 0 auto;font-family:inherit;font-size:11px;color:#9a3b1e;border:1px solid #e7c4b8;
+ background:#fdf3f0;border-radius:6px;padding:3px 8px;cursor:pointer}
+.np-rp-del:hover{background:#f9e4dd}
+
+/* ---- 窄屏：导航面板退成顶部一条，正文拉满 ---- */
+@media (max-width:900px){
+ .navpanel{position:static;width:auto;height:auto;max-height:none;border-left:none;border-bottom:1px solid #ececec}
+ .shell{padding-right:0}
+ body.nav-collapsed .navpanel{display:none}
+ .ai-float{right:16px;left:16px;width:auto}
+}

@@ -143,6 +143,29 @@ const I18N = {
     'prog.none': '暂无定量事实',
     'time.never': '还没打开过',
     'card.edit': '编辑',
+    'np.pdf': '渲染PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
+    'np.openDir': '打开目录', 'np.collapse': '收起导航', 'np.toc': '目录',
+    'np.ai': '智能助手', 'np.reports': '实验报告', 'np.import': '从外部导入',
+    'nav.open': '展开导航', 'np.tocEmpty': '这个盘还没有章节。',
+    'act.pdfTitle': '渲染 PDF', 'act.bundleTitle': '导出投稿包',
+    'act.openTitle': '打开项目目录', 'act.close': '关闭',
+    'act.pdfOk': '编译完成', 'act.pdfFail': '编译没成功',
+    'act.pdfPages': '{n} 页 · {b} 字节', 'act.pdfPreview': '预览',
+    'act.pdfDownload': '下载 PDF', 'act.pdfPath': '产物路径',
+    'act.bundleOk': '投稿包已导出', 'act.bundleFail': '清单门没过',
+    'act.bundlePath': '包目录', 'act.bundleFiles': '包内 {n} 件',
+    'act.bundleGate': '清单门：{p} 过 / {f} 不过 / {w} 豁免',
+    'act.openOk': '已在访达里打开', 'act.openUnsupported': '本机不是 macOS：路径如下。',
+    'rp.delAsk': '删掉这条导入记录？\n（只删草稿记录；报告源文件不动）',
+    'rp.deleted': '已删掉这条导入记录（源文件没动）',
+    'rp.noDelete': '这条记录删不掉：{e}',
+    'ab.label': '摘要', 'ab.edit': '点击编辑摘要', 'ab.saved': '摘要已保存',
+    'ab.missing': '这个盘的主文件里没有 abstract 环境。',
+    'fc.title': '证据', 'fc.nofact': '账本里没有这条事实。',
+    'fc.claim': '断言', 'fc.value': '值', 'fc.source': '出处',
+    'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
+    'check.title': '全检结果', 'check.tabReport': '检查报告',
+    'check.tabMachine': '机器底账', 'rp.card.del': '删除',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -282,6 +305,29 @@ const I18N = {
     'prog.none': 'No quantitative facts yet',
     'time.never': 'never opened',
     'card.edit': 'Edit',
+    'np.pdf': '渲染PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
+    'np.openDir': '打开目录', 'np.collapse': '收起导航', 'np.toc': '目录',
+    'np.ai': '智能助手', 'np.reports': '实验报告', 'np.import': '从外部导入',
+    'nav.open': '展开导航', 'np.tocEmpty': '这个盘还没有章节。',
+    'act.pdfTitle': '渲染 PDF', 'act.bundleTitle': '导出投稿包',
+    'act.openTitle': '打开项目目录', 'act.close': '关闭',
+    'act.pdfOk': '编译完成', 'act.pdfFail': '编译没成功',
+    'act.pdfPages': '{n} 页 · {b} 字节', 'act.pdfPreview': '预览',
+    'act.pdfDownload': '下载 PDF', 'act.pdfPath': '产物路径',
+    'act.bundleOk': '投稿包已导出', 'act.bundleFail': '清单门没过',
+    'act.bundlePath': '包目录', 'act.bundleFiles': '包内 {n} 件',
+    'act.bundleGate': '清单门：{p} 过 / {f} 不过 / {w} 豁免',
+    'act.openOk': '已在访达里打开', 'act.openUnsupported': '本机不是 macOS：路径如下。',
+    'rp.delAsk': '删掉这条导入记录？\n（只删草稿记录；报告源文件不动）',
+    'rp.deleted': '已删掉这条导入记录（源文件没动）',
+    'rp.noDelete': '这条记录删不掉：{e}',
+    'ab.label': '摘要', 'ab.edit': '点击编辑摘要', 'ab.saved': '摘要已保存',
+    'ab.missing': '这个盘的主文件里没有 abstract 环境。',
+    'fc.title': '证据', 'fc.nofact': '账本里没有这条事实。',
+    'fc.claim': '断言', 'fc.value': '值', 'fc.source': '出处',
+    'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
+    'check.title': '全检结果', 'check.tabReport': '检查报告',
+    'check.tabMachine': '机器底账', 'rp.card.del': 'Delete',
   },
 };
 
@@ -292,11 +338,12 @@ const state = {
   disk: null,
   blocks: [],
   meta: null,
-  rtab: 'report',
+  nav: { pane: 'toc', aiOpen: false },   // 段五：导航面板（目录/报告 ＋ 助手浮层）
   filter: '',
   editing: null,      // 正在编辑的块 {id, file, host}
   assembly: [],       // main.tex 的装配清单
   form: null,         // 新建/编辑项目表单 {mode, project, disk}
+  abstract: null,     // 段五：封面摘要块模型（cover-abstract）
   report: null,       // 段三：检查报告数据（/report）
   machine: null,      // 段三：机器视图数据（/machine）
   reportError: '',
@@ -357,9 +404,9 @@ function applyI18n() {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });
   document.body.classList.toggle('panel-en', state.lang === 'en');
-  // 段四：报告页的标题与卡片文案跟着语言走。
-  renderReportsTitle();
-  if (document.body.getAttribute('data-view') === 'reports') renderReports();
+  // 段五：报告列表在导航面板里，跟着语言重画。
+  renderReports();
+  applyLangToggle();
 }
 
 async function getJSON(url) {
@@ -454,10 +501,7 @@ function diskLabel(disk) {
 
 function renderBlocks() {
   const host = $('#bodyBlocks');
-  const toc = $('#tocList');
   host.innerHTML = '';
-  toc.innerHTML = '';
-  const stack = [];
   let curSec = '';
   state.blocks.forEach((block) => {
     if (block.kind === 'section') {
@@ -479,11 +523,6 @@ function renderBlocks() {
       }
       section.appendChild(heading);
       host.appendChild(section);
-      stack.push({ id: block.id, title: block.title, title_en: block.title_en, level: 1 });
-      const li = document.createElement('li');
-      li.innerHTML = `<a href="#${esc(block.id)}"><span class="cn">${esc(block.title)}</span>` +
-        (block.title_en ? `<span class="en">${esc(block.title_en)}</span>` : '') + '</a>';
-      toc.appendChild(li);
     } else if (block.kind === 'subsection') {
       curSec = block.title || '';
       const heading = document.createElement('h3');
@@ -491,23 +530,8 @@ function renderBlocks() {
       heading.id = block.id;
       heading.textContent = block.title;
       host.appendChild(heading);
-      const li = document.createElement('li');
-      li.innerHTML = `<a href="#${esc(block.id)}"><span class="cn">${esc(block.title)}</span></a>`;
-      toc.appendChild(li);
     } else if (block.kind === 'abstract') {
-      const box = document.createElement('section');
-      box.className = 'abstract';
-      box.id = block.id;
-      box.innerHTML = `<div class="ab-label">${esc(state.lang === 'en' ? 'Abstract' : '摘要')}</div>`;
-      host.appendChild(box);
-      const holder = box;
-      const para = document.createElement('div');
-      para.innerHTML = block.html || '';
-      const absNode = para.firstElementChild;
-      holder.appendChild(absNode || document.createTextNode(''));
-      if (absNode) {
-        bindParaTools(absNode, (absNode.textContent || '').replace(/\s+/g, ' ').trim(), '', block.id);
-      }
+      // 段五：摘要归封面（封面摘要区可编辑），正文里不重复渲染。
     } else {
       const holder = document.createElement('div');
       holder.innerHTML = block.html || '';
@@ -525,6 +549,70 @@ function renderBlocks() {
       }
     }
   });
+  bindFactChips(host);
+  renderTocList();
+}
+
+/* 段五：目录住进导航面板；章节管理并入目录——
+   目录条目行内直接带 ↑↓/删除，末尾一行是「＋新建章节」。
+   条目顺序＝装配顺序（main.tex 的 \input 链），调序后目录跟着走。 */
+function renderTocList() {
+  const toc = $('#tocList');
+  if (!toc) return;
+  toc.innerHTML = '';
+  const assembly = state.assembly || [];
+  const byFile = new Map();
+  state.blocks.forEach((block) => {
+    if (block.kind !== 'section' && block.kind !== 'subsection') return;
+    const key = block.file || '';
+    if (!byFile.has(key)) byFile.set(key, []);
+    byFile.get(key).push(block);
+  });
+  const rows = [];
+  const used = new Set();
+  assembly.forEach((entry, index) => {
+    const list = byFile.get(entry.rel) || [];
+    list.forEach((block, position) => {
+      rows.push({ block: block, ops: position === 0 ? { index: index, entry: entry } : null });
+    });
+    used.add(entry.rel);
+  });
+  byFile.forEach((list, file) => {
+    if (used.has(file)) return;
+    list.forEach((block) => rows.push({ block: block, ops: null }));
+  });
+  if (!rows.length) {
+    const empty = document.createElement('li');
+    empty.className = 'toc-empty';
+    empty.textContent = t('np.tocEmpty');
+    toc.appendChild(empty);
+  }
+  rows.forEach((row) => {
+    const block = row.block;
+    const li = document.createElement('li');
+    li.className = 'toc-item' + ((block.level || 1) > 1 ? ' sub' : '');
+    const link = document.createElement('a');
+    link.href = '#' + block.id;
+    link.innerHTML = `<span class="cn">${esc(block.title || block.file || '')}</span>`;
+    li.appendChild(link);
+    if (row.ops) {
+      const last = row.ops.index === assembly.length - 1;
+      const ops = document.createElement('span');
+      ops.className = 'tm-ops';
+      ops.innerHTML = `
+        <button type="button" class="tm-btn" data-move="up" data-rel="${esc(block.file || '')}" title="${esc(t('toc.up'))}" ${row.ops.index === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" class="tm-btn" data-move="down" data-rel="${esc(block.file || '')}" title="${esc(t('toc.down'))}" ${last ? 'disabled' : ''}>↓</button>
+        <button type="button" class="tm-btn tm-del" data-del="${esc(block.file || '')}" title="${esc(t('toc.del'))}">🗑</button>`;
+      li.appendChild(ops);
+    }
+    toc.appendChild(li);
+  });
+  // 末尾：新建章节（行内入口，不是独立长条）
+  const add = document.createElement('li');
+  add.className = 'toc-add';
+  add.innerHTML = `<button type="button" id="tocNew">${esc(t('toc.new'))}</button>`;
+  toc.appendChild(add);
+
   $$('#tocList a').forEach((a) => {
     a.addEventListener('click', (ev) => {
       ev.preventDefault();
@@ -532,6 +620,22 @@ function renderBlocks() {
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
+  $$('#tocList [data-move]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      moveSection(btn.dataset.rel, btn.dataset.move);
+    });
+  });
+  $$('#tocList [data-del]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      deleteSection(btn.dataset.del);
+    });
+  });
+  const newBtn = $('#tocNew');
+  if (newBtn) newBtn.addEventListener('click', openNewSection);
 }
 
 function renderCover() {
@@ -551,6 +655,130 @@ function renderCover() {
   });
   const langLine = disk.lang === 'zh' ? t('disc.zh') : t('disc.en');
   $('#coverMeta').innerHTML = `${esc(t('card.disks'))}: <b>${esc(disk.id)}</b> · ${esc(langLine)} · ${esc(disk.path)}`;
+}
+
+/* ---------------------------------------------------------------- 封面摘要（段五） */
+
+const ABSTRACT_BLOCK = 'cover-abstract';
+
+async function loadAbstract() {
+  const project = state.project;
+  const disk = currentDisk();
+  const box = $('#coverAbstract');
+  if (!box) return;
+  if (!project || !disk) { state.abstract = null; box.hidden = true; return; }
+  try {
+    const data = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/block/${ABSTRACT_BLOCK}`);
+    if (!data || data.ok === false) { state.abstract = null; box.hidden = true; return; }
+    state.abstract = data;
+  } catch (err) {
+    state.abstract = null;
+    box.hidden = true;
+    return;
+  }
+  renderAbstract();
+}
+
+function abstractChipHtml(chip) {
+  const raw = chip.raw || '';
+  const label = chip.label || '';
+  if (label === 'fact') {
+    const match = /\\fact\s*\{([^{}]*)\}/.exec(raw);
+    const id = match ? match[1].trim() : '';
+    return `<span class="prot-chip fc-fact" data-fact="${esc(id)}" tabindex="0" role="button" title="${esc(raw)}">✓ ${esc(id)}</span>`;
+  }
+  return `<span class="prot-chip" title="${esc(raw)}">${esc(chip.display || raw)}</span>`;
+}
+
+function renderAbstract() {
+  const box = $('#coverAbstract');
+  const body = $('#coverAbstractBody');
+  const label = $('#coverAbstractLabel');
+  if (!box || !body) return;
+  const model = state.abstract;
+  if (!model) { box.hidden = true; return; }
+  box.hidden = false;
+  if (label) label.textContent = t('ab.label');
+  const parts = String(model.plain || '').split(/(\ue000P\d+\ue001)/);
+  let html = '';
+  parts.forEach((part) => {
+    if (!part) return;
+    if (/^\ue000P\d+\ue001$/.test(part)) {
+      const index = part.replace(/\D/g, '');
+      const chip = (model.chips || []).find((c) => String(c.i) === index);
+      html += chip ? abstractChipHtml(chip) : '';
+      return;
+    }
+    html += esc(part);
+  });
+  body.innerHTML = html;
+  body.classList.add('editable-para');
+  body.title = t('ab.edit');
+  body.onclick = (ev) => {
+    if (ev.target.closest('.fc-fact')) return;   // 芯片走证据卡，不进编辑
+    ev.stopPropagation();
+    enterEdit(ABSTRACT_BLOCK, '', body);
+  };
+  bindFactChips(body);
+}
+
+/* ---------------------------------------------------------------- 证据卡（段五） */
+
+function bindFactChips(root) {
+  $$('.fc[data-fact]', root || document).forEach((chip) => {
+    if (chip.dataset.bound === '1') return;
+    chip.dataset.bound = '1';
+    chip.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openFactCard(chip.dataset.fact || '', chip);
+    });
+  });
+}
+
+function factRow(key, value, mono) {
+  return `<div class="fc-row"><span class="k">${esc(t(key))}</span><span class="fc-v${mono ? ' mono' : ''}">${esc(value || '—')}</span></div>`;
+}
+
+function openFactCard(id, anchor) {
+  const card = $('#factCard');
+  const body = $('#fcBody');
+  const foot = $('#fcFoot');
+  const idEl = $('#fcId');
+  if (!card || !body) return;
+  idEl.textContent = id || '—';
+  const groups = machineGroups();
+  const rows = (groups && groups.ledger && Array.isArray(groups.ledger.rows)) ? groups.ledger.rows : [];
+  const row = rows.find((r) => String(r.id) === String(id));
+  if (!row) {
+    body.innerHTML = `<div class="fc-empty">${esc(t('fc.nofact'))}</div>`;
+    foot.innerHTML = '';
+  } else {
+    body.innerHTML = factRow('fc.claim', row.claim) +
+      factRow('fc.value', row.value) +
+      factRow('fc.source', row.source_file || row.source_path) +
+      factRow('fc.locator', row.locator) +
+      factRow('fc.conf', row.confidence) +
+      factRow('fc.fp', row.fp_short, true);
+    foot.innerHTML = row.source_path
+      ? `<span title="${esc(row.source_path)}">${esc(row.source_path)}</span>`
+      : '';
+  }
+  card.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const width = card.offsetWidth || 320;
+  const height = card.offsetHeight || 200;
+  let left = rect.left - width - 10;
+  if (left < 8) left = Math.min(rect.right + 10, window.innerWidth - width - 8);
+  let top = rect.top - 8;
+  if (top + height > window.innerHeight - 8) top = Math.max(8, window.innerHeight - height - 8);
+  card.style.left = Math.max(8, left) + 'px';
+  card.style.top = top + 'px';
+}
+
+function closeFactCard() {
+  const card = $('#factCard');
+  if (card) card.hidden = true;
 }
 
 function renderStatus() {
@@ -612,6 +840,8 @@ async function loadDisk() {
   }
   renderCover();
   renderBlocks();
+  // 段五：封面摘要（可编辑；写回走段二同一保护通道）。
+  await loadAbstract();
   // 段三：检查报告与机器视图跟着当前盘走（进哪篇管哪篇）。
   resetReportState();
   state.rerun = null;
@@ -1143,7 +1373,7 @@ function buildEditor(model) {
   return host;
 }
 
-async function enterEdit(blockId, file) {
+async function enterEdit(blockId, file, targetEl) {
   if (state.editing) await saveEdit();
   const project = state.project;
   const disk = currentDisk();
@@ -1159,11 +1389,12 @@ async function enterEdit(blockId, file) {
     toast((model && model.error) || '打不开这一段');
     return;
   }
-  const target = document.getElementById(blockId);
+  const target = targetEl || document.getElementById(blockId);
   if (!target) return;
+  const keepId = target.id || blockId;
   const editor = buildEditor(model);
   target.replaceWith(editor);
-  editor.id = blockId;
+  editor.id = keepId;
   state.editing = { id: blockId, file: file || model.file, host: editor };
   editor.focus();
   const range = document.createRange();
@@ -1215,32 +1446,7 @@ async function loadAssembly() {
   } catch (err) {
     state.assembly = [];
   }
-  renderManageList();
-}
-
-function renderManageList() {
-  const list = $('#tocManageList');
-  if (!list) return;
-  list.innerHTML = '';
-  state.assembly.forEach((entry, index) => {
-    const li = document.createElement('li');
-    li.className = 'tm-item';
-    li.innerHTML = `
-      <span class="tm-t">${esc(entry.title || entry.rel)}</span>
-      <span class="tm-f">${esc(entry.rel)}</span>
-      <span class="tm-ops">
-        <button type="button" class="tm-btn" data-move="up" data-rel="${esc(entry.rel)}" title="${esc(t('toc.up'))}" ${index === 0 ? 'disabled' : ''}>↑</button>
-        <button type="button" class="tm-btn" data-move="down" data-rel="${esc(entry.rel)}" title="${esc(t('toc.down'))}" ${index === state.assembly.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" class="tm-btn tm-del" data-del="${esc(entry.rel)}" title="${esc(t('toc.del'))}">🗑</button>
-      </span>`;
-    list.appendChild(li);
-  });
-  $$('#tocManageList [data-move]').forEach((btn) => {
-    btn.addEventListener('click', () => moveSection(btn.dataset.rel, btn.dataset.move));
-  });
-  $$('#tocManageList [data-del]').forEach((btn) => {
-    btn.addEventListener('click', () => deleteSection(btn.dataset.del));
-  });
+  renderTocList();
 }
 
 async function tocAction(path, body) {
@@ -1458,7 +1664,7 @@ function setAiBusy(busy) {
     send.disabled = !!busy;
     send.textContent = busy ? t('ai.sending') : t('ai.send');
   }
-  $$('#pane-ai .aq').forEach((btn) => { btn.disabled = !!busy; });
+  $$('#aiFloat .aq').forEach((btn) => { btn.disabled = !!busy; });
 }
 
 function aiFallbackNote(data) {
@@ -1521,7 +1727,7 @@ async function aiSend(question, mode) {
 function askAiAbout(text, section, id) {
   state.ai.quote = { text: String(text || ''), section: String(section || ''), id: String(id || '') };
   renderAiCtx();
-  switchRtab('ai');
+  setAiOpen(true);
   const input = $('#aiText');
   if (input) {
     input.value = t('ai.askPara');
@@ -1573,13 +1779,6 @@ function reportsApiPath(suffix) {
   return `/api/project/${encodeURIComponent(project.id)}/reports${suffix || ''}`;
 }
 
-function renderReportsTitle() {
-  const el = $('#rpTitleH1');
-  if (!el) return;
-  const name = state.project ? state.project.name : '';
-  el.textContent = t('rp.title.paper', { p: name || '—' });
-}
-
 function reportStatusLabel(report) {
   if (report && report.status_label) return String(report.status_label);
   const status = (report && report.status) || '';
@@ -1598,60 +1797,32 @@ const REPORT_STATUS_CLS = {
   confirmed: 'rp-confirmed',
 };
 
-function reportCardHtml(report) {
+/* 段五：实验报告列表住进导航面板——只导入与删除，不在工作台里编辑报告内容。 */
+function reportRowHtml(report) {
   const name = report.name || report.file || report.id || '';
   const file = report.file || '';
   const bound = Number(report.bound || 0);
   const cls = REPORT_STATUS_CLS[report.status || ''] || 'rp-pending_check';
-  return `<div class="rp-card" data-rp="${esc(report.id || '')}">
-    <div class="rp-top">
-      <span class="rp-name">${esc(name)}</span>
-      <span class="rp-ver" title="${esc(t('rp.card.from'))}">${esc(reportFromLabel(report))}</span>
-      <span class="rp-chip ${cls}">${esc(reportStatusLabel(report))}</span>
+  return `<div class="np-rp-row" data-rp="${esc(report.id || '')}">
+    <div class="np-rp-main">
+      <div class="np-rp-name" title="${esc(file)}">${esc(name)}</div>
+      <div class="np-rp-meta">
+        <span class="np-rp-chip ${cls}">${esc(reportStatusLabel(report))}</span>
+        <span>${esc(t('rp.card.bound', { n: bound }))}</span>
+        <span>${esc(report.time || '')}</span>
+      </div>
     </div>
-    <div class="rp-file" title="${esc(file)}">${esc(file)}</div>
-    <div class="rp-row"><span>${esc(t('rp.card.time'))}</span><span class="pj-v">${esc(report.time || '—')}</span></div>
-    <div class="rp-row"><span>${esc(t('rp.card.bound', { n: bound }))}</span></div>
+    <button type="button" class="np-rp-del" data-del="${esc(report.id || '')}" title="${esc(t('rp.delAsk'))}">${esc(t('rp.card.del'))}</button>
   </div>`;
 }
 
-function renderReportDetail(report) {
-  const nameEl = $('#rpDName');
-  if (nameEl) nameEl.textContent = report.name || report.file || report.id || '';
-  const metaEl = $('#rpDMeta');
-  if (metaEl) {
-    metaEl.innerHTML = `${esc(t('rp.card.time'))} ${esc(report.time || '—')} · ${esc(reportStatusLabel(report))} · ` +
-      `${esc(t('rp.card.from'))} ${esc(reportFromLabel(report))} · ${esc(t('rp.card.bound', { n: Number(report.bound || 0) }))}` +
-      `<br>${esc(t('rp.card.file'))}: <code title="${esc(report.file || '')}">${esc(report.file || '—')}</code>`;
-  }
-  const boundEl = $('#rpDBound');
-  if (boundEl) {
-    const n = Number(report.bound || 0);
-    boundEl.innerHTML = n
-      ? `<div class="rp-row"><span>${esc(t('rp.card.bound', { n: n }))}</span><span class="pj-v">${esc(String(n))}</span></div>` +
-        `<div class="rp-d-note">${esc(t('rp.d.rowsNote'))}</div>`
-      : `<div class="ff-empty">${esc(t('rp.d.nobound'))}</div>`;
-  }
-  const fileEl = $('#rpDFile');
-  if (fileEl) {
-    fileEl.innerHTML = `${esc(t('rp.d.draft'))}: <code>${esc(report.draft_path || '—')}</code>`;
-  }
-}
-
 function renderReports() {
-  const list = $('#rpList');
-  const detail = $('#rpDetail');
+  const list = $('#npReportsList');
   if (!list) return;
-  renderReportsTitle();
-  const report = state.reports.detail;
-  if (report) {
-    list.hidden = true;
-    if (detail) detail.hidden = false;
-    renderReportDetail(report);
+  if (!state.project) {
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.noProject'))}</div>`;
     return;
   }
-  list.hidden = false;
-  if (detail) detail.hidden = true;
   if (state.reports.loading) {
     list.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
     return;
@@ -1665,22 +1836,10 @@ function renderReports() {
     list.innerHTML = `<div class="ff-empty">${esc(t('rp.empty'))}</div>`;
     return;
   }
-  list.innerHTML = items.map(reportCardHtml).join('');
-  $$('#rpList [data-rp]').forEach((card) => {
-    card.addEventListener('click', () => {
-      const found = (state.reports.list || []).find((r) => String(r.id) === String(card.dataset.rp));
-      if (!found) return;
-      state.reports.detail = found;
-      renderReports();
-    });
+  list.innerHTML = items.map(reportRowHtml).join('');
+  $$('#npReportsList [data-del]').forEach((btn) => {
+    btn.addEventListener('click', () => deleteReport(btn.dataset.del));
   });
-}
-
-function openReportDetail(id) {
-  const report = (state.reports.list || []).find((r) => String(r.id) === String(id));
-  if (!report) return;
-  state.reports.detail = report;
-  renderReports();
 }
 
 async function loadReports() {
@@ -1701,11 +1860,22 @@ async function loadReports() {
   renderReports();
 }
 
-async function openReports() {
-  if (!state.project) { toast(t('rp.noProject')); return; }
-  state.reports.detail = null;
-  setView('reports');
-  await loadReports();
+/* 删除导入记录（草稿）：先确认，再走服务端；报告源文件不动。 */
+async function deleteReport(id) {
+  if (!id) return;
+  if (!window.confirm(t('rp.delAsk'))) return;
+  const path = reportsApiPath('/delete');
+  if (!path) return;
+  try {
+    const result = await postJSON(path, { name: id });
+    toast(t('rp.deleted'));
+    if (result && result.source_file) {
+      toast(t('rp.deleted') + '（' + result.source_file + '）');
+    }
+    await loadReports();
+  } catch (err) {
+    toast(t('rp.noDelete', { e: (err && err.message) || String(err) }));
+  }
 }
 
 /* ---------------------------------------------------------------- 导入向导 */
@@ -1958,24 +2128,186 @@ function setView(view) {
   if (view === 'projects') {
     $('#tocList').innerHTML = '';
     $('#bodyBlocks').innerHTML = '';
-    $('#tocManageList').innerHTML = '';
     state.assembly = [];
   }
   // 段落悬浮工具条只在正文里用。
   const bar = $('#ptools');
   if (bar) bar.classList.remove('on');
+  applyLangToggle();
 }
 
-function switchRtab(name) {
-  state.rtab = name;
-  $$('.rtab').forEach((btn) => btn.classList.toggle('on', btn.dataset.rtab === name));
-  $('#pane-report').classList.toggle('on', name === 'report');
-  $('#pane-machine').classList.toggle('on', name === 'machine');
-  $('#pane-ai').classList.toggle('on', name === 'ai');
-  document.body.classList.toggle('ai-full', name === 'ai');
-  // 段三：切回面板时按当前数据重画（语言切换后也走这条路）。
+/* 段五：导航面板头部的中/EN 切换。
+   单语言项目（只有一个盘）→ 整组隐藏；双盘项目 → 照常切盘。 */
+function applyLangToggle() {
+  const seg = $('#langSeg');
+  if (!seg) return;
+  const project = state.project;
+  const multi = project ? (project.multi_lang !== false && (project.disks || []).length > 1) : true;
+  seg.hidden = !multi;
+  $$('#langSeg button').forEach((btn) => {
+    btn.classList.toggle('on', btn.dataset.lang === state.lang);
+  });
+}
+
+/* 段五：导航面板的面板切换（目录 ⇄ 实验报告列表）。 */
+function switchNavPane(name) {
+  state.nav.pane = name;
+  $('#paneToc').classList.toggle('on', name === 'toc');
+  $('#paneReports').classList.toggle('on', name === 'reports');
+  $('#npToc').classList.toggle('on', name === 'toc');
+  $('#npReports').classList.toggle('on', name === 'reports');
+  if (name === 'reports') loadReports();
+}
+
+/* 段五：智能助手＝半透明悬浮层，浮在正文上方。 */
+function setAiOpen(open) {
+  state.nav.aiOpen = !!open;
+  const layer = $('#aiFloat');
+  if (layer) layer.hidden = !open;
+  $('#npAi').classList.toggle('on', !!open);
+  if (open) {
+    const input = $('#aiText');
+    if (input) input.focus();
+  }
+}
+
+/* 段五：导航面板整体收起／展开（收起后正文拉满，左缘留一枚竖排钮）。 */
+function setNavCollapsed(collapsed) {
+  document.body.classList.toggle('nav-collapsed', !!collapsed);
+  const btn = $('#npCollapse');
+  if (btn) btn.classList.toggle('on', !!collapsed);
+}
+
+/* ---------------------------------------------------------------- 段五：常用功能 */
+
+/* 动作接口永远 200；ok=false 表示「这件事没做成」，不是路由错。
+   所以不走 postJSON（它见 ok===false 就抛），自己接，把原因原样呈现。 */
+async function postAction(action) {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) throw new Error(t('rp.noProject'));
+  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/action`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ action: action }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (err) { data = null; }
+  if (!data) throw new Error('HTTP ' + res.status);
+  return data;
+}
+
+function openActionModal(title, html) {
+  const modal = $('#modalAction');
+  const titleEl = $('#actTitle');
+  const body = $('#actBody');
+  if (titleEl) titleEl.textContent = title;
+  if (body) body.innerHTML = html;
+  if (modal) modal.hidden = false;
+}
+
+function pdfUrl() {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return '';
+  return `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/pdf`;
+}
+
+async function runPdfAction() {
+  openActionModal(t('act.pdfTitle'), `<div class="ff-empty">${esc(t('rp.rerunning'))}</div>`);
+  let data = null;
+  try {
+    data = await postAction('pdf');
+  } catch (err) {
+    openActionModal(t('act.pdfTitle'),
+      `<div class="rp-card-err">${esc((err && err.message) || String(err))}</div>`);
+    return;
+  }
+  if (!data.ok) {
+    openActionModal(t('act.pdfTitle'),
+      `<div class="act-fail">${esc(t('act.pdfFail'))}</div>` +
+      `<div class="rp-card-err">${esc(data.error || data.message || '')}</div>`);
+    return;
+  }
+  const url = pdfUrl();
+  openActionModal(t('act.pdfTitle'),
+    `<div class="act-ok">${esc(t('act.pdfOk'))}</div>` +
+    `<div class="act-kv"><span>${esc(t('act.pdfPages', { n: Number(data.pdf_pages || 0), b: Number(data.pdf_bytes || 0) }))}</span></div>` +
+    `<div class="act-kv"><span>${esc(t('act.pdfPath'))}</span><code>${esc(data.pdf_path || '')}</code></div>` +
+    `<div class="act-links"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(t('act.pdfPreview'))}</a>` +
+    `<a href="${esc(url)}" download="main.pdf">${esc(t('act.pdfDownload'))}</a></div>` +
+    `<div class="act-preview"><iframe src="${esc(url)}" title="PDF"></iframe></div>`);
+}
+
+async function runBundleAction() {
+  openActionModal(t('act.bundleTitle'), `<div class="ff-empty">${esc(t('rp.rerunning'))}</div>`);
+  let data = null;
+  try {
+    data = await postAction('bundle');
+  } catch (err) {
+    openActionModal(t('act.bundleTitle'),
+      `<div class="rp-card-err">${esc((err && err.message) || String(err))}</div>`);
+    return;
+  }
+  const gateRows = (data.gate || []).map((item) => {
+    const status = item.status || '';
+    return `<div class="act-kv"><span>${esc(item.code || '')} ${esc(item.name || '')}</span>` +
+      `<span class="act-gate ${esc(status)}">${esc(status)}</span></div>`;
+  }).join('');
+  if (!data.ok) {
+    openActionModal(t('act.bundleTitle'),
+      `<div class="act-fail">${esc(t('act.bundleFail'))}</div>` +
+      `<div class="rp-card-err">${esc(data.error || data.failure_reason || '')}</div>` + gateRows);
+    return;
+  }
+  openActionModal(t('act.bundleTitle'),
+    `<div class="act-ok">${esc(t('act.bundleOk'))}</div>` +
+    `<div class="act-kv"><span>${esc(t('act.bundlePath'))}</span><code>${esc(data.bundle_dir || '')}</code></div>` +
+    `<div class="act-kv"><span>${esc(t('act.bundleFiles', { n: Number(data.file_count || 0) }))}</span></div>` +
+    `<div class="act-kv"><span>${esc(t('act.bundleGate', { p: Number(data.passed || 0), f: Number(data.failed || 0), w: Number(data.waived || 0) }))}</span></div>` +
+    gateRows);
+}
+
+async function runOpenDirAction() {
+  let data = null;
+  try {
+    data = await postAction('open_dir');
+  } catch (err) {
+    toast((err && err.message) || String(err));
+    return;
+  }
+  if (data.ok && data.opened) {
+    toast(data.message || t('act.openOk'));
+    return;
+  }
+  // 非 macOS（或 open 失败）：退回「展示路径」，不假装打开过。
+  openActionModal(t('act.openTitle'),
+    `<div class="act-fail">${esc(data.error || t('act.openUnsupported'))}</div>` +
+    `<div class="act-kv"><span>${esc(t('act.pdfPath'))}</span><code>${esc(data.path || '')}</code></div>`);
+}
+
+/* ---------------------------------------------------------------- 全检模态（段五） */
+
+function openCheckModal() {
+  const modal = $('#modalCheck');
+  if (modal) modal.hidden = false;
+}
+
+function switchCheckTab(name) {
+  $$('.mt-tab').forEach((btn) => btn.classList.toggle('on', btn.dataset.mt === name));
+  const report = $('#mtReport');
+  const machine = $('#mtMachine');
+  if (report) report.classList.toggle('on', name === 'report');
+  if (machine) machine.classList.toggle('on', name === 'machine');
   if (name === 'report') renderReport();
   if (name === 'machine') renderMachine();
+}
+
+async function runFullCheck() {
+  openCheckModal();
+  switchCheckTab('report');
+  await rerunCheck();
 }
 
 function bind() {
@@ -2000,23 +2332,33 @@ function bind() {
     applyI18n();
     renderProjects();
   });
-  $$('.rtab').forEach((btn) => {
-    btn.addEventListener('click', () => switchRtab(btn.dataset.rtab));
+  // 段五：导航面板
+  $('#npCollapse').addEventListener('click', () => {
+    setNavCollapsed(!document.body.classList.contains('nav-collapsed'));
   });
-  $('#tocToggle').addEventListener('click', () => {
-    document.body.classList.toggle('toc-hidden');
+  $('#navOpen').addEventListener('click', () => { setNavCollapsed(false); });
+  $('#npToc').addEventListener('click', () => { switchNavPane('toc'); });
+  $('#npReports').addEventListener('click', () => { switchNavPane('reports'); });
+  $('#npAi').addEventListener('click', () => { setAiOpen(!state.nav.aiOpen); });
+  // 段五：常用功能（弹模态框操作）
+  $('#actPdf').addEventListener('click', runPdfAction);
+  $('#actCheck').addEventListener('click', runFullCheck);
+  $('#actBundle').addEventListener('click', runBundleAction);
+  $('#actOpenDir').addEventListener('click', runOpenDirAction);
+  $('#actClose').addEventListener('click', () => { $('#modalAction').hidden = true; });
+  $('#modalAction').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalAction') $('#modalAction').hidden = true;
   });
-  $('#tocCollapse').addEventListener('click', () => {
-    document.body.classList.add('toc-hidden');
+  $('#modalCheckClose').addEventListener('click', () => { $('#modalCheck').hidden = true; });
+  $('#modalCheck').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalCheck') $('#modalCheck').hidden = true;
   });
-  $('#rcCollapse').addEventListener('click', () => {
-    document.body.classList.add('rc-collapsed');
+  $$('.mt-tab').forEach((btn) => {
+    btn.addEventListener('click', () => switchCheckTab(btn.dataset.mt));
   });
-  $('#rcOpen').addEventListener('click', () => {
-    document.body.classList.remove('rc-collapsed');
-  });
-  $('#aiEntry').addEventListener('click', () => switchRtab('ai'));
-  // 段四：AI 对话（真后端）
+  // 段五：证据卡
+  $('#fcClose').addEventListener('click', closeFactCard);
+  // 段四：AI 对话（真后端；浮层）
   $('#aiSend').addEventListener('click', () => {
     const input = $('#aiText');
     const text = input ? input.value.trim() : '';
@@ -2025,17 +2367,17 @@ function bind() {
     aiSend(text, 'ask');
   });
   $('#aiText').addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Enter') return;
+    if (ev.key !== 'Enter' || ev.shiftKey) return;
     ev.preventDefault();
     $('#aiSend').click();
   });
-  $$('#pane-ai .aq').forEach((btn) => {
+  $$('#aiFloat .aq').forEach((btn) => {
     btn.addEventListener('click', () => aiSend(t('ai.q' + btn.dataset.q + '.text'), 'ask'));
   });
   $('#aiFab').addEventListener('click', clearAiConversation);
-  $('#aiBack').addEventListener('click', () => switchRtab('report'));
+  $('#aiBack').addEventListener('click', () => setAiOpen(false));
   $('#askReportRead').addEventListener('click', () => {
-    switchRtab('ai');
+    setAiOpen(true);
     aiSend(t('ai.reportQ'), 'explain');
   });
   $('#ptAsk').addEventListener('click', () => {
@@ -2045,19 +2387,8 @@ function bind() {
   });
   $('#ptools').addEventListener('mouseenter', () => clearTimeout(paraToolsTimer));
   $('#ptools').addEventListener('mouseleave', hideParaTools);
-  // 段四：实验报告管理
-  $('#rpSideBtn').addEventListener('click', () => {
-    openReports();
-  });
-  $('#rpBackWs').addEventListener('click', () => {
-    setView('workbench');
-    renderStatus();
-  });
-  $('#rpImportBtn').addEventListener('click', openWizard);
-  $('#rpBack').addEventListener('click', () => {
-    state.reports.detail = null;
-    renderReports();
-  });
+  // 段五：实验报告列表（导航面板里）
+  $('#npImportBtn').addEventListener('click', openWizard);
   // 段四：导入向导（选文件 → 字段映射 → 确认绑定）
   $('#wzFiles').addEventListener('change', (ev) => {
     const input = ev.target;
@@ -2109,8 +2440,7 @@ function bind() {
     $('#pfReportsUnlock').hidden = false;
     $('#pfReportsReset').hidden = true;
   });
-  // 段二：章节管理
-  $('#tocNew').addEventListener('click', openNewSection);
+  // 段二：章节管理（目录行内入口）
   $('#newSecOk').addEventListener('click', createSection);
   $('#newSecCancel').addEventListener('click', () => { $('#modalNew').hidden = true; });
   $('#modalNew').addEventListener('click', (ev) => {
@@ -2139,8 +2469,13 @@ function bind() {
     if (ev.key !== 'Escape') return;
     const modal = $('#modalFindings');
     if (modal && !modal.hidden) modal.hidden = true;
+    const check = $('#modalCheck');
+    if (check && !check.hidden) check.hidden = true;
+    const action = $('#modalAction');
+    if (action && !action.hidden) action.hidden = true;
     const wizard = $('#wizardModal');
     if (wizard && !wizard.hidden) closeWizard();
+    closeFactCard();
   });
   // 段二：编辑态的提交键（Esc / 点外面）
   document.addEventListener('keydown', (ev) => {
@@ -2152,7 +2487,7 @@ function bind() {
   document.addEventListener('click', (ev) => {
     if (!state.editing) return;
     if (state.editing.host.contains(ev.target)) return;
-    if (ev.target.closest('#tocFloat') || ev.target.closest('.modal')) return;
+    if (ev.target.closest('.navpanel') || ev.target.closest('.modal') || ev.target.closest('.ai-float')) return;
     saveEdit();
   });
   window.addEventListener('scroll', () => {
@@ -2167,7 +2502,7 @@ function bind() {
 async function main() {
   bind();
   applyI18n();
-  switchRtab('report');
+  switchNavPane('toc');
   await loadProjects();
   setView('projects');
 }

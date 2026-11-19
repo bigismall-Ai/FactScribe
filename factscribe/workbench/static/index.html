@@ -10,18 +10,10 @@
 
 <header class="topbar">
   <span class="tb-brand">FactScribe</span>
-  <button type="button" class="tb-btn" id="goProjects">
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
-    <span data-i18n="nav.projects">项目管理</span>
-  </button>
   <button type="button" class="tb-btn" id="goNew">
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
     <span data-i18n="tb.new">新建</span>
   </button>
-  <div class="lang-seg" id="langSeg" role="group" aria-label="panel language">
-    <button type="button" data-lang="zh" class="on">中</button>
-    <button type="button" data-lang="en">EN</button>
-  </div>
 </header>
 
 <div class="shell">
@@ -104,35 +96,6 @@
     </div>
   </main>
 
-  <!-- ============ 实验报告管理（段四） ============ -->
-  <main class="mainview" id="viewReports">
-    <div class="pv-wrap">
-      <div class="pv-head">
-        <div class="pv-head-txt">
-          <h1 id="rpTitleH1">实验报告</h1>
-          <p class="pv-sub" data-i18n="rp.sub">当前项目的实验报告：导入、字段映射、数字绑定与签收状态。</p>
-        </div>
-        <div class="pv-head-btns">
-          <button type="button" class="btn-ghost" id="rpBackWs" data-i18n="rp.backWs">返回工作台</button>
-          <button type="button" class="btn-primary" id="rpImportBtn">
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-            <span data-i18n="wz.open">导入实验报告</span>
-          </button>
-        </div>
-      </div>
-      <div class="pv-grid rp-grid" id="rpList"></div>
-      <div class="rp-detail" id="rpDetail" hidden>
-        <button type="button" class="btn-ghost" id="rpBack" data-i18n="rp.back">返回列表</button>
-        <h2 class="rp-d-name" id="rpDName"></h2>
-        <div class="rp-d-meta" id="rpDMeta"></div>
-        <h3 class="rp-d-h" data-i18n="rp.d.bound">数字绑定清单</h3>
-        <div id="rpDBound"></div>
-        <h3 class="rp-d-h" data-i18n="rp.d.file">原始文件</h3>
-        <div class="rp-file-ph" id="rpDFile"></div>
-      </div>
-    </div>
-  </main>
-
   <!-- ============ 论文工作台 ============ -->
   <main class="doc" id="viewWorkbench">
     <div class="progwrap"><div id="prog"></div></div>
@@ -142,171 +105,234 @@
         <div class="sub" id="coverSub"></div>
         <div class="st-line" id="coverSt">—</div>
         <div class="meta" id="coverMeta"></div>
+        <div class="cover-abstract" id="coverAbstract" hidden>
+          <div class="ab-label" id="coverAbstractLabel">摘要</div>
+          <div class="ab-body" id="coverAbstractBody"></div>
+        </div>
       </section>
       <div id="ptools"><button type="button" class="pt ask" id="ptAsk" data-i18n="ai.ask">问 AI</button></div>
       <div id="bodyBlocks"></div>
     </div>
   </main>
 
-  <!-- ============ 右栏（互斥标签页） ============ -->
-  <aside class="colright" id="colright">
-    <div class="rtabs">
-      <button type="button" class="rtab-btn" id="tocToggle" data-i18n-title="toc.toggle" title="显示/隐藏目录">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 2.5h11v11h-11z"/><path d="M5 5.5h6M5 8h6M5 10.5h4"/></svg>
+  <!-- ============ 右导航面板（固定 · 可整体收起） ============ -->
+  <aside class="navpanel" id="navPanel">
+    <!-- 头部行：项目管理 ＋ 中/EN（单语项目整组隐藏） -->
+    <div class="np-head">
+      <button type="button" class="tb-btn np-projects" id="goProjects">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
+        <span data-i18n="nav.projects">项目管理</span>
       </button>
-      <button type="button" class="rtab on" data-rtab="report" data-i18n="tab.report">检查报告</button>
-      <button type="button" class="rtab" data-rtab="machine" data-i18n="tab.machine">机器视图</button>
-      <button type="button" class="rtab" data-rtab="ai" data-i18n="tab.ai">AI 对话</button>
+      <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
+        <button type="button" data-lang="zh" class="on">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
     </div>
 
-    <div class="rpane rpane-report on" id="pane-report">
-      <div class="rp-tools">
-        <button type="button" class="rp-run" id="rpRerun" data-i18n="rp.rerun">重跑检查</button>
-        <button type="button" class="btn-ghost rp-ai-btn" id="askReportRead" data-i18n="rp.read" data-i18n-title="rp.readT" title="AI 用大白话总评当前检查结果">让 AI 解读这份报告</button>
-        <span class="rp-tools-note" id="rpRerunNote" hidden></span>
-      </div>
+    <!-- 常用功能行 -->
+    <div class="np-tools">
+      <button type="button" class="np-tool" id="actPdf">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>
+        <span data-i18n="np.pdf">渲染 PDF</span>
+      </button>
+      <button type="button" class="np-tool" id="actCheck">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
+        <span data-i18n="np.check">全检一次</span>
+      </button>
+      <button type="button" class="np-tool" id="actBundle">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 5.5h11v8h-11z"/><path d="M5.5 5.5v-2h5v2"/></svg>
+        <span data-i18n="np.bundle">导出投稿包</span>
+      </button>
+      <button type="button" class="np-tool" id="actOpenDir">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5h4l1.5 2h5.5v7h-11z"/></svg>
+        <span data-i18n="np.openDir">打开项目目录</span>
+      </button>
+    </div>
 
-      <!-- 段三：体检（折叠卡，默认收起） -->
-      <section class="rcard fold" id="cardHealth">
-        <button type="button" class="rc-fold-h">
-          <span class="rc-t" data-i18n="hc.h">体检</span>
-          <span class="fold-badge" id="badgeHealth">—</span>
-          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-        </button>
-        <div class="rc-fold-b" id="bodyHealth">
-          <div class="st-row">
-            <div class="st ok" id="stFacts">—</div>
-            <div class="st ok" id="stSections">—</div>
-          </div>
-          <div class="kv" id="stHealthKv"></div>
-          <div class="st-sub" id="stNote"></div>
-          <div class="rp-card-err" id="stRerunErr" hidden></div>
+    <!-- 切换按钮组（四枚纵排） -->
+    <div class="np-switches">
+      <button type="button" class="np-switch" id="npCollapse" data-i18n="np.collapse">收起导航</button>
+      <button type="button" class="np-switch" id="npToc" data-i18n="np.toc">目录</button>
+      <button type="button" class="np-switch" id="npAi" data-i18n="np.ai">智能助手</button>
+      <button type="button" class="np-switch" id="npReports" data-i18n="np.reports">实验报告列表</button>
+    </div>
+
+    <!-- 面板内容区：目录（章节管理并入） ｜ 实验报告列表 -->
+    <div class="np-body">
+      <section class="np-pane on" id="paneToc">
+        <div class="np-pane-h" data-i18n="toc.h">目录</div>
+        <ul class="toc-list" id="tocList"></ul>
+      </section>
+      <section class="np-pane" id="paneReports">
+        <div class="np-pane-h">
+          <span data-i18n="np.reports">实验报告列表</span>
+          <button type="button" class="np-mini" id="npImportBtn" data-i18n="np.import">从外部导入</button>
         </div>
+        <div class="np-reports" id="npReportsList"></div>
       </section>
-
-      <!-- 段三：发现（折叠卡，默认收起） -->
-      <section class="rcard fold" id="cardFindings">
-        <button type="button" class="rc-fold-h">
-          <span class="rc-t" data-i18n="rp.findings">发现</span>
-          <span class="fold-badge" id="badgeFindings">—</span>
-          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-        </button>
-        <div class="rc-fold-b" id="bodyFindings"></div>
-      </section>
-
-      <!-- 段三：四步链（折叠卡，默认收起） -->
-      <section class="rcard fold" id="cardChain">
-        <button type="button" class="rc-fold-h">
-          <span class="rc-t" data-i18n="rp.chain">四步链</span>
-          <span class="fold-badge" id="badgeChain">—</span>
-          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-        </button>
-        <div class="rc-fold-b" id="bodyChainSteps"></div>
-      </section>
-    </div>
-
-    <div class="rpane rpane-machine" id="pane-machine">
-      <div class="mv-head">
-        <div class="t" data-i18n="mv.h">机器视图</div>
-        <div class="sub" data-i18n="mv.sub">这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。</div>
-      </div>
-      <div class="acc" id="mvAcc">
-        <!-- 段三：账本表 -->
-        <section class="acc-card" id="accLedger">
-          <button type="button" class="acc-h">
-            <span class="acc-t" data-i18n="mv.ledger">账本表</span>
-            <span class="acc-badge" id="badgeLedger">—</span>
-            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-          </button>
-          <div class="acc-b" id="bodyLedger"></div>
-        </section>
-
-        <!-- 段三：正文扫描 -->
-        <section class="acc-card" id="accScan">
-          <button type="button" class="acc-h">
-            <span class="acc-t" data-i18n="mv.scan">正文扫描</span>
-            <span class="acc-badge" id="badgeScan">—</span>
-            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-          </button>
-          <div class="acc-b" id="bodyScan"></div>
-        </section>
-
-        <!-- 段三：文献与证据链 -->
-        <section class="acc-card" id="accEvidence">
-          <button type="button" class="acc-h">
-            <span class="acc-t" data-i18n="mv.evidence">文献与证据链</span>
-            <span class="acc-badge" id="badgeEvidence">—</span>
-            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-          </button>
-          <div class="acc-b" id="bodyEvidence"></div>
-        </section>
-
-        <!-- 段三：导出与命令 -->
-        <section class="acc-card" id="accExport">
-          <button type="button" class="acc-h">
-            <span class="acc-t" data-i18n="mv.export">导出与命令</span>
-            <span class="acc-badge" id="badgeExport">—</span>
-            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-          </button>
-          <div class="acc-b" id="bodyExport"></div>
-        </section>
-      </div>
-    </div>
-
-    <div class="rpane rpane-ai" id="pane-ai">
-      <div class="ai-head">
-        <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
-        <button type="button" class="ai-fab" id="aiFab" data-i18n="ai.clear">清空</button>
-        <button type="button" class="ai-close" id="aiBack" data-i18n="ai.back">返回</button>
-      </div>
-      <div class="ai-ctx" id="aiCtx"></div>
-      <div class="ai-msgs" id="aiMsgs">
-        <div class="msg ai">
-          <div class="who">AI</div>
-          <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
-        </div>
-      </div>
-      <div class="ai-quick">
-        <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
-        <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
-        <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
-      </div>
-      <div class="ai-input">
-        <input id="aiText" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off">
-        <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
-      </div>
     </div>
   </aside>
 
-  <!-- ============ 悬浮目录（停靠右栏左侧） ============ -->
-  <nav class="toc-float" id="tocFloat" aria-label="目录">
-    <div class="tf-head">
-      <span class="rail-h" data-i18n="toc.h">目录</span>
-      <button type="button" class="tf-collapse" id="tocCollapse" data-i18n-title="toc.collapse" title="收起目录">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
-      </button>
-    </div>
-    <ul id="tocList"></ul>
-    <div class="tf-manage">
-      <div class="tf-m-head">
-        <span class="tf-m-t" data-i18n="toc.manage">章节管理</span>
-        <button type="button" class="tf-m-new" id="tocNew" data-i18n="toc.new">＋ 新建章节</button>
-      </div>
-      <ul id="tocManageList"></ul>
-    </div>
-  </nav>
+  <!-- 收起后：左缘只剩一枚竖排「展开导航」钮 -->
+  <button type="button" class="nav-open" id="navOpen" data-i18n="nav.open">展开导航</button>
 
-  <!-- ============ 右缘三竖标 ============ -->
-  <div class="side-rail" id="sideRail">
-    <button type="button" class="side-tab" id="rpSideBtn" data-i18n-title="rp.sideT" title="打开实验报告管理" data-i18n="side.reports">实验报告</button>
-    <button type="button" class="side-tab" id="rcCollapse" data-i18n="side.collapse">收起右栏</button>
-    <button type="button" class="side-tab" id="aiEntry" data-i18n="tab.ai">AI 对话</button>
-  </div>
-  <button type="button" class="side-alone" id="rcOpen" data-i18n="side.expand">展开右栏</button>
+  <!-- ============ 智能助手（半透明悬浮层，浮在正文上方） ============ -->
+  <section class="ai-float" id="aiFloat" hidden>
+    <div class="ai-head">
+      <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
+      <button type="button" class="ai-fab" id="aiFab" data-i18n="ai.clear">清空</button>
+      <button type="button" class="ai-close" id="aiBack" data-i18n="ai.back">关闭</button>
+    </div>
+    <div class="ai-ctx" id="aiCtx"></div>
+    <div class="ai-msgs" id="aiMsgs">
+      <div class="msg ai">
+        <div class="who">AI</div>
+        <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
+      </div>
+    </div>
+    <div class="ai-quick">
+      <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
+      <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
+      <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
+    </div>
+    <div class="ai-input">
+      <textarea id="aiText" rows="3" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off"></textarea>
+      <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
+    </div>
+  </section>
 
 </div>
 
 <div id="toast"></div>
+
+<!-- 数字芯片下钻：证据卡 -->
+<div class="fact-card" id="factCard" hidden>
+  <div class="fc-h"><span class="k" id="fcId">—</span><span class="fc-close" id="fcClose">×</span></div>
+  <div class="fc-body" id="fcBody"></div>
+  <div class="fc-foot" id="fcFoot"></div>
+</div>
+
+<!-- 常用功能的结果模态（PDF / 投稿包 / 打开目录） -->
+<div class="modal" id="modalAction" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" id="actTitle">—</div>
+    <div class="modal-body" id="actBody"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="actClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 全检：检查报告 ＋ 机器底账 -->
+<div class="modal" id="modalCheck" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t">
+      <span data-i18n="np.check">全检一次</span>
+      <span class="mt-tabs">
+        <button type="button" class="mt-tab on" data-mt="report" data-i18n="tab.report">检查报告</button>
+        <button type="button" class="mt-tab" data-mt="machine" data-i18n="tab.machine">机器底账</button>
+      </span>
+    </div>
+    <div class="modal-body">
+      <div class="mt-pane on" id="mtReport">
+        <div class="rp-tools">
+          <button type="button" class="rp-run" id="rpRerun" data-i18n="rp.rerun">重跑检查</button>
+          <button type="button" class="btn-ghost rp-ai-btn" id="askReportRead" data-i18n="rp.read" data-i18n-title="rp.readT" title="AI 用大白话总评当前检查结果">让 AI 解读这份报告</button>
+          <span class="rp-tools-note" id="rpRerunNote" hidden></span>
+        </div>
+
+        <!-- 段三：体检（折叠卡，默认收起） -->
+        <section class="rcard fold" id="cardHealth">
+          <button type="button" class="rc-fold-h">
+            <span class="rc-t" data-i18n="hc.h">体检</span>
+            <span class="fold-badge" id="badgeHealth">—</span>
+            <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="rc-fold-b" id="bodyHealth">
+            <div class="st-row">
+              <div class="st ok" id="stFacts">—</div>
+              <div class="st ok" id="stSections">—</div>
+            </div>
+            <div class="kv" id="stHealthKv"></div>
+            <div class="st-sub" id="stNote"></div>
+            <div class="rp-card-err" id="stRerunErr" hidden></div>
+          </div>
+        </section>
+
+        <!-- 段三：发现（折叠卡，默认收起） -->
+        <section class="rcard fold" id="cardFindings">
+          <button type="button" class="rc-fold-h">
+            <span class="rc-t" data-i18n="rp.findings">发现</span>
+            <span class="fold-badge" id="badgeFindings">—</span>
+            <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="rc-fold-b" id="bodyFindings"></div>
+        </section>
+
+        <!-- 段三：四步链（折叠卡，默认收起） -->
+        <section class="rcard fold" id="cardChain">
+          <button type="button" class="rc-fold-h">
+            <span class="rc-t" data-i18n="rp.chain">四步链</span>
+            <span class="fold-badge" id="badgeChain">—</span>
+            <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="rc-fold-b" id="bodyChainSteps"></div>
+        </section>
+      </div>
+
+      <div class="mt-pane" id="mtMachine">
+        <div class="mv-head">
+          <div class="t" data-i18n="mv.h">机器视图</div>
+          <div class="sub" data-i18n="mv.sub">这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。</div>
+        </div>
+        <div class="acc" id="mvAcc">
+          <!-- 段三：账本表 -->
+          <section class="acc-card" id="accLedger">
+            <button type="button" class="acc-h">
+              <span class="acc-t" data-i18n="mv.ledger">账本表</span>
+              <span class="acc-badge" id="badgeLedger">—</span>
+              <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <div class="acc-b" id="bodyLedger"></div>
+          </section>
+
+          <!-- 段三：正文扫描 -->
+          <section class="acc-card" id="accScan">
+            <button type="button" class="acc-h">
+              <span class="acc-t" data-i18n="mv.scan">正文扫描</span>
+              <span class="acc-badge" id="badgeScan">—</span>
+              <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <div class="acc-b" id="bodyScan"></div>
+          </section>
+
+          <!-- 段三：文献与证据链 -->
+          <section class="acc-card" id="accEvidence">
+            <button type="button" class="acc-h">
+              <span class="acc-t" data-i18n="mv.evidence">文献与证据链</span>
+              <span class="acc-badge" id="badgeEvidence">—</span>
+              <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <div class="acc-b" id="bodyEvidence"></div>
+          </section>
+
+          <!-- 段三：导出与命令 -->
+          <section class="acc-card" id="accExport">
+            <button type="button" class="acc-h">
+              <span class="acc-t" data-i18n="mv.export">导出与命令</span>
+              <span class="acc-badge" id="badgeExport">—</span>
+              <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+            </button>
+            <div class="acc-b" id="bodyExport"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="modalCheckClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal" id="modalNew" hidden>
   <div class="modal-card">

@@ -314,6 +314,9 @@ def aggregate(disks: list[Path]) -> list[dict]:
             "name": _config_title(Path(primary["path"])) or primary["name"],
             "root": parent,
             "disks": disks_out,
+            # 单语项目（只有一个盘）→ 导航面板上的中/EN 切换整组隐藏。
+            "multi_lang": len(disks_out) > 1,
+            "langs": sorted({d["lang"] for d in disks_out if d.get("lang")}),
         })
     return projects
 

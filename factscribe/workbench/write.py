@@ -631,6 +631,117 @@ def _safe_section_file(disk_root: Path, rel: str) -> Path:
     return target
 
 
+# ---------------------------------------------------------------- 摘要（封面）
+
+#: 摘要块的固定 id（封面摘要区只有一个摘要，前端按这个 id 就地编辑）。
+ABSTRACT_BLOCK_ID = "cover-abstract"
+
+_ABSTRACT_BEGIN_RE = re.compile(r"\\begin\s*\{abstract\}")
+_ABSTRACT_END_RE = re.compile(r"\\end\s*\{abstract\}")
+
+
+def _root_tex_file(disk_root: Path) -> tuple[str, Path]:
+    """根文件（配置里的 `root_tex`，没有就 `main.tex`）——相对名与绝对路径。
+
+    摘要住在根文件的 `abstract` 环境里；根文件**不在** `sections/` 下，
+    所以它自己一套闸（不许越出盘根、不许写账本目录、只写 .tex）。
+    """
+    rel = ""
+    try:
+        cfg = load_config(disk_root)
+        rel = str(getattr(cfg, "root_tex", "") or "").strip()
+    except (ConfigError, OSError, ValueError):
+        rel = ""
+    rel = rel or "main.tex"
+    from pathlib import PurePosixPath
+
+    pure = PurePosixPath(rel.replace("\\", "/"))
+    if pure.is_absolute() or any(part == ".." for part in pure.parts):
+        raise ConfigError("根文件路径不合法：%s" % rel,
+                          code="SECTION_PATH_INVALID")
+    root = Path(disk_root).resolve()
+    target = Path(disk_root).joinpath(*[p for p in pure.parts if p not in ("", ".")])
+    try:
+        inside = target.resolve().relative_to(root)
+    except (OSError, ValueError):
+        raise ConfigError("根文件越出项目根：%s" % rel,
+                          code="SECTION_PATH_INVALID")
+    if target.suffix.lower() != ".tex":
+        raise ConfigError("根文件必须是 .tex：%s" % rel,
+                          code="SECTION_PATH_INVALID")
+    parts = inside.parts
+    if parts and parts[0] in ("facts", "audit", "results", "runs"):
+        raise ConfigError("账本与产物目录只读：%s" % rel,
+                          code="SECTION_READONLY")
+    return inside.as_posix(), target
+
+
+def _abstract_span(text: str) -> tuple[int, int, int, int] | None:
+    """找 `abstract` 环境的**内容**区间。
+
+    返回 (内容起点, 内容终点, 前导空白长度, 尾部空白长度)；找不到返回 None。
+    内容两头的空白另算——写回时照原样保留，版式不塌。
+    """
+    begin = _ABSTRACT_BEGIN_RE.search(text)
+    if not begin:
+        return None
+    end = _ABSTRACT_END_RE.search(text, begin.end())
+    if not end:
+        return None
+    inner = text[begin.end():end.start()]
+    lead = len(inner) - len(inner.lstrip())
+    trail = len(inner) - len(inner.rstrip())
+    return (begin.end(), end.start(), lead, trail)
+
+
+def abstract_block(disk_root: Path) -> Block:
+    """封面摘要块：根文件 `abstract` 环境里的正文。"""
+    rel, path = _root_tex_file(disk_root)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到根文件：%s（%s）" % (rel, exc),
+                          code="SECTION_MISSING")
+    span = _abstract_span(text)
+    if span is None:
+        raise ConfigError("这个盘的主文件里没有 abstract 环境（摘要没法就地编辑）",
+                          code="ABSTRACT_MISSING")
+    start, end, lead, trail = span
+    core = text[start + lead:end - trail]
+    return Block(file=rel, block_id=ABSTRACT_BLOCK_ID, kind="abstract",
+                 start=start + lead, end=end - trail, raw=core, title="摘要")
+
+
+def save_abstract(disk_root: Path, client_text: str) -> dict:
+    """把改后的摘要写回根文件的 `abstract` 环境。
+
+    走段二同一条保护通道：保护面（`\\fact{}` 等）原样保留、删了按原位补回、
+    花括号不配平不落盘、原子写、保存前留 `.bak`。
+    """
+    block = abstract_block(disk_root)
+    segments = scan(block.raw, _bound_values(disk_root))
+    new_raw, warnings = _rebuild(segments, client_text)
+    if not _balanced_ok(new_raw):
+        raise ConfigError("摘要的花括号不配平（写下去会编不过），没有保存。",
+                          code="EDIT_UNBALANCED")
+    rel, path = _root_tex_file(disk_root)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到根文件：%s（%s）" % (rel, exc),
+                          code="SECTION_MISSING")
+    span = _abstract_span(text)
+    if span is None:
+        raise ConfigError("这个盘的主文件里没有 abstract 环境（摘要没法就地编辑）",
+                          code="ABSTRACT_MISSING")
+    start, end, lead, trail = span
+    new_text = text[:start + lead] + new_raw + text[end - trail:]
+    result = atomic_write(path, new_text)
+    return {"ok": True, "file": rel, "block": ABSTRACT_BLOCK_ID,
+            "before": block.raw, "after": new_raw,
+            "backup": result["backup"], "warnings": warnings}
+
+
 def find_block(disk_root: Path, rel_file: str, block_id: str) -> Block:
     """按 id 找到一段：返回它所在文件、偏移与原文。"""
     path = _safe_section_file(disk_root, rel_file)

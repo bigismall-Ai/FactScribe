@@ -282,7 +282,7 @@ pkill -f "factscribe.*workbench"
 python3 -m factscribe workbench --root /path/to/papers
 ```
 
-Three rules:
+Four rules:
 
 1. **After changing Python or front-end code, restart the service before you
    verify** — otherwise you are testing the old process;
@@ -295,7 +295,20 @@ Three rules:
    the real gate: a subprocess runs `factscribe audit --json` (no `--build`, so
    nothing is compiled and nothing is written), bounded to 120 seconds, with a
    before/after hash comparison of the project directory to **prove zero
-   writes**.
+   writes**;
+4. From stage 5 the frame is "body on the left + fixed navigation panel on the
+   right (320px, collapsible as a whole)"; the old right-edge vertical tabs and
+   the right-column tab strip are retired. New endpoints:
+   `POST /api/disk/<project>/<disk>/action` (`action=pdf|bundle|open_dir` —
+   a real `buildpdf.auto_build` compile, a real `bundle.run_bundle` export,
+   and macOS `open` for the project folder),
+   `GET /api/disk/<project>/<disk>/pdf` (serves the disk's `main.pdf` for
+   preview/download), `POST /api/project/<project>/reports/delete` (drops an
+   imported draft record — **the report source file is left alone**), and
+   `POST /api/disk/<project>/<disk>/edit` with `block=cover-abstract` to write
+   the cover abstract (the root file's `abstract` environment) through the
+   same protected channel as stage 2 (`\fact` chips kept byte-for-byte, atomic
+   write, `.bak` left behind).
 
 ## Known gaps
 

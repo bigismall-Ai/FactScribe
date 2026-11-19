@@ -10,9 +10,11 @@
   GET  /api/disk/<project>/<disk>/meta            状态行数据
   GET  /api/disk/<project>/<disk>/assembly        装配清单（main.tex 的 \\input 列表）
   GET  /api/disk/<project>/<disk>/block/<id>      一段的可编辑模型（散文 + 保护面）
+  GET  /api/disk/<project>/<disk>/pdf              盘里已编译好的 PDF（预览/下载）
   GET  /api/disk/<project>/<disk>/report          检查报告（体检摘要 + 发现 + 四步链）
   GET  /api/disk/<project>/<disk>/machine         机器视图（账本表/正文扫描/证据链/命令）
-  POST /api/disk/<project>/<disk>/edit            写回一段
+  POST /api/disk/<project>/<disk>/edit            写回一段（block=cover-abstract 写摘要）
+  POST /api/disk/<project>/<disk>/action          常用功能（pdf / bundle / open_dir）
   POST /api/disk/<project>/<disk>/toc/move        调序
   POST /api/disk/<project>/<disk>/toc/delete      删除（挪 attic）
   POST /api/disk/<project>/<disk>/toc/create      新建一节
@@ -40,9 +42,10 @@ from urllib.parse import unquote, urlparse
 
 from ..config import ConfigError
 from .projects import MAX_DEPTH, disk_meta, disk_sections, load_projects
-from .write import (create_paper_project, create_section, delete_section,
-                    editable_model, find_block, move_section, save_block,
-                    touch_opened, update_paper_project)
+from .write import (ABSTRACT_BLOCK_ID, abstract_block, create_paper_project,
+                    create_section, delete_section, editable_model, find_block,
+                    move_section, save_abstract, save_block, touch_opened,
+                    update_paper_project)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_TYPES = {
@@ -226,6 +229,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 rel = parts[5]
                 return self._json(self._block_model(project_id, disk_id,
                                                     disk_path, rel))
+            if what == "pdf":
+                return self._serve_pdf(disk_path)
             if what == "report":
                 from .checkreport import report_payload
                 data = report_payload(disk_path)
@@ -242,6 +247,17 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
     def _block_model(self, project_id: str, disk_id: str,
                      disk_path: Path, rel: str) -> dict:
         """一段的可编辑模型：散文（带占位符）＋保护面芯片。"""
+        if rel == ABSTRACT_BLOCK_ID:
+            # 封面摘要：根文件 abstract 环境（不是 sections/ 下的段）。
+            try:
+                block = abstract_block(disk_path)
+            except ConfigError as exc:
+                return {"ok": False, "error": str(exc),
+                        "code": getattr(exc, "code", "ABSTRACT_MISSING"),
+                        "status": 400}
+            data = editable_model(disk_path, block)
+            data.update({"ok": True, "project": project_id, "disk": disk_id})
+            return data
         blocks = disk_sections(disk_path)["blocks"]
         target = next((b for b in blocks if b["id"] == rel), None)
         if target is None:
@@ -254,6 +270,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         data = editable_model(disk_path, block)
         data.update({"ok": True, "project": project_id, "disk": disk_id})
         return data
+
+    def _serve_pdf(self, disk_path: Path) -> None:
+        """回传盘里已编译好的 PDF（预览/下载用）。"""
+        from .actions import PDF_NAME
+
+        target = disk_path / PDF_NAME
+        if not target.is_file():
+            return self._error(404, "这个盘还没有编译好的 PDF（先点「渲染 PDF」）")
+        try:
+            body = target.read_bytes()
+        except OSError as exc:
+            return self._error(404, "读不到 PDF：%s" % exc)
+        return self._send(200, body, "application/pdf")
 
     def do_HEAD(self) -> None:  # noqa: N802
         self.do_GET()
@@ -295,6 +324,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                         return self._reports_parse(parts[2], body)
                     if parts[4] == "confirm":
                         return self._reports_confirm(parts[2], body)
+                    if parts[4] == "delete":
+                        return self._reports_delete(parts[2], body)
                     return self._error(404, "没有这个报告操作：%s" % parts[4])
         except ConfigError as exc:
             return self._error(400, str(exc))
@@ -328,10 +359,18 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             rel = str(body.get("file") or "")
             block_id = str(body.get("block") or "")
             text = body.get("text")
-            if not rel or not block_id or not isinstance(text, str):
+            if not block_id or not isinstance(text, str):
+                return self._error(400, "block / text 都要给")
+            if block_id == ABSTRACT_BLOCK_ID:
+                # 封面摘要：根文件 abstract 环境（id 固定，不带 file）。
+                result = save_abstract(disk, text)
+                return self._json(result)
+            if not rel:
                 return self._error(400, "file / block / text 都要给")
             result = save_block(disk, rel, block_id, text)
             return self._json(result)
+        if action == "action":
+            return self._disk_action(project_id, disk_id, disk, body)
         if action == "assembly":
             from .write import read_assembly
             return self._json({"ok": True, **read_assembly(disk)})
@@ -350,6 +389,29 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 return self._error(404, "没有这个目录操作：%s" % what)
             return self._json(result)
         return self._error(404, "没有这个操作：%s" % action)
+
+    def _disk_action(self, project_id: str, disk_id: str,
+                     disk: Path, body: dict) -> None:
+        """常用功能：渲染 PDF / 导出投稿包 / 打开项目目录（真做）。"""
+        from .actions import export_bundle, open_project_dir, render_pdf
+
+        what = str(body.get("action") or body.get("what") or "").strip()
+        try:
+            if what == "pdf":
+                result = render_pdf(disk)
+            elif what == "bundle":
+                result = export_bundle(disk)
+            elif what == "open_dir":
+                result = open_project_dir(disk)
+            else:
+                return self._error(404, "没有这个动作：%s" % what)
+        except ConfigError as exc:
+            return self._error(400, str(exc))
+        except (OSError, ValueError) as exc:
+            return self._error(400, "动作失败：%s" % exc)
+        result.update({"project": project_id, "disk": disk_id})
+        # 失败也是 200：前端要拿 detail 渲染人话原因（HTTP 码只管路由）。
+        return self._json(result, code=200)
 
     def _project_new(self, body: dict) -> None:
         root = self.index.root
@@ -536,6 +598,23 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return self._error(400, str(exc))
         result.update({"project": project_id, "source": str(source),
                        "report_sha256": digest})
+        return self._json(result)
+
+    def _reports_delete(self, project_id: str, body: dict) -> None:
+        """删一条导入记录（草稿）。源报告文件不动。"""
+        from .importer import ImportError_, delete_draft
+
+        disk = self.index.project_disk_path(project_id)
+        if disk is None:
+            return self._error(404, "没有这个项目：%s" % project_id)
+        name = str(body.get("name") or body.get("id") or "").strip()
+        if not name:
+            return self._error(400, "name 要给")
+        try:
+            result = delete_draft(disk, name)
+        except ImportError_ as exc:
+            return self._error(404, str(exc))
+        result.update({"project": project_id})
         return self._json(result)
 
     # ---- 原始请求体 ----

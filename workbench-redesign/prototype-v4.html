@@ -1157,7 +1157,7 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
     <div class="pv-wrap">
       <div class="pv-head">
         <div class="pv-head-txt">
-          <h1 data-i18n="rp.title">实验报告</h1>
+          <h1 id="rpTitleH1">实验报告</h1>
           <p class="pv-sub" data-i18n="rp.sub">每个项目的实验报告：导入、字段映射、数字绑定与签收状态。</p>
         </div>
         <div class="pv-head-btns">
@@ -1167,10 +1167,6 @@ code; ``partial'' means some were, but below the registered bar.</figcaption></f
             <span data-i18n="wz.open">导入实验报告</span>
           </button>
         </div>
-      </div>
-      <div class="rp-switch" id="rpSwitch">
-        <button type="button" data-rproj="A" class="on" data-i18n="rp.projA">论文 A</button>
-        <button type="button" data-rproj="B" data-i18n="rp.projB">论文 B</button>
       </div>
       <div class="pv-grid rp-grid" id="rpList"></div>
       <div class="rp-detail" id="rpDetail" hidden>
@@ -1574,8 +1570,8 @@ zh:{
  'd.index':'事实索引视图：与账本同义的逐条索引（id／断言／值／定位／文件／置信）。共 {n} 条，与账本逐条一致。',
  'd.na':'缺',
  'th.id':'id','th.claim':'断言','th.value':'值','th.conf':'置信','th.src':'出处文件','th.sha':'指纹（sha256）','th.fp':'短指纹','th.loc':'定位',
- 'rp.title':'实验报告','rp.sub':'每个项目的实验报告：导入、字段映射、数字绑定与签收状态。',
- 'rp.projA':'论文 A','rp.projB':'论文 B','rp.back':'返回列表','rp.side':'实验报告','rp.sideT':'打开实验报告管理','rp.backWs':'返回工作台',
+ 'rp.title.paper':'实验报告 · {p}','rp.sub':'当前项目的实验报告：导入、字段映射、数字绑定与签收状态。',
+ 'rp.back':'返回列表','rp.side':'实验报告','rp.sideT':'打开实验报告管理','rp.backWs':'返回工作台',
  'side.collapse':'收起右栏','side.expand':'展开右栏','hc.badge':'红 {r} · 黄 {y}','rc.fold':'实验报告 · 四步链',
  'rp.card.time':'导入时间','rp.card.bound':'绑定 {n} 个数字',
  'rp.st.draft':'待核对','rp.st.signed':'已签收','rp.st.confirmed':'已确认',
@@ -1707,8 +1703,8 @@ en:{
  'd.index':'Fact index view: a per-entry index mirroring the ledger (id/claim/value/locator/file/confidence). {n} entries, identical to the ledger.',
  'd.na':'missing',
  'th.id':'id','th.claim':'Claim','th.value':'Value','th.conf':'Conf','th.src':'Source file','th.sha':'Hash (sha256)','th.fp':'Short fp','th.loc':'Locator',
- 'rp.title':'Experiment reports','rp.sub':'Per project: import, field mapping, bound numbers and signoff status.',
- 'rp.projA':'Paper A','rp.projB':'Paper B','rp.back':'Back to list','rp.side':'Reports','rp.sideT':'Open experiment-report management','rp.backWs':'Back to workspace',
+ 'rp.title.paper':'Experiment reports · {p}','rp.sub':'Experiment reports of the current project: import, field mapping, bound numbers and signoff status.',
+ 'rp.back':'Back to list','rp.side':'Reports','rp.sideT':'Open experiment-report management','rp.backWs':'Back to workspace',
  'side.collapse':'Collapse column','side.expand':'Expand column','hc.badge':'red {r} · yellow {y}','rc.fold':'Report · 4-step chain',
  'rp.card.time':'Imported','rp.card.bound':'{n} numbers bound',
  'rp.st.draft':'To check','rp.st.signed':'Signed off','rp.st.confirmed':'Confirmed',
@@ -2061,13 +2057,11 @@ const REPORTS=[
   boundList:[{id:'D1',claim:'按真实账单的成本比',value:'1.66×',conf:'high'},{id:'H1',claim:'按输入全额计价的成本比',value:'3×',conf:'high'}]}
 ];
 let RP={proj:'A',detail:null};
-function syncRpSwitch(){
-  $$('#rpSwitch button').forEach(b=>b.classList.toggle('on',b.getAttribute('data-rproj')===RP.proj));
-}
 function renderReports(){
   const list=$('#rpList'),det=$('#rpDetail');
   if(!list) return;
-  syncRpSwitch();
+  const p=PROJECTS.filter(x=>x.id===RP.proj)[0];
+  const h=$('#rpTitleH1'); if(h) h.textContent=T('rp.title.paper',{p:p?p.name:RP.proj});
   if(RP.detail){
     list.hidden=true; det.hidden=false; return;
   }
@@ -2097,9 +2091,6 @@ function openReport(id){
     '<span class="rp-bound-conf">'+esc(b.conf)+'</span></div>').join('');
   renderReports();
 }
-$$('#rpSwitch button').forEach(b=>b.addEventListener('click',()=>{
-  RP.proj=b.getAttribute('data-rproj'); RP.detail=null; renderReports();
-}));
 $('#rpBack').addEventListener('click',()=>{RP.detail=null;renderReports()});
 $('#rpImportBtn').addEventListener('click',openWizard);
 

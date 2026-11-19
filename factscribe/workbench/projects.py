@@ -618,22 +618,88 @@ _ABSTRACT_END_RE = re.compile(r"\\end\s*\{abstract\}")
 _ABSTRACT_FILE_RE = re.compile(r"^(?:[\d_.-]*[-_])?abstract$", re.IGNORECASE)
 
 
+def abstract_env_spans(text: str) -> list[tuple[int, int]]:
+    """文件里所有 `abstract` 环境的内容区间（绝对偏移，平衡配对）。
+
+    配对时数嵌套：`\\begin{abstract} … \\begin{abstract} … \\end{abstract} …
+    \\end{abstract}` 里，外层环境的区间**包含**内层那一段。
+    """
+    spans: list[tuple[int, int]] = []
+    pos = 0
+    while True:
+        begin = _ABSTRACT_BEGIN_RE.search(text, pos)
+        if not begin:
+            break
+        depth = 1
+        scan = begin.end()
+        end_pos = None
+        while depth > 0:
+            nested = _ABSTRACT_BEGIN_RE.search(text, scan)
+            closing = _ABSTRACT_END_RE.search(text, scan)
+            if closing is None:
+                break
+            if nested is not None and nested.start() < closing.start():
+                depth += 1
+                scan = nested.end()
+                continue
+            depth -= 1
+            end_pos = closing.start()
+            scan = closing.end()
+        if end_pos is None:
+            break
+        spans.append((begin.end(), end_pos))
+        pos = scan
+    return spans
+
+
+def abstract_content_range(text: str) -> tuple[int, int] | None:
+    """摘要**散文**的内容区间（绝对偏移，不含环境标记）。
+
+    取最内层 `abstract` 环境的内容（嵌套时外层区间含内层，故要往里再挖一层）；
+    找不到环境返回 None。
+    """
+    spans = abstract_env_spans(text)
+    if not spans:
+        return None
+    start, end = spans[-1]
+    inner = text[start:end]
+    nested = abstract_env_spans(inner)
+    if nested:
+        s2, e2 = nested[-1]
+        return (start + s2, start + e2)
+    return (start, end)
+
+
 def abstract_env_span(text: str) -> tuple[int, int, int, int] | None:
-    """`abstract` 环境内部内容的区间。
+    """摘要散文区间 + 两头空白长度。
 
     返回 (内容起点, 内容终点, 前导空白长度, 尾部空白长度)；找不到返回 None。
     内容两头的空白另算——写回时照原样保留，版式不塌。
     """
-    begin = _ABSTRACT_BEGIN_RE.search(text)
-    if not begin:
+    rng = abstract_content_range(text)
+    if rng is None:
         return None
-    end = _ABSTRACT_END_RE.search(text, begin.end())
-    if not end:
-        return None
-    inner = text[begin.end():end.start()]
-    lead = len(inner) - len(inner.lstrip())
-    trail = len(inner) - len(inner.rstrip())
-    return (begin.end(), end.start(), lead, trail)
+    start, end = rng
+    core = text[start:end]
+    lead = len(core) - len(core.lstrip())
+    trail = len(core) - len(core.rstrip())
+    return (start, end, lead, trail)
+
+
+def abstract_prose(text: str) -> str:
+    """提交文本里的摘要散文。
+
+    提交文本若**自带** `abstract` 环境（整段环境甚至整份文件被回传），只取
+    环境内的散文：写回时不再包一层环境，也不重生成环境外的标记行
+    （`% FACTS-USED` 之类属于文件原有结构，不在编辑块范围内）。
+    没有环境时原样返回。
+    """
+    rng = abstract_content_range(text)
+    if rng is None:
+        return text
+    start, end = rng
+    return text[start:end].strip()
+
 
 
 def _looks_like_abstract_file(rel: str) -> bool:

@@ -34,7 +34,7 @@ from pathlib import Path
 from ..config import ConfigError, load_config, load_facts
 from .projects import (ABSTRACT_BLOCK_ID as _ABSTRACT_BLOCK_ID,
                        CONFIG_NAME, abstract_env_span as _abstract_env_span,
-                       render_tex)
+                       abstract_prose as _abstract_prose, render_tex)
 
 #: 客户端与本层之间的占位符（私用区字符，LaTeX 正文里不会出现）。
 TOKEN_OPEN = "\ue000"
@@ -710,12 +710,21 @@ def _writable_target(disk_root: Path, rel: str) -> Path:
 def save_abstract(disk_root: Path, client_text: str) -> dict:
     """把改后的摘要写回它所在的那个文件。
 
-    走段二同一条保护通道：保护面（`\\fact{}` 等）原样保留、删了按原位补回、
-    花括号不配平不落盘、原子写、保存前留 `.bak`。
+    **span 权威**：写回位置＝渲染闭包给出的那块（file/start/end），块外的东西
+    （`\\begin{abstract}`/`\\end{abstract}` 环境标记、`% FACTS-USED` 标记行）属
+    于文件原有结构，不在编辑块范围内——原样留着，不补、不重生成。
+
+    **不套娃**：提交文本若自带 abstract 环境（前端把整段环境甚至整份文件回传
+    了），只取环境内的散文写进去，不再包一层；同一份文本连存 N 次，文件字节
+    稳定。
+
+    保护通道不变：保护面（`\\fact{}` 等）原样保留、删了按原位补回、花括号不
+    配平不落盘、原子写、保存前留 `.bak`。
     """
     block = abstract_block(disk_root)
+    prose = _abstract_prose(client_text)
     segments = scan(block.raw, _bound_values(disk_root))
-    new_raw, warnings = _rebuild(segments, client_text)
+    new_raw, warnings = _rebuild(segments, prose)
     if not _balanced_ok(new_raw):
         raise ConfigError("摘要的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
@@ -726,6 +735,8 @@ def save_abstract(disk_root: Path, client_text: str) -> dict:
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError("读不到摘要所在文件：%s（%s）" % (rel, exc),
                           code="SECTION_MISSING")
+    # 重新定位：文件可能被人外部改过（绕过服务端），按当前结构再算一次——
+    # 写回落在**现在**的摘要块里，不会叠出第二层。
     span = _abstract_span(text)
     if span is None:
         raise ConfigError("摘要已经被挪走了（或文件变了）：%s，请刷新页面重试" % rel,

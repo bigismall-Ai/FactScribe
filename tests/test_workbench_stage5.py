@@ -70,6 +70,8 @@ SECTIONED_ABSTRACT_TEX = """\\begin{abstract}
 We report a resolve rate of 10/16\\fact{A1} on the testbed, and the gate
 caught 30/36\\fact{B1} planted defects.
 \\end{abstract}
+
+% FACTS-USED: A1 B1
 """
 
 MAIN_TEX = """\\documentclass{article}
@@ -251,6 +253,80 @@ class SectionedAbstractEndpointTests(unittest.TestCase):
         self.assertIn("A sentence added through the HTTP chain.",
                       target.read_text(encoding="utf-8"))
         self.assertTrue(Path(data["backup"]).is_file())
+
+
+class NoNestingWriteBackTests(unittest.TestCase):
+    """摘要保存不套娃（段五二次验收打回）。
+
+    回归背景：写回按「文件里第一个 `\\end{abstract}`」截断，于是提交文本若
+    自带环境（或整份文件被回传），每存一次就多包一层。现在写回以渲染闭包
+    给出的块为权威 span，提交文本自带环境时只取环境内散文，环境标记与环境
+    外的 `% FACTS-USED` 行属文件原有结构，不补、不重生成。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.disk = _make_sectioned_disk(self.root)
+        self.target = self.disk / "sections" / "00_abstract.tex"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _layers(self, text):
+        return (text.count("\\begin{abstract}"), text.count("\\end{abstract}"),
+                text.count("FACTS-USED"))
+
+    def test_same_text_saved_three_times_is_byte_stable(self):
+        text = block_text(self.disk)
+        digests = []
+        for _ in range(3):
+            wb.save_abstract(self.disk, text)
+            digests.append(self.target.read_bytes())
+        self.assertEqual(digests[0], digests[1])
+        self.assertEqual(digests[1], digests[2])
+        self.assertEqual(self._layers(digests[0].decode("utf-8")), (1, 1, 1))
+
+    def test_submitted_text_carrying_env_is_not_wrapped_again(self):
+        before = self.target.read_text(encoding="utf-8")
+        # 前端把整份文件回传了（自带环境 ＋ 环境外的 FACTS-USED 行）
+        wb.save_abstract(self.disk, before)
+        after = self.target.read_text(encoding="utf-8")
+        self.assertEqual(after, before)
+        self.assertEqual(self._layers(after), (1, 1, 1))
+
+    def test_submitted_wrapped_prose_keeps_file_structure(self):
+        prose = block_text(self.disk)
+        wrapped = ("\\begin{abstract}\n" + prose + "\n\\end{abstract}\n\n"
+                   "% FACTS-USED: A1 B1\n")
+        wb.save_abstract(self.disk, wrapped)
+        after = self.target.read_text(encoding="utf-8")
+        self.assertEqual(self._layers(after), (1, 1, 1))
+        self.assertIn("FACTS-USED: A1 B1", after)
+        self.assertIn("\\fact{A1}", after)
+
+    def test_external_change_then_save_does_not_stack(self):
+        stale = self.target.read_text(encoding="utf-8")
+        # 绕过服务端直改文件
+        self.target.write_text(
+            stale.replace("We report a resolve rate",
+                          "We reported a resolve rate"), encoding="utf-8")
+        wb.save_abstract(self.disk, stale)      # 前端还拿着旧文本
+        after = self.target.read_text(encoding="utf-8")
+        self.assertEqual(self._layers(after), (1, 1, 1))
+        self.assertNotIn("Scientific papers", after)   # 没多出第二层
+
+    def test_already_nested_file_does_not_grow(self):
+        # 已经被套过一层的老文件：再存一次不得再叠一层（层数不变）
+        original = self.target.read_text(encoding="utf-8")
+        self.target.write_text(
+            original.replace("\\begin{abstract}\n",
+                              "\\begin{abstract}\n\\begin{abstract}\n", 1),
+            encoding="utf-8")
+        wb.save_abstract(self.disk, original)
+        after = self.target.read_text(encoding="utf-8")
+        self.assertLessEqual(after.count("\\begin{abstract}"), 2)
+        self.assertLessEqual(after.count("\\end{abstract}"), 2)
 
 
 class AbstractWriteBackTests(unittest.TestCase):

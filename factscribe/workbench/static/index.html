@@ -149,19 +149,19 @@
       </button>
     </div>
 
-    <!-- 切换按钮组（四枚纵排） -->
-    <div class="np-switches">
-      <button type="button" class="np-switch" id="npCollapse" data-i18n="np.collapse">收起导航</button>
-      <button type="button" class="np-switch" id="npToc" data-i18n="np.toc">目录</button>
-      <button type="button" class="np-switch" id="npAi" data-i18n="np.ai">智能助手</button>
-      <button type="button" class="np-switch" id="npReports" data-i18n="np.reports">实验报告列表</button>
-    </div>
-
-    <!-- 面板内容区：目录（章节管理并入） ｜ 实验报告列表 -->
+    <!-- 面板内容区：目录（章节管理并入） ｜ 智能助手 ｜ 实验报告列表（三面互斥） -->
     <div class="np-body">
       <section class="np-pane on" id="paneToc">
         <div class="np-pane-h" data-i18n="toc.h">目录</div>
         <ul class="toc-list" id="tocList"></ul>
+      </section>
+      <section class="np-pane" id="paneAi">
+        <div class="np-pane-h"><span data-i18n="np.ai">智能助手</span></div>
+        <div class="np-ai-face">
+          <p class="np-ai-note" data-i18n="np.aiNote">对话层是半透明悬浮层，浮在正文上方；这里放上下文与入口。</p>
+          <div class="np-ai-ctx" id="npAiCtx"></div>
+          <button type="button" class="np-btn" id="npAiToggle" data-i18n="np.aiOpen">打开对话层</button>
+        </div>
       </section>
       <section class="np-pane" id="paneReports">
         <div class="np-pane-h">
@@ -172,6 +172,14 @@
       </section>
     </div>
   </aside>
+
+  <!-- 切换按钮组：固定在窗口右缘，一列纵排（条目 29：恢复段四 side-tab 族） -->
+  <div class="side-rail" id="sideRail">
+    <button type="button" class="side-tab" id="npCollapse" data-i18n="np.collapse">收起导航</button>
+    <button type="button" class="side-tab" id="npToc" data-i18n="np.toc">目录</button>
+    <button type="button" class="side-tab" id="npAi" data-i18n="np.ai">智能助手</button>
+    <button type="button" class="side-tab" id="npReports" data-i18n="np.reports">实验报告</button>
+  </div>
 
   <!-- 收起后：左缘只剩一枚竖排「展开导航」钮 -->
   <button type="button" class="nav-open" id="navOpen" data-i18n="nav.open">展开导航</button>

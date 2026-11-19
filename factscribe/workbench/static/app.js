@@ -166,6 +166,8 @@ const I18N = {
     'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
     'check.title': '全检结果', 'check.tabReport': '检查报告',
     'check.tabMachine': '机器底账', 'rp.card.del': '删除',
+    'np.aiNote': '对话层是半透明悬浮层，浮在正文上方；这里放上下文与入口。',
+    'np.aiOpen': '打开对话层', 'np.aiClose': '收起对话层',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -328,6 +330,8 @@ const I18N = {
     'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
     'check.title': '全检结果', 'check.tabReport': '检查报告',
     'check.tabMachine': '机器底账', 'rp.card.del': 'Delete',
+    'np.aiNote': 'The chat layer is a translucent overlay floating above the body; context and entry live here.',
+    'np.aiOpen': 'Open chat layer', 'np.aiClose': 'Hide chat layer',
   },
 };
 
@@ -1727,7 +1731,7 @@ async function aiSend(question, mode) {
 function askAiAbout(text, section, id) {
   state.ai.quote = { text: String(text || ''), section: String(section || ''), id: String(id || '') };
   renderAiCtx();
-  setAiOpen(true);
+  switchNavPane('ai');
   const input = $('#aiText');
   if (input) {
     input.value = t('ai.askPara');
@@ -2149,14 +2153,32 @@ function applyLangToggle() {
   });
 }
 
-/* 段五：导航面板的面板切换（目录 ⇄ 实验报告列表）。 */
+/* 段五返修三（条目 29）：三枚内容钮互斥——面板显示当前激活钮对应的面，
+   右缘钮列（side-tab 族）负责切换；激活态深色底。 */
 function switchNavPane(name) {
   state.nav.pane = name;
   $('#paneToc').classList.toggle('on', name === 'toc');
+  $('#paneAi').classList.toggle('on', name === 'ai');
   $('#paneReports').classList.toggle('on', name === 'reports');
   $('#npToc').classList.toggle('on', name === 'toc');
+  $('#npAi').classList.toggle('on', name === 'ai');
   $('#npReports').classList.toggle('on', name === 'reports');
+  // 互斥：切到别的面就把悬浮对话层收起来（对话层属「智能助手」这一面）。
+  if (name === 'ai') {
+    setAiOpen(true);
+    renderAiFace();
+  } else {
+    setAiOpen(false);
+  }
   if (name === 'reports') loadReports();
+}
+
+/* 面板里的智能助手面：上下文 + 打开/收起悬浮对话层。 */
+function renderAiFace() {
+  const ctx = $('#npAiCtx');
+  if (ctx) ctx.innerHTML = aiCtxHtml();
+  const btn = $('#npAiToggle');
+  if (btn) btn.textContent = state.nav.aiOpen ? t('np.aiClose') : t('np.aiOpen');
 }
 
 /* 段五：智能助手＝半透明悬浮层，浮在正文上方。 */
@@ -2164,18 +2186,18 @@ function setAiOpen(open) {
   state.nav.aiOpen = !!open;
   const layer = $('#aiFloat');
   if (layer) layer.hidden = !open;
-  $('#npAi').classList.toggle('on', !!open);
   if (open) {
     const input = $('#aiText');
     if (input) input.focus();
   }
+  renderAiFace();
 }
 
-/* 段五：导航面板整体收起／展开（收起后正文拉满，左缘留一枚竖排钮）。 */
+/* 段五返修三（条目 29）：收起＝导航面板＋右缘钮列全隐，只剩一枚竖排
+   「展开导航」钮；正文拉满。 */
 function setNavCollapsed(collapsed) {
   document.body.classList.toggle('nav-collapsed', !!collapsed);
-  const btn = $('#npCollapse');
-  if (btn) btn.classList.toggle('on', !!collapsed);
+  if (collapsed) setAiOpen(false);
 }
 
 /* ---------------------------------------------------------------- 段五：常用功能 */
@@ -2332,14 +2354,17 @@ function bind() {
     applyI18n();
     renderProjects();
   });
-  // 段五：导航面板
+  // 段五返修三（条目 29）：右缘钮列——收起导航 ＋ 三枚内容钮（互斥）
   $('#npCollapse').addEventListener('click', () => {
     setNavCollapsed(!document.body.classList.contains('nav-collapsed'));
   });
   $('#navOpen').addEventListener('click', () => { setNavCollapsed(false); });
   $('#npToc').addEventListener('click', () => { switchNavPane('toc'); });
   $('#npReports').addEventListener('click', () => { switchNavPane('reports'); });
-  $('#npAi').addEventListener('click', () => { setAiOpen(!state.nav.aiOpen); });
+  $('#npAi').addEventListener('click', () => { switchNavPane('ai'); });
+  $('#npAiToggle').addEventListener('click', () => {
+    setAiOpen(!state.nav.aiOpen);
+  });
   // 段五：常用功能（弹模态框操作）
   $('#actPdf').addEventListener('click', runPdfAction);
   $('#actCheck').addEventListener('click', runFullCheck);
@@ -2377,7 +2402,7 @@ function bind() {
   $('#aiFab').addEventListener('click', clearAiConversation);
   $('#aiBack').addEventListener('click', () => setAiOpen(false));
   $('#askReportRead').addEventListener('click', () => {
-    setAiOpen(true);
+    switchNavPane('ai');
     aiSend(t('ai.reportQ'), 'explain');
   });
   $('#ptAsk').addEventListener('click', () => {

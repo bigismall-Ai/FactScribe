@@ -551,15 +551,25 @@ section.flash-sec{animation:flashsec 1.8s ease}
  color:#9b9a96;margin-bottom:28px;background:#fbfbfa}
 .pv-search input{flex:1;border:none;outline:none;background:none;font-family:inherit;font-size:13px;color:#37352f}
 .pj-list{background:#fff;border:1px solid #e9e9e7;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(15,15,15,.03)}
-.pj-row-item{display:flex;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid #efefee;background:#fff}
+/* 项目行＝双列式（条目 28）：第一行标题独占整行；第二行定宽栏位一排。
+   各栏位固定宽度、互不挤压；窄屏时整排折行而不是横向溢出。 */
+.pj-row-item{display:block;padding:13px 16px;border-bottom:1px solid #efefee;background:#fff}
 .pj-row-item:last-child{border-bottom:none}
 .pj-row-item:hover{background:#fafaf8}
-.pj-r-name{font-size:14px;font-weight:650;color:#37352f;white-space:nowrap}
-.pj-r-disks{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9b9a96;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pj-r-status{flex:0 0 auto}
-.pj-r-time{font-size:11.5px;color:#8f8d86;font-family:ui-monospace,Menlo,monospace;flex:0 0 auto}
-.pj-r-prog{display:flex;align-items:center;gap:7px;width:150px;flex:0 0 150px}
-.pj-r-actions{display:flex;gap:8px;flex:0 0 auto}
+.pj-r-title{display:block;min-width:0;margin-bottom:9px}
+.pj-r-name{display:block;font-size:14px;font-weight:650;color:#37352f;line-height:1.5;
+  white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+.pj-r-line{display:flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap}
+.pj-r-disks{flex:0 0 200px;width:200px;min-width:0;font-family:ui-monospace,Menlo,monospace;
+  font-size:11px;color:#9b9a96;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-r-status{flex:0 0 88px;width:88px;min-width:0;overflow:hidden}
+.pj-r-last{flex:0 0 128px;width:128px;min-width:0;font-size:11.5px;color:#8f8d86;
+  font-family:ui-monospace,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-r-time{font-size:11.5px;color:#8f8d86;font-family:ui-monospace,Menlo,monospace;white-space:nowrap}
+.pj-r-prog{display:flex;align-items:center;gap:7px;flex:0 0 170px;width:170px;min-width:0;overflow:hidden}
+.pj-r-prog .pj-bar{flex:0 0 64px}
+.pj-r-prog .pj-r-time{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pj-r-actions{display:flex;gap:8px;flex:0 0 auto;margin-left:auto}
 .pj-row-item .pj-open{padding:6px 16px}
 .pj-card{background:#fff;border:1px solid #e6e6e4;border-radius:10px;padding:16px 16px 14px;box-shadow:0 1px 2px rgba(15,15,15,.04);
  display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,transform .15s}

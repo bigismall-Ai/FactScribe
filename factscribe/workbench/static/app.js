@@ -16,6 +16,7 @@ const I18N = {
     'card.open': '打开', 'card.status': '状态', 'card.last': '最近打开',
     'card.disks': '盘', 'card.sections': '节', 'card.facts': '事实',
     'status.placeholder': '段二接入', 'time.placeholder': '段二接入',
+    'status.draft': '未建账', 'status.checking': '在写', 'status.released': '已绑完',
     'prog.placeholder': '进度占位',
     'toc.h': '目录', 'toc.collapse': '收起目录', 'toc.toggle': '显示/隐藏目录',
     'tab.report': '检查报告', 'tab.machine': '机器视图', 'tab.ai': 'AI 对话',
@@ -150,6 +151,8 @@ const I18N = {
     'card.open': 'Open', 'card.status': 'Status', 'card.last': 'Last opened',
     'card.disks': 'Disks', 'card.sections': 'sections', 'card.facts': 'facts',
     'status.placeholder': 'stage 2', 'time.placeholder': 'stage 2',
+    'status.draft': 'No ledger yet', 'status.checking': 'In progress',
+    'status.released': 'Fully bound',
     'prog.placeholder': 'progress placeholder',
     'toc.h': 'Contents', 'toc.collapse': 'Collapse contents', 'toc.toggle': 'Show/hide contents',
     'tab.report': 'Check report', 'tab.machine': 'Machine view', 'tab.ai': 'AI chat',
@@ -392,18 +395,24 @@ function renderProjects() {
       ? t('prog.facts', { b: progress.bound, t: progress.total })
       : t('prog.none');
     const last = disk.last_opened ? formatTime(disk.last_opened) : t('time.never');
+    const disks = diskSummary(project);
+    // 状态：由真实进度派生（跟原型三态一致），不另造字段。
+    const status = !progress.total ? 'draft'
+      : (progress.bound >= progress.total ? 'released' : 'checking');
     const row = document.createElement('div');
     row.className = 'pj-row-item';
     row.innerHTML = `
-      <span class="pj-r-name">${esc(project.name)}</span>
-      <span class="pj-r-disks">${esc(diskSummary(project))}</span>
-      <span class="pj-r-prog"><span class="pj-bar"><span class="pj-bar-in" style="width:${progress.percent || 0}%"></span></span><span class="pj-r-time">${esc(progText)}</span></span>
-      <span class="pj-r-status"><span class="pj-chip pj-draft">${esc(progText)}</span></span>
-      <span class="pj-r-time">${esc(last)}</span>
-      <span class="pj-r-actions">
-        <button type="button" class="btn-ghost pj-edit" data-edit="${esc(project.id)}">${esc(t('card.edit'))}</button>
-        <button type="button" class="btn-primary pj-open" data-open="${esc(project.id)}">${esc(t('card.open'))}</button>
-      </span>`;
+      <div class="pj-r-title"><span class="pj-r-name">${esc(project.name)}</span></div>
+      <div class="pj-r-line">
+        <span class="pj-r-disks" title="${esc(disks)}">${esc(disks)}</span>
+        <span class="pj-r-status"><span class="pj-chip pj-${status}">${esc(t('status.' + status))}</span></span>
+        <span class="pj-r-last" title="${esc(last)}">${esc(last)}</span>
+        <span class="pj-r-prog"><span class="pj-bar"><span class="pj-bar-in" style="width:${progress.percent || 0}%"></span></span><span class="pj-r-time">${esc(progText)}</span></span>
+        <span class="pj-r-actions">
+          <button type="button" class="btn-ghost pj-edit" data-edit="${esc(project.id)}">${esc(t('card.edit'))}</button>
+          <button type="button" class="btn-primary pj-open" data-open="${esc(project.id)}">${esc(t('card.open'))}</button>
+        </span>
+      </div>`;
     list.appendChild(row);
   });
   $$('#pjList [data-open]').forEach((btn) => {

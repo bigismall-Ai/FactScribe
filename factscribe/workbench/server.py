@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """工作台段二的本地 HTTP 服务（只用标准库）。
 
-段一只有 GET；段二加了写接口（正文写回、章节管理、项目新建/编辑）。
+段一只有 GET；段二加了写接口（正文写回、章节管理、项目新建/编辑）；
+段三加了检查报告与机器视图（只读真闸读数）。
 
 端点：
   GET  /api/projects                              项目 + 盘 + 计数 + 进度
@@ -9,10 +10,13 @@
   GET  /api/disk/<project>/<disk>/meta            状态行数据
   GET  /api/disk/<project>/<disk>/assembly        装配清单（main.tex 的 \\input 列表）
   GET  /api/disk/<project>/<disk>/block/<id>      一段的可编辑模型（散文 + 保护面）
+  GET  /api/disk/<project>/<disk>/report          检查报告（体检摘要 + 发现 + 四步链）
+  GET  /api/disk/<project>/<disk>/machine         机器视图（账本表/正文扫描/证据链/命令）
   POST /api/disk/<project>/<disk>/edit            写回一段
   POST /api/disk/<project>/<disk>/toc/move        调序
   POST /api/disk/<project>/<disk>/toc/delete      删除（挪 attic）
   POST /api/disk/<project>/<disk>/toc/create      新建一节
+  POST /api/disk/<project>/<disk>/report/rerun    只读重跑真闸（限时 120s，零写入）
   POST /api/project/new                           新建论文项目（落盘）
   POST /api/project/update                        改项目（标题等）
   POST /api/project/opened                        记「最近打开」
@@ -167,6 +171,16 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 rel = parts[5]
                 return self._json(self._block_model(project_id, disk_id,
                                                     disk_path, rel))
+            if what == "report":
+                from .checkreport import report_payload
+                data = report_payload(disk_path)
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "machine":
+                from .checkreport import machine_payload
+                data = machine_payload(disk_path)
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
             return self._error(404, "没有这个接口：%s" % what)
         return self._error(404, "没有这个接口：%s" % route)
 
@@ -199,6 +213,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return self._error(405, "这个接口只有 GET（段一就是只读的）")
         try:
             if route.startswith("/api/disk/"):
+                parts = [part for part in route.split("/") if part]
+                # 段三：只读重跑（不是写接口，不必是可写盘）。
+                if (len(parts) == 6 and parts[4] == "report"
+                        and parts[5] == "rerun"):
+                    return self._report_rerun(parts[2], parts[3])
                 return self._disk_post(route, body)
             if route == "/api/project/new":
                 return self._project_new(body)
@@ -213,6 +232,16 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         return self._error(404, "没有这个接口：%s" % route)
 
     # ---- 写接口的实现 ----
+
+    def _report_rerun(self, project_id: str, disk_id: str) -> None:
+        """段三：只读重跑真闸（subprocess，限时 120s，跑前跑后哈希对比）。"""
+        disk = self.index.disk_path(project_id, disk_id)
+        if disk is None:
+            return self._error(404, "没有这个盘：%s/%s" % (project_id, disk_id))
+        from .checkreport import rerun
+        result = rerun(disk)
+        result.update({"project": project_id, "disk": disk_id})
+        return self._json(result)
 
     def _disk_post(self, route: str, body: dict) -> None:
         parts = [part for part in route.split("/") if part]

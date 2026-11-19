@@ -262,6 +262,33 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 
 缺 `factscribe.toml`、事实账为空、正文为空、`refs.bib` 缺失，一律退出码 2 并说清原因，不静默放行。
 
+## 工作台运行须知（改完代码必须重启）
+
+工作台是**常驻进程**：Python 端点与前端静态文件都是启动时加载的。改完代码
+还看着旧页面／旧行为，多半是**旧进程还在跑**，不是改动没生效。
+
+```bash
+# 1）看有没有残留的旧服务进程
+ps aux | grep -E "factscribe.*workbench" | grep -v grep
+
+# 2）杀掉残留进程（本地开发机；共享机器上先确认是自己的）
+pkill -f "factscribe.*workbench"
+
+# 3）重新起
+python3 -m factscribe workbench --root /path/to/papers
+```
+
+规矩三条：
+
+1. **改完 Python 或前端代码，一律重启服务再验收**——否则测的是旧进程；
+2. 前端静态文件带 `Cache-Control: no-store`，但浏览器仍可能缓存 CSS/JS，
+   刷新不出来就硬刷新（macOS：`Cmd+Shift+R`）；
+3. 段三新增的端点是**只读**的（`/api/disk/<项目>/<盘>/report`、
+   `/api/disk/<项目>/<盘>/machine`），
+   `POST /api/disk/<项目>/<盘>/report/rerun` 是**只读重跑**真闸：
+   subprocess 跑 `factscribe audit --json`（不加 `--build`，不编译不落盘），
+   限时 120 秒，跑前跑后对项目目录做哈希对比，**保证零写入**。
+
 ## 已知缺口
 
 剩下的问题如实写在 [`docs/release/KNOWN-GAPS.md`](docs/release/KNOWN-GAPS.md) 里。另有三条结构性边界不打算修：信任根是人签，若 agent 同时伪造账与据，工具无法发现；出题人与实现方同机，盲测只能算弱盲测；不做 OCR，图片承载的定量一律判红。

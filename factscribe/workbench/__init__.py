@@ -3,6 +3,7 @@
 
 - `projects.py`：项目发现、盘聚合、章节轻量渲染（只读）。
 - `server.py`：标准库 HTTP 服务，只提供 GET。
+- `checkreport.py`：段三＝检查报告 / 机器视图的数据层（只读真闸读数）。
 - `static/`：前端单页（结构移植自 workbench-redesign/prototype-v4.html）。
 
 旧的 `serve` / `mcp` 数据层原封不动搬到了 `factscribe/workbench_dataplayer.py`

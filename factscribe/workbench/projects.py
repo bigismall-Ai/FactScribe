@@ -103,17 +103,50 @@ def discover_disks(root: str | Path, max_depth: int = MAX_DEPTH) -> list[Path]:
 # ---------------------------------------------------------------- 聚合
 
 _TITLE_CMD_RE = re.compile(r"\\title\s*\{")
+# 标题里的排版命令：只影响观感，不该出现在页面上。
+_TITLE_NOISE = ("\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge",
+                "\\bfseries", "\\rmfamily", "\\sffamily", "\\mdseries",
+                "\\itshape", "\\upshape", "\\normalfont")
+# `\\`（换行）后面可跟 `[4pt]` 这样的可选参数。
+_TITLE_BREAK_RE = re.compile(r"\\\\(?:\[[^\]]*\])?")
 
 
-def _tex_title(path: Path) -> str:
-    """盘自己的标题：读这个盘 `main.tex` 的 `\\title{…}`。
+def _clean_title(text: str) -> str:
+    """去掉标题里的 LaTeX 排版味，留人读得懂的一句。"""
+    out = text.replace("\\%", "%").replace("\\&", "&").replace("\\_", "_")
+    for cmd in _TITLE_NOISE:
+        out = out.replace(cmd, "")
+    out = out.replace("{", "").replace("}", "")
+    return " ".join(out.split())
 
-    段二起，标题**分盘取**：中文盘显示中文标题，不再统一挂英题。
-    """
+
+def _title_files(path: Path) -> list[Path]:
+    """这个盘自己的入口 .tex：先按项目声明的 `root_tex`，再按常见文件名。"""
+    out: list[Path] = []
+    try:
+        from ..config import ConfigError, load_config
+        cfg = load_config(path)
+        if cfg.root_tex:
+            target = path / cfg.root_tex
+            if target.is_file():
+                out.append(target)
+    except Exception:  # noqa: BLE001 - 读不到声明就按常见文件名找
+        pass
     for name in ("main.tex", "paper.tex", "root.tex"):
         target = path / name
-        if not target.is_file():
-            continue
+        if target.is_file() and target not in out:
+            out.append(target)
+    return out
+
+
+def _tex_title_parts(path: Path) -> tuple[str, str]:
+    """盘自己的标题：读这个盘入口 .tex 的 `\\title{…}` → (主标题, 副标题)。
+
+    段二起，标题**分盘取**：中文盘显示中文标题，不再统一挂英题。
+    段三再进一步：把 `\\large …`、`\\[4pt]` 这类排版命令剥掉，
+    副标题（`\\` 之后那半句）单独返回，不跟主标题挤在一行里。
+    """
+    for target in _title_files(path):
         try:
             text = target.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -122,10 +155,25 @@ def _tex_title(path: Path) -> str:
         if not match:
             continue
         body, _end = _balanced(text, match.end() - 1)
-        clean = body.strip()
-        if clean:
-            return clean.replace("\\%", "%").replace("\\&", "&").replace("\\_", "_")
-    return ""
+        if not body.strip():
+            continue
+        pieces = [p for p in _TITLE_BREAK_RE.split(body)]
+        title = _clean_title(pieces[0]) if pieces else ""
+        if not title:
+            continue
+        subtitle = _clean_title(pieces[1]) if len(pieces) > 1 else ""
+        return title, subtitle
+    return "", ""
+
+
+def _tex_title(path: Path) -> str:
+    """盘自己的主标题（分盘取，去排版味）。"""
+    return _tex_title_parts(path)[0]
+
+
+def _tex_subtitle(path: Path) -> str:
+    """盘自己的副标题（`\\title{…}` 里 `\\` 之后那半句）。"""
+    return _tex_title_parts(path)[1]
 
 
 def _disk_title(path: Path) -> str:
@@ -249,6 +297,7 @@ def aggregate(disks: list[Path]) -> list[dict]:
                 "id": member.name,
                 "lang": disk_language(member.name),
                 "name": _disk_title(member),
+                "subtitle": _tex_subtitle(member),
                 "path": str(member),
                 "sections": sections,
                 "facts": facts,
@@ -576,6 +625,7 @@ def disk_meta(path: str | Path, lang: str = "") -> dict:
     root = Path(path)
     sections, facts = _disk_counts(root)
     title = _disk_title(root)
+    subtitle = _tex_subtitle(root)
     built = ""
     built_file = ""
     try:
@@ -596,6 +646,7 @@ def disk_meta(path: str | Path, lang: str = "") -> dict:
     return {
         "path": str(root),
         "name": title,
+        "subtitle": subtitle,
         "lang": lang or disk_language(root.name),
         "facts": facts,
         "sections": sections,

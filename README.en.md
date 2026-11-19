@@ -264,6 +264,39 @@ This layer adds no criteria and produces no score. It leaves every decision and 
 
 A missing `factscribe.toml`, an empty ledger, empty prose, or a missing `refs.bib` exits 2 with a reason. Nothing passes silently.
 
+## Workbench runtime notes (restart after every code change)
+
+The workbench is a **resident process**: the Python endpoints and the front-end
+static files are loaded at startup. If you changed code and still see the old
+page or the old behaviour, the usual cause is **an old process still running**,
+not a change that failed to take effect.
+
+```bash
+# 1) look for a stale workbench process
+ps aux | grep -E "factscribe.*workbench" | grep -v grep
+
+# 2) kill it (local dev machine; on a shared machine confirm it is yours first)
+pkill -f "factscribe.*workbench"
+
+# 3) start it again
+python3 -m factscribe workbench --root /path/to/papers
+```
+
+Three rules:
+
+1. **After changing Python or front-end code, restart the service before you
+   verify** — otherwise you are testing the old process;
+2. Static files are served with `Cache-Control: no-store`, but a browser may
+   still cache CSS/JS; if a refresh does not show the change, force a hard
+   reload (macOS: `Cmd+Shift+R`);
+3. The stage-3 endpoints are **read-only** (`/api/disk/<project>/<disk>/report`,
+   `/api/disk/<project>/<disk>/machine`), and
+   `POST /api/disk/<project>/<disk>/report/rerun` is a **read-only re-run** of
+   the real gate: a subprocess runs `factscribe audit --json` (no `--build`, so
+   nothing is compiled and nothing is written), bounded to 120 seconds, with a
+   before/after hash comparison of the project directory to **prove zero
+   writes**.
+
 ## Known gaps
 
 The remaining issues are recorded in [`docs/release/KNOWN-GAPS.md`](docs/release/KNOWN-GAPS.md). Three structural limits will stay. The trust root is a human signature, so an agent that forges both the ledger and the evidence cannot be caught. Author and implementer share one machine, so blind tests are weak blinding. There is no OCR, so any number carried by an image is red.

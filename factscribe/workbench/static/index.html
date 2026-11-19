@@ -129,18 +129,47 @@
     </div>
 
     <div class="rpane rpane-report on" id="pane-report">
-      <section class="rcard">
-        <div class="rc-h"><span class="rc-t" data-i18n="hc.h">体检</span></div>
-        <div class="st-row">
-          <div class="st ok" id="stFacts">—</div>
-          <div class="st warn" id="stSections">—</div>
-          <div class="st warn" id="stBuild">—</div>
+      <div class="rp-tools">
+        <button type="button" class="rp-run" id="rpRerun" data-i18n="rp.rerun">重跑检查</button>
+        <span class="rp-tools-note" id="rpRerunNote" hidden></span>
+      </div>
+
+      <!-- 段三：体检（折叠卡，默认收起） -->
+      <section class="rcard fold" id="cardHealth">
+        <button type="button" class="rc-fold-h">
+          <span class="rc-t" data-i18n="hc.h">体检</span>
+          <span class="fold-badge" id="badgeHealth">—</span>
+          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="rc-fold-b" id="bodyHealth">
+          <div class="st-row">
+            <div class="st ok" id="stFacts">—</div>
+            <div class="st ok" id="stSections">—</div>
+          </div>
+          <div class="kv" id="stHealthKv"></div>
+          <div class="st-sub" id="stNote"></div>
+          <div class="rp-card-err" id="stRerunErr" hidden></div>
         </div>
-        <div class="st-sub" id="stNote"></div>
       </section>
-      <section class="rcard">
-        <div class="rc-h"><span class="rc-t" data-i18n="seg3">检查报告 / 机器视图</span></div>
-        <div class="st-sub" id="seg3Note"></div>
+
+      <!-- 段三：发现（折叠卡，默认收起） -->
+      <section class="rcard fold" id="cardFindings">
+        <button type="button" class="rc-fold-h">
+          <span class="rc-t" data-i18n="rp.findings">发现</span>
+          <span class="fold-badge" id="badgeFindings">—</span>
+          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="rc-fold-b" id="bodyFindings"></div>
+      </section>
+
+      <!-- 段三：四步链（折叠卡，默认收起） -->
+      <section class="rcard fold" id="cardChain">
+        <button type="button" class="rc-fold-h">
+          <span class="rc-t" data-i18n="rp.chain">四步链</span>
+          <span class="fold-badge" id="badgeChain">—</span>
+          <svg class="fold-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+        </button>
+        <div class="rc-fold-b" id="bodyChainSteps"></div>
       </section>
     </div>
 
@@ -149,11 +178,45 @@
         <div class="t" data-i18n="mv.h">机器视图</div>
         <div class="sub" data-i18n="mv.sub">这一层是给工具看的，不是给稿子看的——按主题折叠，点开看细节。</div>
       </div>
-      <div class="acc">
-        <section class="acc-card on">
-          <div class="acc-b" style="display:block">
-            <div class="acc-note" id="seg3Note2"></div>
-          </div>
+      <div class="acc" id="mvAcc">
+        <!-- 段三：账本表 -->
+        <section class="acc-card" id="accLedger">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="mv.ledger">账本表</span>
+            <span class="acc-badge" id="badgeLedger">—</span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="bodyLedger"></div>
+        </section>
+
+        <!-- 段三：正文扫描 -->
+        <section class="acc-card" id="accScan">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="mv.scan">正文扫描</span>
+            <span class="acc-badge" id="badgeScan">—</span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="bodyScan"></div>
+        </section>
+
+        <!-- 段三：文献与证据链 -->
+        <section class="acc-card" id="accEvidence">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="mv.evidence">文献与证据链</span>
+            <span class="acc-badge" id="badgeEvidence">—</span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="bodyEvidence"></div>
+        </section>
+
+        <!-- 段三：导出与命令 -->
+        <section class="acc-card" id="accExport">
+          <button type="button" class="acc-h">
+            <span class="acc-t" data-i18n="mv.export">导出与命令</span>
+            <span class="acc-badge" id="badgeExport">—</span>
+            <svg class="acc-chev" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+          </button>
+          <div class="acc-b" id="bodyExport"></div>
         </section>
       </div>
     </div>
@@ -212,6 +275,16 @@
     <div class="modal-acts">
       <button type="button" class="btn-primary" id="newSecOk" data-i18n="toc.create">创建</button>
       <button type="button" class="btn-ghost" id="newSecCancel" data-i18n="pf.cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalFindings" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" data-i18n="rp.findingsT">发现明细</div>
+    <div class="modal-body" id="modalFindingsBody"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="modalFindingsClose" data-i18n="rp.close">关闭</button>
     </div>
   </div>
 </div>

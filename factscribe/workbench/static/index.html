@@ -104,6 +104,35 @@
     </div>
   </main>
 
+  <!-- ============ 实验报告管理（段四） ============ -->
+  <main class="mainview" id="viewReports">
+    <div class="pv-wrap">
+      <div class="pv-head">
+        <div class="pv-head-txt">
+          <h1 id="rpTitleH1">实验报告</h1>
+          <p class="pv-sub" data-i18n="rp.sub">当前项目的实验报告：导入、字段映射、数字绑定与签收状态。</p>
+        </div>
+        <div class="pv-head-btns">
+          <button type="button" class="btn-ghost" id="rpBackWs" data-i18n="rp.backWs">返回工作台</button>
+          <button type="button" class="btn-primary" id="rpImportBtn">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+            <span data-i18n="wz.open">导入实验报告</span>
+          </button>
+        </div>
+      </div>
+      <div class="pv-grid rp-grid" id="rpList"></div>
+      <div class="rp-detail" id="rpDetail" hidden>
+        <button type="button" class="btn-ghost" id="rpBack" data-i18n="rp.back">返回列表</button>
+        <h2 class="rp-d-name" id="rpDName"></h2>
+        <div class="rp-d-meta" id="rpDMeta"></div>
+        <h3 class="rp-d-h" data-i18n="rp.d.bound">数字绑定清单</h3>
+        <div id="rpDBound"></div>
+        <h3 class="rp-d-h" data-i18n="rp.d.file">原始文件</h3>
+        <div class="rp-file-ph" id="rpDFile"></div>
+      </div>
+    </div>
+  </main>
+
   <!-- ============ 论文工作台 ============ -->
   <main class="doc" id="viewWorkbench">
     <div class="progwrap"><div id="prog"></div></div>
@@ -114,6 +143,7 @@
         <div class="st-line" id="coverSt">—</div>
         <div class="meta" id="coverMeta"></div>
       </section>
+      <div id="ptools"><button type="button" class="pt ask" id="ptAsk" data-i18n="ai.ask">问 AI</button></div>
       <div id="bodyBlocks"></div>
     </div>
   </main>
@@ -126,11 +156,13 @@
       </button>
       <button type="button" class="rtab on" data-rtab="report" data-i18n="tab.report">检查报告</button>
       <button type="button" class="rtab" data-rtab="machine" data-i18n="tab.machine">机器视图</button>
+      <button type="button" class="rtab" data-rtab="ai" data-i18n="tab.ai">AI 对话</button>
     </div>
 
     <div class="rpane rpane-report on" id="pane-report">
       <div class="rp-tools">
         <button type="button" class="rp-run" id="rpRerun" data-i18n="rp.rerun">重跑检查</button>
+        <button type="button" class="btn-ghost rp-ai-btn" id="askReportRead" data-i18n="rp.read" data-i18n-title="rp.readT" title="AI 用大白话总评当前检查结果">让 AI 解读这份报告</button>
         <span class="rp-tools-note" id="rpRerunNote" hidden></span>
       </div>
 
@@ -224,13 +256,24 @@
     <div class="rpane rpane-ai" id="pane-ai">
       <div class="ai-head">
         <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
-        <button type="button" class="ai-fab" id="aiFab" data-i18n="tab.ai">AI 对话</button>
+        <button type="button" class="ai-fab" id="aiFab" data-i18n="ai.clear">清空</button>
+        <button type="button" class="ai-close" id="aiBack" data-i18n="ai.back">返回</button>
       </div>
-      <div class="ai-msgs">
-        <div class="msg">
-          <div class="who">FactScribe</div>
-          <div class="bub" id="seg4Note"></div>
+      <div class="ai-ctx" id="aiCtx"></div>
+      <div class="ai-msgs" id="aiMsgs">
+        <div class="msg ai">
+          <div class="who">AI</div>
+          <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
         </div>
+      </div>
+      <div class="ai-quick">
+        <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
+        <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
+        <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
+      </div>
+      <div class="ai-input">
+        <input id="aiText" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off">
+        <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
       </div>
     </div>
   </aside>
@@ -285,6 +328,54 @@
     <div class="modal-body" id="modalFindingsBody"></div>
     <div class="modal-acts">
       <button type="button" class="btn-ghost" id="modalFindingsClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="wizardModal" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" data-i18n="wz.title">导入实验报告</div>
+    <div class="modal-body">
+      <div class="wsteps">
+        <span class="wstep on" data-ws="1"><i>1</i><span data-i18n="wz.s1">选文件</span></span>
+        <span class="wstep" data-ws="2"><i>2</i><span data-i18n="wz.s2">字段映射</span></span>
+        <span class="wstep" data-ws="3"><i>3</i><span data-i18n="wz.s3">确认绑定</span></span>
+      </div>
+
+      <div class="wpane on" id="wpane1">
+        <p class="d-note" data-i18n="wz.s1.h">下面是本项目 reports 目录里的真实文件；也可以直接上传一份。</p>
+        <div id="wzFiles"></div>
+        <div class="wz-upload">
+          <label class="btn-ghost" for="wzUpload" data-i18n="wz.s1.upload">上传文件</label>
+          <input type="file" id="wzUpload" hidden>
+          <span class="wz-up-name" id="wzUpName"></span>
+        </div>
+      </div>
+
+      <div class="wpane" id="wpane2">
+        <p class="d-note" data-i18n="wz.s2.h">把报告里的指标对到论文事实账的字段；对不上的可以先跳过。</p>
+        <div class="wz-failed" id="wzFailed" hidden></div>
+        <div class="wz-status" id="wzStatus"></div>
+        <table class="mt wz-table" id="wzMapTable">
+          <thead><tr>
+            <th data-i18n="wz.col.id">报告 id</th>
+            <th data-i18n="wz.col.claim">断言</th>
+            <th data-i18n="wz.col.val">报告值</th>
+            <th data-i18n="wz.col.field">事实账字段</th>
+          </tr></thead>
+          <tbody id="wzRows"></tbody>
+        </table>
+      </div>
+
+      <div class="wpane" id="wpane3">
+        <p class="d-note" data-i18n="wz.s3.h">确认后写入草稿，交人核对后才进正式事实账。</p>
+        <div id="wzSummary" class="wz-summary"></div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="wzCancel" data-i18n="pf.cancel">取消</button>
+      <button type="button" class="btn-ghost" id="wzBack" data-i18n="wz.back">上一步</button>
+      <button type="button" class="btn-primary" id="wzNext" data-i18n="wz.next">下一步</button>
     </div>
   </div>
 </div>

@@ -61,6 +61,51 @@ const I18N = {
     'mv.colId': 'id', 'mv.colClaim': '断言', 'mv.colValue': '值',
     'mv.colConf': '置信', 'mv.colFile': '出处文件', 'mv.colFp': '指纹',
     'mv.none': '（无）',
+    /* ---- 段四：AI 对话（真后端）+ 实验报告导入（真文件） ---- */
+    'ai.ask': '问 AI', 'ai.askPara': '这一段有什么可改的？',
+    'ai.reportQ': '用大白话解读这份检查报告',
+    'ai.back': '返回', 'ai.clear': '清空',
+    'ai.note': 'AI 对话接的是真后端（/api/chat）。模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
+    'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
+    'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
+    'ai.ctxHead': '当前段落 · {sec}', 'ai.ctxHeadNone': '当前段落',
+    'ai.fbChip': '模拟', 'ai.fbNote': '未接模型{d}',
+    'ai.q1': '① 总结这篇论文的状态', 'ai.q2': '② 这一段有什么可改的？', 'ai.q3': '③ 这段为什么被标了缺作者',
+    'ai.q1.text': '总结这篇论文的状态', 'ai.q2.text': '这一段有什么可改的？', 'ai.q3.text': '这段为什么被标了缺作者',
+    'ai.noProject': '先打开一篇论文。',
+    'rp.title.paper': '实验报告 · {p}',
+    'rp.sub': '当前项目的实验报告：导入、字段映射、数字绑定与签收状态。',
+    'rp.backWs': '返回工作台', 'rp.back': '返回列表',
+    'rp.card.time': '导入时间', 'rp.card.bound': '绑定 {n} 个数字', 'rp.card.from': '来源', 'rp.card.file': '文件',
+    'rp.st.pending_check': '待核对', 'rp.st.signed': '已签收', 'rp.st.confirmed': '已确认',
+    'rp.from.import': '来自导入', 'rp.from.unknown': '未知来源',
+    'rp.empty': '该项目还没有报告，点右上角「导入实验报告」。',
+    'rp.loading': '读取中…', 'rp.loadErr': '读实验报告失败：{e}',
+    'rp.read': '让 AI 解读这份报告', 'rp.readT': 'AI 用大白话总评当前检查结果',
+    'rp.d.bound': '数字绑定清单', 'rp.d.file': '原始文件', 'rp.d.draft': '导入草稿',
+    'rp.d.nobound': '这份报告还没有绑定数字。',
+    'rp.d.rowsNote': '本版接口只返回绑定条数，逐条明细待后端补齐。',
+    'rp.noProject': '先打开一篇论文，再看实验报告。',
+    'wz.open': '导入实验报告', 'wz.title': '导入实验报告',
+    'wz.s1': '选文件', 'wz.s2': '字段映射', 'wz.s3': '确认绑定',
+    'wz.s1.h': '下面是本项目 reports 目录里的真实文件；也可以直接上传一份。',
+    'wz.s1.empty': 'reports 目录里还没有文件，先上传一份。',
+    'wz.s1.meta': '{size} 字节 · {mtime}',
+    'wz.s1.upload': '上传文件', 'wz.s1.uploading': '上传中…', 'wz.s1.upErr': '上传失败：{e}',
+    'wz.s2.h': '把报告里的指标对到论文事实账的字段；对不上的可以先跳过。',
+    'wz.s2.empty': '这份文件没解析出可绑定的行。',
+    'wz.s2.loading': '解析中…', 'wz.s2.err': '解析失败：{e}',
+    'wz.col.id': '报告 id', 'wz.col.claim': '断言', 'wz.col.val': '报告值', 'wz.col.field': '事实账字段',
+    'wz.skip': '— 跳过 —',
+    'wz.failed': '以下行解析失败，已跳过',
+    'wz.s3.h': '确认后写入草稿，交人核对后才进正式事实账。',
+    'wz.sum.file': '文件', 'wz.sum.sha': '指纹', 'wz.sum.mapped': '将绑定的行',
+    'wz.sum.skip': '跳过', 'wz.sum.disk': '目标盘', 'wz.sum.project': '目标项目',
+    'wz.draftNote': '导入只写草稿 {path}；正式事实账 facts/*.toml 不会被改动。',
+    'wz.next': '下一步', 'wz.back': '上一步', 'wz.confirm': '确认导入',
+    'wz.done': '已导入 {n} 行，草稿在 {path}',
+    'wz.fail': '导入失败：{e}',
+    'wz.nofile': '先选一份文件。', 'wz.norows': '先解析出行。',
     'cover.sub': '盘：{disk}',
     'cover.st': '{n} 条事实 · {m} 节正文',
     'lang.none': '这个项目没有别的语言盘',
@@ -152,6 +197,51 @@ const I18N = {
     'mv.colId': 'id', 'mv.colClaim': 'Claim', 'mv.colValue': 'Value',
     'mv.colConf': 'Confidence', 'mv.colFile': 'Source file', 'mv.colFp': 'Fingerprint',
     'mv.none': '(none)',
+    /* ---- stage 4: AI chat (real backend) + experiment report import (real files) ---- */
+    'ai.ask': 'Ask AI', 'ai.askPara': 'What could be improved in this paragraph?',
+    'ai.reportQ': 'Explain this check report in plain words',
+    'ai.back': 'Back', 'ai.clear': 'Clear',
+    'ai.note': 'AI chat talks to the real backend (/api/chat). When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
+    'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
+    'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
+    'ai.ctxHead': 'Current paragraph · {sec}', 'ai.ctxHeadNone': 'Current paragraph',
+    'ai.fbChip': 'Mock', 'ai.fbNote': 'model not connected{d}',
+    'ai.q1': '① Summarize this paper\'s state', 'ai.q2': '② What could be improved in this paragraph?', 'ai.q3': '③ Why is this flagged missing-author',
+    'ai.q1.text': 'Summarize this paper\'s state', 'ai.q2.text': 'What could be improved in this paragraph?', 'ai.q3.text': 'Why is this flagged missing-author',
+    'ai.noProject': 'Open a paper first.',
+    'rp.title.paper': 'Experiment reports · {p}',
+    'rp.sub': 'Experiment reports of the current project: import, field mapping, bound numbers and sign-off status.',
+    'rp.backWs': 'Back to workspace', 'rp.back': 'Back to list',
+    'rp.card.time': 'Imported', 'rp.card.bound': '{n} numbers bound', 'rp.card.from': 'Source', 'rp.card.file': 'File',
+    'rp.st.pending_check': 'To check', 'rp.st.signed': 'Signed off', 'rp.st.confirmed': 'Confirmed',
+    'rp.from.import': 'From import', 'rp.from.unknown': 'Unknown source',
+    'rp.empty': 'No reports for this project yet — import one from the top-right button.',
+    'rp.loading': 'Loading…', 'rp.loadErr': 'Failed to load the experiment reports: {e}',
+    'rp.read': 'Let AI explain this report', 'rp.readT': 'AI summarizes the current check results in plain words',
+    'rp.d.bound': 'Bound numbers', 'rp.d.file': 'Original file', 'rp.d.draft': 'Import draft',
+    'rp.d.nobound': 'This report has no bound numbers yet.',
+    'rp.d.rowsNote': 'This API returns only the bound count; per-row details are not available yet.',
+    'rp.noProject': 'Open a paper first to see its experiment reports.',
+    'wz.open': 'Import experiment report', 'wz.title': 'Import experiment report',
+    'wz.s1': 'Choose file', 'wz.s2': 'Map fields', 'wz.s3': 'Confirm binding',
+    'wz.s1.h': 'These are the real files in this project\'s reports directory; you can also upload one.',
+    'wz.s1.empty': 'No files in the reports directory yet — upload one first.',
+    'wz.s1.meta': '{size} B · {mtime}',
+    'wz.s1.upload': 'Upload a file', 'wz.s1.uploading': 'Uploading…', 'wz.s1.upErr': 'Upload failed: {e}',
+    'wz.s2.h': 'Map report metrics to fact-ledger fields; skip the ones that don\'t fit.',
+    'wz.s2.empty': 'No rows could be parsed from this file.',
+    'wz.s2.loading': 'Parsing…', 'wz.s2.err': 'Parse failed: {e}',
+    'wz.col.id': 'Report id', 'wz.col.claim': 'Claim', 'wz.col.val': 'Report value', 'wz.col.field': 'Ledger field',
+    'wz.skip': '— Skip —',
+    'wz.failed': 'These rows failed to parse and were skipped',
+    'wz.s3.h': 'Once confirmed it is written as a draft and only enters the live ledger after human sign-off.',
+    'wz.sum.file': 'File', 'wz.sum.sha': 'Fingerprint', 'wz.sum.mapped': 'Rows to bind',
+    'wz.sum.skip': 'Skipped', 'wz.sum.disk': 'Target disk', 'wz.sum.project': 'Target project',
+    'wz.draftNote': 'The import only writes the draft {path}; the live ledger facts/*.toml is not touched.',
+    'wz.next': 'Next', 'wz.back': 'Back', 'wz.confirm': 'Confirm import',
+    'wz.done': 'Imported {n} rows; draft at {path}',
+    'wz.fail': 'Import failed: {e}',
+    'wz.nofile': 'Pick a file first.', 'wz.norows': 'Parse the rows first.',
     'cover.sub': 'Disk: {disk}',
     'cover.st': '{n} facts · {m} sections',
     'lang.none': 'This project has no other language disk',
@@ -181,7 +271,7 @@ const I18N = {
     'pf.journal': 'Target journal / conference', 'pf.template': 'Reference template',
     'pf.question': 'Research question in one line',
     'pf.save': 'Save', 'pf.cancel': 'Cancel',
-    'pf.newTitle': 'New paper project',
+    'pf.newTitle': 'New paper project', 'pf.editTitle': 'Edit project',
     'pf.editSub': 'Project directory and disk set are locked (item 24); other fields are editable.',
     'pf.newSub': 'Once created, the project shows up in the project list.',
     'pf.created': 'Created: {n}',
@@ -210,6 +300,9 @@ const state = {
   machineError: '',
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
+  ai: { messages: [], quote: null, waiting: false, seq: 0 },   // 段四：AI 对话（真后端）
+  reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
+  wz: { step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [], suggested: [], sha: '', busy: false, parseError: '' }, // 段四：导入向导
 };
 
 async function postJSON(url, body) {
@@ -261,6 +354,9 @@ function applyI18n() {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });
   document.body.classList.toggle('panel-en', state.lang === 'en');
+  // 段四：报告页的标题与卡片文案跟着语言走。
+  renderReportsTitle();
+  if (document.body.getAttribute('data-view') === 'reports') renderReports();
 }
 
 async function getJSON(url) {
@@ -353,8 +449,10 @@ function renderBlocks() {
   host.innerHTML = '';
   toc.innerHTML = '';
   const stack = [];
+  let curSec = '';
   state.blocks.forEach((block) => {
     if (block.kind === 'section') {
+      curSec = block.title || '';
       const section = document.createElement('section');
       section.setAttribute('data-sec', block.id);
       const heading = document.createElement('h2');
@@ -378,6 +476,7 @@ function renderBlocks() {
         (block.title_en ? `<span class="en">${esc(block.title_en)}</span>` : '') + '</a>';
       toc.appendChild(li);
     } else if (block.kind === 'subsection') {
+      curSec = block.title || '';
       const heading = document.createElement('h3');
       heading.className = 'sub-h';
       heading.id = block.id;
@@ -395,7 +494,11 @@ function renderBlocks() {
       const holder = box;
       const para = document.createElement('div');
       para.innerHTML = block.html || '';
-      holder.appendChild(para.firstElementChild || document.createTextNode(''));
+      const absNode = para.firstElementChild;
+      holder.appendChild(absNode || document.createTextNode(''));
+      if (absNode) {
+        bindParaTools(absNode, (absNode.textContent || '').replace(/\s+/g, ' ').trim(), '', block.id);
+      }
     } else {
       const holder = document.createElement('div');
       holder.innerHTML = block.html || '';
@@ -408,6 +511,7 @@ function renderBlocks() {
           ev.stopPropagation();
           enterEdit(block.id, block.file || '');
         });
+        bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(), curSec, block.id);
         host.appendChild(node);
       }
     }
@@ -450,7 +554,7 @@ function renderStatus() {
   setText('#stFacts', t('hc.facts', { n: facts }));
   setText('#stSections', t('hc.sections', { m: sections }));
   setText('#stNote', t('hc.note'));
-  setText('#seg4Note', t('seg4'));
+  // 段四：AI 面板的说明条走 data-i18n（#seg4Note），不在这里覆盖。
   // 段三：体检 / 发现 / 四步链 / 机器视图。
   renderReport();
   renderMachine();
@@ -466,6 +570,8 @@ async function openProject(projectId, diskId) {
   if (!disk) return;
   state.disk = disk.id;
   state.lang = disk.lang === 'zh' ? 'zh' : 'en';
+  // 段四：换盘＝换一篇稿子，对话上下文跟着重置。
+  clearAiConversation();
   document.body.setAttribute('data-view', 'workbench');
   applyI18n();
   await loadDisk();
@@ -1256,6 +1362,586 @@ async function submitForm(event) {
   }
 }
 
+/* =====================================================================
+   段四：AI 对话（接真后端 /api/chat）＋ 实验报告导入（走真文件）
+   ===================================================================== */
+
+/* 后端约定的 fallback 标记：模拟回答的第一行必须是这一句。 */
+const AI_FALLBACK_MARK = '模拟回答（未接模型）';
+
+/* 这条接口永远 200；ok=false 表示「模型没接上」，不是请求失败。
+   所以不能走 postJSON（它见 ok===false 就抛），要自己接。 */
+async function postChat(body) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(body || {}),
+  });
+  let data = null;
+  try { data = await res.json(); } catch (err) { data = null; }
+  if (!data) throw new Error('HTTP ' + res.status);
+  return data;
+}
+
+/* ---------------------------------------------------------------- AI 对话 */
+
+function aiCtxHtml() {
+  const quote = state.ai.quote;
+  if (!quote) return '';
+  const head = quote.section ? t('ai.ctxHead', { sec: quote.section }) : t('ai.ctxHeadNone');
+  return `<div class="ctx-h">${esc(head)}</div><div class="ctx-q">「${esc(quote.text || '')}」</div>`;
+}
+
+function renderAiCtx() {
+  const el = $('#aiCtx');
+  if (!el) return;
+  el.innerHTML = aiCtxHtml();
+  el.classList.toggle('on', !!state.ai.quote);
+}
+
+/* 追加一条气泡。fallback 的回复必须一眼看得出是模拟的。 */
+function pushAiMsg(role, text, opts) {
+  const host = $('#aiMsgs');
+  if (!host) return null;
+  const options = opts || {};
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (role === 'user' ? 'me' : 'ai') + ' msg-js';
+  if (options.fallback) wrap.classList.add('fb');
+  if (options.waiting) wrap.classList.add('waiting');
+  const who = document.createElement('div');
+  who.className = 'who';
+  who.textContent = role === 'user' ? t('ai.you') : 'AI';
+  if (options.fallback) {
+    const chip = document.createElement('span');
+    chip.className = 'fb-chip';
+    chip.textContent = t('ai.fbChip');
+    who.appendChild(chip);
+  }
+  const bub = document.createElement('div');
+  bub.className = 'bub';
+  bub.textContent = text || '';
+  wrap.appendChild(who);
+  wrap.appendChild(bub);
+  if (options.note) {
+    const note = document.createElement('div');
+    note.className = 'msg-note';
+    note.textContent = options.note;
+    wrap.appendChild(note);
+  }
+  host.appendChild(wrap);
+  host.scrollTop = host.scrollHeight;
+  return wrap;
+}
+
+function clearAiConversation() {
+  state.ai.messages = [];
+  state.ai.quote = null;
+  state.ai.seq += 1;      // 作废在途的请求回复
+  renderAiCtx();
+  const host = $('#aiMsgs');
+  if (!host) return;
+  $$('.msg-js', host).forEach((el) => el.remove());
+}
+
+function setAiBusy(busy) {
+  const send = $('#aiSend');
+  if (send) {
+    send.disabled = !!busy;
+    send.textContent = busy ? t('ai.sending') : t('ai.send');
+  }
+  $$('#pane-ai .aq').forEach((btn) => { btn.disabled = !!busy; });
+}
+
+function aiFallbackNote(data) {
+  const code = (data && data.code) || '';
+  const msg = (data && data.error) || '';
+  const detail = [code, msg].filter(Boolean).join(' · ');
+  return t('ai.fbNote', { d: detail ? ' · ' + detail : '' });
+}
+
+/* 两条都认：后端给的 fallback 标记，或回复第一行就是约定的那句标记。 */
+function isFallbackReply(data, reply) {
+  if (data && data.fallback) return true;
+  const text = String(reply || '').replace(/^\s+/, '');
+  return text.indexOf(AI_FALLBACK_MARK) === 0;
+}
+
+async function aiSend(question, mode) {
+  if (state.ai.waiting) return;
+  const q = String(question || '').trim();
+  if (!q) return;
+  if (!state.project) { toast(t('ai.noProject')); return; }
+  pushAiMsg('user', q);
+  state.ai.messages.push({ role: 'user', content: q });
+  const wait = pushAiMsg('ai', t('ai.waiting'), { waiting: true });
+  state.ai.waiting = true;
+  setAiBusy(true);
+  const seq = state.ai.seq;
+  const payload = {
+    project: state.project.id,
+    disk: state.disk || '',
+    messages: state.ai.messages.map((m) => ({ role: m.role, content: m.content })),
+    quote: mode === 'explain' ? null : (state.ai.quote || null),
+    mode: mode || 'ask',
+  };
+  try {
+    const data = await postChat(payload);
+    if (seq !== state.ai.seq) return;      // 期间清空过：这次回复作废
+    if (wait && wait.parentNode) wait.parentNode.removeChild(wait);
+    const reply = data && data.reply ? String(data.reply) : '';
+    if (!reply) {
+      pushAiMsg('ai', t('ai.empty'), { fallback: true, note: aiFallbackNote(data) });
+      return;
+    }
+    const fallback = isFallbackReply(data, reply);
+    pushAiMsg('ai', reply, { fallback: fallback, note: fallback ? aiFallbackNote(data) : '' });
+    state.ai.messages.push({ role: 'assistant', content: reply });
+  } catch (err) {
+    if (seq !== state.ai.seq) return;
+    if (wait && wait.parentNode) wait.parentNode.removeChild(wait);
+    pushAiMsg('ai', t('ai.err', { e: (err && err.message) || String(err) }), { fallback: true });
+  } finally {
+    if (seq === state.ai.seq) {
+      state.ai.waiting = false;
+      setAiBusy(false);
+    }
+  }
+}
+
+/* 「问 AI」带引用：切到 AI 页、带上下文、预填问题（人再按发送）。 */
+function askAiAbout(text, section, id) {
+  state.ai.quote = { text: String(text || ''), section: String(section || ''), id: String(id || '') };
+  renderAiCtx();
+  switchRtab('ai');
+  const input = $('#aiText');
+  if (input) {
+    input.value = t('ai.askPara');
+    input.focus();
+  }
+}
+
+/* 段落的悬浮工具条（原型同款）：不占正文排版，悬停段落才浮出来。 */
+let paraAskTarget = null;
+let paraToolsTimer = null;
+
+function showParaTools(node) {
+  const bar = $('#ptools');
+  const page = $('#diskBody');
+  if (!bar || !page) return;
+  const r = node.getBoundingClientRect();
+  const pr = page.getBoundingClientRect();
+  bar.classList.add('on');
+  const width = bar.offsetWidth || 64;
+  let left = (r.right - pr.left) - width - 6;
+  if (left > pr.width - width - 8) left = pr.width - width - 8;
+  if (left < 4) left = 4;
+  bar.style.left = left + 'px';
+  bar.style.top = (r.top - pr.top + 2) + 'px';
+}
+
+function hideParaTools() {
+  clearTimeout(paraToolsTimer);
+  paraToolsTimer = setTimeout(() => {
+    const bar = $('#ptools');
+    if (bar) bar.classList.remove('on');
+  }, 160);
+}
+
+/* 段落 → 悬浮工具条的绑定（原型同款：悬停段落才浮出「问 AI」）。 */
+function bindParaTools(node, text, section, id) {
+  node.addEventListener('mouseenter', () => {
+    paraAskTarget = { text: text, section: section, id: id };
+    showParaTools(node);
+  });
+  node.addEventListener('mouseleave', hideParaTools);
+}
+
+/* ---------------------------------------------------------------- 实验报告 */
+
+function reportsApiPath(suffix) {
+  const project = state.project;
+  if (!project) return null;
+  return `/api/project/${encodeURIComponent(project.id)}/reports${suffix || ''}`;
+}
+
+function renderReportsTitle() {
+  const el = $('#rpTitleH1');
+  if (!el) return;
+  const name = state.project ? state.project.name : '';
+  el.textContent = t('rp.title.paper', { p: name || '—' });
+}
+
+function reportStatusLabel(report) {
+  if (report && report.status_label) return String(report.status_label);
+  const status = (report && report.status) || '';
+  return status ? t('rp.st.' + status) : '—';
+}
+
+function reportFromLabel(report) {
+  const from = (report && report.from) || '';
+  if (from === 'import') return t('rp.from.import');
+  return from ? String(from) : t('rp.from.unknown');
+}
+
+const REPORT_STATUS_CLS = {
+  pending_check: 'rp-pending_check',
+  signed: 'rp-signed',
+  confirmed: 'rp-confirmed',
+};
+
+function reportCardHtml(report) {
+  const name = report.name || report.file || report.id || '';
+  const file = report.file || '';
+  const bound = Number(report.bound || 0);
+  const cls = REPORT_STATUS_CLS[report.status || ''] || 'rp-pending_check';
+  return `<div class="rp-card" data-rp="${esc(report.id || '')}">
+    <div class="rp-top">
+      <span class="rp-name">${esc(name)}</span>
+      <span class="rp-ver" title="${esc(t('rp.card.from'))}">${esc(reportFromLabel(report))}</span>
+      <span class="rp-chip ${cls}">${esc(reportStatusLabel(report))}</span>
+    </div>
+    <div class="rp-file" title="${esc(file)}">${esc(file)}</div>
+    <div class="rp-row"><span>${esc(t('rp.card.time'))}</span><span class="pj-v">${esc(report.time || '—')}</span></div>
+    <div class="rp-row"><span>${esc(t('rp.card.bound', { n: bound }))}</span></div>
+  </div>`;
+}
+
+function renderReportDetail(report) {
+  const nameEl = $('#rpDName');
+  if (nameEl) nameEl.textContent = report.name || report.file || report.id || '';
+  const metaEl = $('#rpDMeta');
+  if (metaEl) {
+    metaEl.innerHTML = `${esc(t('rp.card.time'))} ${esc(report.time || '—')} · ${esc(reportStatusLabel(report))} · ` +
+      `${esc(t('rp.card.from'))} ${esc(reportFromLabel(report))} · ${esc(t('rp.card.bound', { n: Number(report.bound || 0) }))}` +
+      `<br>${esc(t('rp.card.file'))}: <code title="${esc(report.file || '')}">${esc(report.file || '—')}</code>`;
+  }
+  const boundEl = $('#rpDBound');
+  if (boundEl) {
+    const n = Number(report.bound || 0);
+    boundEl.innerHTML = n
+      ? `<div class="rp-row"><span>${esc(t('rp.card.bound', { n: n }))}</span><span class="pj-v">${esc(String(n))}</span></div>` +
+        `<div class="rp-d-note">${esc(t('rp.d.rowsNote'))}</div>`
+      : `<div class="ff-empty">${esc(t('rp.d.nobound'))}</div>`;
+  }
+  const fileEl = $('#rpDFile');
+  if (fileEl) {
+    fileEl.innerHTML = `${esc(t('rp.d.draft'))}: <code>${esc(report.draft_path || '—')}</code>`;
+  }
+}
+
+function renderReports() {
+  const list = $('#rpList');
+  const detail = $('#rpDetail');
+  if (!list) return;
+  renderReportsTitle();
+  const report = state.reports.detail;
+  if (report) {
+    list.hidden = true;
+    if (detail) detail.hidden = false;
+    renderReportDetail(report);
+    return;
+  }
+  list.hidden = false;
+  if (detail) detail.hidden = true;
+  if (state.reports.loading) {
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
+    return;
+  }
+  if (state.reports.error) {
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loadErr', { e: state.reports.error }))}</div>`;
+    return;
+  }
+  const items = state.reports.list || [];
+  if (!items.length) {
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.empty'))}</div>`;
+    return;
+  }
+  list.innerHTML = items.map(reportCardHtml).join('');
+  $$('#rpList [data-rp]').forEach((card) => {
+    card.addEventListener('click', () => {
+      const found = (state.reports.list || []).find((r) => String(r.id) === String(card.dataset.rp));
+      if (!found) return;
+      state.reports.detail = found;
+      renderReports();
+    });
+  });
+}
+
+function openReportDetail(id) {
+  const report = (state.reports.list || []).find((r) => String(r.id) === String(id));
+  if (!report) return;
+  state.reports.detail = report;
+  renderReports();
+}
+
+async function loadReports() {
+  const path = reportsApiPath('');
+  if (!path) return;
+  state.reports.loading = true;
+  renderReports();
+  try {
+    const data = await getJSON(path);
+    if (data && data.ok === false) throw new Error(data.error || 'REPORTS_FAILED');
+    state.reports.list = (data && Array.isArray(data.reports)) ? data.reports : [];
+    state.reports.error = '';
+  } catch (err) {
+    state.reports.list = [];
+    state.reports.error = (err && err.message) || String(err);
+  }
+  state.reports.loading = false;
+  renderReports();
+}
+
+async function openReports() {
+  if (!state.project) { toast(t('rp.noProject')); return; }
+  state.reports.detail = null;
+  setView('reports');
+  await loadReports();
+}
+
+/* ---------------------------------------------------------------- 导入向导 */
+
+function wzDraftName(file) {
+  const name = String(file || '');
+  return name.replace(/\.[^.]+$/, '') + '.draft.toml';
+}
+
+async function openWizard() {
+  if (!state.project) { toast(t('rp.idle')); return; }
+  state.wz = {
+    step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [],
+    suggested: [], sha: '', busy: false, parseError: '',
+  };
+  const modal = $('#wizardModal');
+  if (modal) modal.hidden = false;
+  renderWz();
+  await loadWzDir();
+}
+
+function closeWizard() {
+  const modal = $('#wizardModal');
+  if (modal) modal.hidden = true;
+}
+
+async function loadWzDir() {
+  const path = reportsApiPath('/dir');
+  if (!path) return;
+  try {
+    const data = await getJSON(path);
+    if (data && data.ok === false) throw new Error(data.error || 'REPORTS_DIR_FAILED');
+    state.wz.files = (data && Array.isArray(data.files)) ? data.files : [];
+  } catch (err) {
+    state.wz.files = [];
+    toast(t('wz.s1.upErr', { e: (err && err.message) || String(err) }));
+  }
+  // 刚上传的文件可能还没进目录列表：自己补一条，别把选中状态弄丢。
+  if (state.wz.file && !state.wz.files.some((f) => f.name === state.wz.file)) {
+    state.wz.files = [{ name: state.wz.file, size: state.wz.fileSize || 0, mtime: '' }].concat(state.wz.files);
+  }
+  renderWz();
+}
+
+function renderWz() {
+  const step = state.wz.step;
+  $$('.wstep').forEach((s) => {
+    const n = Number(s.getAttribute('data-ws'));
+    s.classList.toggle('on', n === step);
+    s.classList.toggle('done', n < step);
+  });
+  ['#wpane1', '#wpane2', '#wpane3'].forEach((sel, i) => {
+    const pane = $(sel);
+    if (pane) pane.classList.toggle('on', i === step - 1);
+  });
+  const back = $('#wzBack');
+  if (back) back.disabled = step === 1;
+  const next = $('#wzNext');
+  if (next) {
+    next.textContent = step === 3 ? t('wz.confirm') : t('wz.next');
+    next.disabled = (step === 1 && !state.wz.file) || (step === 2 && !state.wz.rows.length);
+  }
+  if (step === 1) renderWzFiles();
+  if (step === 2) renderWzRows();
+  if (step === 3) renderWzSummary();
+}
+
+function renderWzFiles() {
+  const host = $('#wzFiles');
+  if (!host) return;
+  const files = state.wz.files || [];
+  if (!files.length) {
+    host.innerHTML = `<div class="ff-empty">${esc(t('wz.s1.empty'))}</div>`;
+    return;
+  }
+  host.innerHTML = files.map((f) => {
+    const checked = f.name === state.wz.file ? ' checked' : '';
+    const meta = t('wz.s1.meta', { size: Number(f.size || 0), mtime: f.mtime || '—' });
+    return `<label class="wz-file"><input type="radio" name="wzf" value="${esc(f.name)}"${checked}>` +
+      `<span class="rf-n">${esc(f.name)}</span><span class="rf-s">${esc(meta)}</span></label>`;
+  }).join('');
+}
+
+function renderWzRows() {
+  const failedBox = $('#wzFailed');
+  const failed = state.wz.failed || [];
+  if (failedBox) {
+    if (failed.length) {
+      failedBox.hidden = false;
+      failedBox.innerHTML = `<div class="wz-failed-h">${esc(t('wz.failed'))}</div>` + failed.map((f) => {
+        const line = (f && f.line !== undefined && f.line !== null) ? String(f.line) : '';
+        return `<div class="wz-failed-row"><span class="wz-f-line">${esc(line)}</span>` +
+          `<span class="wz-f-raw">${esc(String((f && f.raw) || ''))}</span>` +
+          `<span class="wz-f-err">${esc(String((f && f.error) || ''))}</span></div>`;
+      }).join('');
+    } else {
+      failedBox.hidden = true;
+      failedBox.innerHTML = '';
+    }
+  }
+  const status = $('#wzStatus');
+  const body = $('#wzRows');
+  const table = $('#wzMapTable');
+  if (!body || !table) return;
+  const rows = state.wz.rows || [];
+  if (!rows.length) {
+    table.hidden = true;
+    if (status) status.innerHTML = `<div class="ff-empty">${esc(state.wz.parseError || t('wz.s2.empty'))}</div>`;
+    return;
+  }
+  table.hidden = false;
+  if (status) status.innerHTML = '';
+  const targets = [];
+  (state.wz.suggested || []).forEach((s) => {
+    const tgt = (s && s.target) ? String(s.target) : '';
+    if (tgt && targets.indexOf(tgt) < 0) targets.push(tgt);
+  });
+  body.innerHTML = rows.map((row, i) => {
+    const opts = [`<option value="">${esc(t('wz.skip'))}</option>`].concat(
+      targets.map((tgt) => `<option value="${esc(tgt)}"${tgt === row.target ? ' selected' : ''}>${esc(tgt)}</option>`)
+    ).join('');
+    return `<tr>
+      <td><input class="wz-in" type="text" data-row="${i}" data-f="id" value="${esc(row.id)}"></td>
+      <td><input class="wz-in" type="text" data-row="${i}" data-f="claim" value="${esc(row.claim)}"></td>
+      <td><input class="wz-in" type="text" data-row="${i}" data-f="value" value="${esc(row.value)}"></td>
+      <td><select class="wzsel" data-row="${i}" data-f="target">${opts}</select></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderWzSummary() {
+  const host = $('#wzSummary');
+  if (!host) return;
+  const rows = state.wz.rows || [];
+  const mapped = rows.filter((r) => r.target).length;
+  const skipped = rows.length - mapped;
+  const disk = currentDisk();
+  const lines = [];
+  lines.push(`${esc(t('wz.sum.file'))} <code>${esc(state.wz.file || '')}</code>`);
+  if (state.wz.sha) lines.push(`${esc(t('wz.sum.sha'))} <code>${esc(state.wz.sha)}</code>`);
+  lines.push(`${esc(t('wz.sum.mapped'))} ${mapped} / ${rows.length}`);
+  lines.push(`${esc(t('wz.sum.skip'))} ${skipped}`);
+  lines.push(`${esc(t('wz.sum.disk'))} <code>${esc(disk ? disk.id : '—')}</code>`);
+  lines.push(`${esc(t('wz.sum.project'))} <code>${esc(state.project ? state.project.id : '')}</code>`);
+  lines.push(`<b>${esc(t('wz.draftNote', { path: 'facts/draft/' + wzDraftName(state.wz.file) }))}</b>`);
+  host.innerHTML = lines.join('<br>');
+}
+
+async function parseReport() {
+  const path = reportsApiPath('/parse');
+  if (!path) return;
+  const status = $('#wzStatus');
+  const body = $('#wzRows');
+  const table = $('#wzMapTable');
+  if (table) table.hidden = true;
+  if (status) status.innerHTML = `<div class="ff-empty">${esc(t('wz.s2.loading'))}</div>`;
+  if (body) body.innerHTML = '';
+  try {
+    const data = await postJSON(path, { name: state.wz.file });
+    const suggested = (data && Array.isArray(data.suggested)) ? data.suggested : [];
+    const targets = {};
+    suggested.forEach((s) => { if (s && s.id) targets[String(s.id)] = s.target ? String(s.target) : ''; });
+    const rows = (data && Array.isArray(data.rows)) ? data.rows : [];
+    state.wz.rows = rows.map((r) => {
+      const id = (r && r.id !== undefined && r.id !== null) ? String(r.id) : '';
+      return {
+        id: id,
+        claim: (r && r.claim !== undefined && r.claim !== null) ? String(r.claim) : '',
+        value: (r && r.value !== undefined && r.value !== null) ? String(r.value) : '',
+        source: (r && r.source) ? String(r.source) : '',
+        line: (r && r.line !== undefined) ? r.line : null,
+        target: targets[id] || '',
+      };
+    });
+    state.wz.failed = (data && Array.isArray(data.failed)) ? data.failed : [];
+    state.wz.suggested = suggested;
+    state.wz.sha = (data && data.sha256) ? String(data.sha256) : '';
+    state.wz.parseError = '';
+  } catch (err) {
+    state.wz.rows = [];
+    state.wz.failed = [];
+    state.wz.parseError = t('wz.s2.err', { e: (err && err.message) || String(err) });
+  }
+  renderWz();
+}
+
+async function confirmImport() {
+  const path = reportsApiPath('/confirm');
+  if (!path) return;
+  const source = state.wz.rows || [];
+  const rows = source.map((r) => ({
+    id: r.id, claim: r.claim, value: r.value, source: r.source, line: r.line,
+  }));
+  const mapping = {};
+  source.forEach((r) => { mapping[r.id] = r.target || ''; });
+  const name = state.wz.file;
+  try {
+    const data = await postJSON(path, {
+      name: name,
+      report_name: name.replace(/\.[^.]+$/, ''),
+      rows: rows,
+      mapping: mapping,
+    });
+    closeWizard();
+    toast(t('wz.done', { n: Number((data && data.count) || rows.length), path: (data && data.draft_path) || '' }));
+    await loadReports();
+  } catch (err) {
+    toast(t('wz.fail', { e: (err && err.message) || String(err) }));
+  }
+}
+
+async function onWzUpload(ev) {
+  const input = ev.target;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const path = reportsApiPath('/upload');
+  if (!path) return;
+  const nameEl = $('#wzUpName');
+  if (nameEl) nameEl.textContent = t('wz.s1.uploading');
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch(path, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
+    let data = null;
+    try { data = await res.json(); } catch (err) { data = null; }
+    if (!data || data.ok === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    state.wz.file = data.name ? String(data.name) : file.name;
+    state.wz.fileSize = Number(data.size || file.size || 0);
+    if (nameEl) nameEl.textContent = state.wz.file;
+    await loadWzDir();
+  } catch (err) {
+    if (nameEl) nameEl.textContent = t('wz.s1.upErr', { e: (err && err.message) || String(err) });
+  } finally {
+    input.value = '';
+  }
+}
+
+function onWzRowEdit(ev) {
+  const el = ev.target;
+  if (!el || el.dataset.row === undefined || !el.dataset.f) return;
+  const row = (state.wz.rows || [])[Number(el.dataset.row)];
+  if (!row) return;
+  row[el.dataset.f] = el.value;
+}
+
 /* ---------------------------------------------------------------- 交互 */
 
 function setView(view) {
@@ -1266,6 +1952,9 @@ function setView(view) {
     $('#tocManageList').innerHTML = '';
     state.assembly = [];
   }
+  // 段落悬浮工具条只在正文里用。
+  const bar = $('#ptools');
+  if (bar) bar.classList.remove('on');
 }
 
 function switchRtab(name) {
@@ -1318,9 +2007,81 @@ function bind() {
     document.body.classList.remove('rc-collapsed');
   });
   $('#aiEntry').addEventListener('click', () => switchRtab('ai'));
-  $('#aiFab').addEventListener('click', () => switchRtab('ai'));
+  // 段四：AI 对话（真后端）
+  $('#aiSend').addEventListener('click', () => {
+    const input = $('#aiText');
+    const text = input ? input.value.trim() : '';
+    if (!text) return;
+    if (input) input.value = '';
+    aiSend(text, 'ask');
+  });
+  $('#aiText').addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    $('#aiSend').click();
+  });
+  $$('#pane-ai .aq').forEach((btn) => {
+    btn.addEventListener('click', () => aiSend(t('ai.q' + btn.dataset.q + '.text'), 'ask'));
+  });
+  $('#aiFab').addEventListener('click', clearAiConversation);
+  $('#aiBack').addEventListener('click', () => switchRtab('report'));
+  $('#askReportRead').addEventListener('click', () => {
+    switchRtab('ai');
+    aiSend(t('ai.reportQ'), 'explain');
+  });
+  $('#ptAsk').addEventListener('click', () => {
+    const target = paraAskTarget;
+    if (!target) return;
+    askAiAbout(target.text, target.section, target.id);
+  });
+  $('#ptools').addEventListener('mouseenter', () => clearTimeout(paraToolsTimer));
+  $('#ptools').addEventListener('mouseleave', hideParaTools);
+  // 段四：实验报告管理
   $('#rpSideBtn').addEventListener('click', () => {
-    toast(t('seg3.note2'));
+    openReports();
+  });
+  $('#rpBackWs').addEventListener('click', () => {
+    setView('workbench');
+    renderStatus();
+  });
+  $('#rpImportBtn').addEventListener('click', openWizard);
+  $('#rpBack').addEventListener('click', () => {
+    state.reports.detail = null;
+    renderReports();
+  });
+  // 段四：导入向导（选文件 → 字段映射 → 确认绑定）
+  $('#wzFiles').addEventListener('change', (ev) => {
+    const input = ev.target;
+    if (!input || input.name !== 'wzf') return;
+    state.wz.file = input.value;
+    renderWz();
+  });
+  $('#wzUpload').addEventListener('change', onWzUpload);
+  $('#wzRows').addEventListener('input', onWzRowEdit);
+  $('#wzRows').addEventListener('change', onWzRowEdit);
+  $('#wzBack').addEventListener('click', () => {
+    if (state.wz.step > 1) { state.wz.step -= 1; renderWz(); }
+  });
+  $('#wzNext').addEventListener('click', async () => {
+    const step = state.wz.step;
+    if (step === 1) {
+      if (!state.wz.file) { toast(t('wz.nofile')); return; }
+      state.wz.step = 2;
+      renderWz();
+      await parseReport();
+      return;
+    }
+    if (step === 2) {
+      if (!state.wz.rows.length) { toast(t('wz.norows')); return; }
+      state.wz.step = 3;
+      renderWz();
+      return;
+    }
+    await confirmImport();
+  });
+  $('#wzCancel').addEventListener('click', closeWizard);
+  $('#wizardModal').addEventListener('click', (ev) => {
+    if (ev.target.id === 'wizardModal') closeWizard();
   });
   // 段二：新建/编辑项目
   $('#goNew').addEventListener('click', () => openForm('new'));
@@ -1369,6 +2130,8 @@ function bind() {
     if (ev.key !== 'Escape') return;
     const modal = $('#modalFindings');
     if (modal && !modal.hidden) modal.hidden = true;
+    const wizard = $('#wizardModal');
+    if (wizard && !wizard.hidden) closeWizard();
   });
   // 段二：编辑态的提交键（Esc / 点外面）
   document.addEventListener('keydown', (ev) => {

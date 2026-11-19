@@ -20,6 +20,12 @@
   POST /api/project/new                           新建论文项目（落盘）
   POST /api/project/update                        改项目（标题等）
   POST /api/project/opened                        记「最近打开」
+  POST /api/chat                                  AI 对话（OpenAI 兼容后端；不可达→降级）
+  GET  /api/project/<p>/reports                   报告页的卡（含导入草稿）
+  GET  /api/project/<p>/reports/dir               列实验报告目录下的真实文件
+  POST /api/project/<p>/reports/upload            上传报告文件进该目录（multipart）
+  POST /api/project/<p>/reports/parse             解析报告（预览 + 自动映射）
+  POST /api/project/<p>/reports/confirm           写草稿（绝不写活账本）
   GET  /                                           前端单页
   GET  /static/<name>                             前端静态文件
 """
@@ -47,6 +53,35 @@ STATIC_TYPES = {
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
 }
+
+
+def _parse_multipart_file(content_type: str, raw: bytes) -> tuple[str, bytes]:
+    """从 multipart/form-data 里取出第一个文件：(文件名, 字节)。
+
+    只用标准库：`cgi` 在 3.13 已被移除，这里走 `email` 的解析器。
+    """
+    if not raw:
+        return "", b""
+    ctype = str(content_type or "")
+    if "multipart/form-data" not in ctype:
+        return "", b""
+    header = ("Content-Type: %s\r\nMIME-Version: 1.0\r\n\r\n" % ctype).encode("utf-8")
+    try:
+        from email.parser import BytesParser
+        from email.policy import default as default_policy
+
+        message = BytesParser(policy=default_policy).parsebytes(header + raw)
+    except Exception:  # noqa: BLE001 - 解析不了就当没收到文件
+        return "", b""
+    for part in message.iter_parts():
+        filename = part.get_filename()
+        if not filename:
+            continue
+        payload = part.get_payload(decode=True)
+        if payload is None:
+            continue
+        return str(filename), bytes(payload)
+    return "", b""
 
 
 class ProjectIndex:
@@ -99,6 +134,21 @@ class ProjectIndex:
             return None
         return path
 
+    def project_disks(self, project_id: str) -> list[dict]:
+        """这个项目的盘（英文盘在前）。"""
+        for project in self.projects():
+            if project["id"] == project_id:
+                return list(project.get("disks") or [])
+        return []
+
+    def project_disk_path(self, project_id: str) -> Path | None:
+        """项目的主盘（英文盘优先）：报告目录与草稿都跟着它走。"""
+        disks = self.project_disks(project_id)
+        if not disks:
+            return None
+        primary = next((d for d in disks if d.get("lang") == "en"), disks[0])
+        return Path(primary["path"])
+
 
 class WorkbenchHandler(BaseHTTPRequestHandler):
     """只读 JSON + 静态文件。"""
@@ -143,6 +193,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             projects = self.index.projects(refresh=refresh)
             return self._json({"ok": True, "root": str(self.index.root),
                                "count": len(projects), "projects": projects})
+        if route.startswith("/api/project/"):
+            parts = [part for part in route.split("/") if part]
+            # /api/project/<project>/reports[/<what>]
+            if len(parts) in (4, 5) and parts[3] == "reports":
+                return self._reports_get(parts[2], parts[4] if len(parts) > 4 else "")
         if route.startswith("/api/disk/"):
             parts = [part for part in route.split("/") if part]
             # /api/disk/<project>/<disk>/<what>[/<arg>]
@@ -204,11 +259,18 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
-        """段二：写接口。"""
+        """段二：写接口；段四：AI 对话与实验报告导入。"""
         parsed = urlparse(self.path)
         route = unquote(parsed.path)
+        # 上传走 multipart：自己读原始字节，别让 _body 吞掉。
+        if route.startswith("/api/project/") and route.endswith("/reports/upload"):
+            parts = [part for part in route.split("/") if part]
+            if len(parts) == 5:
+                return self._reports_upload(parts[2])
         body = self._body()
         # 只有这几个接口接受写；其余的路由仍是只读（405，跟段一一致）。
+        if route == "/api/chat":
+            return self._chat(body)
         if not (route.startswith("/api/disk/") or route.startswith("/api/project/")):
             return self._error(405, "这个接口只有 GET（段一就是只读的）")
         try:
@@ -225,6 +287,15 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 return self._project_update(body)
             if route == "/api/project/opened":
                 return self._project_opened(body)
+            if route.startswith("/api/project/"):
+                parts = [part for part in route.split("/") if part]
+                # /api/project/<project>/reports/<what>
+                if len(parts) == 5 and parts[3] == "reports":
+                    if parts[4] == "parse":
+                        return self._reports_parse(parts[2], body)
+                    if parts[4] == "confirm":
+                        return self._reports_confirm(parts[2], body)
+                    return self._error(404, "没有这个报告操作：%s" % parts[4])
         except ConfigError as exc:
             return self._error(400, str(exc))
         except (OSError, ValueError) as exc:
@@ -319,6 +390,162 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         result = touch_opened(disk)
         self.index.projects(refresh=True)
         return self._json({"ok": True, **result})
+
+    # ---- 段四：AI 对话 ----
+
+    def _chat(self, body: dict) -> None:
+        """AI 对话：组装上下文 → 打真后端 → 渲染回复。
+
+        后端不可达 / 超时时返回 `ok=False, fallback=True`，模拟回复首行
+        标注「模拟回答（未接模型）」——绝不静默造假。
+        """
+        from .ai import chat
+
+        project_id = str(body.get("project") or "")
+        disk_id = str(body.get("disk") or "")
+        messages = body.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return self._error(400, "messages 要给（非空数组）")
+        disk = self.index.disk_path(project_id, disk_id)
+        if disk is None:
+            return self._error(404, "没有这个盘：%s/%s" % (project_id, disk_id))
+        quote = body.get("quote")
+        if not isinstance(quote, dict):
+            quote = None
+        mode = str(body.get("mode") or "ask")
+        result = chat(disk, messages, quote=quote, mode=mode)
+        result.update({"project": project_id, "disk": disk_id})
+        # 降级也是 200：前端要拿 reply 渲染，并靠 fallback 分辨真假。
+        return self._json(result, code=200)
+
+    # ---- 段四：实验报告导入 ----
+
+    def _reports_dir(self, project_id: str) -> Path:
+        from .importer import reports_dir
+
+        disk = self.index.project_disk_path(project_id)
+        if disk is None:
+            raise ConfigError("没有这个项目：%s" % project_id)
+        return reports_dir(disk)
+
+    def _reports_get(self, project_id: str, what: str) -> None:
+        """`GET /api/project/<p>/reports`（卡）｜`…/reports/dir`（真实文件清单）。"""
+        from .importer import list_drafts, list_report_files
+
+        try:
+            directory = self._reports_dir(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        if what == "dir":
+            files = list_report_files(directory)
+            return self._json({"ok": True, "project": project_id,
+                               "dir": str(directory),
+                               "exists": directory.is_dir(),
+                               "count": len(files), "files": files})
+        if what in ("", "list"):
+            disk = self.index.project_disk_path(project_id)
+            drafts = list_drafts(disk) if disk else []
+            reports = []
+            for item in drafts:
+                reports.append({
+                    "id": item["id"], "name": item["name"], "file": item["file"],
+                    "time": item["time"], "bound": item.get("bound", 0),
+                    "status": "pending_check", "status_label": "待核对",
+                    "from": "import", "draft_path": item["draft_path"],
+                })
+            return self._json({"ok": True, "project": project_id,
+                               "count": len(reports), "reports": reports})
+        return self._error(404, "没有这个接口：%s" % what)
+
+    def _reports_upload(self, project_id: str) -> None:
+        """上传报告文件（multipart）→ 存进该项目的实验报告目录。"""
+        from .importer import REPORT_SUFFIXES, sha256_of
+
+        try:
+            directory = self._reports_dir(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        raw = self._raw_body()
+        filename, payload = _parse_multipart_file(self.headers.get("Content-Type") or "",
+                                                   raw)
+        if not filename:
+            return self._error(400, "没有收到文件（multipart 字段名要是 file）")
+        if Path(filename).suffix.lower() not in REPORT_SUFFIXES:
+            return self._error(400, "只认 %s 文件" % " / ".join(REPORT_SUFFIXES))
+        safe = Path(filename).name
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            target = directory / safe
+            target.write_bytes(payload)
+        except OSError as exc:
+            return self._error(400, "存文件失败：%s" % exc)
+        return self._json({"ok": True, "project": project_id,
+                           "name": safe, "path": str(target),
+                           "size": len(payload), "sha256": sha256_of(target)})
+
+    def _reports_parse(self, project_id: str, body: dict) -> None:
+        """解析报告 → 行 ＋ 坏行 ＋ 自动映射。"""
+        from .importer import ImportError_, parse_report, sha256_of, suggest_mapping
+
+        try:
+            directory = self._reports_dir(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        name = str(body.get("name") or body.get("file") or "").strip()
+        if not name:
+            return self._error(400, "name 要给（报告目录下的文件名）")
+        target = (directory / Path(name).name)
+        try:
+            target.resolve().relative_to(directory.resolve())
+        except (OSError, ValueError):
+            return self._error(400, "路径越界")
+        try:
+            parsed = parse_report(target)
+        except ImportError_ as exc:
+            return self._error(400, str(exc))
+        return self._json({
+            "ok": True, "project": project_id, "name": target.name,
+            "path": str(target), "sha256": sha256_of(target),
+            "rows": parsed["rows"], "failed": parsed["failed"],
+            "suggested": suggest_mapping(parsed["rows"]),
+        })
+
+    def _reports_confirm(self, project_id: str, body: dict) -> None:
+        """写草稿：`facts/draft/<报告名>.draft.toml`。绝不写活账本。"""
+        from .importer import ImportError_, sha256_of, write_draft
+
+        disk = self.index.project_disk_path(project_id)
+        if disk is None:
+            return self._error(404, "没有这个项目：%s" % project_id)
+        directory = self._reports_dir(project_id)
+        name = str(body.get("name") or body.get("file") or "").strip()
+        if not name:
+            return self._error(400, "name 要给")
+        source = directory / Path(name).name
+        rows = body.get("rows")
+        if not isinstance(rows, list):
+            return self._error(400, "rows 要给（数组）")
+        mapping = body.get("mapping")
+        mapping = mapping if isinstance(mapping, dict) else {}
+        report_name = str(body.get("report_name") or "").strip() or source.name
+        digest = sha256_of(source) if source.is_file() else ""
+        try:
+            result = write_draft(disk, report_name, rows, mapping=mapping,
+                                 source_path=source, report_sha256=digest)
+        except ImportError_ as exc:
+            return self._error(400, str(exc))
+        result.update({"project": project_id, "source": str(source),
+                       "report_sha256": digest})
+        return self._json(result)
+
+    # ---- 原始请求体 ----
+
+    def _raw_body(self) -> bytes:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            length = 0
+        return self.rfile.read(length) if length > 0 else b""
 
     def _body(self) -> dict:
         try:

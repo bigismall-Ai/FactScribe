@@ -927,3 +927,37 @@ body[data-view="form"] .toc-float{display:none}
 .fd-k{flex:0 0 62px;color:#9b9a96}
 .fd-v{flex:1 1 auto;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;word-break:break-all}
 .fd-pre{white-space:pre-wrap}
+
+/* =====================================================================
+   段四：AI 对话（真后端）＋ 实验报告导入（真文件）
+   ===================================================================== */
+/* 段落悬浮工具条的定位锚（#ptools/.pt 样式段二已从原型带过来） */
+.page{position:relative}
+/* 检查报告里的「让 AI 解读这份报告」 */
+.rp-ai-btn{font-size:11.5px;padding:5px 11px;border-radius:7px}
+/* AI 气泡：模拟回答必须一眼看得出不是模型答的 */
+.msg .fb-chip{margin-left:6px;font-size:10.5px;font-weight:600;color:#8a5a10;background:#fdf3e3;
+ border:1px solid #f0dcb8;border-radius:999px;padding:1px 7px}
+.msg.fb .bub{border-style:dashed;border-left:3px solid #d9a441;background:#fdf9f0}
+.msg.waiting .bub{color:#9b9a96;font-style:italic}
+.msg-note{margin-top:4px;font-size:10.5px;color:#9b9a96;line-height:1.5;word-break:break-all}
+/* 实验报告卡片网格 */
+.pv-grid,.rp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:14px}
+.rp-pending_check{background:#fdf3e3;color:#8a5a10}
+.rp-from{background:#f1f0ee;color:#5f5e5b}
+.rp-d-note{margin-top:6px;font-size:11.5px;color:#9b9a96;line-height:1.6}
+/* 导入向导 */
+.wz-upload{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed #ececeb}
+.wz-upload .btn-ghost{font-size:12px;padding:5px 11px}
+.wz-up-name{font-size:11.5px;color:#8f8d86;word-break:break-all}
+.wz-status{margin-bottom:10px}
+.modal-card .wz-in{width:100%;font-family:inherit;font-size:11.5px;padding:4px 6px;border:1px solid #e3e2df;
+ border-radius:6px;color:#37352f;background:#fff;outline:none}
+.modal-card .wz-in:focus,.wzsel:focus{outline:none;border-color:#b8b5ac}
+.wz-table input,.wz-table select{max-width:230px}
+.wz-failed{margin-bottom:12px;padding:9px 11px;border:1px solid #f0d3d3;border-radius:8px;background:#fdf3f0}
+.wz-failed-h{font-size:11.5px;font-weight:600;color:#9a3b1e;margin-bottom:5px}
+.wz-failed-row{display:flex;gap:9px;font-size:11px;color:#9a3b1e;line-height:1.7}
+.wz-f-line{flex:0 0 52px;font-family:ui-monospace,Menlo,monospace}
+.wz-f-raw{flex:1 1 auto;min-width:0;font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+.wz-f-err{flex:0 0 auto;color:#c07a63}

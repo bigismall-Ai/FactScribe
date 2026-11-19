@@ -32,7 +32,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import ConfigError, load_config, load_facts
-from .projects import CONFIG_NAME, render_tex
+from .projects import (ABSTRACT_BLOCK_ID as _ABSTRACT_BLOCK_ID,
+                       CONFIG_NAME, abstract_env_span as _abstract_env_span,
+                       render_tex)
 
 #: 客户端与本层之间的占位符（私用区字符，LaTeX 正文里不会出现）。
 TOKEN_OPEN = "\ue000"
@@ -634,10 +636,11 @@ def _safe_section_file(disk_root: Path, rel: str) -> Path:
 # ---------------------------------------------------------------- 摘要（封面）
 
 #: 摘要块的固定 id（封面摘要区只有一个摘要，前端按这个 id 就地编辑）。
-ABSTRACT_BLOCK_ID = "cover-abstract"
+#: 与渲染层同源（projects.ABSTRACT_BLOCK_ID）——渲染与写回共用一套闭包定位。
+ABSTRACT_BLOCK_ID = _ABSTRACT_BLOCK_ID
 
-_ABSTRACT_BEGIN_RE = re.compile(r"\\begin\s*\{abstract\}")
-_ABSTRACT_END_RE = re.compile(r"\\end\s*\{abstract\}")
+#: `abstract` 环境的内容区间：与渲染层同一份实现（projects.abstract_env_span）。
+_abstract_span = _abstract_env_span
 
 
 def _root_tex_file(disk_root: Path) -> tuple[str, Path]:
@@ -676,44 +679,36 @@ def _root_tex_file(disk_root: Path) -> tuple[str, Path]:
     return inside.as_posix(), target
 
 
-def _abstract_span(text: str) -> tuple[int, int, int, int] | None:
-    """找 `abstract` 环境的**内容**区间。
-
-    返回 (内容起点, 内容终点, 前导空白长度, 尾部空白长度)；找不到返回 None。
-    内容两头的空白另算——写回时照原样保留，版式不塌。
-    """
-    begin = _ABSTRACT_BEGIN_RE.search(text)
-    if not begin:
-        return None
-    end = _ABSTRACT_END_RE.search(text, begin.end())
-    if not end:
-        return None
-    inner = text[begin.end():end.start()]
-    lead = len(inner) - len(inner.lstrip())
-    trail = len(inner) - len(inner.rstrip())
-    return (begin.end(), end.start(), lead, trail)
-
-
 def abstract_block(disk_root: Path) -> Block:
-    """封面摘要块：根文件 `abstract` 环境里的正文。"""
-    rel, path = _root_tex_file(disk_root)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ConfigError("读不到根文件：%s（%s）" % (rel, exc),
-                          code="SECTION_MISSING")
-    span = _abstract_span(text)
-    if span is None:
-        raise ConfigError("这个盘的主文件里没有 abstract 环境（摘要没法就地编辑）",
+    """封面摘要块：**走渲染闭包**定位——摘要在哪个文件就定位在哪个文件。
+
+    两种布局都认：
+
+    1. **节文件式**（sectioned）：摘要是独立节文件 `sections/00_abstract.tex`
+       （自带 `\\begin{abstract}…\\end{abstract}`），经 `\\input` 装配；
+    2. **根文件式**：摘要在根文件 `main.tex` 的 `abstract` 环境里。
+    """
+    from .projects import cover_abstract_block
+
+    info = cover_abstract_block(disk_root)
+    if not info:
+        raise ConfigError("这个盘里找不到摘要（既没有 abstract 环境，也没有独立的摘要节文件）",
                           code="ABSTRACT_MISSING")
-    start, end, lead, trail = span
-    core = text[start + lead:end - trail]
-    return Block(file=rel, block_id=ABSTRACT_BLOCK_ID, kind="abstract",
-                 start=start + lead, end=end - trail, raw=core, title="摘要")
+    return Block(file=info["file"], block_id=ABSTRACT_BLOCK_ID, kind="abstract",
+                 start=info["start"], end=info["end"], raw=info["raw"],
+                 title="摘要")
+
+
+def _writable_target(disk_root: Path, rel: str) -> Path:
+    """摘要所在文件的写闸：根文件走根文件闸，节文件走段二的章节文件闸。"""
+    root_rel, root_path = _root_tex_file(disk_root)
+    if rel == root_rel:
+        return root_path
+    return _safe_section_file(disk_root, rel)
 
 
 def save_abstract(disk_root: Path, client_text: str) -> dict:
-    """把改后的摘要写回根文件的 `abstract` 环境。
+    """把改后的摘要写回它所在的那个文件。
 
     走段二同一条保护通道：保护面（`\\fact{}` 等）原样保留、删了按原位补回、
     花括号不配平不落盘、原子写、保存前留 `.bak`。
@@ -724,15 +719,16 @@ def save_abstract(disk_root: Path, client_text: str) -> dict:
     if not _balanced_ok(new_raw):
         raise ConfigError("摘要的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
-    rel, path = _root_tex_file(disk_root)
+    rel = block.file
+    path = _writable_target(disk_root, rel)
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        raise ConfigError("读不到根文件：%s（%s）" % (rel, exc),
+        raise ConfigError("读不到摘要所在文件：%s（%s）" % (rel, exc),
                           code="SECTION_MISSING")
     span = _abstract_span(text)
     if span is None:
-        raise ConfigError("这个盘的主文件里没有 abstract 环境（摘要没法就地编辑）",
+        raise ConfigError("摘要已经被挪走了（或文件变了）：%s，请刷新页面重试" % rel,
                           code="ABSTRACT_MISSING")
     start, end, lead, trail = span
     new_text = text[:start + lead] + new_raw + text[end - trail:]
@@ -740,6 +736,7 @@ def save_abstract(disk_root: Path, client_text: str) -> dict:
     return {"ok": True, "file": rel, "block": ABSTRACT_BLOCK_ID,
             "before": block.raw, "after": new_raw,
             "backup": result["backup"], "warnings": warnings}
+
 
 
 def find_block(disk_root: Path, rel_file: str, block_id: str) -> Block:

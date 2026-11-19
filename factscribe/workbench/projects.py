@@ -586,7 +586,12 @@ def _titles_by_stem(path: Path) -> dict[str, str]:
 
 
 def disk_sections(path: str | Path, lang: str = "") -> dict:
-    """一个盘的章节内容：块列表 + 标题（含配对盘的英文标题）。"""
+    """一个盘的章节内容：块列表 + 标题（含配对盘的英文标题）。
+
+    封面摘要块（`cover-abstract`）也在这份列表里：渲染层与写回层共用同一套
+    闭包定位——摘要在哪个文件就定位在哪个文件（根文件的 abstract 环境，
+    或独立节文件 `sections/00_abstract.tex`）。
+    """
     root = Path(path)
     paired = _paired_titles(root) if lang == "zh" else {}
     blocks: list[dict] = []
@@ -597,7 +602,127 @@ def disk_sections(path: str | Path, lang: str = "") -> dict:
             if block["kind"] == "section" and not block["title_en"]:
                 block["title_en"] = paired.get(stem, "")
             blocks.append(block)
+    _attach_cover_abstract(root, blocks)
     return {"blocks": blocks, "count": len(blocks)}
+
+
+# ---------------------------------------------------------------- 封面摘要（渲染闭包）
+
+#: 封面摘要块的固定 id（前端按这个 id 就地编辑）。
+ABSTRACT_BLOCK_ID = "cover-abstract"
+
+_ABSTRACT_BEGIN_RE = re.compile(r"\\begin\s*\{abstract\}")
+_ABSTRACT_END_RE = re.compile(r"\\end\s*\{abstract\}")
+
+#: 独立摘要节文件的名字特征（`00_abstract.tex` / `abstract.tex` / `00-abstract.tex`…）。
+_ABSTRACT_FILE_RE = re.compile(r"^(?:[\d_.-]*[-_])?abstract$", re.IGNORECASE)
+
+
+def abstract_env_span(text: str) -> tuple[int, int, int, int] | None:
+    """`abstract` 环境内部内容的区间。
+
+    返回 (内容起点, 内容终点, 前导空白长度, 尾部空白长度)；找不到返回 None。
+    内容两头的空白另算——写回时照原样保留，版式不塌。
+    """
+    begin = _ABSTRACT_BEGIN_RE.search(text)
+    if not begin:
+        return None
+    end = _ABSTRACT_END_RE.search(text, begin.end())
+    if not end:
+        return None
+    inner = text[begin.end():end.start()]
+    lead = len(inner) - len(inner.lstrip())
+    trail = len(inner) - len(inner.rstrip())
+    return (begin.end(), end.start(), lead, trail)
+
+
+def _looks_like_abstract_file(rel: str) -> bool:
+    """这个节文件是不是「独立摘要节」（`00_abstract.tex` 这种）。"""
+    stem = Path(rel).stem
+    if _ABSTRACT_FILE_RE.match(stem):
+        return True
+    return False
+
+
+def cover_abstract_block(path: str | Path) -> dict | None:
+    """封面摘要块：走渲染闭包定位（file/start/end/raw 一起给）。
+
+    两种布局都认：
+
+    1. **节文件式**（sectioned）：摘要是独立节文件 `sections/00_abstract.tex`
+       （内容自带 `\\begin{abstract}…\\end{abstract}`），经 `\\input` 装配；
+    2. **根文件式**：摘要在根文件 `main.tex` 的 `abstract` 环境里。
+
+    找不到就返回 None（前端据此不渲染封面摘要区）。
+    """
+    root = Path(path)
+    # 1) 闭包里的节文件：优先「像摘要文件」的，其次任何带 abstract 环境的。
+    fallback = None
+    for name, text in _section_files(root):
+        span = abstract_env_span(text)
+        if not span:
+            continue
+        start, end, lead, trail = span
+        info = {"id": ABSTRACT_BLOCK_ID, "kind": "abstract", "file": name,
+                "start": start + lead, "end": end - trail,
+                "raw": text[start + lead:end - trail], "title": "",
+                "level": 0, "html": "", "title_en": ""}
+        if _looks_like_abstract_file(name):
+            return info
+        if fallback is None:
+            fallback = info
+    if fallback is not None:
+        return fallback
+    # 2) 根文件（main.tex）的 abstract 环境（sectioned 布局下根文件被闭包剔除）
+    rel, root_tex = _root_tex_rel_and_path(root)
+    if root_tex is None:
+        return None
+    try:
+        text = root_tex.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    span = abstract_env_span(text)
+    if not span:
+        return None
+    start, end, lead, trail = span
+    return {"id": ABSTRACT_BLOCK_ID, "kind": "abstract", "file": rel,
+            "start": start + lead, "end": end - trail,
+            "raw": text[start + lead:end - trail], "title": "",
+            "level": 0, "html": "", "title_en": ""}
+
+
+def _root_tex_rel_and_path(root: Path) -> tuple[str, Path | None]:
+    """根文件（配置里的 `root_tex`，没有就 `main.tex`）：相对名与绝对路径。"""
+    from ..config import ConfigError, load_config
+
+    rel = ""
+    try:
+        cfg = load_config(root)
+        rel = str(getattr(cfg, "root_tex", "") or "").strip()
+    except (ConfigError, OSError, ValueError):
+        rel = ""
+    rel = rel or "main.tex"
+    target = root / rel
+    return rel, (target if target.is_file() else None)
+
+
+def _attach_cover_abstract(root: Path, blocks: list[dict]) -> None:
+    """把封面摘要块挂进块列表（固定 id `cover-abstract`）。
+
+    闭包里本来就有 abstract 块 → 就地换 id（渲染层与写回层同一套定位）；
+    没有（摘要在根文件里）→ 补一块进来。
+    """
+    cover = cover_abstract_block(root)
+    if not cover:
+        return
+    for block in blocks:
+        if (block.get("kind") == "abstract"
+                and block.get("file") == cover["file"]
+                and block.get("start") == cover["start"]):
+            block["id"] = cover["id"]
+            return
+    blocks.insert(0, cover)
+
 
 
 def _paired_titles(path: Path) -> dict[str, str]:

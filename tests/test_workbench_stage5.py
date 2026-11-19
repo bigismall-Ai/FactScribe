@@ -33,7 +33,9 @@ from factscribe.workbench import write as wb           # noqa: E402
 from factscribe.workbench.importer import (           # noqa: E402
     delete_draft, draft_path, write_draft,
 )
-from factscribe.workbench.projects import load_projects  # noqa: E402
+from factscribe.workbench.projects import (           # noqa: E402
+    disk_sections, load_projects,
+)
 from factscribe.workbench.server import create_server   # noqa: E402
 
 CONFIG_TOML = """[project]
@@ -41,6 +43,33 @@ title = "段五测试"
 sections = "sections/*.tex"
 facts = "facts/*.toml"
 bib = "refs.bib"
+"""
+
+#: 节文件式布局的配置：闭包走 main.tex 的 \input 链（没有 sections glob），
+#: 摘要因此是独立节文件 `sections/00_abstract.tex`（真实 paper-b 就是这套）。
+SECTIONED_CONFIG_TOML = """schema = "factscribe-project/3.0"
+
+[project]
+name = "节文件式摘要"
+root_tex = "main.tex"
+facts = "facts/*.toml"
+bib = "refs.bib"
+"""
+
+SECTIONED_MAIN_TEX = """\\documentclass{article}
+\\newcommand{\\fact}[1]{\\textsuperscript{\\textsf{\\footnotesize[#1]}}}
+\\title{节文件式摘要}
+\\begin{document}
+\\maketitle
+\\input{sections/00_abstract}
+\\input{sections/01-intro}
+\\end{document}
+"""
+
+SECTIONED_ABSTRACT_TEX = """\\begin{abstract}
+We report a resolve rate of 10/16\\fact{A1} on the testbed, and the gate
+caught 30/36\\fact{B1} planted defects.
+\\end{abstract}
 """
 
 MAIN_TEX = """\\documentclass{article}
@@ -81,6 +110,147 @@ def _make_disk(root: Path, name: str, title: str = "段五测试",
     (disk / "sections" / "01-intro.tex").write_text(INTRO_TEX, encoding="utf-8")
     (disk / "sections" / "02-method.tex").write_text(METHOD_TEX, encoding="utf-8")
     return disk
+
+
+def _make_sectioned_disk(root: Path, name: str = "paper-b") -> Path:
+    """节文件式摘要的项目：摘要在 `sections/00_abstract.tex`，经 \\input 装配。"""
+    disk = root / name
+    (disk / "sections").mkdir(parents=True)
+    (disk / "facts").mkdir(parents=True)
+    (disk / "factscribe.toml").write_text(SECTIONED_CONFIG_TOML, encoding="utf-8")
+    (disk / "refs.bib").write_text("@article{knuth1984,\n  title={x}\n}\n",
+                                   encoding="utf-8")
+    (disk / "main.tex").write_text(SECTIONED_MAIN_TEX, encoding="utf-8")
+    (disk / "sections" / "00_abstract.tex").write_text(SECTIONED_ABSTRACT_TEX,
+                                                        encoding="utf-8")
+    (disk / "sections" / "01-intro.tex").write_text(INTRO_TEX, encoding="utf-8")
+    return disk
+
+
+
+class SectionedAbstractTests(unittest.TestCase):
+    """节文件式摘要（sectioned）：摘要是独立节文件，走同一套写回通道。
+
+    回归背景：段五验收打回——`save_abstract` 原来只认根文件的 `abstract`
+    环境，paper-b 这套「摘要独立成 `sections/00_abstract.tex` 经 \\input 装配」
+    的布局直接 400。现在渲染与写回共用同一套闭包定位。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.disk = _make_sectioned_disk(self.root)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_abstract_block_points_at_section_file(self):
+        block = wb.abstract_block(self.disk)
+        self.assertEqual(block.file, "sections/00_abstract.tex")
+        self.assertEqual(block.block_id, wb.ABSTRACT_BLOCK_ID)
+        self.assertIn("10/16", block.raw)
+
+    def test_render_closure_carries_cover_abstract(self):
+        blocks = disk_sections(self.disk)["blocks"]
+        cover = [b for b in blocks if b.get("id") == wb.ABSTRACT_BLOCK_ID]
+        self.assertEqual(len(cover), 1)
+        self.assertEqual(cover[0]["kind"], "abstract")
+        self.assertEqual(cover[0]["file"], "sections/00_abstract.tex")
+        self.assertIn("start", cover[0])
+        self.assertIn("end", cover[0])
+
+    def test_save_writes_back_to_the_section_file(self):
+        abstract_file = self.disk / "sections" / "00_abstract.tex"
+        before = abstract_file.read_text(encoding="utf-8")
+        result = wb.save_abstract(self.disk, block_text(self.disk)
+                                  + " A new closing sentence.")
+        after = abstract_file.read_text(encoding="utf-8")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["file"], "sections/00_abstract.tex")
+        self.assertNotEqual(before, after)
+        self.assertIn("A new closing sentence.", after)
+        # 保护面：两个 \fact 芯片都在
+        self.assertEqual(before.count("\\fact{"), after.count("\\fact{"))
+        self.assertIn("\\fact{A1}", after)
+        self.assertIn("\\fact{B1}", after)
+        # main.tex 一个字节没动
+        self.assertEqual((self.disk / "main.tex").read_text(encoding="utf-8"),
+                         SECTIONED_MAIN_TEX)
+
+    def test_save_leaves_backup(self):
+        abstract_file = self.disk / "sections" / "00_abstract.tex"
+        before = abstract_file.read_text(encoding="utf-8")
+        result = wb.save_abstract(self.disk, block_text(self.disk) + " More prose.")
+        backup = Path(result["backup"])
+        self.assertTrue(backup.is_file())
+        self.assertEqual(backup.read_text(encoding="utf-8"), before)
+
+    def test_deleted_chip_is_restored_in_section_file(self):
+        result = wb.save_abstract(self.disk, "A rewritten abstract without markers.")
+        self.assertIn("\\fact{A1}", result["after"])
+        self.assertIn("\\fact{B1}", result["after"])
+
+
+def block_text(disk: Path) -> str:
+    """摘要块的散文（保护面芯片换成占位符）——模拟前端送来的文本。"""
+    model = wb.editable_model(disk, wb.abstract_block(disk))
+    return model["plain"]
+
+
+class SectionedAbstractEndpointTests(unittest.TestCase):
+    """节文件式摘要走 HTTP 全链：读模型 → 写回。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        _make_sectioned_disk(self.root)
+        self.server, self.index = create_server(self.root, port=0, ttl=0.0)
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       daemon=True)
+        self.thread.start()
+        self.base = "http://127.0.0.1:%d" % self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+        self.tmp.cleanup()
+
+    def _get(self, path):
+        with urllib.request.urlopen(self.base + path, timeout=30) as res:
+            return res.status, res.read()
+
+    def _post(self, path, body):
+        request = urllib.request.Request(
+            self.base + path, data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(request, timeout=60) as res:
+            return res.status, json.loads(res.read().decode("utf-8"))
+
+    def test_block_endpoint_returns_section_file_model(self):
+        status, body = self._get("/api/disk/paper-b/paper-b/block/cover-abstract")
+        self.assertEqual(status, 200)
+        data = json.loads(body.decode("utf-8"))
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["file"], "sections/00_abstract.tex")
+        self.assertEqual(data["id"], "cover-abstract")
+        self.assertIn("fact", [chip["label"] for chip in data["chips"]])
+
+    def test_edit_endpoint_writes_back_to_section_file(self):
+        status, body = self._get("/api/disk/paper-b/paper-b/block/cover-abstract")
+        model = json.loads(body.decode("utf-8"))
+        status, data = self._post("/api/disk/paper-b/paper-b/edit", {
+            "block": "cover-abstract",
+            "text": model["plain"] + " A sentence added through the HTTP chain.",
+        })
+        self.assertEqual(status, 200)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["file"], "sections/00_abstract.tex")
+        self.assertIn("\\fact{A1}", data["after"])
+        target = self.root / "paper-b" / "sections" / "00_abstract.tex"
+        self.assertIn("A sentence added through the HTTP chain.",
+                      target.read_text(encoding="utf-8"))
+        self.assertTrue(Path(data["backup"]).is_file())
 
 
 class AbstractWriteBackTests(unittest.TestCase):

@@ -17,3 +17,6 @@ packages = ["paper", "legal"]
 [checks.legal]
 corpus = "results/corpus-legal"
 date = "2026-11-14"
+
+[workbench]
+last_opened = "2026-11-19T14:27:07+08:00"

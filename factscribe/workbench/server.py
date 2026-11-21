@@ -389,10 +389,16 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             if block_id == ABSTRACT_BLOCK_ID:
                 # 封面摘要：根文件 abstract 环境（id 固定，不带 file）。
                 result = save_abstract(disk, text)
+                # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
+                result["block"] = block_id
+                result["html"] = self._rerender_block(disk, "", block_id)
                 return self._json(result)
             if not rel:
                 return self._error(400, "file / block / text 都要给")
             result = save_block(disk, rel, block_id, text)
+            # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
+            result["block"] = block_id
+            result["html"] = self._rerender_block(disk, rel, block_id)
             return self._json(result)
         if action == "action":
             return self._disk_action(project_id, disk_id, disk, body)
@@ -417,6 +423,30 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return self._draft_post(disk, parts[5] if len(parts) > 5 else "", body)
         return self._error(404, "没有这个操作：%s" % action)
 
+    def _rerender_block(self, disk: Path, rel: str, block_id: str) -> str:
+        """写回之后，对**这一个块**做轻渲染，返回它的新 html。
+
+        条目 36：前端不再整篇重载，靠这个 html 原地换掉那一块的 DOM。
+        """
+        from .projects import disk_sections, render_tex
+
+        try:
+            if block_id == ABSTRACT_BLOCK_ID:
+                for block in disk_sections(disk).get("blocks", []):
+                    if block.get("id") == block_id:
+                        return str(block.get("html") or "")
+                return ""
+            if not rel:
+                return ""
+            path = Path(disk) / rel
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for block in render_tex(text, stem=Path(rel).stem):
+                if block.get("id") == block_id:
+                    return str(block.get("html") or "")
+        except (OSError, ValueError):
+            return ""
+        return ""
+
     def _draft_post(self, disk: Path, what: str, body: dict) -> None:
         """段六：AI 草稿块——写进稿 ＋ 删除。"""
         from .write import delete_ai_draft, insert_ai_draft
@@ -435,6 +465,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 result = delete_ai_draft(disk, rel, block_id)
             else:
                 return self._error(404, "没有这个草稿操作：%s" % what)
+            # 条目 36：把受影响那块的新 html 一并回传，前端原地更新。
+            affected = str(result.get("block") or block_id)
+            result["html"] = self._rerender_block(disk, rel, affected)
+            result["affected"] = affected
         except ConfigError as exc:
             return self._error(400, str(exc))
         except (OSError, ValueError) as exc:

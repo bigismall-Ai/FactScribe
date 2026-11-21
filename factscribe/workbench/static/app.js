@@ -1634,7 +1634,8 @@ async function enterEdit(blockId, file, targetEl) {
   const editor = buildEditor(model);
   target.replaceWith(editor);
   editor.id = keepId;
-  state.editing = { id: blockId, file: file || model.file, host: editor };
+  // 条目 36：留一份进入编辑前的原文节点——取消编辑时本地还原，零网络。
+  state.editing = { id: blockId, file: file || model.file, host: editor, orig: target };
   editor.focus();
   const range = document.createRange();
   range.selectNodeContents(editor);
@@ -1642,6 +1643,47 @@ async function enterEdit(blockId, file, targetEl) {
   const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+/* 条目 36：把一个块原地换成新 html（不整篇重载，滚动位置不动）。 */
+function replaceBlockNode(blockId, html) {
+  const old = document.getElementById(blockId);
+  if (!old || !html) return false;
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const node = holder.firstElementChild;
+  if (!node) return false;
+  node.id = blockId;
+  old.replaceWith(node);
+  return true;
+}
+
+/* 条目 36：把一个新块插到锚点之后（AI 草稿插入用）。 */
+function insertBlockAfter(anchorId, blockId, html) {
+  const anchor = document.getElementById(anchorId);
+  if (!anchor || !html) return false;
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const node = holder.firstElementChild;
+  if (!node) return false;
+  node.id = blockId;
+  anchor.after(node);
+  return true;
+}
+
+/* 条目 36：原地删掉一个块（AI 草稿删除用）。 */
+function removeBlockNode(blockId) {
+  const node = document.getElementById(blockId);
+  if (!node) return false;
+  node.remove();
+  return true;
+}
+
+/* 条目 36：本地还原进入编辑前的那个节点（取消编辑 / 保存失败时用）。 */
+function restoreEditedNode(editing) {
+  if (!editing || !editing.host || !editing.orig) return false;
+  editing.host.replaceWith(editing.orig);
+  return true;
 }
 
 async function saveEdit() {
@@ -1660,17 +1702,21 @@ async function saveEdit() {
     });
     (result.warnings || []).forEach((text) => toast(text));
     toast(t('edit.saved'));
-    await loadDisk();
+    // 条目 36：只换掉这一块，不整篇 loadDisk（滚动位置保持）。
+    if (replaceBlockNode(editing.id, result.html)) return;
+    restoreEditedNode(editing);
   } catch (err) {
     toast(t('err.saveFailed', { e: err.message }));
-    await loadDisk();
+    restoreEditedNode(editing);
   }
 }
 
+/* 条目 36：取消编辑＝零网络请求，本地还原进入编辑前的原文。 */
 async function cancelEdit() {
   if (!state.editing) return;
+  const editing = state.editing;
   state.editing = null;
-  await loadDisk();
+  restoreEditedNode(editing);
 }
 
 /* ---------------------------------------------------------------- 章节管理 */
@@ -2034,6 +2080,8 @@ async function writeIntoDraft(text) {
       return;
     }
     toast(t('ai.written'));
+    // 条目 36：草稿块原地插到那一段之后，不整篇重载。
+    if (data.block && data.html && insertBlockAfter(data.after, data.block, data.html)) return;
     await loadDisk();
   } catch (err) {
     toast(t('ai.writeFail', { e: (err && err.message) || String(err) }));
@@ -2058,6 +2106,8 @@ async function deleteAiDraft(file, blockId) {
       return;
     }
     toast(t('draft.deleted'));
+    // 条目 36：草稿块原地消失，不整篇重载。
+    if (removeBlockNode(data.block || blockId)) return;
     await loadDisk();
   } catch (err) {
     toast(t('draft.delFail', { e: (err && err.message) || String(err) }));

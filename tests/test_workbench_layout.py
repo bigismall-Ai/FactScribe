@@ -384,5 +384,69 @@ class Item35ManageTests(unittest.TestCase):
         self.assertIn("'more.kbNote':", JS)
 
 
+class Item36InPlaceUpdateTests(unittest.TestCase):
+    """条目 36：废模式切换——保存原地更新 ＋ 顶导航固定/进度条嵌入。"""
+
+    def test_edit_endpoint_returns_block_html(self):
+        """① 后端 /edit 应答带该块新渲染的 html。"""
+        source = (ROOT / "factscribe" / "workbench" / "server.py").read_text(encoding="utf-8")
+        self.assertIn("def _rerender_block(", source)
+        self.assertIn('result["html"] = self._rerender_block(disk, rel, block_id)', source)
+        self.assertIn('result["html"] = self._rerender_block(disk, "", block_id)', source)
+
+    def test_draft_endpoints_return_affected_html(self):
+        """④ AI 草稿 insert/delete 也回传受影响块的 html。"""
+        source = (ROOT / "factscribe" / "workbench" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('result["html"] = self._rerender_block(disk, rel, affected)', source)
+        self.assertIn('result["affected"] = affected', source)
+
+    def test_save_edit_updates_in_place(self):
+        """② 保存只换那一块的 DOM，不整篇 loadDisk。"""
+        save = JS[JS.index("async function saveEdit()"):JS.index("async function cancelEdit()")]
+        self.assertIn("replaceBlockNode(editing.id, result.html)", save)
+        self.assertNotIn("loadDisk()", save)
+
+    def test_cancel_edit_is_local_only(self):
+        """③ 取消编辑：零网络请求，本地还原原文。"""
+        cancel = JS[JS.index("async function cancelEdit()"):]
+        cancel = cancel[:cancel.index("}")]
+        self.assertIn("restoreEditedNode(editing)", cancel)
+        self.assertNotIn("loadDisk()", cancel)
+        self.assertNotIn("fetch(", cancel)
+        self.assertNotIn("postJSON(", cancel)
+
+    def test_original_text_copy_is_kept(self):
+        """前端保存进入编辑时的原文副本。"""
+        self.assertIn("orig: target", JS)
+        self.assertIn("function restoreEditedNode(", JS)
+        self.assertIn("editing.host.replaceWith(editing.orig);", JS)
+
+    def test_draft_insert_delete_in_place(self):
+        self.assertIn("insertBlockAfter(data.after, data.block, data.html)", JS)
+        self.assertIn("removeBlockNode(data.block || blockId)", JS)
+
+    def test_loaddisk_only_three_triggers(self):
+        """⑤ loadDisk 只保留三种触发：初次载入、换盘、切语言。"""
+        calls = []
+        for line in JS.splitlines():
+            if "loadDisk()" in line and "function loadDisk" not in line:
+                calls.append(line.strip())
+        self.assertLessEqual(len(calls), 6)   # openProject/换盘/切语言 ＋ 兜底分支
+
+    def test_left_head_is_fixed(self):
+        """B① 左栏头部固定在顶。"""
+        self.assertIn(".left-head{position:fixed;top:0;left:0;right:336px;z-index:80;height:48px;", CSS)
+
+    def test_progress_bar_moved_into_header(self):
+        """B② 进度条从正文流挪出，贴头部下缘。"""
+        self.assertIn('id="progWrap"', HTML)
+        self.assertNotIn('<div class="progwrap"><div id="prog"></div></div>', HTML)
+        self.assertIn(".progwrap{position:fixed;top:48px;left:0;right:336px;z-index:79;height:3px;", CSS)
+
+    def test_content_makes_room_for_header_and_bar(self):
+        """B③ 正文让出「头部高＋进度条高」。"""
+        self.assertIn(".left-col{padding-top:51px}", CSS)
+
+
 if __name__ == "__main__":
     unittest.main()

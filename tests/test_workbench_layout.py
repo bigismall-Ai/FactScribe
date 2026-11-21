@@ -158,17 +158,24 @@ class RightColumnTests(unittest.TestCase):
 
     def test_collapse_button_anchors_to_window_edge(self):
         """收起后剩下的「展开导航」钮贴窗缘（不再是左缘）。"""
-        self.assertIn(".nav-open{display:none;position:fixed;right:0;top:0;", CSS)
+        self.assertIn(".nav-open{display:none;position:fixed;right:0;top:50%;", CSS)
         self.assertNotIn(".nav-open{display:none;position:fixed;left:0;", CSS)
 
-    def test_open_button_is_icon_only(self):
-        """条目 33：展开钮也改成纯图标，不再竖排文字。"""
+    def test_open_button_is_a_vertical_label(self):
+        """条目 39：展开钮＝贴右缘中部的竖排文字标签（30×90），不是小图标。"""
         open_btn = _slice('<button type="button" class="nav-open"', '</button>')
-        self.assertIn("<svg", open_btn)
-        self.assertNotIn("data-i18n=", open_btn)
-        self.assertEqual(_visible_text(open_btn), "")
+        self.assertIn('data-i18n="nav.open"', open_btn)
+        self.assertNotIn("<svg", open_btn)
+        self.assertIn("展开导航", _visible_text(open_btn))
         nav_open_css = CSS[CSS.index(".nav-open{"):CSS.index(".nav-open:hover")]
-        self.assertNotIn("writing-mode", nav_open_css)
+        self.assertIn("writing-mode:vertical-rl", nav_open_css)
+        self.assertIn("width:30px;height:90px", nav_open_css)
+        self.assertIn("transform:translateY(-50%)", nav_open_css)
+
+    def test_old_side_alone_scheme_is_gone(self):
+        """旧 .nav-open/.side-alone 小图标方案废弃。"""
+        self.assertNotIn(".side-alone{", CSS)
+        self.assertNotIn('class="side-alone"', HTML)
 
 
 class MorePaneTests(unittest.TestCase):
@@ -208,10 +215,13 @@ class MorePaneTests(unittest.TestCase):
         self.assertIn("function openKbModal(", JS)
         self.assertIn("openKbModal(data);", JS)
 
-    def test_venue_section_keeps_save_and_preview_chain(self):
-        for field_id in ("vnVenue", "vnDeadline", "vnSave", "vnPreviewBtn", "vnTemplates"):
+    def test_venue_section_keeps_save_chain(self):
+        """条目 39：版式面保留字段/截止/选刊指南，删掉「渲染并预览首页」。"""
+        for field_id in ("vnVenue", "vnDeadline", "vnSave", "vnTemplates", "npVenueGuideBtn"):
             self.assertIn('id="%s"' % field_id, PANE_MORE)
         self.assertIn("$('#vnSave').addEventListener('click', saveVenueConfig);", JS)
+        self.assertNotIn('id="vnPreviewBtn"', HTML)
+        self.assertNotIn("renderVenuePreview", JS)
 
     def test_switch_pane_supports_more(self):
         self.assertIn("$('#paneMore').classList.toggle('on', name === 'more');", JS)

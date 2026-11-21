@@ -155,14 +155,15 @@ const I18N = {
     'prog.none': '暂无定量事实',
     'time.never': '还没打开过',
     'card.edit': '编辑',
-    'np.pdf': '渲染PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
+    'np.pdf': '导出 PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
     'np.openDir': '打开目录', 'np.collapse': '收起导航', 'np.toc': '目录',
     'np.ai': '智能助手', 'np.reports': '实验报告', 'np.import': '从外部导入',
     'np.more': '更多',
     'nav.open': '展开导航', 'np.tocEmpty': '这个盘还没有章节。',
-    'act.pdfTitle': '渲染 PDF', 'act.bundleTitle': '导出投稿包',
+    'act.pdfTitle': '导出 PDF', 'act.bundleTitle': '导出投稿包',
     'act.openTitle': '打开项目目录', 'act.close': '关闭',
     'act.pdfOk': '编译完成', 'act.pdfFail': '编译没成功',
+    'act.pdfCompiling': '编译中…', 'act.pdfDone': '编译完成：{p}',
     'act.pdfPages': '{n} 页 · {b} 字节', 'act.pdfPreview': '预览',
     'act.pdfDownload': '下载 PDF', 'act.pdfPath': '产物路径',
     'act.bundleOk': '投稿包已导出', 'act.bundleFail': '清单门没过',
@@ -232,7 +233,7 @@ const I18N = {
     'vn.previewErr': '渲染失败：{e}',
     'vn.dueSoon': '截稿提醒：{d}', 'vn.overdue': '已过截稿日 {d} 天',
     'vn.dueNormal': '距截稿 {d} 天',
-    'guide.title': '选刊指南', 'guide.go': '按目标版式预览并开写',
+    'guide.title': '选刊指南', 'guide.go': '按目标版式开写',
     'guide.h1': '一、贡献是什么形状',
     'guide.p1': '先说清你多出来的那一点是什么：新方法、新数据、新测量，还是新的失效边界。' +
       '贡献形状决定你能投哪一类刊物——方法类看新颖性，数据类看覆盖与可复现，' +
@@ -404,16 +405,17 @@ const I18N = {
     'prog.none': 'No quantitative facts yet',
     'time.never': 'never opened',
     'card.edit': 'Edit',
-    'np.pdf': 'Render PDF', 'np.check': 'Run full check',
+    'np.pdf': 'Export PDF', 'np.check': 'Run full check',
     'np.bundle': 'Export submission bundle',
     'np.openDir': 'Open project folder', 'np.collapse': 'Hide panel',
     'np.toc': 'Contents',
     'np.ai': 'Assistant', 'np.reports': 'Reports', 'np.import': 'Import',
     'np.more': 'More',
     'nav.open': 'Show panel', 'np.tocEmpty': 'This disk has no sections yet.',
-    'act.pdfTitle': 'Render PDF', 'act.bundleTitle': 'Export submission bundle',
+    'act.pdfTitle': 'Export PDF', 'act.bundleTitle': 'Export submission bundle',
     'act.openTitle': 'Open project folder', 'act.close': 'Close',
     'act.pdfOk': 'Build finished', 'act.pdfFail': 'The build did not succeed',
+    'act.pdfCompiling': 'Building…', 'act.pdfDone': 'Build finished: {p}',
     'act.pdfPages': '{n} pages · {b} bytes', 'act.pdfPreview': 'Preview',
     'act.pdfDownload': 'Download PDF', 'act.pdfPath': 'Output path',
     'act.bundleOk': 'Submission bundle exported',
@@ -488,7 +490,7 @@ const I18N = {
     'vn.previewErr': 'Render failed: {e}',
     'vn.dueSoon': 'Deadline reminder: {d}', 'vn.overdue': '{d} days past the deadline',
     'vn.dueNormal': '{d} days to the deadline',
-    'guide.title': 'Venue guide', 'guide.go': 'Preview against this venue and start writing',
+    'guide.title': 'Venue guide', 'guide.go': 'Start writing with this venue',
     'guide.h1': '1. What shape is the contribution',
     'guide.p1': 'Say first what you add that was not there: a new method, new data, a new measurement, ' +
       'or a newly mapped failure boundary. The shape decides which venues are even open to you — ' +
@@ -580,13 +582,28 @@ function esc(s) {
     .replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
-function toast(text) {
+function toast(text, opts) {
   const el = $('#toast');
   if (!el) return;
   el.textContent = text;
+  // 条目 39：toast 可以挂一个下载钮（导出 PDF 走这条路，不再弹预览模态）。
+  const conf = opts || {};
+  el.classList.remove('has-link');
+  if (conf.url) {
+    el.classList.add('has-link');
+    const link = document.createElement('a');
+    link.className = 'toast-link';
+    link.href = conf.url;
+    link.download = conf.download || 'main.pdf';
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = conf.label || t('act.pdfDownload');
+    el.appendChild(document.createElement('br'));
+    el.appendChild(link);
+  }
   el.classList.add('on');
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => el.classList.remove('on'), 1900);
+  el._timer = setTimeout(() => el.classList.remove('on'), conf.url ? 8000 : 1900);
 }
 
 function applyI18n() {
@@ -3157,27 +3174,6 @@ function updateDeadlineBadge() {
 }
 
 /* 首页预览：走现有的渲染 PDF 链路（真渲染，出预览）。 */
-async function renderVenuePreview() {
-  const host = $('#vnPreview');
-  if (!host) return;
-  const project = state.project;
-  const disk = currentDisk();
-  if (!project || !disk) return;
-  host.innerHTML = `<div class="vn-prev-note">${esc(t('rp.rerunning'))}</div>`;
-  try {
-    const data = await postAction('pdf');
-    if (!data.ok) {
-      host.innerHTML = `<div class="vn-prev-note err">${esc(data.error || data.message || t('vn.previewErr', { e: '' }))}</div>`;
-      return;
-    }
-  } catch (err) {
-    host.innerHTML = `<div class="vn-prev-note err">${esc(t('vn.previewErr', { e: (err && err.message) || String(err) }))}</div>`;
-    return;
-  }
-  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/pdf?t=${Date.now()}`;
-  host.innerHTML = `<iframe class="vn-prev-frame" title="preview" src="${url}"></iframe>`;
-}
-
 /* ---------------------------------------------------------------- 段六：选刊指南 */
 
 const VENUE_GUIDE_KEYS = [
@@ -3246,30 +3242,23 @@ function pdfUrl() {
   return `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/pdf`;
 }
 
+/* 条目 39：导出 PDF＝真编译 ＋ 直接给下载链接（不再弹 PDF 预览模态）。 */
 async function runPdfAction() {
-  openActionModal(t('act.pdfTitle'), `<div class="ff-empty">${esc(t('rp.rerunning'))}</div>`);
+  toast(t('act.pdfCompiling'));
   let data = null;
   try {
     data = await postAction('pdf');
   } catch (err) {
-    openActionModal(t('act.pdfTitle'),
-      `<div class="rp-card-err">${esc((err && err.message) || String(err))}</div>`);
+    toast(t('act.pdfFail'));
     return;
   }
   if (!data.ok) {
-    openActionModal(t('act.pdfTitle'),
-      `<div class="act-fail">${esc(t('act.pdfFail'))}</div>` +
-      `<div class="rp-card-err">${esc(data.error || data.message || '')}</div>`);
+    toast(t('act.pdfFail'));
     return;
   }
   const url = pdfUrl();
-  openActionModal(t('act.pdfTitle'),
-    `<div class="act-ok">${esc(t('act.pdfOk'))}</div>` +
-    `<div class="act-kv"><span>${esc(t('act.pdfPages', { n: Number(data.pdf_pages || 0), b: Number(data.pdf_bytes || 0) }))}</span></div>` +
-    `<div class="act-kv"><span>${esc(t('act.pdfPath'))}</span><code>${esc(data.pdf_path || '')}</code></div>` +
-    `<div class="act-links"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(t('act.pdfPreview'))}</a>` +
-    `<a href="${esc(url)}" download="main.pdf">${esc(t('act.pdfDownload'))}</a></div>` +
-    `<div class="act-preview"><iframe src="${esc(url)}" title="PDF"></iframe></div>`);
+  toast(t('act.pdfDone', { p: data.pdf_path || '' }),
+        { url: url, label: t('act.pdfDownload') });
 }
 
 async function runBundleAction() {
@@ -3447,13 +3436,12 @@ function bind() {
   $('#npKbUpload').addEventListener('change', uploadKbFile);
   // 段六：版式（存配置 ＋ 首页预览 ＋ 选刊指南）
   $('#vnSave').addEventListener('click', saveVenueConfig);
-  $('#vnPreviewBtn').addEventListener('click', renderVenuePreview);
   $('#npVenueGuideBtn').addEventListener('click', openVenueGuide);
   $('#guideClose').addEventListener('click', closeVenueGuide);
   $('#guideGo').addEventListener('click', () => {
+    // 条目 39：选刊指南只落版式，不再渲染首页预览。
     closeVenueGuide();
     switchNavPane('more');
-    renderVenuePreview();
   });
   $('#modalGuide').addEventListener('click', (ev) => {
     if (ev.target.id === 'modalGuide') closeVenueGuide();

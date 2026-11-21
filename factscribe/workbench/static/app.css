@@ -386,13 +386,7 @@ p{font-size:16.5px}
  cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;line-height:1.5}
 .side-tab:hover{color:#1c1e22;background:#f4f2ea}
 .side-tab.on{background:#2f2e2b;color:#fff;border-color:#2f2e2b}
-.side-alone{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:none;
- writing-mode:vertical-rl;font-family:inherit;font-size:11.5px;letter-spacing:2px;padding:12px 7px;
- border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
- cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);line-height:1.5}
-.side-alone:hover{color:#1c1e22;background:#f4f2ea}
-body.rc-collapsed .side-alone{display:block}
-body:not([data-view="workbench"]) .side-alone{display:none}
+/* 条目 39：旧 .side-alone 小图标方案废弃（展开标签见 .nav-open）。 */
 body.rc-collapsed .colright{flex-basis:0;width:0;padding:0;overflow:hidden;border-left:none}
 /* ---- D：AI 对话独占模式（整栏替换） ---- */
 body.ai-full .rtabs{display:none}
@@ -1055,8 +1049,6 @@ body.nav-collapsed .shell{padding-right:0}
 .act-kv code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#54514a;word-break:break-all}
 .act-links{display:flex;gap:14px;margin:10px 0 4px}
 .act-links a{font-size:12px;color:#2f5279;text-decoration:underline}
-.act-preview{margin-top:10px;border:1px solid #ececeb;border-radius:8px;overflow:hidden;background:#fafaf9}
-.act-preview iframe{width:100%;height:min(460px,52vh);border:none;display:block}
 .act-gate{font-size:11px;color:#8f8d86}
 
 /* ---- 导航面板里的实验报告行 ---- */
@@ -1198,11 +1190,6 @@ body.nav-collapsed .shell{padding-right:0}
 .vn-dl.soon{color:#8a5a10;font-weight:600}
 .vn-dl.late{color:#a13c2c;font-weight:600}
 .vn-sec-h{font-size:10.5px;letter-spacing:1.2px;color:#a3a29c;margin:14px 0 4px}
-.vn-prev-btn{margin-top:0;align-self:flex-start}
-.vn-preview{margin-top:7px;min-height:40px;background:#fff;border:1px solid #ececeb;border-radius:8px;overflow:hidden}
-.vn-prev-note{font-size:11px;color:#8f8d86;padding:10px}
-.vn-prev-note.err{color:#a13c2c}
-.vn-prev-frame{width:100%;height:300px;border:none;display:block}
 .vn-tpl-row{display:flex;gap:8px;align-items:baseline;font-size:12px;color:#37352f;
  border:1px solid #ececeb;background:#fff;border-radius:7px;padding:6px 9px;margin-bottom:5px}
 .vn-tpl-note{font-size:10.5px;color:#a3a29c}
@@ -1295,11 +1282,19 @@ body{padding-top:0}
 .np-sec .np-pane-h{margin-bottom:8px}
 
 /* ④ 收起态：窗缘只留一枚图标展开钮（不再是竖排文字钮） */
-.nav-open{display:none;position:fixed;right:0;top:0;z-index:61;
- width:30px;height:30px;align-items:center;justify-content:center;
- border:1px solid #e6e6e4;border-right:none;border-radius:8px 0 0 8px;background:#fafaf9;color:#8f8d86;cursor:pointer}
-.nav-open:hover{color:#37352f;background:#f4f2ea}
+/* 条目 39：收起态的展开标签——贴窗口右缘中部，竖排文字，30×90，醒目同族样式 */
+.nav-open{display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:61;
+ width:30px;height:90px;writing-mode:vertical-rl;text-orientation:upright;
+ align-items:center;justify-content:center;font-family:inherit;font-size:12.5px;letter-spacing:2px;
+ padding:8px 4px;border:1px solid #ddd8c6;border-right:none;border-radius:10px 0 0 10px;
+ background:#fffefb;color:#2f5279;cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08)}
+.nav-open:hover{color:#1c3d5c;background:#f2f7fc}
 body.nav-collapsed .nav-open{display:flex}
+
+/* toast 里挂下载钮（深色底 → 浅色字；要点得着就得放开 pointer-events） */
+#toast.has-link{pointer-events:auto}
+.toast-link{display:inline-block;margin-top:3px;font-size:12px;color:#bcd9ff;text-decoration:underline}
+.toast-link:hover{color:#e8f2ff}
 
 /* ================================================================
    条目 34（段五验收返修八）：智能助手＝侧栏里的嵌入式对话面板

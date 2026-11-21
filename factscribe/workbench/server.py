@@ -28,6 +28,13 @@
   POST /api/project/<p>/reports/upload            上传报告文件进该目录（multipart）
   POST /api/project/<p>/reports/parse             解析报告（预览 + 自动映射）
   POST /api/project/<p>/reports/confirm           写草稿（绝不写活账本）
+  GET  /api/project/<p>/knowledge                 知识库文件清单（项目目录里真有的）
+  GET  /api/project/<p>/knowledge/preview         看一个文件的内容（文本类直接读）
+  POST /api/project/<p>/knowledge/upload          上传进知识库目录（multipart）
+  GET  /api/project/<p>/venue                     版式配置（刊物/截稿/语言锁定）
+  POST /api/project/<p>/venue                     存版式配置（落 workbench.toml）
+  POST /api/disk/<project>/<disk>/draft/insert    AI 草稿块写进稿（该段之后）
+  POST /api/disk/<project>/<disk>/draft/delete    删掉一个 AI 草稿块
   GET  /                                           前端单页
   GET  /static/<name>                             前端静态文件
 """
@@ -201,6 +208,13 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             # /api/project/<project>/reports[/<what>]
             if len(parts) in (4, 5) and parts[3] == "reports":
                 return self._reports_get(parts[2], parts[4] if len(parts) > 4 else "")
+            # 段六：/api/project/<project>/knowledge[/preview]
+            if len(parts) in (4, 5) and parts[3] == "knowledge":
+                return self._knowledge_get(parts[2], parts[4] if len(parts) > 4 else "",
+                                           query)
+            # 段六：/api/project/<project>/venue
+            if len(parts) == 4 and parts[3] == "venue":
+                return self._venue_get(parts[2])
         if route.startswith("/api/disk/"):
             parts = [part for part in route.split("/") if part]
             # /api/disk/<project>/<disk>/<what>[/<arg>]
@@ -296,6 +310,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             parts = [part for part in route.split("/") if part]
             if len(parts) == 5:
                 return self._reports_upload(parts[2])
+        if route.startswith("/api/project/") and route.endswith("/knowledge/upload"):
+            parts = [part for part in route.split("/") if part]
+            if len(parts) == 5:
+                return self._knowledge_upload(parts[2])
         body = self._body()
         # 只有这几个接口接受写；其余的路由仍是只读（405，跟段一一致）。
         if route == "/api/chat":
@@ -327,6 +345,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                     if parts[4] == "delete":
                         return self._reports_delete(parts[2], body)
                     return self._error(404, "没有这个报告操作：%s" % parts[4])
+                # /api/project/<project>/venue
+                if len(parts) == 4 and parts[3] == "venue":
+                    return self._venue_save(parts[2], body)
         except ConfigError as exc:
             return self._error(400, str(exc))
         except (OSError, ValueError) as exc:
@@ -388,7 +409,33 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             else:
                 return self._error(404, "没有这个目录操作：%s" % what)
             return self._json(result)
+        if action == "draft":
+            return self._draft_post(disk, parts[5] if len(parts) > 5 else "", body)
         return self._error(404, "没有这个操作：%s" % action)
+
+    def _draft_post(self, disk: Path, what: str, body: dict) -> None:
+        """段六：AI 草稿块——写进稿 ＋ 删除。"""
+        from .write import delete_ai_draft, insert_ai_draft
+
+        rel = str(body.get("file") or "")
+        block_id = str(body.get("block") or "")
+        if not rel or not block_id:
+            return self._error(400, "file / block 都要给")
+        try:
+            if what == "insert":
+                text = body.get("text")
+                if not isinstance(text, str) or not text.strip():
+                    return self._error(400, "text 要给（要写进稿的正文）")
+                result = insert_ai_draft(disk, rel, block_id, text)
+            elif what == "delete":
+                result = delete_ai_draft(disk, rel, block_id)
+            else:
+                return self._error(404, "没有这个草稿操作：%s" % what)
+        except ConfigError as exc:
+            return self._error(400, str(exc))
+        except (OSError, ValueError) as exc:
+            return self._error(400, "写盘失败：%s" % exc)
+        return self._json(result)
 
     def _disk_action(self, project_id: str, disk_id: str,
                      disk: Path, body: dict) -> None:
@@ -475,7 +522,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         if not isinstance(quote, dict):
             quote = None
         mode = str(body.get("mode") or "ask")
-        result = chat(disk, messages, quote=quote, mode=mode)
+        action = str(body.get("action") or "ask")
+        result = chat(disk, messages, quote=quote, mode=mode, action=action)
         result.update({"project": project_id, "disk": disk_id})
         # 降级也是 200：前端要拿 reply 渲染，并靠 fallback 分辨真假。
         return self._json(result, code=200)
@@ -614,6 +662,103 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             result = delete_draft(disk, name)
         except ImportError_ as exc:
             return self._error(404, str(exc))
+        result.update({"project": project_id})
+        return self._json(result)
+
+    # ---- 段六：知识库 ----
+
+    def _knowledge_disk(self, project_id: str) -> Path:
+        disk = self.index.project_disk_path(project_id)
+        if disk is None:
+            raise ConfigError("没有这个项目：%s" % project_id)
+        return disk
+
+    def _knowledge_get(self, project_id: str, what: str, query: str) -> None:
+        """`GET /api/project/<p>/knowledge`（清单）｜`…/knowledge/preview`（预览）。"""
+        from .knowledge import (KnowledgeError, knowledge_dir, list_files,
+                                preview)
+
+        try:
+            disk = self._knowledge_disk(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        if what in ("", "list"):
+            try:
+                folder = str(knowledge_dir(disk))
+            except KnowledgeError as exc:
+                return self._error(400, str(exc))
+            files = list_files(disk)
+            return self._json({"ok": True, "project": project_id,
+                               "dir": folder, "count": len(files),
+                               "files": files})
+        if what == "preview":
+            from urllib.parse import parse_qs
+
+            params = parse_qs(query or "")
+            rel = (params.get("path") or [""])[0]
+            if not rel:
+                return self._error(400, "path 要给（项目目录里的相对路径）")
+            try:
+                data = preview(disk, rel)
+            except KnowledgeError as exc:
+                return self._error(400, str(exc))
+            data.update({"project": project_id})
+            return self._json(data)
+        return self._error(404, "没有这个接口：%s" % what)
+
+    def _knowledge_upload(self, project_id: str) -> None:
+        """上传文件进知识库目录（multipart）。"""
+        from .knowledge import KnowledgeError, save_upload
+
+        try:
+            disk = self._knowledge_disk(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        raw = self._raw_body()
+        filename, payload = _parse_multipart_file(self.headers.get("Content-Type") or "",
+                                                   raw)
+        if not filename:
+            return self._error(400, "没有收到文件（multipart 字段名要是 file）")
+        try:
+            result = save_upload(disk, filename, payload)
+        except KnowledgeError as exc:
+            return self._error(400, str(exc))
+        result.update({"project": project_id})
+        return self._json(result)
+
+    # ---- 段六：版式 ----
+
+    def _venue_get(self, project_id: str) -> None:
+        """版式配置（刊物 / 截稿 / 语言锁定 / 模板库）。"""
+        from .venue import venue_payload
+
+        try:
+            disk = self._knowledge_disk(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        lang = self.index.disk_lang(project_id, disk.name)
+        payload = venue_payload(disk, lang=lang)
+        payload.update({"project": project_id})
+        return self._json(payload)
+
+    def _venue_save(self, project_id: str, body: dict) -> None:
+        """存版式配置（落进项目级 `workbench.toml` 的 `[venue]` 表）。"""
+        from .venue import VenueError, save_venue
+
+        try:
+            disk = self._knowledge_disk(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        lang = self.index.disk_lang(project_id, disk.name)
+        try:
+            result = save_venue(disk,
+                                venue=str(body.get("venue") or ""),
+                                deadline=str(body.get("deadline") or ""),
+                                lang=lang)
+        except VenueError as exc:
+            return self._error(400, str(exc))
+        except (OSError, ValueError) as exc:
+            return self._error(400, "写配置失败：%s" % exc)
         result.update({"project": project_id})
         return self._json(result)
 

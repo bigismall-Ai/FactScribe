@@ -1147,3 +1147,120 @@ body.nav-collapsed .shell{padding-right:0}
 .np-btn{font-family:inherit;font-size:12px;color:#5f5e5b;background:#fff;border:1px solid #e3e2df;
  border-radius:7px;padding:6px 10px;cursor:pointer;margin-top:8px}
 .np-btn:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+
+/* ================================================================
+   段六：段落 ⋯ 菜单 · AI 模式 tab · 纪律角标 · 回复动作钮
+   ================================================================ */
+
+/* 段落 ⋯ 菜单（编辑 ＋ 续写／改写／提问） */
+.para-menu{position:absolute;z-index:78;display:flex;flex-direction:column;min-width:104px;
+ background:#fff;border:1px solid #e3e2df;border-radius:9px;box-shadow:0 10px 26px rgba(30,28,22,.14);
+ padding:4px;gap:1px}
+.para-menu[hidden]{display:none}
+.para-menu .mi{font-family:inherit;font-size:12.5px;text-align:left;color:#37352f;background:none;
+ border:none;border-radius:6px;padding:7px 10px;cursor:pointer}
+.para-menu .mi:hover{background:#f4f2ea}
+.para-menu .mi + .mi{border-top:1px solid #f1f0ec}
+
+/* AI 模式 tab（聊想法／写论文） */
+.ai-modes{display:inline-flex;gap:2px;background:#f4f2ea;border:1px solid #e3e2df;border-radius:7px;padding:2px}
+.ai-mode{font-family:inherit;font-size:11px;color:#5f5e5b;background:none;border:none;border-radius:5px;
+ padding:4px 9px;cursor:pointer;white-space:nowrap}
+.ai-mode:hover{color:#1c1e22}
+.ai-mode.on{background:#2f2e2b;color:#fff}
+
+/* 纪律角标（常驻） */
+.ai-disc{display:flex;align-items:flex-start;gap:6px;margin:8px 12px 0;padding:6px 9px;
+ background:#fdf9f0;border:1px solid #f0e2c4;border-radius:8px;
+ font-size:11px;line-height:1.55;color:#8a5a10}
+.ai-disc .dot{flex:0 0 auto;width:6px;height:6px;border-radius:50%;background:#d9a441;margin-top:5px}
+
+/* 回复卡上的动作钮（复制／写进稿） */
+.msg-acts{display:flex;gap:6px;margin-top:7px}
+.mact{font-family:inherit;font-size:11px;color:#5f5e5b;background:#fff;border:1px solid #e3e2df;
+ border-radius:6px;padding:4px 9px;cursor:pointer}
+.mact:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+.mact.primary{border-color:#c9d8ea;color:#2f5279;background:#f4f8fc}
+.mact.primary:hover{background:#e6eff8}
+
+/* AI 草稿块（正文里的独立块：浅色底 ＋ 左侧条 ＋ 角标） */
+.ai-draft{position:relative;margin:14px 0;padding:11px 13px 11px 15px;
+ background:#fbfaf6;border:1px solid #eae5d6;border-left:3px solid #d9a441;border-radius:8px;
+ font-family:"Songti SC","Noto Serif CJK SC",Georgia,serif}
+.ai-draft-badge{position:absolute;top:-8px;left:12px;font-size:10px;letter-spacing:.4px;color:#8a5a10;
+ background:#fdf3e3;border:1px solid #f0e2c4;border-radius:5px;padding:1px 6px}
+.ai-draft-body{font-size:14px;line-height:1.85;color:#4a4842}
+.ai-draft-body p{margin:0}
+.ai-draft-hint{margin-top:6px;font-size:10.5px;color:#a49e8d}
+.ai-draft-del{position:absolute;top:6px;right:8px;font-size:14px;line-height:1;color:#b6b0a0;
+ background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:5px}
+.ai-draft-del:hover{color:#8a5a10;background:#fdf3e3}
+
+/* 截稿提醒徽标（导航钮） */
+.side-tab{position:relative}
+.side-tab.has-due{color:#8a5a10}
+.side-tab.has-due.on{background:#8a5a10;border-color:#8a5a10;color:#fff}
+.dl-badge{position:absolute;top:4px;right:4px;min-width:15px;height:15px;line-height:15px;
+ font-size:9.5px;text-align:center;color:#fff;background:#d9a441;border-radius:8px;padding:0 3px}
+
+/* ================================================================
+   段六：知识库面（左文件列表 ＋ 右详情）
+   ================================================================ */
+.kb-wrap{display:flex;gap:8px;align-items:flex-start}
+.kb-files{flex:0 0 46%;min-width:0;margin:0;padding:0;list-style:none;max-height:52vh;overflow:auto}
+.kb-file{display:flex;flex-direction:column;gap:1px;padding:6px 8px;border-radius:7px;cursor:pointer;
+ border:1px solid transparent}
+.kb-file:hover{background:#f4f2ea}
+.kb-file.on{background:#eef4fb;border-color:#cfdff2}
+.kbf-name{font-size:12px;color:#37352f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kbf-meta{font-size:10px;color:#a3a29c}
+.kb-empty{font-size:11.5px;color:#a3a29c;padding:8px 4px;line-height:1.6}
+.kb-detail{flex:1 1 auto;min-width:0;background:#fff;border:1px solid #ececeb;border-radius:8px;padding:9px 10px;
+ max-height:52vh;overflow:auto}
+.kb-pick{font-size:11.5px;color:#a3a29c;margin:4px 0}
+.kbd-h{font-size:12.5px;font-weight:650;color:#1c1e22;word-break:break-all;margin-bottom:6px}
+.kbd-kv{display:flex;gap:6px;font-size:11px;color:#5f5e5b;margin-bottom:3px;align-items:baseline}
+.kbd-kv span:first-child{flex:0 0 auto;color:#a3a29c}
+.kbd-kv code{font-size:10.5px;word-break:break-all}
+.kbd-title{font-size:10.5px;letter-spacing:1px;color:#a3a29c;margin:8px 0 4px}
+.kbd-note{font-size:10.5px;color:#8a5a10;margin-top:5px;line-height:1.5}
+.kbd-text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.65;
+ color:#3f3e3a;background:#fafaf9;border:1px solid #efefee;border-radius:6px;padding:7px 8px;
+ margin:0;white-space:pre-wrap;word-break:break-word;max-height:32vh;overflow:auto}
+
+/* ================================================================
+   段六：版式面
+   ================================================================ */
+.vn-face{display:flex;flex-direction:column;gap:2px}
+.vn-l{font-size:10.5px;letter-spacing:.6px;color:#a3a29c;margin-top:8px}
+.vn-face input{font-family:inherit;font-size:12px;padding:6px 8px;border:1px solid #e3e2df;
+ border-radius:6px;background:#fff;color:#37352f;width:100%}
+.vn-face input:focus{outline:none;border-color:#b6b0a0}
+.vn-acts{display:flex;align-items:center;gap:8px;margin-top:9px}
+.vn-acts .np-btn{margin-top:0}
+.vn-msg{font-size:11px;color:#8f8d86}
+.vn-lock{display:flex;gap:6px;align-items:flex-start;margin-top:9px;padding:6px 8px;font-size:11px;
+ line-height:1.6;color:#5f5e5b;background:#f7f7f5;border:1px solid #efefee;border-radius:7px}
+.vn-lock.locked{background:#fdf9f0;border-color:#f0e2c4;color:#8a5a10}
+.vn-lock-tag{flex:0 0 auto;font-size:10px;border:1px solid currentColor;border-radius:4px;padding:0 4px;opacity:.75}
+.vn-dl{font-size:11px;color:#8f8d86;margin-top:6px;min-height:14px}
+.vn-dl.soon{color:#8a5a10;font-weight:600}
+.vn-dl.late{color:#a13c2c;font-weight:600}
+.vn-sec-h{font-size:10.5px;letter-spacing:1.2px;color:#a3a29c;margin:14px 0 4px}
+.vn-prev-btn{margin-top:0;align-self:flex-start}
+.vn-preview{margin-top:7px;min-height:40px;background:#fff;border:1px solid #ececeb;border-radius:8px;overflow:hidden}
+.vn-prev-note{font-size:11px;color:#8f8d86;padding:10px}
+.vn-prev-note.err{color:#a13c2c}
+.vn-prev-frame{width:100%;height:300px;border:none;display:block}
+.vn-tpl-row{display:flex;gap:8px;align-items:baseline;font-size:12px;color:#37352f;
+ border:1px solid #ececeb;background:#fff;border-radius:7px;padding:6px 9px;margin-bottom:5px}
+.vn-tpl-note{font-size:10.5px;color:#a3a29c}
+
+/* ================================================================
+   段六：选刊指南模态
+   ================================================================ */
+.guide-h{font-size:13.5px;font-weight:650;color:#37352f;margin:14px 0 5px}
+.guide-h:first-child{margin-top:0}
+.guide-p{font-size:13px;line-height:1.85;color:#5f5e5b;margin:0 0 4px}
+.guide-foot{font-size:12px;line-height:1.8;color:#8f8d86;margin:16px 0 0;padding-top:10px;
+ border-top:1px solid #efefee}

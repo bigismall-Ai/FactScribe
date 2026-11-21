@@ -48,6 +48,54 @@ EXPLAIN_SYSTEM_PROMPT = (
     "不要编造材料里没有的数字。"
 )
 
+#: 段六：两个模式档（智能助手对话头部的 tab）。系统提示互不相同。
+IDEA_SYSTEM_PROMPT = (
+    "你在「聊想法」档：这一档不急着写正文，先帮作者把问题想清楚——"
+    "追问贡献到底在哪儿、哪条主张还没有证据、哪条路走不通就直说。"
+    "只依据给定材料说事；材料里没有的，就说材料里没有，"
+    "不要编造数字或出处。回答用中文，简洁分条。"
+)
+
+PAPER_SYSTEM_PROMPT = (
+    "你在「写论文」档：这一档只围着当前稿件转——"
+    "对照已有正文，指出这一段该怎么接、怎么写才合得上前后文。"
+    "只依据给定材料说事；材料里没有的，就说材料里没有，"
+    "不要编造数字或出处。回答用中文，简洁分条。"
+)
+
+#: 段六：段落三动作的系统提示（续写 / 改写 / 提问）。
+ACTION_CONTINUE_PROMPT = (
+    "你要**续写**用户引用的那一段：接着往下写，"
+    "和引用的段落语气、话题、详略一致。只输出续写的正文，"
+    "不要重复引用的原文，不要加解释。"
+)
+
+ACTION_REWRITE_PROMPT = (
+    "你要**改写**用户引用的那一段：意思不变，把话说得更清楚、更紧凑。"
+    "引用的原文里若有 \\fact{} / \\cite{} 这类标记，原样保留、位置不变。"
+    "只输出改写后的正文，不要加解释。"
+)
+
+ACTION_ASK_PROMPT = (
+    "你要**回答**关于用户引用的那一段的提问："
+    "先直接回答问题，再给一条能落到纸面上的改法。"
+    "只依据给定材料说事，不要编造数字或出处。"
+)
+
+#: 动作名 → 系统提示。`ask` 是缺省。
+ACTION_PROMPTS = {
+    "continue": ACTION_CONTINUE_PROMPT,
+    "rewrite": ACTION_REWRITE_PROMPT,
+    "ask": ACTION_ASK_PROMPT,
+}
+
+#: 模式名 → 系统提示。`paper` 是缺省（`ask` 视同 `paper`）。
+MODE_PROMPTS = {
+    "idea": IDEA_SYSTEM_PROMPT,
+    "paper": PAPER_SYSTEM_PROMPT,
+    "ask": PAPER_SYSTEM_PROMPT,
+}
+
 
 class AIError(Exception):
     """后端不可达 / 超时 / 返回体不认。调用方据此降级。"""
@@ -215,13 +263,23 @@ def report_summary(disk_path: str | Path) -> str:
 
 
 def build_context(disk_path: str | Path, quote: dict | None = None,
-                  mode: str = "ask") -> str:
-    """组装喂给模型的上下文：正文 ＋ 可选引用段 ＋ 可选检查报告摘要。"""
+                  mode: str = "ask", action: str = "ask",
+                  use_knowledge: bool = True) -> str:
+    """组装喂给模型的上下文：正文 ＋ 知识库 ＋ 可选引用段 ＋ 可选检查报告摘要。"""
     blocks: list[str] = []
     if mode == "explain":
         summary = report_summary(disk_path)
         if summary:
             blocks.append("【检查报告摘要】\n" + summary)
+    if use_knowledge:
+        try:
+            from .knowledge import context_text
+
+            knowledge = context_text(disk_path)
+        except Exception:  # noqa: BLE001 - 知识库读不到不该让对话崩掉
+            knowledge = ""
+        if knowledge:
+            blocks.append("【知识库】\n" + knowledge)
     text = disk_text(disk_path)
     if text:
         blocks.append("【当前稿件正文】\n" + text)
@@ -259,7 +317,7 @@ def _last_question(messages: list[dict]) -> str:
 
 def chat(disk_path: str | Path, messages: list[dict],
          quote: dict | None = None, mode: str = "ask",
-         timeout: float = TIMEOUT) -> dict:
+         action: str = "ask", timeout: float = TIMEOUT) -> dict:
     """工作台的 AI 入口。
 
     返回结构**恒定**：
@@ -267,14 +325,24 @@ def chat(disk_path: str | Path, messages: list[dict],
 
     成功时 `ok=True, fallback=False`；后端不可达 / 超时 / 返回体不认时
     `ok=False, fallback=True`，且 `reply` 首行是 `模拟回答（未接模型）`。
+
+    `mode` 决定大方向（`idea` 聊想法 / `paper` 写论文 / `explain` 解读报告）；
+    `action` 决定这一轮干什么（`continue` 续写 / `rewrite` 改写 / `ask` 提问）。
     """
     config = ai_config(disk_path)
     history = [m for m in (messages or [])
                if isinstance(m, dict) and m.get("role")
                and isinstance(m.get("content"), str)]
     question = _last_question(history)
-    context = build_context(disk_path, quote=quote, mode=mode)
-    system = EXPLAIN_SYSTEM_PROMPT if mode == "explain" else SYSTEM_PROMPT
+    context = build_context(disk_path, quote=quote, mode=mode, action=action)
+    system = EXPLAIN_SYSTEM_PROMPT if mode == "explain" \
+        else MODE_PROMPTS.get(str(mode or "ask"), PAPER_SYSTEM_PROMPT)
+    action_prompt = ACTION_PROMPTS.get(str(action or "ask"))
+    # 动作提示只在「段落动作」时加：续写／改写一定要；提问要带段落引用；
+    # 普通闲聊（没有引用）别套上「回答关于这一段的问题」这种话。
+    if action_prompt and mode != "explain":
+        if action in ("continue", "rewrite") or quote:
+            system = system + "\n\n" + action_prompt
     payload: list[dict] = [{"role": "system", "content": system}]
     if context:
         payload.append({"role": "system", "content": context})
@@ -288,9 +356,11 @@ def chat(disk_path: str | Path, messages: list[dict],
             "reply": simulated_reply(question, str(exc)),
             "model": config["model"], "base_url": config["base_url"],
             "code": exc.code, "error": str(exc),
+            "mode": str(mode or "ask"), "action": str(action or "ask"),
         }
     return {
         "ok": True, "fallback": False, "reply": reply,
         "model": config["model"], "base_url": config["base_url"],
         "code": "", "error": "",
+        "mode": str(mode or "ask"), "action": str(action or "ask"),
     }

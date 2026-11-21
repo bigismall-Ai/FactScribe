@@ -347,6 +347,57 @@ _TEXT_CMD_RE = re.compile(
     r"\\(textbf|bfseries|emph|textit|texttt|underline|textsf)\s*\{")
 _INLINE_KEEP = ("url", "href")
 
+# ---------------------------------------------------------------- AI 草稿块
+
+#: AI 草稿块的标记（写进 .tex 的注释行，渲染层与写回层共用）。
+AI_DRAFT_BEGIN = "FACTSCRIBE-AI-DRAFT-BEGIN"
+AI_DRAFT_END = "FACTSCRIBE-AI-DRAFT-END"
+
+#: AI 草稿块用的环境（标准 LaTeX 的 quote——不需要改导言区就能编过）。
+AI_DRAFT_ENV = "quote"
+
+_AI_DRAFT_RE = re.compile(
+    r"^[ \t]*%[ \t]*" + AI_DRAFT_BEGIN + r"[ \t]+(?P<id>\S+)[^\n]*\n"
+    r"(?P<body>.*?)"
+    r"^[ \t]*%[ \t]*" + AI_DRAFT_END + r"[ \t]+(?P<id2>\S+)[^\n]*",
+    re.DOTALL | re.MULTILINE)
+
+_AI_DRAFT_ENV_RE = re.compile(
+    r"^[ \t]*\\begin\{" + AI_DRAFT_ENV + r"\}[ \t]*\n"
+    r"(?P<inner>.*?)"
+    r"^[ \t]*\\end\{" + AI_DRAFT_ENV + r"\}[ \t]*\n?",
+    re.DOTALL | re.MULTILINE)
+
+
+def ai_draft_regions(text: str) -> list[dict]:
+    r"""找出文件里所有 AI 草稿块。
+
+    每个区域给：`{id, region_start, region_end, inner_start, inner_end}`。
+    `inner_*` 是**可编辑的散文区间**（环境的 `\begin`/`\end` 标记在外头，
+    属文件结构，不进编辑块）；`region_*` 是整块（含标记行）的区间。
+    """
+    out: list[dict] = []
+    for match in _AI_DRAFT_RE.finditer(text):
+        body = match.group("body")
+        body_start = match.start("body")
+        inner_start, inner_end = body_start, match.end("body")
+        env = _AI_DRAFT_ENV_RE.match(body)
+        if env:
+            inner_start = body_start + env.start("inner")
+            inner_end = body_start + env.end("inner")
+        # 散文区间不含结尾那个换行（那是环境的边界，不是正文）。
+        while inner_end > inner_start and text[inner_end - 1] in "\n\r":
+            inner_end -= 1
+        out.append({
+            "id": match.group("id"),
+            "region_start": match.start(),
+            "region_end": match.end(),
+            "inner_start": inner_start,
+            "inner_end": inner_end,
+        })
+    return out
+
+
 
 def _strip_comments(text: str) -> str:
     r"""去掉 `%` 注释（`\%` 是字面百分号，保留）。"""
@@ -450,6 +501,9 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
     index = 0
     counter = 0
     length = len(source)
+    # 段六：AI 草稿块——整块跳过普通扫描，单独渲染成一块。
+    regions = ai_draft_regions(text)
+    region_at = 0
 
     def flush() -> None:
         nonlocal buffer, buffer_start
@@ -475,6 +529,27 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
         })
 
     while index < length:
+        if region_at < len(regions) and index >= regions[region_at]["region_start"]:
+            region = regions[region_at]
+            region_at += 1
+            flush()
+            inner = text[region["inner_start"]:region["inner_end"]]
+            body = _inline(html.escape(inner, quote=False))
+            body = re.sub(r"[ \t]+", " ", body)
+            body = re.sub(r"\n+", " ", body).strip()
+            blocks.append({
+                "kind": "ai_draft",
+                "id": "%s-%s" % (stem, region["id"]),
+                "level": 0, "title": "", "title_en": "",
+                "html": ('<div class="aidraft"><p>%s</p></div>' % body) if body else "",
+                "start": region["inner_start"], "end": region["inner_end"],
+                "raw": inner,
+                "draft_id": region["id"],
+                "region_start": region["region_start"],
+                "region_end": region["region_end"],
+            })
+            index = region["region_end"]
+            continue
         char = source[index]
         if char == "\\":
             env = _ENV_RE.match(source, index)

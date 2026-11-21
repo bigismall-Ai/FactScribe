@@ -3,6 +3,12 @@
    段一做只读骨架，段二接上写回（正文就地编辑）与章节管理（调序/删除/新建）。 */
 'use strict';
 
+/* 浏览器端错误计数（自查用）：window.__errs 全程应为 0。
+   段六起沿用这个约定——交付前在浏览器里读一次这个数。 */
+window.__errs = 0;
+window.addEventListener('error', () => { window.__errs += 1; });
+window.addEventListener('unhandledrejection', () => { window.__errs += 1; });
+
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
 
@@ -168,6 +174,71 @@ const I18N = {
     'check.tabMachine': '机器底账', 'rp.card.del': '删除',
     'np.aiNote': '对话层是半透明悬浮层，浮在正文上方；这里放上下文与入口。',
     'np.aiOpen': '打开对话层', 'np.aiClose': '收起对话层',
+    /* ---- 段六 ---- */
+    'np.kb': '知识库', 'np.kbUpload': '上传文件',
+    'np.venue': '版式', 'np.venueGuide': '选刊指南',
+    'para.more': '段落动作', 'para.edit': '编辑',
+    'para.continue': '续写', 'para.rewrite': '改写', 'para.ask': '提问',
+    'para.menu': '这一段的动作',
+    'ai.modeIdea': '聊想法', 'ai.modePaper': '写论文',
+    'ai.discipline': '示例数不是你的结果：没有真实跑出来的数，不要写进稿。',
+    'ai.copy': '复制', 'ai.writeIn': '写进稿',
+    'ai.copied': '已复制到剪贴板', 'ai.copyFail': '复制不了：{e}',
+    'ai.written': '已写进稿（在那一段之后，标着「AI 草稿」）',
+    'ai.writeFail': '写不进稿：{e}',
+    'ai.writeNoTarget': '这条回复没有对应的段落，先用段落菜单里的动作再试。',
+    'ai.continueQ': '接着这一段往下写。',
+    'ai.rewriteQ': '把这一段改写得更好。',
+    'ai.askQ': '这一段有什么可改的？',
+    'ai.actionDone': '动作已发出',
+    'kb.empty': '项目目录里还没有可收进知识库的文件。',
+    'kb.loading': '正在读文件…', 'kb.loadErr': '读知识库失败：{e}',
+    'kb.pick': '点左边一个文件看内容。',
+    'kb.status': '处理状态', 'kb.size': '大小', 'kb.path': '路径',
+    'kb.preview': '内容预览', 'kb.truncated': '（预览已截断）',
+    'kb.uploadOk': '已上传：{name}', 'kb.uploadErr': '上传失败：{e}',
+    'kb.noFile': '没有选中文件。', 'kb.pending': '待提取', 'kb.ready': '可用',
+    'kb.pdfNote': 'PDF 只登记文件名与大小，文本提取段七接入。',
+    'vn.venue': '目标刊物 / 会议', 'vn.venuePh': '例如：ACL 2026',
+    'vn.deadline': '截稿日期', 'vn.save': '保存版式配置',
+    'vn.lockTag': '语言盘锁定',
+    'vn.lockZh': '这一盘是中文稿：版式只管排版与刊物要求，不动语言盘——中文稿不能换成英文刊。',
+    'vn.lockEn': '这一盘是英文稿：版式只管排版与刊物要求，不动语言盘——要写中文稿就另开一个中文盘。',
+    'vn.tplArticle': 'article（通用单栏论文版式）',
+    'vn.saved': '版式配置已存进 workbench.toml',
+    'vn.saveErr': '存不了：{e}', 'vn.preview': '首页预览',
+    'vn.templates': '模板库', 'vn.tplBuilding': '模板库建设中',
+    'vn.previewNone': '这个盘还没编译过 PDF：先点「渲染 PDF」，再回来看首页预览。',
+    'vn.previewBtn': '渲染并预览首页',
+    'vn.previewErr': '渲染失败：{e}',
+    'vn.dueSoon': '截稿提醒：{d}', 'vn.overdue': '已过截稿日 {d} 天',
+    'vn.dueNormal': '距截稿 {d} 天',
+    'guide.title': '选刊指南', 'guide.go': '按目标版式预览并开写',
+    'guide.h1': '一、贡献是什么形状',
+    'guide.p1': '先说清你多出来的那一点是什么：新方法、新数据、新测量，还是新的失效边界。' +
+      '贡献形状决定你能投哪一类刊物——方法类看新颖性，数据类看覆盖与可复现，' +
+      '边界类看这个结论别人多久会自己撞上。说不清形状，选刊就只剩碰运气。',
+    'guide.h2': '二、读者是谁',
+    'guide.p2': '读者决定你得把哪部分放前面。审稿人每天读十几篇稿子，' +
+      '只对「和我要解决的问题相关」的那几段有耐心。' +
+      '所以先问：谁会读这份稿子，他是来找方法的还是来找结论的？' +
+      '两类读者的入口段不一样，把两拨人塞在同一段里，两拨人都读不下去。',
+    'guide.h3': '三、截稿与双投',
+    'guide.p3': '截稿日决定你的时间盒：倒排到「最后一版能编过」，' +
+      '别倒排到最后一刻。双投规则各家不同，而且常常一年一改——' +
+      '投稿之前去看该刊当年的作者须知，别拿去年的记忆投稿。' +
+      '扩展会议、连续出版物这些名目看着像加分项，实际规则最容易被忽略。',
+    'guide.h4': '四、影响因子怎么用',
+    'guide.p4': '影响因子是刊物层面的平均数，不是你这篇稿子的分数。' +
+      '它能帮你排除明显不匹配的刊物（比如只发综述的刊），' +
+      '但不能替代「这篇稿子会被谁读」的判断。' +
+      '拿它当唯一依据，很容易把稿子投到没人读你这类问题的地方去。',
+    'guide.foot': '目标刊物定了以后，把它填进上面的表单——版式面会照着它给首页预览，' +
+      '截稿日临近时导航钮会提醒你。语言盘不动：中文稿还是中文稿。',
+    'draft.badge': 'AI 草稿',
+    'draft.hint': '这是 AI 写的草稿块，不是正文。点它可以改，也可以删掉。',
+    'draft.deleted': 'AI 草稿块已删掉',
+    'draft.delFail': '删不掉：{e}',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -332,6 +403,77 @@ const I18N = {
     'check.tabMachine': '机器底账', 'rp.card.del': 'Delete',
     'np.aiNote': 'The chat layer is a translucent overlay floating above the body; context and entry live here.',
     'np.aiOpen': 'Open chat layer', 'np.aiClose': 'Hide chat layer',
+    /* ---- segment six ---- */
+    'np.kb': 'Knowledge base', 'np.kbUpload': 'Upload file',
+    'np.venue': 'Venue', 'np.venueGuide': 'Venue guide',
+    'para.more': 'Paragraph actions', 'para.edit': 'Edit',
+    'para.continue': 'Continue', 'para.rewrite': 'Rewrite', 'para.ask': 'Ask',
+    'para.menu': 'Actions for this paragraph',
+    'ai.modeIdea': 'Brainstorm', 'ai.modePaper': 'Write paper',
+    'ai.discipline': 'Example numbers are not your results: nothing you did not actually run belongs in the draft.',
+    'ai.copy': 'Copy', 'ai.writeIn': 'Write into draft',
+    'ai.copied': 'Copied to the clipboard',
+    'ai.copyFail': 'Copy failed: {e}',
+    'ai.written': 'Written into the draft (right after that paragraph, tagged "AI draft")',
+    'ai.writeFail': 'Could not write into the draft: {e}',
+    'ai.writeNoTarget': 'This reply has no paragraph attached — use a paragraph action first.',
+    'ai.continueQ': 'Continue this paragraph.',
+    'ai.rewriteQ': 'Rewrite this paragraph better.',
+    'ai.askQ': 'What could be improved in this paragraph?',
+    'ai.actionDone': 'Action sent',
+    'kb.empty': 'No file in this project directory can go into the knowledge base yet.',
+    'kb.loading': 'Reading files…', 'kb.loadErr': 'Could not load the knowledge base: {e}',
+    'kb.pick': 'Pick a file on the left to read it.',
+    'kb.status': 'Status', 'kb.size': 'Size', 'kb.path': 'Path',
+    'kb.preview': 'Preview', 'kb.truncated': '(preview truncated)',
+    'kb.uploadOk': 'Uploaded: {name}', 'kb.uploadErr': 'Upload failed: {e}',
+    'kb.noFile': 'No file selected.', 'kb.pending': 'extraction pending',
+    'kb.ready': 'Ready',
+    'kb.pdfNote': 'PDF: name and size only — text extraction lands in the next stage.',
+    'vn.venue': 'Target journal / conference', 'vn.venuePh': 'e.g. ACL 2026',
+    'vn.deadline': 'Deadline', 'vn.save': 'Save venue config',
+    'vn.lockTag': 'Language lock',
+    'vn.lockZh': 'This disk is a Chinese draft: the venue pane changes layout and venue requirements only, never the language disk — a Chinese draft cannot be swapped for an English venue.',
+    'vn.lockEn': 'This disk is an English draft: the venue pane changes layout and venue requirements only, never the language disk — open a separate Chinese disk for Chinese.',
+    'vn.tplArticle': 'article (general single-column paper layout)',
+    'vn.saved': 'Venue config saved into workbench.toml',
+    'vn.saveErr': 'Could not save: {e}', 'vn.preview': 'First-page preview',
+    'vn.templates': 'Template library', 'vn.tplBuilding': 'Template library under construction',
+    'vn.previewNone': 'This disk has no compiled PDF yet: render one first, then come back for the preview.',
+    'vn.previewBtn': 'Render and preview the first page',
+    'vn.previewErr': 'Render failed: {e}',
+    'vn.dueSoon': 'Deadline reminder: {d}', 'vn.overdue': '{d} days past the deadline',
+    'vn.dueNormal': '{d} days to the deadline',
+    'guide.title': 'Venue guide', 'guide.go': 'Preview against this venue and start writing',
+    'guide.h1': '1. What shape is the contribution',
+    'guide.p1': 'Say first what you add that was not there: a new method, new data, a new measurement, ' +
+      'or a newly mapped failure boundary. The shape decides which venues are even open to you — ' +
+      'method papers live on novelty, data papers on coverage and reproducibility, ' +
+      'boundary papers on how long before somebody else bumps into the same wall. ' +
+      'If you cannot state the shape, picking a venue is just luck.',
+    'guide.h2': '2. Who the reader is',
+    'guide.p2': 'The reader decides what has to come first. A reviewer reads a dozen papers a day ' +
+      'and stays patient only with the parts that look relevant to their own problem. ' +
+      'So ask who will read this: are they after the method or after the conclusion? ' +
+      'Those two audiences need different opening paragraphs, and one paragraph serving both ' +
+      'loses both.',
+    'guide.h3': '3. Deadlines and double submission',
+    'guide.p3': 'The deadline is your time box: back-plan to the last version that still compiles, ' +
+      'not to the last minute. Double-submission rules differ per venue and often change yearly, ' +
+      'so read that venue\'s current author instructions instead of trusting last year\'s memory. ' +
+      'Journal extensions and rolling venues sound like bonus tracks but carry the rules people forget.',
+    'guide.h4': '4. How to use an impact factor',
+    'guide.p4': 'An impact factor is an average across a journal, not a score for your paper. ' +
+      'It usefully rules out mismatched venues (a letters-only journal, say), ' +
+      'but it cannot replace the judgement "who will read this". ' +
+      'Treating it as the only criterion is a reliable way to publish where nobody reads your problem.',
+    'guide.foot': 'Once the venue is settled, put it in the form above — the venue pane previews ' +
+      'the first page against it, and the navigation button warns you as the deadline nears. ' +
+      'The language disk never changes: a Chinese draft stays a Chinese draft.',
+    'draft.badge': 'AI draft',
+    'draft.hint': 'This is an AI-written draft block, not body text. Click it to edit, or delete it.',
+    'draft.deleted': 'AI draft block deleted',
+    'draft.delFail': 'Could not delete: {e}',
   },
 };
 
@@ -354,8 +496,10 @@ const state = {
   machineError: '',
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
-  ai: { messages: [], quote: null, waiting: false, seq: 0 },   // 段四：AI 对话（真后端）
+  ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper' },  // 段四：AI 对话（真后端）；段六：两档模式
   reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
+  kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
+  venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
   wz: { step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [], suggested: [], sha: '', busy: false, parseError: '' }, // 段四：导入向导
 };
 
@@ -410,6 +554,8 @@ function applyI18n() {
   document.body.classList.toggle('panel-en', state.lang === 'en');
   // 段五：报告列表在导航面板里，跟着语言重画。
   renderReports();
+  renderKb();
+  renderVenue();
   applyLangToggle();
 }
 
@@ -536,6 +682,45 @@ function renderBlocks() {
       host.appendChild(heading);
     } else if (block.kind === 'abstract') {
       // 段五：摘要归封面（封面摘要区可编辑），正文里不重复渲染。
+    } else if (block.kind === 'ai_draft') {
+      // 段六：AI 草稿块——独立成块，不混进正文；可再编辑，也可删掉。
+      const holder = document.createElement('div');
+      holder.innerHTML = block.html || '';
+      const node = holder.firstElementChild;
+      if (node) {
+        const wrap = document.createElement('div');
+        wrap.className = 'ai-draft';
+        wrap.id = block.id;
+        wrap.dataset.file = block.file || '';
+        wrap.dataset.kind = 'ai_draft';
+        const badge = document.createElement('span');
+        badge.className = 'ai-draft-badge';
+        badge.textContent = t('draft.badge');
+        const body = document.createElement('div');
+        body.className = 'ai-draft-body';
+        body.innerHTML = node.innerHTML || '';
+        const hint = document.createElement('div');
+        hint.className = 'ai-draft-hint';
+        hint.textContent = t('draft.hint');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'ai-draft-del';
+        del.textContent = '×';
+        del.title = t('draft.badge');
+        del.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          deleteAiDraft(block.file || '', block.id);
+        });
+        wrap.appendChild(badge);
+        wrap.appendChild(body);
+        wrap.appendChild(hint);
+        wrap.appendChild(del);
+        wrap.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          enterEdit(block.id, block.file || '');
+        });
+        host.appendChild(wrap);
+      }
     } else {
       const holder = document.createElement('div');
       holder.innerHTML = block.html || '';
@@ -548,7 +733,7 @@ function renderBlocks() {
           ev.stopPropagation();
           enterEdit(block.id, block.file || '');
         });
-        bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(), curSec, block.id);
+        bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(), curSec, block.id, block.file || '');
         host.appendChild(node);
       }
     }
@@ -846,6 +1031,8 @@ async function loadDisk() {
   renderBlocks();
   // 段五：封面摘要（可编辑；写回走段二同一保护通道）。
   await loadAbstract();
+  // 段六：版式配置跟着当前盘走（截稿徽标立刻可显示）。
+  loadVenue();
   // 段三：检查报告与机器视图跟着当前盘走（进哪篇管哪篇）。
   resetReportState();
   state.rerun = null;
@@ -1647,6 +1834,22 @@ function pushAiMsg(role, text, opts) {
     note.textContent = options.note;
     wrap.appendChild(note);
   }
+  /* 段六：回复卡带动作钮（复制／写进稿）。 */
+  if (options.actions && options.actions.length) {
+    const acts = document.createElement('div');
+    acts.className = 'msg-acts';
+    options.actions.forEach((act) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mact' + (act.kind ? ' ' + act.kind : '');
+      btn.textContent = t(act.label);
+      btn.addEventListener('click', () => {
+        if (typeof act.onClick === 'function') act.onClick(text || '', btn);
+      });
+      acts.appendChild(btn);
+    });
+    wrap.appendChild(acts);
+  }
   host.appendChild(wrap);
   host.scrollTop = host.scrollHeight;
   return wrap;
@@ -1685,7 +1888,7 @@ function isFallbackReply(data, reply) {
   return text.indexOf(AI_FALLBACK_MARK) === 0;
 }
 
-async function aiSend(question, mode) {
+async function aiSend(question, mode, action) {
   if (state.ai.waiting) return;
   const q = String(question || '').trim();
   if (!q) return;
@@ -1696,12 +1899,16 @@ async function aiSend(question, mode) {
   state.ai.waiting = true;
   setAiBusy(true);
   const seq = state.ai.seq;
+  const useMode = mode === 'explain' ? 'explain' : (mode || state.ai.mode || 'paper');
+  const useAction = action || 'ask';
+  const quote = useMode === 'explain' ? null : (state.ai.quote || null);
   const payload = {
     project: state.project.id,
     disk: state.disk || '',
     messages: state.ai.messages.map((m) => ({ role: m.role, content: m.content })),
-    quote: mode === 'explain' ? null : (state.ai.quote || null),
-    mode: mode || 'ask',
+    quote: quote,
+    mode: useMode,
+    action: useAction,
   };
   try {
     const data = await postChat(payload);
@@ -1713,7 +1920,18 @@ async function aiSend(question, mode) {
       return;
     }
     const fallback = isFallbackReply(data, reply);
-    pushAiMsg('ai', reply, { fallback: fallback, note: fallback ? aiFallbackNote(data) : '' });
+    /* 段六：段落三动作的回复带「复制」「写进稿」两枚钮。 */
+    const actions = (useAction !== 'ask' && quote && quote.file)
+      ? [
+        { label: 'ai.copy', onClick: (text) => copyReply(text) },
+        { label: 'ai.writeIn', kind: 'primary', onClick: (text) => writeIntoDraft(text) },
+      ]
+      : [];
+    pushAiMsg('ai', reply, {
+      fallback: fallback,
+      note: fallback ? aiFallbackNote(data) : '',
+      actions: actions,
+    });
     state.ai.messages.push({ role: 'assistant', content: reply });
   } catch (err) {
     if (seq !== state.ai.seq) return;
@@ -1727,9 +1945,90 @@ async function aiSend(question, mode) {
   }
 }
 
+/* 段六：复制回复（剪贴板不可用时明说，不假装复制过）。 */
+async function copyReply(text) {
+  const value = String(text || '');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(value);
+      toast(t('ai.copied'));
+      return;
+    }
+  } catch (err) {
+    toast(t('ai.copyFail', { e: (err && err.message) || String(err) }));
+    return;
+  }
+  toast(t('ai.copyFail', { e: 'clipboard unavailable' }));
+}
+
+/* 段六：写进稿——以 AI 标记块插到那一段之后（不混进正文）。 */
+async function writeIntoDraft(text) {
+  const quote = state.ai.quote;
+  if (!quote || !quote.file || !quote.id) {
+    toast(t('ai.writeNoTarget'));
+    return;
+  }
+  const body = String(text || '').trim();
+  if (!body) { toast(t('ai.writeNoTarget')); return; }
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) { toast(t('ai.writeNoTarget')); return; }
+  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/draft/insert`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ file: quote.file, block: quote.id, text: body }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data || data.ok === false) {
+      toast(t('ai.writeFail', { e: (data && data.error) || ('HTTP ' + res.status) }));
+      return;
+    }
+    toast(t('ai.written'));
+    await loadDisk();
+  } catch (err) {
+    toast(t('ai.writeFail', { e: (err && err.message) || String(err) }));
+  }
+}
+
+/* 段六：删掉一个 AI 草稿块。 */
+async function deleteAiDraft(file, blockId) {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/draft/delete`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ file: file, block: blockId }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data || data.ok === false) {
+      toast(t('draft.delFail', { e: (data && data.error) || ('HTTP ' + res.status) }));
+      return;
+    }
+    toast(t('draft.deleted'));
+    await loadDisk();
+  } catch (err) {
+    toast(t('draft.delFail', { e: (err && err.message) || String(err) }));
+  }
+}
+
+/* 段六：模式切换（聊想法／写论文）——两档的系统提示不同。 */
+function setAiMode(mode) {
+  const name = (mode === 'idea') ? 'idea' : 'paper';
+  state.ai.mode = name;
+  $$('#aiModes .ai-mode').forEach((btn) => {
+    btn.classList.toggle('on', btn.dataset.mode === name);
+  });
+}
+
 /* 「问 AI」带引用：切到 AI 页、带上下文、预填问题（人再按发送）。 */
-function askAiAbout(text, section, id) {
-  state.ai.quote = { text: String(text || ''), section: String(section || ''), id: String(id || '') };
+function askAiAbout(text, section, id, file) {
+  state.ai.quote = { text: String(text || ''), section: String(section || ''),
+                     id: String(id || ''), file: String(file || '') };
   renderAiCtx();
   switchNavPane('ai');
   const input = $('#aiText');
@@ -1767,12 +2066,52 @@ function hideParaTools() {
 }
 
 /* 段落 → 悬浮工具条的绑定（原型同款：悬停段落才浮出「问 AI」）。 */
-function bindParaTools(node, text, section, id) {
+function bindParaTools(node, text, section, id, file) {
   node.addEventListener('mouseenter', () => {
-    paraAskTarget = { text: text, section: section, id: id };
+    paraAskTarget = { text: text, section: section, id: id, file: file || '',
+                      rect: node.getBoundingClientRect() };
     showParaTools(node);
   });
   node.addEventListener('mouseleave', hideParaTools);
+}
+
+/* 段六：段落 ⋯ 菜单（编辑 ＋ 续写／改写／提问）。 */
+function closeParaMenu() {
+  const menu = $('#paraMenu');
+  if (menu) menu.hidden = true;
+}
+
+function openParaMenu() {
+  const target = paraAskTarget;
+  if (!target) return;
+  const menu = $('#paraMenu');
+  const page = $('#diskBody');
+  if (!menu || !page) return;
+  menu.hidden = false;
+  const pr = page.getBoundingClientRect();
+  const mr = menu.getBoundingClientRect();
+  let left = 12;
+  let top = 12;
+  if (target.rect) {
+    left = Math.min(Math.max(8, target.rect.left - pr.left), pr.width - mr.width - 8);
+    top = Math.min(Math.max(8, target.rect.top - pr.top), pr.height - mr.height - 8);
+  }
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+}
+
+/* 段六：段落三动作——都走 /api/chat（带段落引用上下文，action 字段区分）。 */
+async function paraAction(action) {
+  const target = paraAskTarget;
+  closeParaMenu();
+  if (!target) return;
+  const label = action === 'continue' ? t('ai.continueQ')
+    : (action === 'rewrite' ? t('ai.rewriteQ') : t('ai.askQ'));
+  state.ai.quote = { text: String(target.text || ''), section: String(target.section || ''),
+                     id: String(target.id || ''), file: String(target.file || '') };
+  renderAiCtx();
+  switchNavPane('ai');
+  await aiSend(label, state.ai.mode || 'paper', action);
 }
 
 /* ---------------------------------------------------------------- 实验报告 */
@@ -2160,9 +2499,13 @@ function switchNavPane(name) {
   $('#paneToc').classList.toggle('on', name === 'toc');
   $('#paneAi').classList.toggle('on', name === 'ai');
   $('#paneReports').classList.toggle('on', name === 'reports');
+  $('#paneKb').classList.toggle('on', name === 'kb');
+  $('#paneVenue').classList.toggle('on', name === 'venue');
   $('#npToc').classList.toggle('on', name === 'toc');
   $('#npAi').classList.toggle('on', name === 'ai');
   $('#npReports').classList.toggle('on', name === 'reports');
+  $('#npKb').classList.toggle('on', name === 'kb');
+  $('#npVenue').classList.toggle('on', name === 'venue');
   // 互斥：切到别的面就把悬浮对话层收起来（对话层属「智能助手」这一面）。
   if (name === 'ai') {
     setAiOpen(true);
@@ -2171,6 +2514,8 @@ function switchNavPane(name) {
     setAiOpen(false);
   }
   if (name === 'reports') loadReports();
+  if (name === 'kb') loadKb();
+  if (name === 'venue') loadVenue();
 }
 
 /* 面板里的智能助手面：上下文 + 打开/收起悬浮对话层。 */
@@ -2198,6 +2543,333 @@ function setAiOpen(open) {
 function setNavCollapsed(collapsed) {
   document.body.classList.toggle('nav-collapsed', !!collapsed);
   if (collapsed) setAiOpen(false);
+}
+
+/* ---------------------------------------------------------------- 段六：知识库 */
+
+function kbApiPath(suffix) {
+  const project = state.project;
+  if (!project) return null;
+  return `/api/project/${encodeURIComponent(project.id)}/knowledge${suffix || ''}`;
+}
+
+function kbStatusLabel(file) {
+  if (!file) return '';
+  if (file.status === 'pending') return t('kb.pending');
+  return t('kb.ready');
+}
+
+function renderKb() {
+  const list = $('#kbFiles');
+  const detail = $('#kbDetail');
+  if (!list || !detail) return;
+  list.innerHTML = '';
+  if (state.kb.loading) {
+    const li = document.createElement('li');
+    li.className = 'kb-empty';
+    li.textContent = t('kb.loading');
+    list.appendChild(li);
+    detail.innerHTML = '';
+    return;
+  }
+  if (state.kb.error) {
+    const li = document.createElement('li');
+    li.className = 'kb-empty';
+    li.textContent = state.kb.error;
+    list.appendChild(li);
+    detail.innerHTML = '';
+    return;
+  }
+  if (!state.kb.files.length) {
+    const li = document.createElement('li');
+    li.className = 'kb-empty';
+    li.textContent = t('kb.empty');
+    list.appendChild(li);
+    detail.innerHTML = `<p class="kb-pick">${esc(t('kb.pick'))}</p>`;
+    return;
+  }
+  state.kb.files.forEach((file) => {
+    const li = document.createElement('li');
+    li.className = 'kb-file' + (state.kb.current === file.path ? ' on' : '');
+    li.dataset.path = file.path;
+    const name = document.createElement('span');
+    name.className = 'kbf-name';
+    name.textContent = file.name;
+    const meta = document.createElement('span');
+    meta.className = 'kbf-meta';
+    meta.textContent = `${file.size_label} · ${kbStatusLabel(file)}`;
+    li.appendChild(name);
+    li.appendChild(meta);
+    li.addEventListener('click', () => previewKbFile(file.path));
+    list.appendChild(li);
+  });
+  renderKbDetail();
+}
+
+function renderKbDetail() {
+  const detail = $('#kbDetail');
+  if (!detail) return;
+  const data = state.kb.detail;
+  if (!data) {
+    detail.innerHTML = `<p class="kb-pick">${esc(t('kb.pick'))}</p>`;
+    return;
+  }
+  const head = [
+    `<div class="kbd-h">${esc(data.name || '')}</div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.path'))}</span><code>${esc(data.path || '')}</code></div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.size'))}</span><span>${esc(data.size_label || '')}</span></div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.status'))}</span><span>${esc(data.status === 'pending' ? t('kb.pending') : t('kb.ready'))}</span></div>`,
+  ];
+  if (data.status === 'pending') head.push(`<div class="kbd-note">${esc(t('kb.pdfNote'))}</div>`);
+  let bodyHtml = '';
+  if (data.status === 'pending') {
+    bodyHtml = `<div class="kbd-kv"><span>${esc(t('kb.preview'))}</span><span>${esc(t('kb.pending'))}</span></div>`;
+  } else {
+    bodyHtml = `<div class="kbd-title">${esc(t('kb.preview'))}</div>`
+      + `<pre class="kbd-text">${esc(data.text || '')}</pre>`
+      + (data.truncated ? `<div class="kbd-note">${esc(t('kb.truncated'))}</div>` : '');
+  }
+  detail.innerHTML = head.join('') + bodyHtml;
+}
+
+async function loadKb() {
+  const url = kbApiPath('');
+  if (!url) return;
+  state.kb.loading = true;
+  state.kb.error = '';
+  renderKb();
+  try {
+    const data = await getJSON(url);
+    state.kb.files = (data && data.files) || [];
+    state.kb.error = '';
+  } catch (err) {
+    state.kb.files = [];
+    state.kb.error = t('kb.loadErr', { e: (err && err.message) || String(err) });
+  } finally {
+    state.kb.loading = false;
+    renderKb();
+  }
+}
+
+async function previewKbFile(path) {
+  state.kb.current = path;
+  const url = kbApiPath('/preview') + '?path=' + encodeURIComponent(path);
+  renderKb();
+  try {
+    const data = await getJSON(url);
+    state.kb.detail = data;
+  } catch (err) {
+    state.kb.detail = { name: path, path: path, text: '', size_label: '—',
+                        status_label: t('kb.loadErr', { e: (err && err.message) || String(err) }) };
+  }
+  renderKb();
+}
+
+async function uploadKbFile(event) {
+  const input = event.target;
+  if (!input || !input.files || !input.files.length) {
+    toast(t('kb.noFile'));
+    return;
+  }
+  const file = input.files[0];
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const url = kbApiPath('/upload');
+  try {
+    const res = await fetch(url, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok || !data || data.ok === false) {
+      toast(t('kb.uploadErr', { e: (data && data.error) || ('HTTP ' + res.status) }));
+      return;
+    }
+    toast(t('kb.uploadOk', { name: data.name || file.name }));
+    state.kb.current = '';
+    state.kb.detail = null;
+    await loadKb();
+  } catch (err) {
+    toast(t('kb.uploadErr', { e: (err && err.message) || String(err) }));
+  } finally {
+    input.value = '';
+  }
+}
+
+/* ---------------------------------------------------------------- 段六：版式 */
+
+function venueApiPath(suffix) {
+  const project = state.project;
+  if (!project) return null;
+  return `/api/project/${encodeURIComponent(project.id)}/venue${suffix || ''}`;
+}
+
+function renderVenue() {
+  const data = state.venue.data;
+  const venueInput = $('#vnVenue');
+  const deadlineInput = $('#vnDeadline');
+  const lock = $('#vnLock');
+  const info = $('#vnDeadlineInfo');
+  const tpl = $('#vnTemplates');
+  const msg = $('#vnMsg');
+  if (msg) msg.textContent = state.venue.msg || '';
+  if (!data) {
+    if (venueInput) venueInput.value = '';
+    if (deadlineInput) deadlineInput.value = '';
+    if (lock) lock.innerHTML = '';
+    if (info) info.innerHTML = '';
+    if (tpl) tpl.innerHTML = '';
+    return;
+  }
+  if (venueInput && document.activeElement !== venueInput) venueInput.value = data.venue || '';
+  if (deadlineInput && document.activeElement !== deadlineInput) deadlineInput.value = data.deadline || '';
+  if (lock) {
+    const lockData = data.lang_lock || {};
+    const note = lockData.note_key ? t(lockData.note_key) : (lockData.note || '');
+    lock.innerHTML = `<span class="vn-lock-tag">${esc(t('vn.lockTag'))}</span><span>${esc(note)}</span>`;
+    lock.classList.toggle('locked', !!(data.lang_lock && data.lang_lock.locked));
+  }
+  if (info) {
+    const days = data.days_left;
+    let text = '';
+    if (days === null || days === undefined) {
+      text = '';
+    } else if (data.overdue) {
+      text = t('vn.overdue', { d: Math.abs(days) });
+    } else if (data.due_soon) {
+      text = t('vn.dueSoon', { d: days });
+    } else {
+      text = t('vn.dueNormal', { d: days });
+    }
+    info.innerHTML = text ? `<span>${esc(text)}</span>` : '';
+    info.classList.toggle('soon', !!(data.due_soon && !data.overdue));
+    info.classList.toggle('late', !!data.overdue);
+  }
+  if (tpl) {
+    const items = data.templates || [];
+    tpl.innerHTML = items.map((item) => `
+      <div class="vn-tpl-row">
+        <span class="vn-tpl-name">${esc(item.name_key ? t(item.name_key) : (item.name || item.id || ''))}</span>
+        <span class="vn-tpl-note">${esc(item.note_key ? t(item.note_key) : (item.note || ''))}</span>
+      </div>`).join('');
+  }
+}
+
+async function loadVenue() {
+  const url = venueApiPath('');
+  if (!url) return;
+  state.venue.loading = true;
+  try {
+    const data = await getJSON(url);
+    state.venue.data = data;
+    state.venue.error = '';
+  } catch (err) {
+    state.venue.data = null;
+    state.venue.error = t('vn.saveErr', { e: (err && err.message) || String(err) });
+  } finally {
+    state.venue.loading = false;
+    renderVenue();
+    updateDeadlineBadge();
+  }
+}
+
+async function saveVenueConfig() {
+  const url = venueApiPath('');
+  if (!url) return;
+  const venue = ($('#vnVenue') || {}).value || '';
+  const deadline = ($('#vnDeadline') || {}).value || '';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ venue: venue.trim(), deadline: deadline.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data || data.ok === false) {
+      state.venue.msg = t('vn.saveErr', { e: (data && data.error) || ('HTTP ' + res.status) });
+      renderVenue();
+      return;
+    }
+    state.venue.data = data;
+    state.venue.msg = t('vn.saved');
+    renderVenue();
+    updateDeadlineBadge();
+  } catch (err) {
+    state.venue.msg = t('vn.saveErr', { e: (err && err.message) || String(err) });
+    renderVenue();
+  }
+}
+
+/* 段六：截稿提醒徽标（到期前 7 天，导航钮上带提醒）。 */
+function updateDeadlineBadge() {
+  const btn = $('#npVenue');
+  if (!btn) return;
+  let badge = btn.querySelector('.dl-badge');
+  const data = state.venue.data;
+  const soon = !!(data && (data.due_soon || data.overdue));
+  if (!soon) {
+    if (badge) badge.remove();
+    btn.classList.remove('has-due');
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'dl-badge';
+    btn.appendChild(badge);
+  }
+  badge.textContent = data.overdue ? '!' : String(data.days_left);
+  btn.classList.add('has-due');
+}
+
+/* 首页预览：走现有的渲染 PDF 链路（真渲染，出预览）。 */
+async function renderVenuePreview() {
+  const host = $('#vnPreview');
+  if (!host) return;
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  host.innerHTML = `<div class="vn-prev-note">${esc(t('rp.rerunning'))}</div>`;
+  try {
+    const data = await postAction('pdf');
+    if (!data.ok) {
+      host.innerHTML = `<div class="vn-prev-note err">${esc(data.error || data.message || t('vn.previewErr', { e: '' }))}</div>`;
+      return;
+    }
+  } catch (err) {
+    host.innerHTML = `<div class="vn-prev-note err">${esc(t('vn.previewErr', { e: (err && err.message) || String(err) }))}</div>`;
+    return;
+  }
+  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/pdf?t=${Date.now()}`;
+  host.innerHTML = `<iframe class="vn-prev-frame" title="preview" src="${url}"></iframe>`;
+}
+
+/* ---------------------------------------------------------------- 段六：选刊指南 */
+
+const VENUE_GUIDE_KEYS = [
+  ['guide.h1', 'guide.p1'],
+  ['guide.h2', 'guide.p2'],
+  ['guide.h3', 'guide.p3'],
+  ['guide.h4', 'guide.p4'],
+];
+
+function renderGuide() {
+  const body = $('#guideBody');
+  if (!body) return;
+  const parts = [];
+  VENUE_GUIDE_KEYS.forEach((pair) => {
+    parts.push(`<h3 class="guide-h">${esc(t(pair[0]))}</h3>`);
+    parts.push(`<p class="guide-p">${esc(t(pair[1]))}</p>`);
+  });
+  parts.push(`<p class="guide-foot">${esc(t('guide.foot'))}</p>`);
+  body.innerHTML = parts.join('');
+}
+
+function openVenueGuide() {
+  renderGuide();
+  const modal = $('#modalGuide');
+  if (modal) modal.hidden = false;
+}
+
+function closeVenueGuide() {
+  const modal = $('#modalGuide');
+  if (modal) modal.hidden = true;
 }
 
 /* ---------------------------------------------------------------- 段五：常用功能 */
@@ -2362,6 +3034,9 @@ function bind() {
   $('#npToc').addEventListener('click', () => { switchNavPane('toc'); });
   $('#npReports').addEventListener('click', () => { switchNavPane('reports'); });
   $('#npAi').addEventListener('click', () => { switchNavPane('ai'); });
+  // 段六：知识库（第五钮，排在实验报告之后）＋版式（第六钮）
+  $('#npKb').addEventListener('click', () => { switchNavPane('kb'); });
+  $('#npVenue').addEventListener('click', () => { switchNavPane('venue'); });
   $('#npAiToggle').addEventListener('click', () => {
     setAiOpen(!state.nav.aiOpen);
   });
@@ -2401,6 +3076,12 @@ function bind() {
   });
   $('#aiFab').addEventListener('click', clearAiConversation);
   $('#aiBack').addEventListener('click', () => setAiOpen(false));
+  // 段六：模式切换（聊想法／写论文）
+  $('#aiModes').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-mode]');
+    if (!btn) return;
+    setAiMode(btn.dataset.mode);
+  });
   $('#askReportRead').addEventListener('click', () => {
     switchNavPane('ai');
     aiSend(t('ai.reportQ'), 'explain');
@@ -2408,10 +3089,41 @@ function bind() {
   $('#ptAsk').addEventListener('click', () => {
     const target = paraAskTarget;
     if (!target) return;
-    askAiAbout(target.text, target.section, target.id);
+    askAiAbout(target.text, target.section, target.id, target.file);
   });
+  // 段六：段落 ⋯ 菜单（编辑 ＋ 续写／改写／提问）
+  $('#ptMore').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    openParaMenu();
+  });
+  $('#miEdit').addEventListener('click', () => {
+    const target = paraAskTarget;
+    closeParaMenu();
+    if (!target) return;
+    enterEdit(target.id, target.file || '');
+  });
+  $('#miContinue').addEventListener('click', () => paraAction('continue'));
+  $('#miRewrite').addEventListener('click', () => paraAction('rewrite'));
+  $('#miAsk').addEventListener('click', () => paraAction('ask'));
+  $('#paraMenu').addEventListener('click', (ev) => ev.stopPropagation());
   $('#ptools').addEventListener('mouseenter', () => clearTimeout(paraToolsTimer));
   $('#ptools').addEventListener('mouseleave', hideParaTools);
+  // 段六：知识库上传
+  $('#npKbUploadBtn').addEventListener('click', () => $('#npKbUpload').click());
+  $('#npKbUpload').addEventListener('change', uploadKbFile);
+  // 段六：版式（存配置 ＋ 首页预览 ＋ 选刊指南）
+  $('#vnSave').addEventListener('click', saveVenueConfig);
+  $('#vnPreviewBtn').addEventListener('click', renderVenuePreview);
+  $('#npVenueGuideBtn').addEventListener('click', openVenueGuide);
+  $('#guideClose').addEventListener('click', closeVenueGuide);
+  $('#guideGo').addEventListener('click', () => {
+    closeVenueGuide();
+    switchNavPane('venue');
+    renderVenuePreview();
+  });
+  $('#modalGuide').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalGuide') closeVenueGuide();
+  });
   // 段五：实验报告列表（导航面板里）
   $('#npImportBtn').addEventListener('click', openWizard);
   // 段四：导入向导（选文件 → 字段映射 → 确认绑定）
@@ -2500,7 +3212,10 @@ function bind() {
     if (action && !action.hidden) action.hidden = true;
     const wizard = $('#wizardModal');
     if (wizard && !wizard.hidden) closeWizard();
+    const guide = $('#modalGuide');
+    if (guide && !guide.hidden) closeVenueGuide();
     closeFactCard();
+    closeParaMenu();
   });
   // 段二：编辑态的提交键（Esc / 点外面）
   document.addEventListener('keydown', (ev) => {

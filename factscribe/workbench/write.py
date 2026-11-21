@@ -93,6 +93,9 @@ class Block:
     raw: str
     title: str = ""
     segments: list = field(default_factory=list)
+    #: AI 草稿块的整块区间（含标记行）——删除时用；普通段是 -1。
+    region_start: int = -1
+    region_end: int = -1
 
 
 # ---------------------------------------------------------------- 保护面扫描
@@ -762,7 +765,9 @@ def find_block(disk_root: Path, rel_file: str, block_id: str) -> Block:
         if block["id"] == block_id:
             return Block(file=rel_file, block_id=block_id, kind=block["kind"],
                          start=block["start"], end=block["end"],
-                         raw=block.get("raw", ""), title=block.get("title", ""))
+                         raw=block.get("raw", ""), title=block.get("title", ""),
+                         region_start=int(block.get("region_start", -1)),
+                         region_end=int(block.get("region_end", -1)))
     raise ConfigError("这一段已经不在文件里了（请刷新页面）：%s" % block_id,
                       code="BLOCK_MISSING")
 
@@ -828,6 +833,121 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
     return {"ok": True, "file": rel_file, "block": block_id,
             "before": block.raw, "after": new_raw,
             "backup": result["backup"], "warnings": warnings}
+
+
+# ---------------------------------------------------------------- AI 草稿块
+
+def _escape_draft(text: str) -> str:
+    """AI 草稿进 LaTeX 前的最小转义。
+
+    只转 `%`（它会把后面整行变成注释，破坏文件）——其余原样留着，
+    免得作者在稿子里看到一堆反斜杠。
+    """
+    return str(text or "").replace("%", r"\%")
+
+
+def _next_draft_id(text: str) -> str:
+    """这一段文件里下一个 AI 草稿块的标记 id（`aidraft-N`）。"""
+    from .projects import ai_draft_regions
+
+    used = set()
+    for region in ai_draft_regions(text):
+        used.add(str(region.get("id") or ""))
+    number = 1
+    while ("aidraft-%d" % number) in used:
+        number += 1
+    return "aidraft-%d" % number
+
+
+def _draft_region(marker: str, body: str) -> str:
+    """AI 草稿块在文件里的样子（标记行 ＋ quote 环境 ＋ 标记行）。"""
+    from .projects import AI_DRAFT_BEGIN, AI_DRAFT_END, AI_DRAFT_ENV
+
+    lines = [
+        "%% %s %s" % (AI_DRAFT_BEGIN, marker),
+        "\\begin{%s}" % AI_DRAFT_ENV,
+    ]
+    lines.extend(body.splitlines() or [""])
+    lines.append("\\end{%s}" % AI_DRAFT_ENV)
+    lines.append("%% %s %s" % (AI_DRAFT_END, marker))
+    return "\n".join(lines)
+
+
+def insert_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
+                    text: str) -> dict:
+    """把一段 AI 回复**写进稿**：在该段之后插一个 AI 标记块。
+
+    写进去的样子（.tex）：
+
+    ```
+    % FACTSCRIBE-AI-DRAFT-BEGIN aidraft-1
+    \\begin{quote}
+    …回复正文…
+    \\end{quote}
+    % FACTSCRIBE-AI-DRAFT-END aidraft-1
+    ```
+
+    * 标记行与环境标记属**文件结构**，不进编辑块——作者再编辑这个块时，
+      标记行不会丢；
+    * 内容独立成块，**不混进正文**；
+    * 原子写，落盘前留 `.bak`（与段二同一条写回通道）。
+    """
+    block = find_block(disk_root, rel_file, after_block_id)
+    path = _safe_section_file(disk_root, rel_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
+                          code="SECTION_MISSING")
+    marker = _next_draft_id(source)
+    body = _escape_draft(str(text or "")).strip()
+    if not body:
+        raise ConfigError("回复是空的，没什么可写进稿的。", code="DRAFT_EMPTY")
+    region = _draft_region(marker, body)
+    newline = source.find("\n", block.end)
+    if newline == -1:
+        insert_at = len(source)
+        insertion = "\n\n" + region + "\n"
+    else:
+        insert_at = newline + 1
+        insertion = "\n" + region + "\n"
+    new_text = source[:insert_at] + insertion + source[insert_at:]
+    result = atomic_write(path, new_text)
+    return {"ok": True, "file": rel_file, "after": after_block_id,
+            "marker": marker, "block": "%s-%s" % (Path(rel_file).stem, marker),
+            "draft": body, "backup": result["backup"]}
+
+
+def delete_ai_draft(disk_root: Path, rel_file: str, block_id: str) -> dict:
+    """删掉一个 AI 草稿块（标记行 ＋ 环境 ＋ 正文一起拿掉）。
+
+    只动这个块，别人的正文一个字不碰。删除可逆：`.bak` 留着。
+    """
+    block = find_block(disk_root, rel_file, block_id)
+    if block.kind != "ai_draft":
+        raise ConfigError("这不是 AI 草稿块，删不了：%s" % block_id,
+                          code="DRAFT_NOT_AI")
+    path = _safe_section_file(disk_root, rel_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
+                          code="SECTION_MISSING")
+    start = block.region_start if block.region_start >= 0 else block.start
+    end = block.region_end if block.region_end >= 0 else block.end
+    if not (0 <= start <= end <= len(source)):
+        raise ConfigError("这个 AI 草稿块已经不在文件里了（请刷新页面）：%s"
+                          % block_id, code="BLOCK_MISSING")
+    # 前面那行空行是这块跟正文之间的分隔——一起吃掉，别留两个空行。
+    if start >= 2 and source[start - 2:start] == "\n\n":
+        start -= 1
+    # 连着后面那个换行一起吃掉。
+    while end < len(source) and source[end] == "\n":
+        end += 1
+    new_text = source[:start] + source[end:]
+    result = atomic_write(path, new_text)
+    return {"ok": True, "file": rel_file, "block": block_id,
+            "deleted": block.raw, "backup": result["backup"]}
 
 
 # ---------------------------------------------------------------- 装配

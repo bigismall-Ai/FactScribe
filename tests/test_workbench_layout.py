@@ -403,7 +403,7 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
     def test_save_edit_updates_in_place(self):
         """② 保存只换那一块的 DOM，不整篇 loadDisk。"""
         save = JS[JS.index("async function saveEdit()"):JS.index("async function cancelEdit()")]
-        self.assertIn("replaceBlockNode(editing.id, result.html)", save)
+        self.assertIn("replaceBlockNode(blockId, result.html)", save)
         self.assertNotIn("loadDisk()", save)
 
     def test_cancel_edit_is_local_only(self):
@@ -446,6 +446,94 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
     def test_content_makes_room_for_header_and_bar(self):
         """B③ 正文让出「头部高＋进度条高」。"""
         self.assertIn(".left-col{padding-top:51px}", CSS)
+
+
+class Item37RegressionTests(unittest.TestCase):
+    """条目 37 四案：单击进编辑／写回寻址同源／blur 自动保存／ZZEDIT 全文往返。"""
+
+    def _enter_edit_body(self) -> str:
+        body = JS[JS.index("function enterEdit("):]
+        return body[:body.index("\n}\n")]
+
+    def test_1_single_click_enters_edit_synchronously(self):
+        """案一：单击即进入编辑——编辑器同步挂载，不等模型（老实现的 await 缺口
+        会让「单击＋输入」落空，也会让两次点击互相串台）。"""
+        body = self._enter_edit_body()
+        self.assertIn("function enterEdit(", JS)
+        self.assertNotIn("async function enterEdit(", JS)
+        self.assertNotIn("await ", body)
+        mount = body.index("target.replaceWith(editor);")
+        fetch = body.index("getJSON(")
+        self.assertLess(mount, fetch, "编辑器必须先同步挂载，再去后台取模型")
+        self.assertIn("buildPlainEditor(target)", body)
+        # 单击处理器把节点本身传进去（不再靠 id 反查）
+        self.assertIn("enterEdit(block.id, block.file || '', node);", JS)
+
+    def test_2_save_carries_dom_identity(self):
+        """案二：保存携带的 (file, block-id) 从**正在编辑的 DOM 节点**读回，
+        与渲染闭包同源。"""
+        save = JS[JS.index("async function saveEdit()"):JS.index("/* 条目 36：取消编辑")]
+        self.assertIn("editing.host.dataset.file", save)
+        self.assertIn("editing.host.dataset.blockId", save)
+        self.assertIn("node.dataset.blockId = block.id;", JS)
+        self.assertIn("node.dataset.file = block.file || '';", JS)
+        # 不许再拿异步模型里的 file 当权威
+        self.assertNotIn("file: file || model.file", JS)
+
+    def test_3_blur_auto_saves(self):
+        """案三：blur 自动保存 ＋ 可见的「已保存」反馈。"""
+        body = self._enter_edit_body()
+        self.assertIn("addEventListener('blur'", body)
+        blur = body[body.index("addEventListener('blur'"):]
+        self.assertIn("saveEdit()", blur[:400])
+        self.assertIn("editor.contains(document.activeElement)", blur[:400])
+        self.assertIn("function showSavedBadge(", JS)
+        self.assertIn("setTimeout(() => { if (badge.parentNode) badge.remove(); }, 1500);", JS)
+        self.assertIn("'edit.savedBadge': '已保存',", JS)
+        self.assertIn("'edit.savedBadge': 'Saved',", JS)
+
+    def test_4_zzedit_round_trip_restores_bytes(self):
+        """案四：ZZEDIT 全文往返（写入→读回→删除→字节还原），跑在真项目样例上。
+
+        样例＝examples/minimal 的真实项目副本；另起一节纯文本段落当受试块
+        （编辑器走的是纯文本，LaTeX 命令不在可编辑面内）。
+        """
+        import shutil
+        import tempfile
+
+        from factscribe.workbench.projects import render_tex
+        from factscribe.workbench.write import save_block
+
+        src = ROOT / "examples" / "minimal"
+        self.assertTrue(src.is_dir(), "真项目样例不在：examples/minimal")
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = Path(tmp) / "paper"
+            shutil.copytree(src, disk)
+            rel = "sections/03-zzedit.tex"
+            target = disk / rel
+            target.write_text("\\section{Round Trip Probe}\n\nZZPLAIN body text here.\n",
+                              encoding="utf-8")
+            original = target.read_bytes()
+            text = target.read_text(encoding="utf-8")
+            blocks = [b for b in render_tex(text, stem="03-zzedit") if b["kind"] == "para"]
+            self.assertTrue(blocks, "样例段落没渲染出来")
+            block = blocks[0]
+            body = block["raw"].strip()
+
+            # ① 写入：ZZEDIT 真进文件
+            result = save_block(disk, rel, block["id"], body + " ZZEDIT")
+            self.assertTrue(result.get("ok"), "写入失败：%s" % result)
+            after = target.read_text(encoding="utf-8")
+            self.assertIn("ZZEDIT", after, "编辑没写进文件")
+
+            # ② 读回：重新渲染这一块，能看到 ZZEDIT
+            blocks2 = render_tex(after, stem="03-zzedit")
+            self.assertTrue(any("ZZEDIT" in b["raw"] for b in blocks2), "读回看不到 ZZEDIT")
+
+            # ③ 删除 ④ 字节还原：写回原文，文件回到逐字节相同
+            save_block(disk, rel, block["id"], body)
+            self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
+            self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后字节没还原")
 
 
 if __name__ == "__main__":

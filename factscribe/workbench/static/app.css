@@ -1264,8 +1264,7 @@ body{padding-top:0}
 .lh-tools[hidden]{display:none}
 .lh-tools .lang-seg{margin-left:0;flex:0 0 auto;height:26px}
 .lh-tools .lang-seg button{min-width:34px;padding:0 8px;line-height:22px;height:22px;font-size:12px}
-/* 单语言项目：中/EN 切换整组隐藏（hidden 属性要压得住 display:flex） */
-.lang-seg[hidden]{display:none}
+/* 条目 41：中/EN 切换常显——它同时是界面语言开关，单语言项目不再整组隐藏 */
 .lh-tool{display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-size:12px;line-height:1.2;
  color:#5f5e5b;background:#fff;border:1px solid #e3e2df;border-radius:7px;padding:5px 9px;cursor:pointer;
  white-space:nowrap}
@@ -1316,15 +1315,24 @@ body.nav-collapsed .nav-open{display:flex}
 .np-ai-face .msg .bub{font-size:12.5px;line-height:1.7;padding:8px 10px}
 .np-ai-face .ai-quick{padding:8px 0 0}
 .np-ai-face .aq{font-size:11px;padding:4px 9px}
-.np-ai-face .ai-input{padding:10px 0 0;margin-top:10px;border-top:1px solid #ececeb;
- align-items:flex-end;gap:6px}
-.np-ai-face .ai-input textarea{flex:1 1 auto;min-width:0;min-height:66px;resize:vertical;font-family:inherit;
- font-size:12.5px;line-height:1.6;padding:7px 9px;border:1px solid #ddd8c6;border-radius:8px;
+.np-ai-face .ai-input{padding:10px 0 0;margin-top:10px;border-top:1px solid #ececeb}
+/* 条目 42：发送钮内嵌输入框——.ai-box 相对定位，发送钮绝对定位嵌进右下角；
+   textarea 底部留出按钮高度的空间不压字 */
+.np-ai-face .ai-box{position:relative;flex:1 1 auto;min-width:0}
+.np-ai-face .ai-input textarea{display:block;width:100%;min-height:66px;resize:vertical;font-family:inherit;
+ font-size:12.5px;line-height:1.6;padding:7px 9px 36px;border:1px solid #ddd8c6;border-radius:8px;
  background:#fff;color:#1c1e22}
 .np-ai-face .ai-input textarea:focus{outline:none;border-color:#b6b0a0}
-.np-ai-face .ai-input button{flex:0 0 auto;font-family:inherit;font-size:12px;padding:7px 12px;border-radius:8px;
+.np-ai-face .ai-input button{position:absolute;right:6px;bottom:6px;font-family:inherit;font-size:12px;
+ padding:5px 12px;border-radius:8px;
  border:1px solid #b6d8c4;background:#f2faf5;color:#1c6b4c;cursor:pointer;font-weight:600}
 .np-ai-face .ai-input button:hover{background:#e2f3e9}
+/* 条目 42：模型选择行（输入框上方一行：label＋select） */
+.np-ai-face .ai-modelrow{display:flex;align-items:center;gap:6px;margin-top:10px}
+.np-ai-face .ai-modelrow label{flex:0 0 auto;font-size:11px;color:#5f5e5b}
+.np-ai-face .ai-modelrow select{flex:1 1 auto;min-width:0;font-family:inherit;font-size:11.5px;color:#1c1e22;
+ background:#fff;border:1px solid #ddd8c6;border-radius:7px;padding:4px 6px}
+.np-ai-face .ai-modelrow select:focus{outline:none;border-color:#b6b0a0}
 
 @media (max-width:900px){
  #paneAi.on{height:auto}

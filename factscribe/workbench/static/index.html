@@ -22,7 +22,7 @@
       </div>
       <!-- 条目 33：常用功能组从侧栏搬到左栏头部；仅 workbench 视图渲染（列表视图不渲染） -->
       <div class="lh-tools" id="lhTools" hidden>
-        <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
+        <div class="lang-seg" id="langSeg" role="group" aria-label="panel language">
           <button type="button" data-lang="zh" class="on">中</button>
           <button type="button" data-lang="en">EN</button>
         </div>
@@ -200,9 +200,17 @@
             <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
             <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
           </div>
+          <!-- 条目 42：模型选择行（label＋select，清单由 JS 按当前盘拉取） -->
+          <div class="ai-modelrow">
+            <label for="aiModel" data-i18n="ai.model">模型</label>
+            <select id="aiModel" autocomplete="off" aria-label="model"></select>
+          </div>
+          <!-- 条目 42：发送钮内嵌输入框（.ai-box 相对定位，发送钮绝对定位在右下角） -->
           <div class="ai-input">
-            <textarea id="aiText" rows="3" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off"></textarea>
-            <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
+            <div class="ai-box">
+              <textarea id="aiText" rows="3" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off"></textarea>
+              <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
+            </div>
           </div>
         </div>
       </section>

@@ -23,6 +23,7 @@
   POST /api/project/update                        改项目（标题等）
   POST /api/project/opened                        记「最近打开」
   POST /api/chat                                  AI 对话（OpenAI 兼容后端；不可达→降级）
+  GET  /api/ai/models?project=&disk=              可选模型清单（[ai].models；缺省模型保证在列）
   GET  /api/project/<p>/reports                   报告页的卡（含导入草稿）
   GET  /api/project/<p>/reports/dir               列实验报告目录下的真实文件
   POST /api/project/<p>/reports/upload            上传报告文件进该目录（multipart）
@@ -203,6 +204,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             projects = self.index.projects(refresh=refresh)
             return self._json({"ok": True, "root": str(self.index.root),
                                "count": len(projects), "projects": projects})
+        if route == "/api/ai/models":
+            return self._ai_models_get(query)
         if route.startswith("/api/project/"):
             parts = [part for part in route.split("/") if part]
             # /api/project/<project>/reports[/<what>]
@@ -561,10 +564,33 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             quote = None
         mode = str(body.get("mode") or "ask")
         action = str(body.get("action") or "ask")
-        result = chat(disk, messages, quote=quote, mode=mode, action=action)
+        # 条目 42：可选 model 字段透传给 chat()（给了非空串就覆盖配置模型）。
+        model = str(body.get("model") or "").strip()
+        result = chat(disk, messages, quote=quote, mode=mode, action=action,
+                      model=model or None)
         result.update({"project": project_id, "disk": disk_id})
         # 降级也是 200：前端要拿 reply 渲染，并靠 fallback 分辨真假。
         return self._json(result, code=200)
+
+    def _ai_models_get(self, query: str) -> None:
+        """条目 42：`GET /api/ai/models?project=<id>&disk=<id>`。
+
+        这个盘可选的模型清单（`workbench.toml` 的 `[ai].models`，
+        缺省模型保证在列）＋ 缺省模型名。
+        """
+        from urllib.parse import parse_qs
+
+        from .ai import ai_config, available_models
+
+        params = parse_qs(query or "")
+        project_id = (params.get("project") or [""])[0]
+        disk_id = (params.get("disk") or [""])[0]
+        disk = self.index.disk_path(project_id, disk_id)
+        if disk is None:
+            return self._error(404, "没有这个盘：%s/%s" % (project_id, disk_id))
+        return self._json({"ok": True, "project": project_id, "disk": disk_id,
+                           "models": available_models(disk),
+                           "model": ai_config(disk)["model"]})
 
     # ---- 段四：实验报告导入 ----
 

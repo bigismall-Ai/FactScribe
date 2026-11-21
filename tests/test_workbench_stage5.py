@@ -5,8 +5,8 @@
 
 1. **摘要可编辑**：封面摘要（main.tex 的 ``abstract`` 环境）纳入就地编辑；
    保存走段二同一保护通道——``\\fact{}`` 芯片原样保留、原子写、留 ``.bak``。
-2. **单语言隐藏逻辑（服务端可测部分）**：项目只有一个盘时
-   ``multi_lang`` 为假（前端据此把中/EN 切换整组隐藏）；双盘项目为真。
+2. **单语言标记（服务端可测部分）**：项目只有一个盘时
+   ``multi_lang`` 为假；双盘项目为真。（条目 41 起前端不再据此隐藏中/EN 切换。）
 3. **PDF 渲染端点结构**：``POST /api/disk/<p>/<d>/action`` 认 ``pdf``；
    ``GET /api/disk/<p>/<d>/pdf`` 回传 PDF 字节；没编译过就是 404。
 4. **报告删除**：删导入记录只动草稿，报告源文件不动。
@@ -381,7 +381,7 @@ class AbstractWriteBackTests(unittest.TestCase):
 
 
 class SingleLanguageFlagTests(unittest.TestCase):
-    """单语言项目（只有一个盘）→ 中/EN 切换整组隐藏：服务端给 multi_lang。"""
+    """单语言项目（只有一个盘）→ 服务端给 multi_lang 假（条目 41 起前端不再隐藏切换）。"""
 
     def test_single_disk_project_is_not_multi_lang(self):
         with tempfile.TemporaryDirectory() as tmp:

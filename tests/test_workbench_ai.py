@@ -11,10 +11,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import tempfile
 import threading
 import unittest
+import unittest.mock
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -214,6 +216,104 @@ class TestAIAdapter(unittest.TestCase):
         self.assertIn("当前稿件正文", context)
 
 
+class TestChatModelOverride(unittest.TestCase):
+    """条目 42：`chat(model=...)` 覆盖与回报口径。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.project = _sample_copy(self.tmp)
+        self.backend = _FakeBackend()
+        self.base_url = self.backend.start()
+        self.addCleanup(self.backend.stop)
+        self.addCleanup(self._tmp.cleanup)
+        (self.project / "workbench.toml").write_text(
+            '[ai]\nbase_url = "%s"\nmodel = "cfg-model"\n' % self.base_url,
+            encoding="utf-8")
+
+    def test_model_override_reaches_the_backend(self):
+        """给了非空 model → 覆盖配置模型去调用。"""
+        result = ai.chat(self.project, [{"role": "user", "content": "在？"}],
+                         model="override-model")
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.backend.requests[0]["model"], "override-model")
+        # 返回体的 model 一律回报**实际用的**模型。
+        self.assertEqual(result["model"], "override-model")
+
+    def test_empty_or_none_model_falls_back_to_config(self):
+        """model 给了空串 / None → 用配置里的模型。"""
+        for value in (None, "", "   "):
+            result = ai.chat(self.project, [{"role": "user", "content": "在？"}],
+                             model=value)
+            self.assertEqual(self.backend.requests[-1]["model"], "cfg-model")
+            self.assertEqual(result["model"], "cfg-model")
+
+    def test_fallback_reply_reports_the_override_model(self):
+        """后端不可达时也回报实际用的（覆盖后的）模型。"""
+        self.backend.stop()
+        result = ai.chat(self.project, [{"role": "user", "content": "在？"}],
+                         model="override-model")
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["fallback"])
+        self.assertEqual(result["model"], "override-model")
+
+
+class TestAvailableModels(unittest.TestCase):
+    """条目 42：`available_models`——`[ai].models` 清单 ＋ 缺省模型保位。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.project = _sample_copy(self.tmp)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _write(self, body: str, where: Path | None = None) -> None:
+        (where or self.project / "workbench.toml").write_text(
+            "[ai]\n" + body, encoding="utf-8")
+
+    def _no_env(self):
+        """把三个环境变量摘掉，免得机器上临时配置串台。"""
+        return unittest.mock.patch.dict(
+            os.environ,
+            {k: "" for k in ("FACTSCRIBE_AI_BASE_URL", "FACTSCRIBE_AI_MODEL",
+                             "FACTSCRIBE_AI_API_KEY")})
+
+    def test_no_config_yields_only_the_default_model(self):
+        """读不到 / 没有 models → 只返回 [缺省模型]。"""
+        with self._no_env():
+            self.assertEqual(ai.available_models(self.project),
+                             [ai.DEFAULT_MODEL])
+        self.assertEqual(ai.available_models(self.project), ["qwen"])
+
+    def test_models_list_gets_default_prepended(self):
+        """缺省模型不在清单里 → 补在最前。"""
+        self._write('models = ["m-one", "m-two"]\n')
+        with self._no_env():
+            self.assertEqual(ai.available_models(self.project),
+                             [ai.DEFAULT_MODEL, "m-one", "m-two"])
+
+    def test_models_list_keeps_order_and_dedupes(self):
+        """缺省模型已在清单 → 顺序不动；去重、滤空串。"""
+        self._write('model = "main"\nmodels = ["m-one", "main", "", "m-two", "m-one"]\n')
+        with self._no_env():
+            self.assertEqual(ai.available_models(self.project),
+                             ["m-one", "main", "m-two"])
+
+    def test_models_missing_but_model_set_uses_that_model(self):
+        """只有 model 没有 models → [model]。"""
+        self._write('model = "solo"\n')
+        with self._no_env():
+            self.assertEqual(ai.available_models(self.project), ["solo"])
+
+    def test_parent_config_is_found(self):
+        """配置在项目目录（盘的上一级）也认——读法与 ai_config 同源。"""
+        self._write('model = "from-parent"\nmodels = ["a"]\n',
+                    where=self.tmp / "workbench.toml")
+        with self._no_env():
+            self.assertEqual(ai.available_models(self.project),
+                             ["from-parent", "a"])
+
+
 class TestChatEndpoint(unittest.TestCase):
     """`POST /api/chat` 端点（真 HTTP）。"""
 
@@ -281,6 +381,80 @@ class TestChatEndpoint(unittest.TestCase):
             self.assertFalse(body["ok"])
             return
         self.fail("应当 400")
+
+    def test_endpoint_passes_model_through(self):
+        """条目 42：请求体带可选 model → 透传给 chat()。后端不可达走降级，
+        降级体里的 model 也必须是请求里那个（实际用的）。"""
+        (self.project / "workbench.toml").write_text(
+            '[ai]\nbase_url = "http://127.0.0.1:9/v1"\nmodel = "cfg-model"\n',
+            encoding="utf-8")
+        data = self._post({"project": self.project_id, "disk": self.disk_id,
+                           "messages": [{"role": "user", "content": "在？"}],
+                           "model": "custom-m"})
+        self.assertFalse(data["ok"])
+        self.assertTrue(data["fallback"])
+        self.assertEqual(data["model"], "custom-m")
+        # 不带 model 字段 → 用配置缺省。
+        data = self._post({"project": self.project_id, "disk": self.disk_id,
+                           "messages": [{"role": "user", "content": "在？"}]})
+        self.assertEqual(data["model"], "cfg-model")
+
+
+class TestModelsEndpoint(unittest.TestCase):
+    """条目 42：`GET /api/ai/models?project=<id>&disk=<id>`。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.project = _sample_copy(self.tmp)
+        self.server, self.index = create_server(self.tmp)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       daemon=True)
+        self.thread.start()
+        self.addCleanup(self.server.shutdown)
+        self.addCleanup(self._tmp.cleanup)
+        project = self.index.projects()[0]
+        self.project_id = project["id"]
+        self.disk_id = project["disks"][0]["id"]
+
+    def _get(self, query: str) -> dict:
+        url = "http://127.0.0.1:%d/api/ai/models%s" % (self.port, query)
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def test_models_endpoint_defaults(self):
+        """没有 models 配置 → models 只有缺省模型，model 字段报缺省。"""
+        data = self._get("?project=%s&disk=%s" % (self.project_id, self.disk_id))
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["project"], self.project_id)
+        self.assertEqual(data["disk"], self.disk_id)
+        self.assertEqual(data["models"], [ai.DEFAULT_MODEL])
+        self.assertEqual(data["model"], ai.DEFAULT_MODEL)
+
+    def test_models_endpoint_reflects_config(self):
+        """`[ai].models` 清单回传，缺省模型补在最前。"""
+        (self.project / "workbench.toml").write_text(
+            '[ai]\nmodel = "main"\nmodels = ["m-one", "m-two"]\n',
+            encoding="utf-8")
+        data = self._get("?project=%s&disk=%s" % (self.project_id, self.disk_id))
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["model"], "main")
+        self.assertEqual(data["models"], ["main", "m-one", "m-two"])
+
+    def test_models_endpoint_unknown_disk_is_404(self):
+        """盘不存在 → 结构化 404。"""
+        request = urllib.request.Request(
+            "http://127.0.0.1:%d/api/ai/models?project=%s&disk=nope"
+            % (self.port, self.project_id))
+        try:
+            urllib.request.urlopen(request, timeout=10)
+        except urllib.error.HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            body = json.loads(exc.read().decode("utf-8"))
+            self.assertFalse(body["ok"])
+            return
+        self.fail("应当 404")
 
 
 if __name__ == "__main__":

@@ -118,11 +118,13 @@ class LeftHeadToolsTests(unittest.TestCase):
         self.assertIn("tools.hidden = (view !== 'workbench');", JS)
         self.assertIn(".lh-tools[hidden]{display:none}", CSS)
 
-    def test_single_language_hides_only_the_lang_toggle(self):
-        """单语项目隐藏中/EN，其余四钮照旧（条目 24 口径）。"""
-        self.assertIn("seg.hidden = !multi;", JS)
-        self.assertNotIn("const head = $('#npHead');", JS)
-        self.assertIn(".lang-seg[hidden]{display:none}", CSS)
+    def test_lang_toggle_is_always_visible(self):
+        """条目 41：中/EN 切换常显——它同时是界面语言开关，
+        单语言项目不许整组隐藏；整组仍只随 #lhTools 在 workbench 视图渲染。"""
+        self.assertNotIn("seg.hidden", JS)
+        self.assertNotIn(".lang-seg[hidden]", CSS)
+        self.assertNotIn('id="langSeg" role="group" aria-label="panel language" hidden', HTML)
+        self.assertIn("tools.hidden = (view !== 'workbench');", JS)
 
 
 class RightColumnTests(unittest.TestCase):
@@ -774,6 +776,84 @@ class PaneHeaderContrastTests(unittest.TestCase):
     def test_5_decorative_who_is_untouched(self):
         """案五：AI 层 ``.who`` 发送者标是装饰，保持原浅色。"""
         self.assertIn("#a49e8d", self._rule(".msg .who"))
+
+
+class Item41LangToggleAlwaysVisibleTests(unittest.TestCase):
+    """条目 41（返修十五）：中/EN 切换常显——它同时是界面语言开关。
+
+    用户裁定：单语言项目藏掉它之后界面语言就没法切了，所以不许再隐藏。
+    """
+
+    def test_apply_lang_toggle_never_hides(self):
+        self.assertIn("function applyLangToggle()", JS)
+        self.assertNotIn("seg.hidden", JS)
+        self.assertNotIn("multi_lang", JS)
+
+    def test_seg_starts_visible_and_css_hide_rule_is_gone(self):
+        self.assertIn('<div class="lang-seg" id="langSeg" role="group" aria-label="panel language">', HTML)
+        self.assertNotIn(".lang-seg[hidden]", CSS)
+
+    def test_lang_click_switches_ui_language_first(self):
+        """界面语言永远切；workbench 下有对应盘才切盘，没有就留在当前盘。"""
+        block = JS[JS.index("$('#langSeg').addEventListener('click'"):]
+        block = block[:block.index("});")]
+        self.assertIn("state.lang = lang;", block)
+        self.assertIn("applyI18n();", block)
+        self.assertNotIn("toast(t('lang.none'))", block)
+        self.assertIn("if (disk) openProject(state.project.id, disk.id);", block)
+
+
+class Item42AiPanelTests(unittest.TestCase):
+    """条目 42：发送钮内嵌输入框 ＋ 模型选择（前后端联动）。"""
+
+    def test_send_button_embedded_in_a_relative_box(self):
+        """textarea＋发送钮被 .ai-box（position:relative）包住；按钮绝对定位右下角。"""
+        pane = _slice('<section class="np-pane" id="paneAi">', '<section class="np-pane" id="paneMore">')
+        start = pane.index('<div class="ai-box">')
+        box = pane[start:pane.index('id="aiSend"', start)]
+        self.assertIn('<textarea id="aiText" rows="3"', box)
+        self.assertIn('id="aiSend"', pane)
+        self.assertIn(".np-ai-face .ai-box{position:relative", CSS)
+        button_css = CSS[CSS.index(".np-ai-face .ai-input button{"):]
+        button_css = button_css[:button_css.index("}")]
+        self.assertIn("position:absolute", button_css)
+        self.assertIn("bottom:6px", button_css)
+        # textarea 底部留出按钮高度的空间不压字。
+        textarea_css = CSS[CSS.index(".np-ai-face .ai-input textarea{"):]
+        textarea_css = textarea_css[:textarea_css.index("}")]
+        self.assertIn("padding:7px 9px 36px", textarea_css)
+
+    def test_model_row_sits_above_the_input(self):
+        """输入框上方一行紧凑模型选择行（label＋select，label 走 i18n）。"""
+        pane = _slice('<section class="np-pane" id="paneAi">', '<section class="np-pane" id="paneMore">')
+        self.assertLess(pane.index('class="ai-modelrow"'), pane.index('<div class="ai-box">'))
+        self.assertIn('data-i18n="ai.model"', pane)
+        self.assertIn('id="aiModel"', pane)
+        self.assertIn(".np-ai-face .ai-modelrow{", CSS)
+
+    def test_model_state_fetch_and_payload(self):
+        """state.ai 带 model/models；智能助手面打开拉一次清单；payload 带选中模型。"""
+        self.assertIn("model: '', models: [], modelsKey: ''", JS)
+        face = JS[JS.index("function renderAiFace()"):]
+        face = face[:face.index("function renderAiModelSelect()")]
+        self.assertIn("refreshAiModels();", face)
+        body = JS[JS.index("async function refreshAiModels()"):]
+        body = body[:body.index("function renderAiModelSelect()")]
+        self.assertIn("'/api/ai/models?project='", body)
+        self.assertIn("state.ai.modelsKey === key", body)
+        send = JS[JS.index("async function aiSend("):JS.index("/* 段六：复制回复")]
+        self.assertIn("payload.model = useModel;", send)
+        self.assertIn("$('#aiModel').addEventListener('change'", JS)
+
+    def test_backend_model_override_and_models_route_exist(self):
+        """后端：chat 认 model 覆盖；available_models 在；服务器路由挂上。"""
+        source = (ROOT / "factscribe" / "workbench" / "ai.py").read_text(encoding="utf-8")
+        self.assertIn("def available_models(disk_path", source)
+        self.assertIn('chosen = str(model or "").strip()', source)
+        server = (ROOT / "factscribe" / "workbench" / "server.py").read_text(encoding="utf-8")
+        self.assertIn('route == "/api/ai/models"', server)
+        self.assertIn("def _ai_models_get(self, query", server)
+        self.assertIn("model=model or None", server)
 
 
 if __name__ == "__main__":

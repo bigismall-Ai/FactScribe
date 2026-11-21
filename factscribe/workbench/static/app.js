@@ -80,6 +80,7 @@ const I18N = {
     'ai.clear': '清空',
     'ai.note': 'AI 对话接的是真后端（/api/chat）。模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
     'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
+    'ai.model': '模型',
     'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
     'ai.ctxHead': '当前段落 · {sec}', 'ai.ctxHeadNone': '当前段落',
     'ai.fbChip': '模拟', 'ai.fbNote': '未接模型{d}',
@@ -328,6 +329,7 @@ const I18N = {
     'ai.clear': 'Clear',
     'ai.note': 'AI chat talks to the real backend (/api/chat). When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
     'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
+    'ai.model': 'Model',
     'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
     'ai.ctxHead': 'Current paragraph · {sec}', 'ai.ctxHeadNone': 'Current paragraph',
     'ai.fbChip': 'Mock', 'ai.fbNote': 'model not connected{d}',
@@ -544,7 +546,8 @@ const state = {
   machineError: '',
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
-  ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper' },  // 段四：AI 对话（真后端）；段六：两档模式
+  ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper',
+        model: '', models: [], modelsKey: '' },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）
   reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
@@ -2155,6 +2158,9 @@ async function aiSend(question, mode, action) {
     mode: useMode,
     action: useAction,
   };
+  // 条目 42：选了模型就带上（后端给了非空串才覆盖配置缺省）。
+  const useModel = String(state.ai.model || '').trim();
+  if (useModel) payload.model = useModel;
   try {
     const data = await postChat(payload);
     if (seq !== state.ai.seq) return;      // 期间清空过：这次回复作废
@@ -2809,14 +2815,12 @@ function setView(view) {
   applyLangToggle();
 }
 
-/* 段五返修七（条目 33）：中/EN 切换搬到左栏头部。
-   单语言项目（只有一个盘）→ 整组隐藏；双盘项目 → 照常切盘。 */
+/* 条目 41（返修十五）：中/EN 切换常显——它同时是界面语言开关，
+   单语言项目藏掉它之后界面语言就没法切了，所以不再整组隐藏。
+   #lhTools 本身只在 workbench 视图渲染，这个语义保留。 */
 function applyLangToggle() {
   const seg = $('#langSeg');
   if (!seg) return;
-  const project = state.project;
-  const multi = project ? (project.multi_lang !== false && (project.disks || []).length > 1) : true;
-  seg.hidden = !multi;
   $$('#langSeg button').forEach((btn) => {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });
@@ -2843,9 +2847,56 @@ function switchNavPane(name) {
   }
 }
 
-/* 面板里的智能助手面：条目 34 起助手就在侧栏面板里，这里只刷引用上下文。 */
+/* 面板里的智能助手面：条目 34 起助手就在侧栏面板里，这里只刷引用上下文。
+   条目 42：顺带把模型下拉按当前 project+disk 刷一遍（同一组只拉一次）。 */
 function renderAiFace() {
   renderAiCtx();
+  refreshAiModels();
+}
+
+/* 条目 42：模型选择——拉 /api/ai/models 填下拉；同一 project+disk 只拉一次，
+   已选模型不在列表里就回退缺省。拉不到就保持现状，不瞎填。 */
+async function refreshAiModels() {
+  if (!state.project) return;
+  const key = state.project.id + '/' + (state.disk || '');
+  if (state.ai.modelsKey === key && (state.ai.models || []).length) {
+    renderAiModelSelect();
+    return;
+  }
+  let data = null;
+  try {
+    data = await getJSON('/api/ai/models?project=' + encodeURIComponent(state.project.id)
+      + '&disk=' + encodeURIComponent(state.disk || ''));
+  } catch (err) {
+    return;
+  }
+  const models = (data && Array.isArray(data.models))
+    ? data.models.map((m) => String(m || '').trim()).filter(Boolean) : [];
+  if (!models.length) return;
+  state.ai.models = models;
+  state.ai.modelsKey = key;
+  const fallback = data && data.model ? String(data.model) : models[0];
+  if (!state.ai.model || !models.includes(state.ai.model)) state.ai.model = fallback;
+  renderAiModelSelect();
+}
+
+function renderAiModelSelect() {
+  const sel = $('#aiModel');
+  if (!sel) return;
+  sel.innerHTML = '';
+  (state.ai.models || []).forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  if (!state.ai.models.length) return;
+  if (state.ai.model && state.ai.models.includes(state.ai.model)) {
+    sel.value = state.ai.model;
+  } else {
+    state.ai.model = state.ai.models[0];
+    sel.value = state.ai.model;
+  }
 }
 
 /* 条目 34：半透明浮层整条拆除——助手＝侧栏里的一枚互斥面板钮。 */
@@ -3363,16 +3414,15 @@ function bind() {
     const btn = ev.target.closest('button[data-lang]');
     if (!btn) return;
     const lang = btn.dataset.lang;
-    if (state.project && document.body.getAttribute('data-view') === 'workbench') {
-      const disk = state.project.disks.find((d) => d.lang === lang);
-      if (!disk) { toast(t('lang.none')); return; }
-      state.lang = lang;
-      applyI18n();
-      openProject(state.project.id, disk.id);
-      return;
-    }
+    // 条目 41：界面语言永远切；workbench 下有对应盘就照旧切盘，
+    // 没有对应盘就停留在当前盘只切界面语言（不再 toast 硬 return）。
     state.lang = lang;
     applyI18n();
+    if (state.project && document.body.getAttribute('data-view') === 'workbench') {
+      const disk = state.project.disks.find((d) => d.lang === lang);
+      if (disk) openProject(state.project.id, disk.id);
+      return;
+    }
     renderProjects();
   });
   // 段五返修七（条目 33）：右栏工具条＝纯图标收起钮 ＋ 三枚切换钮（互斥）
@@ -3403,6 +3453,10 @@ function bind() {
   // 段五：证据卡
   $('#fcClose').addEventListener('click', closeFactCard);
   // 段四：AI 对话（真后端；浮层）
+  // 条目 42：模型下拉——选中记进 state，下一轮提问带上。
+  $('#aiModel').addEventListener('change', (ev) => {
+    state.ai.model = String(ev.target.value || '').trim();
+  });
   $('#aiSend').addEventListener('click', () => {
     const input = $('#aiText');
     const text = input ? input.value.trim() : '';

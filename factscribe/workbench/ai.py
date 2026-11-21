@@ -6,7 +6,8 @@
 规矩（段四硬约束）：
   * 不引新依赖——只用 `urllib`＋标准库；
   * 后端地址与模型可配：项目级 `workbench.toml` 的 `[ai]` 节
-    （`base_url` / `model` / `api_key`，`api_key` 可选）；
+    （`base_url` / `model` / `api_key`，`api_key` 可选；
+    条目 42 起另认 `models`——可选模型清单，供界面下拉）；
   * 缺省 `base_url=http://127.0.0.1:8220/v1`（本机 Q 席 vLLM）、`model=qwen`；
   * 后端不可达 / 超时（限时 60s）→ 结构化降级：`ok=False, fallback=True`，
     模拟回复的**首行必须**是 `模拟回答（未接模型）`——绝不静默造假。
@@ -317,7 +318,8 @@ def _last_question(messages: list[dict]) -> str:
 
 def chat(disk_path: str | Path, messages: list[dict],
          quote: dict | None = None, mode: str = "ask",
-         action: str = "ask", timeout: float = TIMEOUT) -> dict:
+         action: str = "ask", timeout: float = TIMEOUT,
+         model: str | None = None) -> dict:
     """工作台的 AI 入口。
 
     返回结构**恒定**：
@@ -328,8 +330,13 @@ def chat(disk_path: str | Path, messages: list[dict],
 
     `mode` 决定大方向（`idea` 聊想法 / `paper` 写论文 / `explain` 解读报告）；
     `action` 决定这一轮干什么（`continue` 续写 / `rewrite` 改写 / `ask` 提问）。
+    条目 42：`model` 给了非空串就覆盖配置里的模型去调用；返回体的
+    `model` 字段一律回报**实际用的**模型。
     """
     config = ai_config(disk_path)
+    chosen = str(model or "").strip()
+    if chosen:
+        config["model"] = chosen
     history = [m for m in (messages or [])
                if isinstance(m, dict) and m.get("role")
                and isinstance(m.get("content"), str)]
@@ -364,3 +371,29 @@ def chat(disk_path: str | Path, messages: list[dict],
         "code": "", "error": "",
         "mode": str(mode or "ask"), "action": str(action or "ask"),
     }
+
+
+def available_models(disk_path: str | Path) -> list[str]:
+    """条目 42：这个盘可选的模型清单（`workbench.toml` 的 `[ai].models`）。
+
+    读法沿用 `_read_ai_table`（盘目录 → 项目目录，先找到先用）；
+    缺省模型（`ai_config` 的 `model` 结果）保证在列——不在就补在最前；
+    去重、滤空串；读不到 / 没有 `models` → 只返回 `[缺省模型]`。
+    """
+    default = str(ai_config(disk_path).get("model") or "").strip()
+    disk = Path(disk_path).expanduser()
+    raw: list = []
+    for candidate in (disk, disk.parent):
+        table = _read_ai_table(candidate / CONFIG_NAME)
+        if table:
+            value = table.get("models")
+            raw = value if isinstance(value, list) else []
+            break
+    models: list[str] = []
+    for item in raw:
+        name = str(item or "").strip()
+        if name and name not in models:
+            models.append(name)
+    if default and default not in models:
+        models.insert(0, default)
+    return models if models else ([default] if default else [])

@@ -419,7 +419,7 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
         """前端保存进入编辑时的原文副本。"""
         self.assertIn("orig: target", JS)
         self.assertIn("function restoreEditedNode(", JS)
-        self.assertIn("editing.host.replaceWith(editing.orig);", JS)
+        self.assertIn("host.replaceWith(editing.orig);", JS)
 
     def test_draft_insert_delete_in_place(self):
         self.assertIn("insertBlockAfter(data.after, data.block, data.html)", JS)
@@ -463,7 +463,7 @@ class Item37RegressionTests(unittest.TestCase):
         self.assertNotIn("async function enterEdit(", JS)
         self.assertNotIn("await ", body)
         mount = body.index("target.replaceWith(editor);")
-        fetch = body.index("getJSON(")
+        fetch = body.index("fetchBlockModel(")
         self.assertLess(mount, fetch, "编辑器必须先同步挂载，再去后台取模型")
         self.assertIn("buildPlainEditor(target)", body)
         # 单击处理器把节点本身传进去（不再靠 id 反查）
@@ -473,8 +473,8 @@ class Item37RegressionTests(unittest.TestCase):
         """案二：保存携带的 (file, block-id) 从**正在编辑的 DOM 节点**读回，
         与渲染闭包同源。"""
         save = JS[JS.index("async function saveEdit()"):JS.index("/* 条目 36：取消编辑")]
-        self.assertIn("editing.host.dataset.file", save)
-        self.assertIn("editing.host.dataset.blockId", save)
+        self.assertIn("host.dataset.file", save)
+        self.assertIn("host.dataset.blockId", save)
         self.assertIn("node.dataset.blockId = block.id;", JS)
         self.assertIn("node.dataset.file = block.file || '';", JS)
         # 不许再拿异步模型里的 file 当权威
@@ -486,7 +486,7 @@ class Item37RegressionTests(unittest.TestCase):
         self.assertIn("addEventListener('blur'", body)
         blur = body[body.index("addEventListener('blur'"):]
         self.assertIn("saveEdit()", blur[:400])
-        self.assertIn("editor.contains(document.activeElement)", blur[:400])
+        self.assertIn("live.contains(document.activeElement)", blur[:400])
         self.assertIn("function showSavedBadge(", JS)
         self.assertIn("setTimeout(() => { if (badge.parentNode) badge.remove(); }, 1500);", JS)
         self.assertIn("'edit.savedBadge': '已保存',", JS)
@@ -534,6 +534,88 @@ class Item37RegressionTests(unittest.TestCase):
             save_block(disk, rel, block["id"], body)
             self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
             self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后字节没还原")
+
+
+class Item38RegressionTests(unittest.TestCase):
+    """条目 38 两案：收集宿主指向挂载编辑器；ZZEDIT 真落文件、再删真还原。
+
+    两案都跑在**真项目副本**（examples/minimal 的真实项目）上，
+    断言的是**服务器文件内容**，不是 DOM。
+    """
+
+    def _project_copy(self, tmp: str) -> Path:
+        import shutil
+
+        src = ROOT / "examples" / "minimal"
+        self.assertTrue(src.is_dir(), "真项目样例不在：examples/minimal")
+        disk = Path(tmp) / "paper"
+        shutil.copytree(src, disk)
+        return disk
+
+    def _probe_section(self, disk: Path):
+        """造一节纯文本段落当受试块，返回 (rel, 目标文件, 块, 纯文本)。"""
+        import html as htmllib
+        import re
+
+        from factscribe.workbench.projects import render_tex
+
+        rel = "sections/03-zzedit.tex"
+        target = disk / rel
+        target.write_text("\\section{Round Trip Probe}\n\nZZPLAIN body text here.\n",
+                          encoding="utf-8")
+        text = target.read_text(encoding="utf-8")
+        blocks = [b for b in render_tex(text, stem="03-zzedit") if b["kind"] == "para"]
+        self.assertTrue(blocks, "受试段落没渲染出来")
+        block = blocks[0]
+        # 前端挂载＝克隆原节点的 innerHTML；从克隆里取纯文本。
+        plain = htmllib.unescape(re.sub(r"<[^>]+>", "", block["html"]))
+        return rel, target, block, plain
+
+    def test_1_collect_host_is_the_mounted_dom_node(self):
+        """案一（JS 侧）：保存/blur/还原全链路都用「挂载进 DOM 的那个节点」，
+        不再拿已出 DOM 的旧引用收集文本。"""
+        self.assertIn("function liveEditorNode(", JS)
+        self.assertIn("document.getElementById(editing.id)", JS)
+        self.assertIn("isConnected", JS)
+        save = JS[JS.index("async function saveEdit()"):JS.index("/* 条目 36：取消编辑")]
+        self.assertIn("liveEditorNode(editing)", save)
+        self.assertNotIn("collectPlain(editing.host)", save)
+        blur = JS[JS.index("addEventListener('blur'"):]
+        self.assertIn("liveEditorNode(state.editing)", blur[:500])
+        restore = JS[JS.index("function restoreEditedNode("):]
+        restore = restore[:restore.index("}")]
+        self.assertIn("liveEditorNode(editing)", restore)
+
+    def test_2_typed_text_reaches_the_server_file(self):
+        """案一（文件侧）：克隆里 insertText 出来的 ZZEDIT 真落进服务器文件。"""
+        import tempfile
+
+        from factscribe.workbench.write import save_block
+
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = self._project_copy(tmp)
+            rel, target, block, plain = self._probe_section(disk)
+            typed = plain + " ZZEDIT"          # 克隆里插入的那几个字
+            result = save_block(disk, rel, block["id"], typed)
+            self.assertTrue(result.get("ok"), "写入失败：%s" % result)
+            self.assertIn("ZZEDIT", target.read_text(encoding="utf-8"),
+                          "用户敲的字没落到服务器文件里")
+
+    def test_3_second_edit_removes_zzedit_and_restores(self):
+        """案二：再二次编辑删掉 ZZEDIT → 文件还原（逐字节相同）。"""
+        import tempfile
+
+        from factscribe.workbench.write import save_block
+
+        with tempfile.TemporaryDirectory() as tmp:
+            disk = self._project_copy(tmp)
+            rel, target, block, plain = self._probe_section(disk)
+            original = target.read_bytes()
+            save_block(disk, rel, block["id"], plain + " ZZEDIT")
+            self.assertIn("ZZEDIT", target.read_text(encoding="utf-8"))
+            save_block(disk, rel, block["id"], plain)      # 二次编辑：删掉 ZZEDIT
+            self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
+            self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后文件没还原")
 
 
 if __name__ == "__main__":

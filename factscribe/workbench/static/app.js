@@ -530,6 +530,7 @@ const state = {
   meta: null,
   nav: { pane: 'toc' },   // 段五：导航面板（目录/智能助手/更多 三面互斥）
   blocksMeta: {},          // 条目 37：块身份（文件＋章节）——原地替换后重新绑定用
+  blockModels: {},         // 条目 38：可编辑模型缓存（保护面 token 在里面）
   filter: '',
   editing: null,      // 正在编辑的块 {id, file, host}
   assembly: [],       // main.tex 的装配清单
@@ -1660,7 +1661,10 @@ function enterEdit(blockId, file, targetEl) {
   const realId = target.dataset.blockId || blockId;
   const realFile = target.dataset.file || file || '';
   const keepId = target.id || realId;
-  const editor = buildPlainEditor(target);
+  const cached = state.blockModels[realId];
+  // 条目 38：有缓存模型就用**带保护面芯片**的编辑器（客户端文本自带 token，
+  // 服务端才对得齐；否则整段编辑会被丢掉）。
+  const editor = cached ? buildEditor(cached) : buildPlainEditor(target);
   const plainAtMount = collectPlain(editor);
   target.replaceWith(editor);
   editor.id = keepId;
@@ -1672,22 +1676,70 @@ function enterEdit(blockId, file, targetEl) {
   editor.focus();
   placeCaretAtEnd(editor);
   // 可编辑模型（保护面芯片）后台补齐；失败也不影响编辑与保存。
-  getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/block/${encodeURIComponent(realId)}`)
-    .then((model) => {
-      if (!model || model.ok === false) return;
-      if (!state.editing || state.editing.host !== editor) return;
-      if (collectPlain(editor) !== plainAtMount) return;   // 用户已经动手了 → 不动
-      upgradeEditor(editor, model);
-    })
-    .catch(() => { /* 模型拿不到：照样能编辑能保存 */ });
+  fetchBlockModel(project, disk, realId).then((model) => {
+    if (!model) return;
+    if (!state.editing) return;
+    const live = liveEditorNode(state.editing);
+    if (!live || live !== editor) return;                // 节点已被接管 → 不动
+    if (collectPlain(live) !== plainAtMount) return;      // 用户已经动手了 → 不动
+    upgradeEditor(live, model);
+  });
   // blur 自动保存（点芯片不算离开）。
   editor.addEventListener('blur', () => {
     setTimeout(() => {
-      if (!state.editing || state.editing.host !== editor) return;
-      if (editor.contains(document.activeElement)) return;
+      if (!state.editing) return;
+      // 条目 38：blur 后重新解析宿主——节点被换过也照样能存。
+      const live = liveEditorNode(state.editing);
+      if (!live) return;
+      if (live.contains(document.activeElement)) return;
       saveEdit();
     }, 120);
   });
+}
+
+/* 条目 38：取可编辑模型（带缓存）。保护面 token 就藏在这里。 */
+async function fetchBlockModel(project, disk, blockId) {
+  if (!project || !disk || !blockId) return null;
+  const key = String(blockId);
+  if (state.blockModels[key]) return state.blockModels[key];
+  try {
+    const model = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/block/${encodeURIComponent(blockId)}`);
+    if (!model || model.ok === false) return null;
+    state.blockModels[key] = model;
+    return model;
+  } catch (err) {
+    return null;
+  }
+}
+
+/* 条目 38：客户端文本里没有保护面标记时，服务端对不齐 → 整段编辑会被丢。
+   按模型把受保护的值换回 token 再发。 */
+function tokenizePlain(text, model) {
+  const chips = (model && model.chips) || [];
+  if (!chips.length) return text;
+  let out = String(text || '');
+  chips.forEach((chip) => {
+    const disp = String(chip.display || '');
+    if (!disp) return;
+    const at = out.indexOf(disp);
+    if (at < 0) return;
+    const token = '\ue000P' + chip.i + '\ue001';
+    out = out.slice(0, at) + token + out.slice(at + disp.length);
+  });
+  return out;
+}
+
+const HAS_TOKEN_RE = /\ue000P\d+\ue001/;
+
+/* 条目 38：编辑宿主一律解析成**挂载进 DOM 的那个节点**。
+   挂载是「克隆替换原节点」——若还攥着已出 DOM 的旧引用，收集到的就是原文，
+   用户敲的字（ZZEDIT）永远到不了服务器。保存/blur/还原全链路统一走这里。 */
+function liveEditorNode(editing) {
+  if (!editing) return null;
+  const live = document.getElementById(editing.id);
+  if (live && live.isConnected) return live;
+  if (editing.host && editing.host.isConnected) return editing.host;
+  return editing.host || null;
 }
 
 /* 条目 36：把一个块原地换成新 html（不整篇重载，滚动位置不动）。 */
@@ -1737,8 +1789,10 @@ function removeBlockNode(blockId) {
 
 /* 条目 36：本地还原进入编辑前的那个节点（取消编辑 / 保存失败时用）。 */
 function restoreEditedNode(editing) {
-  if (!editing || !editing.host || !editing.orig) return false;
-  editing.host.replaceWith(editing.orig);
+  if (!editing || !editing.orig) return false;
+  const host = liveEditorNode(editing);
+  if (!host) return false;
+  host.replaceWith(editing.orig);
   return true;
 }
 
@@ -1760,10 +1814,19 @@ async function saveEdit() {
   const project = state.project;
   const disk = currentDisk();
   if (!project || !disk) return;
-  const text = collectPlain(editing.host);
+  // 条目 38：宿主＝挂载进 DOM 的那个节点（不是已出 DOM 的旧引用）。
+  const host = liveEditorNode(editing);
+  if (!host) return;
+  let text = collectPlain(host);
   // 条目 37：写回寻址与渲染闭包同源——身份从**正在编辑的这个 DOM 节点**读回。
-  const file = editing.host.dataset.file || editing.file || '';
-  const blockId = editing.host.dataset.blockId || editing.id;
+  const file = host.dataset.file || editing.file || '';
+  const blockId = host.dataset.blockId || editing.id;
+  // 条目 38：客户端文本缺保护面标记 → 服务端对不齐会丢整段编辑。
+  // 先按模型把 token 补回去再发。
+  if (!HAS_TOKEN_RE.test(text)) {
+    const model = await fetchBlockModel(project, disk, blockId);
+    if (model) text = tokenizePlain(text, model);
+  }
   try {
     const result = await postJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/edit`, {
       file: file,
@@ -2237,6 +2300,12 @@ function hideParaTools() {
 /* 段落 → 悬浮工具条的绑定（原型同款：悬停段落才浮出「问 AI」）。 */
 function bindParaTools(node, text, section, id, file) {
   node.addEventListener('mouseenter', () => {
+    // 条目 38：悬停即预取可编辑模型——单击挂载时就能直接带上保护面芯片。
+    const project = state.project;
+    const disk = currentDisk();
+    if (project && disk && id && !state.blockModels[id]) {
+      fetchBlockModel(project, disk, id);
+    }
     paraAskTarget = { text: text, section: section, id: id, file: file || '',
                       rect: node.getBoundingClientRect() };
     showParaTools(node);

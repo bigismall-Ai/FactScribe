@@ -664,5 +664,117 @@ class Item40HeaderWidthTests(unittest.TestCase):
         self.assertGreater(self._z_of(".nav-open"), self._z_of(".progwrap"))
 
 
+class PaneHeaderContrastTests(unittest.TestCase):
+    """段五返修十三（小修）：面板节标题/段头对比度修复。
+
+    起因：``.np-pane-h`` 用的是 #a3a29c（rgb(163,162,156)），压在面板底 #fafaf9 上
+    对比度只有约 1.8:1（低于 4.5:1 可读标准）——用户报的「英文页目录字体颜色不对」
+    就是这一处。口径：
+
+    1. ``.np-pane-h`` 色值 = #5f5e5b（rgb(95,94,91)），字号落在 11–12px；
+    2. 三个面板（目录 / 智能助手 / 更多）的节标题、段头同族浅色一并加深
+       （标题级 #5f5e5b，次级小字 #6f6e69）；
+    3. 色值不随语言——CSS 里没有任何按语言覆盖的规则；
+    4. AI 层 ``.who`` 是装饰性发送者标，保持原样。
+    """
+
+    PANEL_BG = "#fafaf9"
+    HEADINGS = (".np-pane-h", ".vn-sec-h", ".kbd-title", ".vn-l",
+                ".rp-b-table th", ".toc-item.sub a")
+    SECONDARY = (".np-note", ".np-rp-meta", ".kbf-meta", ".kb-empty",
+                 ".kbd-kv span:first-child", ".vn-tpl-note", ".toc-empty")
+
+    @staticmethod
+    def _all_rules(css):
+        rules = []
+        for match in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+            rules.append((match.group(1).strip(), match.group(2)))
+        return rules
+
+    @classmethod
+    def _rules_for(cls, selector):
+        hits = []
+        for sel, body in cls._all_rules(CSS):
+            if any(one.strip().endswith(selector) for one in sel.split(",")):
+                hits.append(body)
+        assert hits, "CSS rule not found: " + selector
+        return hits
+
+    @classmethod
+    def _rule(cls, selector):
+        return cls._rules_for(selector)[0]
+
+    @classmethod
+    def _color(cls, selector):
+        for body in cls._rules_for(selector):
+            match = re.search(r"color:(#[0-9a-fA-F]{3,6})", body)
+            if match:
+                return match.group(1).lower()
+        raise AssertionError("no color in: " + selector)
+
+    @staticmethod
+    def _lum(hexstr):
+        h = hexstr.lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        chans = []
+        for i in (0, 2, 4):
+            v = int(h[i:i + 2], 16) / 255.0
+            chans.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * chans[0] + 0.7152 * chans[1] + 0.0722 * chans[2]
+
+    @classmethod
+    def _contrast(cls, a, b):
+        la, lb = cls._lum(a), cls._lum(b)
+        hi, lo = max(la, lb), min(la, lb)
+        return (hi + 0.05) / (lo + 0.05)
+
+    def test_1_pane_header_color_and_size(self):
+        """案一：``.np-pane-h`` = #5f5e5b（rgb(95,94,91)），字号 11–12px，
+        压在面板底 #fafaf9 上对比度 ≥4.5:1。"""
+        rule = self._rule(".np-pane-h")
+        self.assertIn("color:#5f5e5b", rule)
+        size = float(re.search(r"font-size:([0-9.]+)px", rule).group(1))
+        self.assertGreaterEqual(size, 11.0)
+        self.assertLessEqual(size, 12.0)
+        self.assertGreaterEqual(self._contrast("#5f5e5b", self.PANEL_BG), 4.5)
+        self.assertGreaterEqual(self._contrast("#5f5e5b", "#ffffff"), 4.5)
+
+    def test_2_panel_headings_are_deepened(self):
+        """案二：三面板的节标题/段头不再残留同族浅色，且各自对比度 ≥4.5:1。"""
+        stale = ("#a3a29c", "#9b9a96", "#8f8d86", "#a49e8d")
+        for selector in self.HEADINGS:
+            rule = self._rule(selector)
+            for bad in stale:
+                self.assertNotIn(bad, rule, f"{selector} 仍是浅色 {bad}")
+            color = self._color(selector)
+            self.assertGreaterEqual(self._contrast(color, self.PANEL_BG), 4.5, selector)
+            self.assertGreaterEqual(self._contrast(color, "#ffffff"), 4.5, selector)
+
+    def test_3_panel_secondary_text_is_readable(self):
+        """案三：面板里的次级小字（提示/空态/元信息）一并离开 1.8:1 那一档。"""
+        for selector in self.SECONDARY:
+            rule = self._rule(selector)
+            for bad in ("#a3a29c", "#9b9a96"):
+                self.assertNotIn(bad, rule, f"{selector} 仍是浅色 {bad}")
+            color = self._color(selector)
+            self.assertGreaterEqual(self._contrast(color, self.PANEL_BG), 4.5, selector)
+            self.assertGreaterEqual(self._contrast(color, "#ffffff"), 4.5, selector)
+
+    def test_4_color_does_not_depend_on_language(self):
+        """案四：色值不随语言——CSS 里没有按语言覆盖的规则，三个面板共用同一条。"""
+        self.assertIsNone(re.search(r"\[lang[=\]]", CSS))
+        for selector in self.HEADINGS:
+            for body in self._rules_for(selector):
+                for bad in ("#a3a29c", "#9b9a96", "#8f8d86", "#a49e8d"):
+                    self.assertNotIn(bad, body, selector + " still pale: " + bad)
+        # 三个面板（目录 / 智能助手 / 更多）都挂着 .np-pane-h
+        self.assertEqual(HTML.count('class="np-pane-h'), 5)
+
+    def test_5_decorative_who_is_untouched(self):
+        """案五：AI 层 ``.who`` 发送者标是装饰，保持原浅色。"""
+        self.assertIn("#a49e8d", self._rule(".msg .who"))
+
+
 if __name__ == "__main__":
     unittest.main()

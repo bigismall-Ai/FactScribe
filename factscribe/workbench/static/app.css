@@ -389,7 +389,7 @@ p{font-size:16.5px}
 .msg .bub{font-size:12.5px;padding:8px 11px}
 
 /* ---- 右栏边缘三竖标（统一修批三·A/D：同族样式一上一下，AI 对话可整栏替换） ---- */
-.side-rail{position:fixed;right:0;top:0;z-index:66;display:flex;flex-direction:column;gap:2px;align-items:stretch}
+.side-rail{position:static;width:50px;flex:0 0 50px;align-self:stretch;z-index:auto;display:flex;flex-direction:column;gap:2px;align-items:flex-start;border-right:1px solid #e6e6e4;background:#fafaf9;overflow:hidden}
 .side-tab{writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:2px;padding:14px 8px;
  border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
  cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;line-height:1.5}
@@ -978,15 +978,15 @@ body[data-view="form"] .toc-float{display:none}
 
 /* ---- 导航面板（fixed · 320px · 可整体收起） ---- */
 .navpanel{position:fixed;right:0;top:0;width:320px;height:100vh;background:#fafaf9;
- border-left:1px solid #ececec;display:flex;flex-direction:column;overflow:hidden;z-index:60;
+ border-left:1px solid #ececec;display:block;overflow:hidden;z-index:60;
  transition:transform .22s ease}
 body.nav-collapsed .navpanel{transform:translateX(100%)}
 .shell{padding-right:336px;transition:padding-right .22s ease}
 body.nav-collapsed .shell{padding-right:0}
 /* 收起后：左缘只剩一枚竖排「展开导航」钮 */
-.nav-open{display:none;position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:61;
+.nav-open{display:none;position:fixed;right:0;top:0;z-index:61;
  writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:3px;padding:14px 7px;
- border:1px solid #e6e6e4;border-left:none;border-radius:0 8px 8px 0;background:#fafaf9;color:#8f8d86;cursor:pointer}
+ border:1px solid #e6e6e4;border-right:none;border-radius:8px 0 0 8px;background:#fafaf9;color:#8f8d86;cursor:pointer}
 .nav-open:hover{color:#37352f;background:#f4f2ea}
 body.nav-collapsed .nav-open{display:block}
 
@@ -1122,21 +1122,21 @@ body.nav-collapsed .ai-float{right:22px}
    「展开导航」钮（段五口径：左缘），正文拉满。 */
 
 /* 钮列：段四 .side-rail / .side-tab 样式原样复用（字体/底色/边框/hover/激活态） */
-.side-rail{position:fixed;right:0;top:0;z-index:66;display:flex;
- flex-direction:column;gap:2px;align-items:stretch}
+.side-rail{position:static;width:50px;flex:0 0 50px;align-self:stretch;z-index:auto;display:flex;
+ flex-direction:column;gap:2px;align-items:flex-start;border-right:1px solid #e6e6e4;
+ background:#fafaf9;overflow:hidden}
 .side-tab{min-width:50px;width:50px;text-align:center}
 body.nav-collapsed .side-rail{display:none}
 body:not([data-view="workbench"]) .side-rail{display:none}
 
 /* 面板挪到钮列左侧 */
-.navpanel{right:50px}
-.shell{padding-right:386px}
+.shell{padding-right:336px}
 body.nav-collapsed .shell{padding-right:0}
 /* 非工作台视图（项目列表/新建）没有钮列，面板贴右缘 */
 body:not([data-view="workbench"]) .navpanel{right:0}
 body:not([data-view="workbench"]) .shell{padding-right:336px}
 /* 收起：面板整体移出视口（面板 320 ＋ 钮列 50），正文拉满 */
-body.nav-collapsed .navpanel{transform:translateX(370px)}
+body.nav-collapsed .navpanel{transform:translateX(320px)}
 body.nav-collapsed .shell{padding-right:0}
 
 /* 面板里的智能助手面 */
@@ -1291,3 +1291,11 @@ body{padding-top:0}
 .side-rail{top:0;transform:none}
 /* 面板头部条：单语项目整组隐藏时连头带边框一起收掉 */
 .np-head[hidden]{display:none}
+
+/* ================================================================
+   条目 32：切换钮收进侧栏内部、锚侧栏顶
+   —— 窗口右缘不再有悬浮元素，钮列变侧栏左缘的一列竖排钮
+   ================================================================ */
+.np-inner{display:flex;flex-direction:row;align-items:stretch;height:100%;width:100%}
+.np-col{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.side-tab{width:50px;min-width:50px;text-align:center}

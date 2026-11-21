@@ -86,12 +86,26 @@ class RightColumnTests(unittest.TestCase):
         panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
         self.assertNotIn('id="goProjects"', panel)
 
-    def test_rail_is_anchored_to_top(self):
-        self.assertIn(".side-rail{top:0;transform:none}", CSS)
-        self.assertNotIn(".side-rail{position:fixed;right:0;top:50%;transform:translateY(-50%)", CSS)
+    def test_rail_is_inside_the_panel_not_floating(self):
+        """条目 32：钮列进侧栏内部，不再是窗口右缘的悬浮元素。"""
+        self.assertIn(".side-rail{position:static;", CSS)
+        self.assertNotIn(".side-rail{position:fixed", CSS)
+        self.assertIn("np-inner", HTML)
+        panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
+        self.assertIn('class="side-rail" id="sideRail"', panel)
+        self.assertIn('class="np-col"', panel)
+
+    def test_rail_column_precedes_panel_content(self):
+        panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
+        self.assertLess(panel.index('id="sideRail"'), panel.index('class="np-col"'))
 
     def test_panel_starts_at_top(self):
         self.assertIn(".navpanel{top:0;height:100vh}", CSS)
+
+    def test_collapse_button_anchors_to_window_edge(self):
+        """收起后剩下的「展开导航」钮贴窗缘（不再是左缘）。"""
+        self.assertIn(".nav-open{display:none;position:fixed;right:0;top:0;", CSS)
+        self.assertNotIn(".nav-open{display:none;position:fixed;left:0;", CSS)
 
     def test_single_language_hides_the_whole_head(self):
         self.assertIn("const head = $('#npHead');", JS)
@@ -103,7 +117,7 @@ class RailButtonTests(unittest.TestCase):
     """切换钮列的成员与顺序。"""
 
     def test_rail_buttons_present(self):
-        rail = _block(r'<div class="side-rail" id="sideRail">.*?</div>\s*\n\s*\n')
+        rail = _block(r'<div class="side-rail" id="sideRail">.*?</div>\s*\n\s*<div class="np-col">')
         for button_id in ("npCollapse", "npToc", "npAi", "npReports", "npKb", "npVenue"):
             self.assertIn('id="%s"' % button_id, rail)
 

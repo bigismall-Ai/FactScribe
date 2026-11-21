@@ -26,6 +26,18 @@ PDF_NAME = "main.pdf"
 #: 打开项目目录时给系统的超时（秒）。
 OPEN_TIMEOUT = 10
 
+#: 「别真开」闸（条目 32）：这个环境变量非空时，`open_project_dir` **不执行**
+#: macOS 的 `open`，只回报路径。端到端脚本与仓库测试一律设它——
+#: 跑测试不应该在测试机上弹访达窗口。
+NO_OPEN_ENV = "FACTSCRIBE_NO_OPEN"
+
+
+def _no_open() -> bool:
+    """闸门状态：环境变量 `FACTSCRIBE_NO_OPEN` 非空＝不许真开。"""
+    import os
+
+    return bool(str(os.environ.get(NO_OPEN_ENV, "") or "").strip())
+
 
 def _cfg(disk: Path):
     try:
@@ -119,6 +131,13 @@ def open_project_dir(disk: str | Path) -> dict:
     system = platform.system()
     base = {"ok": True, "action": "open_dir", "disk": str(target),
             "system": system, "path": str(target), "opened": False}
+    if _no_open():
+        # 闸门关着：不调 `open`，只报路径（测试机不应弹访达）。
+        base["dry_run"] = True
+        base["code"] = "OPEN_SUPPRESSED"
+        base["error"] = "设了 %s：不真开，只报路径。" % NO_OPEN_ENV
+        base["message"] = base["error"]
+        return base
     if system != "Darwin":
         base["code"] = "OPEN_UNSUPPORTED"
         base["error"] = "本机不是 macOS，没法直接唤起文件管理器；路径就在上面。"

@@ -2507,6 +2507,9 @@ function applyLangToggle() {
   const project = state.project;
   const multi = project ? (project.multi_lang !== false && (project.disks || []).length > 1) : true;
   seg.hidden = !multi;
+  // 条目 31：中/EN 在右栏顶部条；单语项目整组隐藏，头条也跟着收掉。
+  const head = $('#npHead');
+  if (head) head.hidden = !multi;
   $$('#langSeg button').forEach((btn) => {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });

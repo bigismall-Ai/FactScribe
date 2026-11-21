@@ -389,7 +389,7 @@ p{font-size:16.5px}
 .msg .bub{font-size:12.5px;padding:8px 11px}
 
 /* ---- 右栏边缘三竖标（统一修批三·A/D：同族样式一上一下，AI 对话可整栏替换） ---- */
-.side-rail{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:flex;flex-direction:column;gap:2px;align-items:stretch}
+.side-rail{position:fixed;right:0;top:0;z-index:66;display:flex;flex-direction:column;gap:2px;align-items:stretch}
 .side-tab{writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:2px;padding:14px 8px;
  border:1px solid #ddd8c6;border-right:none;border-radius:9px 0 0 9px;background:#fffefb;color:#8a8577;
  cursor:pointer;box-shadow:-3px 0 12px rgba(40,36,20,.08);display:flex;flex-direction:column;align-items:center;line-height:1.5}
@@ -451,7 +451,7 @@ body[data-view="reports"] .doc,body[data-view="reports"] .colright{display:none}
 .doc,.colright,.mainview{animation:viewfade .18s ease}
 @keyframes viewfade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 /* ---- 顶栏（三视图恒在，条目2） ---- */
-body{padding-top:52px}
+body{padding-top:0}
 .topbar{position:fixed;top:0;left:0;right:0;height:52px;z-index:100;
  display:flex;align-items:center;gap:10px;padding:0 18px;
  background:rgba(255,255,255,.92);backdrop-filter:saturate(140%) blur(10px);-webkit-backdrop-filter:saturate(140%) blur(10px);
@@ -977,7 +977,7 @@ body[data-view="form"] .toc-float{display:none}
    随旧结构一起退役；目录不再悬浮（.toc-float 退役），住进导航面板。 */
 
 /* ---- 导航面板（fixed · 320px · 可整体收起） ---- */
-.navpanel{position:fixed;right:0;top:52px;width:320px;height:calc(100vh - 52px);background:#fafaf9;
+.navpanel{position:fixed;right:0;top:0;width:320px;height:100vh;background:#fafaf9;
  border-left:1px solid #ececec;display:flex;flex-direction:column;overflow:hidden;z-index:60;
  transition:transform .22s ease}
 body.nav-collapsed .navpanel{transform:translateX(100%)}
@@ -1122,7 +1122,7 @@ body.nav-collapsed .ai-float{right:22px}
    「展开导航」钮（段五口径：左缘），正文拉满。 */
 
 /* 钮列：段四 .side-rail / .side-tab 样式原样复用（字体/底色/边框/hover/激活态） */
-.side-rail{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:66;display:flex;
+.side-rail{position:fixed;right:0;top:0;z-index:66;display:flex;
  flex-direction:column;gap:2px;align-items:stretch}
 .side-tab{min-width:50px;width:50px;text-align:center}
 body.nav-collapsed .side-rail{display:none}
@@ -1264,3 +1264,30 @@ body.nav-collapsed .shell{padding-right:0}
 .guide-p{font-size:13px;line-height:1.85;color:#5f5e5b;margin:0 0 4px}
 .guide-foot{font-size:12px;line-height:1.8;color:#8f8d86;margin:16px 0 0;padding-top:10px;
  border-top:1px solid #efefee}
+
+/* ================================================================
+   条目 31（段五返修四）：严格左右分栏
+   —— 废顶栏、Projects 进左栏头、切换钮锚右栏顶
+   ================================================================ */
+
+/* ① 顶栏整条拆除：全局不再有横贯左右的常驻条。
+   body 的 52px 顶部留白一并撤掉——正文真正顶满。 */
+body{padding-top:0}
+.topbar{display:none !important}
+
+/* ② 左栏：顶部窄条（FactScribe 字标 ＋ [Projects] 钮）＋ 其下正文全宽顶满 */
+.left-col{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;align-items:stretch}
+.left-head{display:flex;align-items:center;gap:10px;flex:0 0 auto;
+ padding:9px 16px;background:#fff;border-bottom:1px solid #ececeb}
+.left-head .tb-brand{margin-right:2px}
+.left-head .tb-btn{border:1px solid #e3e2df;background:#fff}
+.left-head .tb-btn:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+/* 新建只在项目列表页：工作台不再有常驻新建入口（条目 31） */
+.pv-head .pv-new{margin-left:auto;border:1px solid #e3e2df;background:#fff}
+.pv-head .pv-new:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+
+/* ③ 右栏：切换钮列锚在右栏顶部（不再垂直居中悬浮），与面板顶同高 */
+.navpanel{top:0;height:100vh}
+.side-rail{top:0;transform:none}
+/* 面板头部条：单语项目整组隐藏时连头带边框一起收掉 */
+.np-head[hidden]{display:none}

@@ -8,15 +8,16 @@
 </head>
 <body data-view="projects">
 
-<header class="topbar">
-  <span class="tb-brand">FactScribe</span>
-  <button type="button" class="tb-btn" id="goNew">
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-    <span data-i18n="tb.new">新建</span>
-  </button>
-</header>
+<!-- 条目 31：全局顶栏整条拆除。字标与 Projects 归左栏窄条；新建只在项目列表页。 -->
 
 <div class="shell">
+
+  <!-- ============ 左栏：顶部窄条 ＋ 内容 ============ -->
+  <div class="left-col" id="leftCol">
+    <div class="left-head">
+      <span class="tb-brand">FactScribe</span>
+      <button type="button" class="tb-btn" id="goProjects" data-i18n="nav.projects">项目管理</button>
+    </div>
 
   <!-- ============ 项目列表页 ============ -->
   <main class="mainview" id="viewProjects">
@@ -26,6 +27,7 @@
           <h1 data-i18n="pg.title">论文项目</h1>
           <p class="pv-sub" data-i18n="pg.sub">打开一篇论文继续写，或新建一个项目。</p>
         </div>
+        <button type="button" class="tb-btn pv-new" id="goNew" data-i18n="tb.new">＋ 新建</button>
       </div>
       <div class="pv-search">
         <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
@@ -124,15 +126,12 @@
       <div id="bodyBlocks"></div>
     </div>
   </main>
+  </div><!-- /left-col -->
 
-  <!-- ============ 右导航面板（固定 · 可整体收起） ============ -->
+  <!-- ============ 右栏：切换钮列（锚右栏顶） ＋ 面板 ============ -->
   <aside class="navpanel" id="navPanel">
-    <!-- 头部行：项目管理 ＋ 中/EN（单语项目整组隐藏） -->
-    <div class="np-head">
-      <button type="button" class="tb-btn np-projects" id="goProjects">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5v8.5h11V5.5H8.2L6.8 4.5z"/></svg>
-        <span data-i18n="nav.projects">项目管理</span>
-      </button>
+    <!-- 头部行：中/EN（单语项目整组隐藏；切换钮列旁） -->
+    <div class="np-head" id="npHead">
       <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
         <button type="button" data-lang="zh" class="on">中</button>
         <button type="button" data-lang="en">EN</button>

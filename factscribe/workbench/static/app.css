@@ -980,26 +980,11 @@ body[data-view="form"] .toc-float{display:none}
 body.nav-collapsed .navpanel{transform:translateX(100%)}
 .shell{padding-right:336px;transition:padding-right .22s ease}
 body.nav-collapsed .shell{padding-right:0}
-/* 收起后：左缘只剩一枚竖排「展开导航」钮 */
-.nav-open{display:none;position:fixed;right:0;top:0;z-index:61;
- writing-mode:vertical-rl;font-family:inherit;font-size:12px;letter-spacing:3px;padding:14px 7px;
- border:1px solid #e6e6e4;border-right:none;border-radius:8px 0 0 8px;background:#fafaf9;color:#8f8d86;cursor:pointer}
-.nav-open:hover{color:#37352f;background:#f4f2ea}
-body.nav-collapsed .nav-open{display:block}
+/* 收起后：窗缘只剩一枚展开钮（条目 33 起改为纯图标，样式见文件末尾条目 33 段） */
 
-/* ---- 头部行：项目管理 ＋ 中/EN ---- */
-.np-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
-.np-projects{flex:1 1 auto;min-width:0;justify-content:flex-start}
-.np-head .lang-seg{flex:0 0 auto}
-/* 单语言项目：中/EN 切换整组隐藏（hidden 属性要压得住 display:flex） */
-.lang-seg[hidden]{display:none}
-
-/* ---- 常用功能行 ---- */
-.np-tools{display:flex;gap:4px;padding:9px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
-.np-tool{flex:1 1 0;min-width:0;font-family:inherit;font-size:11px;line-height:1.35;color:#5f5e5b;
- border:1px solid #e3e2df;border-radius:7px;background:#fff;padding:6px 3px;cursor:pointer;
- white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
-.np-tool:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+/* 条目 33：面板头部行（#npHead）与侧栏常用功能行（.np-tools）都已搬家——
+   中/EN 与四枚功能钮搬去左栏头部（.lh-tools），右栏只留工具条＋面板。
+   .np-tools / .np-tool 的旧样式随元素一起删除。 */
 
 /* ---- 切换按钮组（四枚纵排） ---- */
 .np-switches{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
@@ -1279,8 +1264,6 @@ body{padding-top:0}
 
 /* ③ 右栏：切换钮列锚在右栏顶部（不再垂直居中悬浮），与面板顶同高 */
 .navpanel{top:0;height:100vh}
-/* 面板头部条：单语项目整组隐藏时连头带边框一起收掉 */
-.np-head[hidden]{display:none}
 
 /* ================================================================
    条目 32：切换钮收进侧栏内部、锚侧栏顶
@@ -1301,3 +1284,44 @@ body{padding-top:0}
 .np-tab:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
 .np-tab.on{background:#2f2e2b;border-color:#2f2e2b;color:#fff}
 .np-tab.on:hover{background:#2f2e2b;color:#fff}
+
+/* ================================================================
+   条目 33（段五返修七）：右栏信息架构收敛
+   —— 左栏头部＝字标＋Projects＋常用功能组（中/EN ＋ PDF/全检/导出/开目录）
+      右栏工具条＝纯图标收起钮＋三枚切换钮（目录／智能助手／更多）
+      「更多」面板＝三段合并（实验报告 / 知识库 / 版式）
+   ================================================================ */
+
+/* ① 左栏头部：左侧字标组 ＋ 右侧功能组（仅 workbench 视图渲染） */
+.lh-left{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.lh-brand{font-family:inherit;border:none;background:none;padding:0;margin-right:2px;
+ cursor:pointer;font-size:14px;font-weight:700;letter-spacing:.2px;color:#37352f}
+.lh-brand:hover{color:#2f5279}
+.lh-tools{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+.lh-tools[hidden]{display:none}
+.lh-tools .lang-seg{margin-left:0;flex:0 0 auto;height:26px}
+.lh-tools .lang-seg button{min-width:34px;padding:0 8px;line-height:22px;height:22px;font-size:12px}
+/* 单语言项目：中/EN 切换整组隐藏（hidden 属性要压得住 display:flex） */
+.lang-seg[hidden]{display:none}
+.lh-tool{display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-size:12px;line-height:1.2;
+ color:#5f5e5b;background:#fff;border:1px solid #e3e2df;border-radius:7px;padding:5px 9px;cursor:pointer;
+ white-space:nowrap}
+.lh-tool:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
+.lh-tool svg{flex:0 0 auto}
+
+/* ② 右栏工具条：最左一枚纯图标收起钮（无文字）＋ 三枚横排文字钮 */
+.np-tab.np-icon{flex:0 0 30px;width:30px;min-width:30px;padding:0;display:inline-flex;
+ align-items:center;justify-content:center}
+.np-tab.np-icon svg{flex:0 0 auto}
+
+/* ③ 「更多」面板＝三段合并面板（上：实验报告 / 中：知识库 / 下：版式） */
+.np-sec{padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid #ececeb}
+.np-sec:last-child{padding-bottom:0;margin-bottom:0;border-bottom:none}
+.np-sec .np-pane-h{margin-bottom:8px}
+
+/* ④ 收起态：窗缘只留一枚图标展开钮（不再是竖排文字钮） */
+.nav-open{display:none;position:fixed;right:0;top:0;z-index:61;
+ width:30px;height:30px;align-items:center;justify-content:center;
+ border:1px solid #e6e6e4;border-right:none;border-radius:8px 0 0 8px;background:#fafaf9;color:#8f8d86;cursor:pointer}
+.nav-open:hover{color:#37352f;background:#f4f2ea}
+body.nav-collapsed .nav-open{display:flex}

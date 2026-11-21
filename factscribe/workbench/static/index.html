@@ -15,8 +15,34 @@
   <!-- ============ 左栏：顶部窄条 ＋ 内容 ============ -->
   <div class="left-col" id="leftCol">
     <div class="left-head">
-      <span class="tb-brand">FactScribe</span>
-      <button type="button" class="tb-btn" id="goProjects" data-i18n="nav.projects">项目管理</button>
+      <div class="lh-left">
+        <!-- 条目 33：字标可点，与 [Projects] 同去项目管理视图 -->
+        <button type="button" class="tb-brand lh-brand" id="goBrand" title="FactScribe">FactScribe</button>
+        <button type="button" class="tb-btn" id="goProjects" data-i18n="nav.projects">项目管理</button>
+      </div>
+      <!-- 条目 33：常用功能组从侧栏搬到左栏头部；仅 workbench 视图渲染（列表视图不渲染） -->
+      <div class="lh-tools" id="lhTools" hidden>
+        <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
+          <button type="button" data-lang="zh" class="on">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+        <button type="button" class="lh-tool" id="actPdf">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>
+          <span data-i18n="np.pdf">渲染PDF</span>
+        </button>
+        <button type="button" class="lh-tool" id="actCheck">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
+          <span data-i18n="np.check">全检一次</span>
+        </button>
+        <button type="button" class="lh-tool" id="actBundle">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 5.5h11v8h-11z"/><path d="M5.5 5.5v-2h5v2"/></svg>
+          <span data-i18n="np.bundle">导出投稿包</span>
+        </button>
+        <button type="button" class="lh-tool" id="actOpenDir">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5h4l1.5 2h5.5v7h-11z"/></svg>
+          <span data-i18n="np.openDir">打开目录</span>
+        </button>
+      </div>
     </div>
 
   <!-- ============ 项目列表页 ============ -->
@@ -128,46 +154,19 @@
   </main>
   </div><!-- /left-col -->
 
-  <!-- ============ 右栏：切换钮列（锚右栏顶） ＋ 面板 ============ -->
+  <!-- ============ 右栏：图标收起钮 ＋ 三枚切换钮（横排工具条）＋ 面板 ============ -->
   <aside class="navpanel" id="navPanel">
     <div class="np-toolbar" id="npToolbar">
-      <button type="button" class="np-tab" id="npCollapse" data-i18n="np.collapse">收起导航</button>
+      <!-- 条目 33：最左一枚纯图标收起钮（无文字，内联 SVG） -->
+      <button type="button" class="np-tab np-icon" id="npCollapse" title="收起导航" aria-label="收起导航" data-i18n-title="np.collapse" data-i18n-aria="np.collapse">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3.5L4 8l3.5 4.5"/><path d="M12.5 2.5v11"/><path d="M4 8h5.5"/></svg>
+      </button>
       <button type="button" class="np-tab" id="npToc" data-i18n="np.toc">目录</button>
       <button type="button" class="np-tab" id="npAi" data-i18n="np.ai">智能助手</button>
-      <button type="button" class="np-tab" id="npReports" data-i18n="np.reports">实验报告</button>
-      <button type="button" class="np-tab" id="npKb" data-i18n="np.kb">知识库</button>
-      <button type="button" class="np-tab" id="npVenue" data-i18n="np.venue">版式</button>
+      <button type="button" class="np-tab" id="npMore" data-i18n="np.more">更多</button>
     </div>
     <div class="np-col">
-    <!-- 头部行：中/EN（单语项目整组隐藏；切换钮列旁） -->
-    <div class="np-head" id="npHead">
-      <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
-        <button type="button" data-lang="zh" class="on">中</button>
-        <button type="button" data-lang="en">EN</button>
-      </div>
-    </div>
-
-    <!-- 常用功能行 -->
-    <div class="np-tools">
-      <button type="button" class="np-tool" id="actPdf">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>
-        <span data-i18n="np.pdf">渲染 PDF</span>
-      </button>
-      <button type="button" class="np-tool" id="actCheck">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
-        <span data-i18n="np.check">全检一次</span>
-      </button>
-      <button type="button" class="np-tool" id="actBundle">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 5.5h11v8h-11z"/><path d="M5.5 5.5v-2h5v2"/></svg>
-        <span data-i18n="np.bundle">导出投稿包</span>
-      </button>
-      <button type="button" class="np-tool" id="actOpenDir">
-        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2.5 4.5h4l1.5 2h5.5v7h-11z"/></svg>
-        <span data-i18n="np.openDir">打开项目目录</span>
-      </button>
-    </div>
-
-    <!-- 面板内容区：目录（章节管理并入） ｜ 智能助手 ｜ 实验报告列表（三面互斥） -->
+    <!-- 面板内容区：目录（章节管理并入） ｜ 智能助手 ｜ 更多（报告＋知识库＋版式 三段） -->
     <div class="np-body">
       <section class="np-pane on" id="paneToc">
         <div class="np-pane-h" data-i18n="toc.h">目录</div>
@@ -181,56 +180,58 @@
           <button type="button" class="np-btn" id="npAiToggle" data-i18n="np.aiOpen">打开对话层</button>
         </div>
       </section>
-      <section class="np-pane" id="paneReports">
-        <div class="np-pane-h">
-          <span data-i18n="np.reports">实验报告列表</span>
-          <button type="button" class="np-mini" id="npImportBtn" data-i18n="np.import">从外部导入</button>
-        </div>
-        <div class="np-reports" id="npReportsList"></div>
-      </section>
-      <!-- 段六：知识库（左文件列表 ＋ 右详情） -->
-      <section class="np-pane" id="paneKb">
-        <div class="np-pane-h">
-          <span data-i18n="np.kb">知识库</span>
-          <button type="button" class="np-mini" id="npKbUploadBtn" data-i18n="np.kbUpload">上传文件</button>
-        </div>
-        <input type="file" id="npKbUpload" hidden>
-        <div class="kb-wrap">
-          <ul class="kb-files" id="kbFiles"></ul>
-          <div class="kb-detail" id="kbDetail"></div>
-        </div>
-      </section>
-      <!-- 段六：版式（目标刊物 ＋ 首页预览 ＋ 语言锁定 ＋ 模板库） -->
-      <section class="np-pane" id="paneVenue">
-        <div class="np-pane-h">
-          <span data-i18n="np.venue">版式</span>
-          <button type="button" class="np-mini" id="npVenueGuideBtn" data-i18n="np.venueGuide">选刊指南</button>
-        </div>
-        <div class="vn-face">
-          <label class="vn-l" for="vnVenue" data-i18n="vn.venue">目标刊物 / 会议</label>
-          <input type="text" id="vnVenue" data-i18n-ph="vn.venuePh" placeholder="例如：ACL 2026">
-          <label class="vn-l" for="vnDeadline" data-i18n="vn.deadline">截稿日期</label>
-          <input type="date" id="vnDeadline">
-          <div class="vn-acts">
-            <button type="button" class="np-btn" id="vnSave" data-i18n="vn.save">保存版式配置</button>
-            <span class="vn-msg" id="vnMsg"></span>
+      <!-- 条目 33：更多＝三段合并面板（上：实验报告 / 中：知识库 / 下：版式） -->
+      <section class="np-pane" id="paneMore">
+        <div class="np-sec" id="secReports">
+          <div class="np-pane-h">
+            <span data-i18n="np.reports">实验报告</span>
+            <button type="button" class="np-mini" id="npImportBtn" data-i18n="np.import">从外部导入</button>
           </div>
-          <div class="vn-lock" id="vnLock"></div>
-          <div class="vn-dl" id="vnDeadlineInfo"></div>
-          <div class="vn-sec-h" data-i18n="vn.preview">首页预览</div>
-          <button type="button" class="np-btn vn-prev-btn" id="vnPreviewBtn" data-i18n="vn.previewBtn">渲染并预览首页</button>
-          <div class="vn-preview" id="vnPreview"></div>
-          <div class="vn-sec-h" data-i18n="vn.templates">模板库</div>
-          <div class="vn-tpl" id="vnTemplates"></div>
+          <div class="np-reports" id="npReportsList"></div>
+        </div>
+        <div class="np-sec" id="secKb">
+          <div class="np-pane-h">
+            <span data-i18n="np.kb">知识库</span>
+            <button type="button" class="np-mini" id="npKbUploadBtn" data-i18n="np.kbUpload">上传文件</button>
+          </div>
+          <input type="file" id="npKbUpload" hidden>
+          <div class="kb-wrap">
+            <ul class="kb-files" id="kbFiles"></ul>
+            <div class="kb-detail" id="kbDetail"></div>
+          </div>
+        </div>
+        <div class="np-sec" id="secVenue">
+          <div class="np-pane-h">
+            <span data-i18n="np.venue">版式</span>
+            <button type="button" class="np-mini" id="npVenueGuideBtn" data-i18n="np.venueGuide">选刊指南</button>
+          </div>
+          <div class="vn-face">
+            <label class="vn-l" for="vnVenue" data-i18n="vn.venue">目标刊物 / 会议</label>
+            <input type="text" id="vnVenue" data-i18n-ph="vn.venuePh" placeholder="例如：ACL 2026">
+            <label class="vn-l" for="vnDeadline" data-i18n="vn.deadline">截稿日期</label>
+            <input type="date" id="vnDeadline">
+            <div class="vn-acts">
+              <button type="button" class="np-btn" id="vnSave" data-i18n="vn.save">保存版式配置</button>
+              <span class="vn-msg" id="vnMsg"></span>
+            </div>
+            <div class="vn-lock" id="vnLock"></div>
+            <div class="vn-dl" id="vnDeadlineInfo"></div>
+            <div class="vn-sec-h" data-i18n="vn.preview">首页预览</div>
+            <button type="button" class="np-btn vn-prev-btn" id="vnPreviewBtn" data-i18n="vn.previewBtn">渲染并预览首页</button>
+            <div class="vn-preview" id="vnPreview"></div>
+            <div class="vn-sec-h" data-i18n="vn.templates">模板库</div>
+            <div class="vn-tpl" id="vnTemplates"></div>
+          </div>
         </div>
       </section>
+    </div><!-- /np-body -->
     </div><!-- /np-col -->
   </aside>
 
-  <!-- 切换按钮组：固定在窗口右缘，一列纵排（条目 29：恢复段四 side-tab 族） -->
-
-  <!-- 收起后：左缘只剩一枚竖排「展开导航」钮 -->
-  <button type="button" class="nav-open" id="navOpen" data-i18n="nav.open">展开导航</button>
+  <!-- 收起后：窗缘只剩一枚图标展开钮 -->
+  <button type="button" class="nav-open" id="navOpen" title="展开导航" aria-label="展开导航" data-i18n-title="nav.open" data-i18n-aria="nav.open">
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3.5L12 8l-3.5 4.5"/><path d="M3.5 2.5v11"/><path d="M12 8H6.5"/></svg>
+  </button>
 
   <!-- ============ 智能助手（半透明悬浮层，浮在正文上方） ============ -->
   <section class="ai-float" id="aiFloat" hidden>

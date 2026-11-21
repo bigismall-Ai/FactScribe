@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-"""tests/test_workbench_layout.py —— 条目 31（段五返修四）：严格左右分栏。
+"""tests/test_workbench_layout.py —— 条目 33（段五验收返修七）：右栏信息架构收敛。
 
 框架三条，静态断言就够（布局的真读数靠浏览器，这里守结构不跑偏）：
 
 1. **顶栏整条拆除**——页面里没有 ``.topbar`` 元素，也没有 ``<header>``；
    ``body`` 不留 52px 顶部留白。
-2. **左栏＝顶部窄条 ＋ 其下正文**——``.left-head`` 里只有 FactScribe 字标与
-   「项目管理」钮，**没有**新建钮；新建钮只在项目列表页（``#viewProjects``），
-   工作台（``#viewWorkbench``）里没有。
-3. **右栏＝切换钮列 ＋ 面板**——钮列在面板右侧、竖排一列；中/EN 切换在
-   右栏顶部条（面板头部 ``#npHead``），单语项目整组隐藏。
-
-CSS 侧另断言：钮列 ``top:0``（不再垂直居中悬浮）、面板 ``top:0``（不再让开
-顶栏 52px）。
+2. **左栏＝顶部窄条 ＋ 其下正文**——``.left-head`` 左侧是可点的 FactScribe 字标
+   与「项目管理」钮，右侧是**仅 workbench 视图渲染**的常用功能组
+   （中/EN ＋ 渲染PDF/全检一次/导出投稿包/打开目录）；新建钮只在项目列表页。
+3. **右栏＝工具条 ＋ 面板**——工具条最左一枚**纯图标**收起钮，右侧三枚互斥切换钮
+   （目录／智能助手／更多）；「更多」面板＝实验报告 / 知识库 / 版式 三段合并。
 """
 from __future__ import annotations
 
@@ -30,9 +27,25 @@ CSS = (STATIC / "app.css").read_text(encoding="utf-8")
 JS = (STATIC / "app.js").read_text(encoding="utf-8")
 
 
-def _block(pattern: str, text: str = HTML) -> str:
-    match = re.search(pattern, text, re.DOTALL)
-    return match.group(0) if match else ""
+def _slice(start: str, end: str, text: str = HTML) -> str:
+    """按锚点切一段 HTML（比正则稳：嵌套 div 不会截断）。"""
+    i = text.index(start)
+    j = text.index(end, i)
+    return text[i:j]
+
+
+def _visible_text(fragment: str) -> str:
+    """抽出片段里的可见文字（去掉标签后剩下的非空白字符）。"""
+    close = fragment.find("</button>")
+    inner = fragment[fragment.index(">") + 1: close if close != -1 else len(fragment)]
+    return re.sub(r"<[^>]+>", "", inner).strip()
+
+
+LEFT_HEAD = _slice('<div class="left-head">', '<!-- ============ 项目列表页')
+TOOLBAR = _slice('<div class="np-toolbar" id="npToolbar">', '<div class="np-col">')
+PANE_MORE = _slice('<section class="np-pane" id="paneMore">', '<!-- /np-body -->')
+PANE_TOC = _slice('<section class="np-pane on" id="paneToc">', '<section class="np-pane" id="paneAi">')
+PANEL = _slice('<aside class="navpanel" id="navPanel">', '</aside>')
 
 
 class NoTopbarTests(unittest.TestCase):
@@ -50,61 +63,95 @@ class NoTopbarTests(unittest.TestCase):
 
 
 class LeftColumnTests(unittest.TestCase):
-    """② 左栏＝顶部窄条（FactScribe ＋ Projects）＋ 其下正文。"""
+    """② 左栏＝顶部窄条（可点字标 ＋ Projects ＋ 常用功能组）＋ 其下正文。"""
 
     def test_left_column_exists(self):
         self.assertIn('class="left-col" id="leftCol"', HTML)
 
+    def test_brand_is_a_clickable_button(self):
+        """条目 33：FactScribe 字标可点，与 [Projects] 同去项目管理视图。"""
+        self.assertIn('id="goBrand"', LEFT_HEAD)
+        self.assertIn('class="tb-brand lh-brand"', LEFT_HEAD)
+        self.assertIn("$('#goBrand').addEventListener('click'", JS)
+
     def test_left_head_has_brand_and_projects(self):
-        head = _block(r'<div class="left-head">.*?</div>\s*\n\s*\n')
-        self.assertIn('class="tb-brand"', head)
-        self.assertIn('id="goProjects"', head)
+        self.assertIn('class="tb-brand', LEFT_HEAD)
+        self.assertIn('id="goProjects"', LEFT_HEAD)
 
     def test_left_head_has_no_new_button(self):
-        head = _block(r'<div class="left-head">.*?</div>\s*\n\s*\n')
-        self.assertNotIn('id="goNew"', head)
+        self.assertNotIn('id="goNew"', LEFT_HEAD)
 
     def test_new_button_lives_only_on_projects_page(self):
-        self.assertIn('id="goNew"', _block(r'<main class="mainview" id="viewProjects">.*?</main>'))
-        self.assertNotIn('id="goNew"', _block(r'<main class="doc" id="viewWorkbench">.*?</main>'))
+        self.assertIn('id="goNew"', _slice('<main class="mainview" id="viewProjects">', '</main>'))
+        self.assertNotIn('id="goNew"', _slice('<main class="doc" id="viewWorkbench">', '</main>'))
 
     def test_doc_sits_under_left_head(self):
-        col = _block(r'<div class="left-col" id="leftCol">.*?\n  </div><!-- /left-col -->')
+        col = _slice('<div class="left-col" id="leftCol">', '</div><!-- /left-col -->')
         self.assertIn('class="left-head"', col)
         self.assertIn('id="viewWorkbench"', col)
 
 
+class LeftHeadToolsTests(unittest.TestCase):
+    """条目 33：常用功能组搬进左栏头部，且只在 workbench 视图渲染。"""
+
+    def test_tools_group_lives_in_left_head(self):
+        self.assertIn('class="lh-tools" id="lhTools"', LEFT_HEAD)
+
+    def test_lang_toggle_moved_to_left_head(self):
+        self.assertIn('id="langSeg"', LEFT_HEAD)
+        self.assertNotIn('id="langSeg"', PANEL)
+
+    def test_four_action_buttons_moved_to_left_head(self):
+        for button_id in ("actPdf", "actCheck", "actBundle", "actOpenDir"):
+            self.assertIn('id="%s"' % button_id, LEFT_HEAD)
+            self.assertNotIn('id="%s"' % button_id, PANEL)
+
+    def test_action_behaviour_unchanged(self):
+        """搬家不改行为：仍是原来那四个动作处理器。"""
+        self.assertIn("$('#actPdf').addEventListener('click', runPdfAction);", JS)
+        self.assertIn("$('#actCheck').addEventListener('click', runFullCheck);", JS)
+        self.assertIn("$('#actBundle').addEventListener('click', runBundleAction);", JS)
+        self.assertIn("$('#actOpenDir').addEventListener('click', runOpenDirAction);", JS)
+
+    def test_tools_group_hidden_outside_workbench(self):
+        """项目管理列表视图时，右侧这组不渲染。"""
+        self.assertIn("tools.hidden = (view !== 'workbench');", JS)
+        self.assertIn(".lh-tools[hidden]{display:none}", CSS)
+
+    def test_single_language_hides_only_the_lang_toggle(self):
+        """单语项目隐藏中/EN，其余四钮照旧（条目 24 口径）。"""
+        self.assertIn("seg.hidden = !multi;", JS)
+        self.assertNotIn("const head = $('#npHead');", JS)
+        self.assertIn(".lang-seg[hidden]{display:none}", CSS)
+
+
 class RightColumnTests(unittest.TestCase):
-    """③ 右栏＝切换钮列（锚顶）＋ 面板。"""
-
-    def test_lang_toggle_in_panel_head(self):
-        head = _block(r'<div class="np-head" id="npHead">.*?</div>\s*\n\s*\n')
-        self.assertIn('id="langSeg"', head)
-        self.assertNotIn('id="goProjects"', head)
-
-    def test_projects_button_left_the_panel(self):
-        panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
-        self.assertNotIn('id="goProjects"', panel)
-
-    def test_no_vertical_rail_anywhere(self):
-        """条目 32 返修六：侧栏左缘的竖排列整条拆掉。"""
-        self.assertNotIn('id="sideRail"', HTML)
-        self.assertNotIn("side-rail{", CSS)
+    """③ 右栏＝图标收起钮 ＋ 三枚切换钮 ＋ 面板。"""
 
     def test_toolbar_is_horizontal_at_panel_top(self):
-        """横排工具条置面板顶部；面板内容在它下方。"""
-        panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
+        panel = PANEL
         self.assertIn('class="np-toolbar" id="npToolbar"', panel)
         self.assertLess(panel.index('id="npToolbar"'), panel.index('class="np-col"'))
         self.assertIn("flex-direction:row", CSS)
 
-    def test_toolbar_buttons_are_horizontal_text(self):
-        """横向文字（不再 writing-mode 竖排）、紧凑等宽。"""
-        toolbar = _block(r'<div class="np-toolbar" id="npToolbar">.*?</div>\s*\n')
-        for button_id in ("npCollapse", "npToc", "npAi", "npReports", "npKb", "npVenue"):
-            self.assertIn('id="%s"' % button_id, toolbar)
-        self.assertIn("flex:1 1 0", CSS)     # 等宽
-        self.assertNotIn("writing-mode:vertical-rl", _block(r"\.np-tab\{.*?\}", CSS))
+    def test_toolbar_has_exactly_one_icon_collapse_and_three_tabs(self):
+        """最左一枚纯图标收起钮（无文字、内联 SVG）＋ 目录/智能助手/更多。"""
+        self.assertIn('id="npCollapse"', TOOLBAR)
+        self.assertIn('class="np-tab np-icon"', TOOLBAR)
+        for button_id in ("npToc", "npAi", "npMore"):
+            self.assertIn('id="%s"' % button_id, TOOLBAR)
+        # 收起钮是纯图标：没有可见文字，只有内联 SVG。
+        collapse = TOOLBAR[TOOLBAR.index('id="npCollapse"'):TOOLBAR.index('id="npToc"')]
+        self.assertIn("<svg", collapse)
+        self.assertNotIn("data-i18n=", collapse)
+        self.assertEqual(_visible_text(collapse), "")
+
+    def test_seven_old_toolbar_buttons_are_gone(self):
+        """渲染PDF/全检/导出/开目录/知识库/版式/实验报告 七枚钮不再占工具条。"""
+        for button_id in ("npReports", "npKb", "npVenue"):
+            self.assertNotIn('id="%s"' % button_id, HTML)
+        for button_id in ("actPdf", "actCheck", "actBundle", "actOpenDir"):
+            self.assertNotIn('id="%s"' % button_id, PANEL)
 
     def test_panel_starts_at_top(self):
         self.assertIn(".navpanel{top:0;height:100vh}", CSS)
@@ -114,22 +161,85 @@ class RightColumnTests(unittest.TestCase):
         self.assertIn(".nav-open{display:none;position:fixed;right:0;top:0;", CSS)
         self.assertNotIn(".nav-open{display:none;position:fixed;left:0;", CSS)
 
-    def test_single_language_hides_the_whole_head(self):
-        self.assertIn("const head = $('#npHead');", JS)
-        self.assertIn("if (head) head.hidden = !multi;", JS)
-        self.assertIn(".np-head[hidden]{display:none}", CSS)
+    def test_open_button_is_icon_only(self):
+        """条目 33：展开钮也改成纯图标，不再竖排文字。"""
+        open_btn = _slice('<button type="button" class="nav-open"', '</button>')
+        self.assertIn("<svg", open_btn)
+        self.assertNotIn("data-i18n=", open_btn)
+        self.assertEqual(_visible_text(open_btn), "")
+        nav_open_css = CSS[CSS.index(".nav-open{"):CSS.index(".nav-open:hover")]
+        self.assertNotIn("writing-mode", nav_open_css)
 
 
-class RailButtonTests(unittest.TestCase):
-    """切换钮列的成员与顺序。"""
+class MorePaneTests(unittest.TestCase):
+    """条目 33：「更多」面板＝实验报告 / 知识库 / 版式 三段合并。"""
 
-    def test_toolbar_buttons_present(self):
-        toolbar = _block(r'<div class="np-toolbar" id="npToolbar">.*?</div>\s*\n')
-        for button_id in ("npCollapse", "npToc", "npAi", "npReports", "npKb", "npVenue"):
-            self.assertIn('id="%s"' % button_id, toolbar)
+    def test_three_sections_in_order(self):
+        order = [PANE_MORE.index('id="secReports"'),
+                 PANE_MORE.index('id="secKb"'),
+                 PANE_MORE.index('id="secVenue"')]
+        self.assertEqual(order, sorted(order))
+
+    def test_reports_section_keeps_import_and_delete_chain(self):
+        self.assertIn('id="npImportBtn"', PANE_MORE)
+        self.assertIn('id="npReportsList"', PANE_MORE)
+        self.assertIn("$('#npImportBtn').addEventListener('click', openWizard);", JS)
+
+    def test_reports_row_delete_goes_through_confirm(self):
+        """每条报告行带删除钮，删除前走一次确认。"""
+        self.assertIn("$$('#npReportsList [data-del]')", JS)
+        self.assertIn("if (!window.confirm(t('rp.delAsk'))) return;", JS)
+        self.assertIn("postJSON(path, { name: id })", JS)
+
+    def test_knowledge_section_keeps_upload_and_preview_chain(self):
+        self.assertIn('id="npKbUploadBtn"', PANE_MORE)
+        self.assertIn('id="npKbUpload"', PANE_MORE)
+        self.assertIn('id="kbFiles"', PANE_MORE)
+        self.assertIn('id="kbDetail"', PANE_MORE)
+        self.assertIn("$('#npKbUploadBtn').addEventListener('click', () => $('#npKbUpload').click());", JS)
+
+    def test_venue_section_keeps_save_and_preview_chain(self):
+        for field_id in ("vnVenue", "vnDeadline", "vnSave", "vnPreviewBtn", "vnTemplates"):
+            self.assertIn('id="%s"' % field_id, PANE_MORE)
+        self.assertIn("$('#vnSave').addEventListener('click', saveVenueConfig);", JS)
+
+    def test_switch_pane_supports_more(self):
+        self.assertIn("$('#paneMore').classList.toggle('on', name === 'more');", JS)
+        self.assertIn("$('#npMore').classList.toggle('on', name === 'more');", JS)
+        self.assertIn("$('#npMore').addEventListener('click', () => { switchNavPane('more'); });", JS)
+
+    def test_more_pane_loads_three_sections(self):
+        """切到「更多」把三段都拉起来（报告 / 知识库 / 版式）。"""
+        more = JS[JS.index("if (name === 'more') {"):]
+        more = more[:more.index("}")]
+        for fn in ("loadReports()", "loadKb()", "loadVenue()"):
+            self.assertIn(fn, more)
+
+    def test_deadline_badge_lands_on_more_button(self):
+        """版式并进「更多」后，截稿徽标改挂在「更多」钮上。"""
+        self.assertIn("const btn = $('#npMore');", JS)
+
+    def test_toc_pane_unchanged(self):
+        """目录面板保持段五现状（目录 ＋ 章节管理行内钮）。"""
+        self.assertIn('id="tocList"', PANE_TOC)
+        self.assertIn('class="np-pane on" id="paneToc"', HTML)
+
+
+class ActiveTabStyleTests(unittest.TestCase):
+    """激活态深色底（同族样式）。"""
 
     def test_active_tab_has_dark_background(self):
         self.assertIn(".np-tab.on{background:#2f2e2b;border-color:#2f2e2b;color:#fff}", CSS)
+
+
+class ProtocolGuardTests(unittest.TestCase):
+    """硬约束：AI fallback 明牌不许被本轮改动带偏。"""
+
+    def test_ai_fallback_marker_untouched(self):
+        self.assertIn("const AI_FALLBACK_MARK = '模拟回答（未接模型）';", JS)
+
+    def test_ai_fallback_still_leads_the_reply(self):
+        self.assertIn("return text.indexOf(AI_FALLBACK_MARK) === 0;", JS)
 
 
 if __name__ == "__main__":

@@ -158,6 +158,7 @@ const I18N = {
     'np.pdf': '渲染PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
     'np.openDir': '打开目录', 'np.collapse': '收起导航', 'np.toc': '目录',
     'np.ai': '智能助手', 'np.reports': '实验报告', 'np.import': '从外部导入',
+    'np.more': '更多',
     'nav.open': '展开导航', 'np.tocEmpty': '这个盘还没有章节。',
     'act.pdfTitle': '渲染 PDF', 'act.bundleTitle': '导出投稿包',
     'act.openTitle': '打开项目目录', 'act.close': '关闭',
@@ -396,6 +397,7 @@ const I18N = {
     'np.openDir': 'Open project folder', 'np.collapse': 'Hide panel',
     'np.toc': 'Contents',
     'np.ai': 'Assistant', 'np.reports': 'Reports', 'np.import': 'Import',
+    'np.more': 'More',
     'nav.open': 'Show panel', 'np.tocEmpty': 'This disk has no sections yet.',
     'act.pdfTitle': 'Render PDF', 'act.bundleTitle': 'Export submission bundle',
     'act.openTitle': 'Open project folder', 'act.close': 'Close',
@@ -568,6 +570,7 @@ function applyI18n() {
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.getAttribute('data-i18n')); });
   $$('[data-i18n-ph]').forEach((el) => { el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); });
   $$('[data-i18n-title]').forEach((el) => { el.setAttribute('title', t(el.getAttribute('data-i18n-title'))); });
+  $$('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.getAttribute('data-i18n-aria'))); });
   $('#langSeg').querySelectorAll('button').forEach((btn) => {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });
@@ -577,6 +580,8 @@ function applyI18n() {
   renderKb();
   renderVenue();
   applyLangToggle();
+  // 条目 33：applyI18n 会把钮里的文字整个重写，截稿徽标要补回来。
+  updateDeadlineBadge();
 }
 
 async function getJSON(url) {
@@ -1018,7 +1023,8 @@ async function openProject(projectId, diskId) {
   state.lang = disk.lang === 'zh' ? 'zh' : 'en';
   // 段四：换盘＝换一篇稿子，对话上下文跟着重置。
   clearAiConversation();
-  document.body.setAttribute('data-view', 'workbench');
+  // 条目 33：走 setView，左栏头部的常用功能组才会跟着渲染出来。
+  setView('workbench');
   applyI18n();
   await loadDisk();
   await loadAssembly();
@@ -2496,10 +2502,14 @@ function setView(view) {
   // 段落悬浮工具条只在正文里用。
   const bar = $('#ptools');
   if (bar) bar.classList.remove('on');
+  // 条目 33：左栏头部的常用功能组（中/EN ＋ PDF/全检/导出/开目录）
+  // 只在 workbench 视图渲染；项目列表/新建视图整组不渲染。
+  const tools = $('#lhTools');
+  if (tools) tools.hidden = (view !== 'workbench');
   applyLangToggle();
 }
 
-/* 段五：导航面板头部的中/EN 切换。
+/* 段五返修七（条目 33）：中/EN 切换搬到左栏头部。
    单语言项目（只有一个盘）→ 整组隐藏；双盘项目 → 照常切盘。 */
 function applyLangToggle() {
   const seg = $('#langSeg');
@@ -2507,28 +2517,21 @@ function applyLangToggle() {
   const project = state.project;
   const multi = project ? (project.multi_lang !== false && (project.disks || []).length > 1) : true;
   seg.hidden = !multi;
-  // 条目 31：中/EN 在右栏顶部条；单语项目整组隐藏，头条也跟着收掉。
-  const head = $('#npHead');
-  if (head) head.hidden = !multi;
   $$('#langSeg button').forEach((btn) => {
     btn.classList.toggle('on', btn.dataset.lang === state.lang);
   });
 }
 
-/* 段五返修三（条目 29）：三枚内容钮互斥——面板显示当前激活钮对应的面，
-   面板顶部的横排工具条（np-tab 族）负责切换；激活态深色底。 */
+/* 段五返修七（条目 33）：右栏工具条＝三枚切换钮（目录／智能助手／更多）。
+   目录 ↔ 更多互斥切面板内内容；「智能助手」开合正文上的半透明对话层。 */
 function switchNavPane(name) {
   state.nav.pane = name;
   $('#paneToc').classList.toggle('on', name === 'toc');
   $('#paneAi').classList.toggle('on', name === 'ai');
-  $('#paneReports').classList.toggle('on', name === 'reports');
-  $('#paneKb').classList.toggle('on', name === 'kb');
-  $('#paneVenue').classList.toggle('on', name === 'venue');
+  $('#paneMore').classList.toggle('on', name === 'more');
   $('#npToc').classList.toggle('on', name === 'toc');
   $('#npAi').classList.toggle('on', name === 'ai');
-  $('#npReports').classList.toggle('on', name === 'reports');
-  $('#npKb').classList.toggle('on', name === 'kb');
-  $('#npVenue').classList.toggle('on', name === 'venue');
+  $('#npMore').classList.toggle('on', name === 'more');
   // 互斥：切到别的面就把悬浮对话层收起来（对话层属「智能助手」这一面）。
   if (name === 'ai') {
     setAiOpen(true);
@@ -2536,9 +2539,12 @@ function switchNavPane(name) {
   } else {
     setAiOpen(false);
   }
-  if (name === 'reports') loadReports();
-  if (name === 'kb') loadKb();
-  if (name === 'venue') loadVenue();
+  // 条目 33：实验报告／知识库／版式都并进「更多」这一面，切过去就把三段都拉起来。
+  if (name === 'more') {
+    loadReports();
+    loadKb();
+    loadVenue();
+  }
 }
 
 /* 面板里的智能助手面：上下文 + 打开/收起悬浮对话层。 */
@@ -2820,9 +2826,10 @@ async function saveVenueConfig() {
   }
 }
 
-/* 段六：截稿提醒徽标（到期前 7 天，导航钮上带提醒）。 */
+/* 段六：截稿提醒徽标（到期前 7 天，导航钮上带提醒）。
+   条目 33：版式已并进「更多」面板，徽标改挂在「更多」钮上（钮面无文字，只有徽标）。 */
 function updateDeadlineBadge() {
-  const btn = $('#npVenue');
+  const btn = $('#npMore');
   if (!btn) return;
   let badge = btn.querySelector('.dl-badge');
   const data = state.venue.data;
@@ -3029,6 +3036,8 @@ async function runFullCheck() {
 
 function bind() {
   $('#goProjects').addEventListener('click', () => { setView('projects'); loadProjects(); });
+  // 条目 33：字标可点，与 [Projects] 同去项目管理视图。
+  $('#goBrand').addEventListener('click', () => { setView('projects'); loadProjects(); });
   $('#pjSearch').addEventListener('input', (ev) => {
     state.filter = ev.target.value || '';
     renderProjects();
@@ -3049,17 +3058,15 @@ function bind() {
     applyI18n();
     renderProjects();
   });
-  // 段五返修三（条目 29）：右缘钮列——收起导航 ＋ 三枚内容钮（互斥）
+  // 段五返修七（条目 33）：右栏工具条＝纯图标收起钮 ＋ 三枚切换钮（互斥）
   $('#npCollapse').addEventListener('click', () => {
     setNavCollapsed(!document.body.classList.contains('nav-collapsed'));
   });
   $('#navOpen').addEventListener('click', () => { setNavCollapsed(false); });
   $('#npToc').addEventListener('click', () => { switchNavPane('toc'); });
-  $('#npReports').addEventListener('click', () => { switchNavPane('reports'); });
   $('#npAi').addEventListener('click', () => { switchNavPane('ai'); });
-  // 段六：知识库（第五钮，排在实验报告之后）＋版式（第六钮）
-  $('#npKb').addEventListener('click', () => { switchNavPane('kb'); });
-  $('#npVenue').addEventListener('click', () => { switchNavPane('venue'); });
+  // 条目 33：实验报告／知识库／版式三段合并进「更多」面板，工具条只剩一枚钮。
+  $('#npMore').addEventListener('click', () => { switchNavPane('more'); });
   $('#npAiToggle').addEventListener('click', () => {
     setAiOpen(!state.nav.aiOpen);
   });
@@ -3141,7 +3148,7 @@ function bind() {
   $('#guideClose').addEventListener('click', closeVenueGuide);
   $('#guideGo').addEventListener('click', () => {
     closeVenueGuide();
-    switchNavPane('venue');
+    switchNavPane('more');
     renderVenuePreview();
   });
   $('#modalGuide').addEventListener('click', (ev) => {

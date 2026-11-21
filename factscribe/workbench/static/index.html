@@ -211,6 +211,8 @@
             <span data-i18n="np.reports">实验报告</span>
             <button type="button" class="np-mini" id="npImportBtn" data-i18n="np.import">从外部导入</button>
           </div>
+          <!-- 条目 35：纪律提示（浅色小字） -->
+          <p class="np-note" data-i18n="more.rpNote">导入进来的都在待核对区；转正走闸，不在面板里</p>
           <div class="np-reports" id="npReportsList"></div>
         </div>
         <div class="np-sec" id="secKb">
@@ -218,10 +220,11 @@
             <span data-i18n="np.kb">知识库</span>
             <button type="button" class="np-mini" id="npKbUploadBtn" data-i18n="np.kbUpload">上传文件</button>
           </div>
+          <!-- 条目 35：纪律提示（浅色小字） -->
+          <p class="np-note" data-i18n="more.kbNote">源文件只读；上传的资料才可删除</p>
           <input type="file" id="npKbUpload" hidden>
           <div class="kb-wrap">
             <ul class="kb-files" id="kbFiles"></ul>
-            <div class="kb-detail" id="kbDetail"></div>
           </div>
         </div>
         <div class="np-sec" id="secVenue">
@@ -471,6 +474,41 @@
     <div class="modal-acts">
       <button type="button" class="btn-ghost" id="guideClose" data-i18n="rp.close">关闭</button>
       <button type="button" class="btn-primary" id="guideGo" data-i18n="guide.go">按目标版式预览并开写</button>
+    </div>
+  </div>
+</div>
+
+<!-- 条目 35：知识库预览模态（不再是侧栏内嵌框） -->
+<div class="modal" id="modalKb" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" id="kbModalTitle">—</div>
+    <div class="modal-body" id="kbModalBody"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="kbModalClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 条目 35：实验报告详情模态 -->
+<div class="modal" id="modalRp" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" id="rpModalTitle">—</div>
+    <div class="modal-body" id="rpModalBody"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-danger" id="rpModalDel" data-i18n="rp.card.del">删除</button>
+      <button type="button" class="btn-ghost" id="rpModalClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 条目 35：通用确认模态 -->
+<div class="modal" id="modalConfirm" hidden>
+  <div class="modal-card">
+    <div class="modal-t" id="cfTitle">—</div>
+    <div class="modal-body" id="cfBody"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="cfCancel" data-i18n="confirm.cancel">取消</button>
+      <button type="button" class="btn-danger" id="cfOk" data-i18n="confirm.ok">确定</button>
     </div>
   </div>
 </div>

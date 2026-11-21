@@ -205,6 +205,19 @@ const I18N = {
     'kb.uploadOk': '已上传：{name}', 'kb.uploadErr': '上传失败：{e}',
     'kb.noFile': '没有选中文件。', 'kb.pending': '待提取', 'kb.ready': '可用',
     'kb.pdfNote': 'PDF 只登记文件名与大小，文本提取段七接入。',
+    'kb.actPreview': '预览', 'kb.actDelete': '删除',
+    'kb.sourceNote': '源文件由章节管理管',
+    'kb.delTitle': '删除知识库文件',
+    'kb.delAsk': '删掉这个知识库文件？\n（只删 knowledge/ 里的这份；项目源文件不动）',
+    'kb.deleted': '已删掉这个知识库文件', 'kb.delFail': '删不掉：{e}',
+    'kb.sha': 'sha256', 'kb.fullNote': '完整内容请打开原文件',
+    'rp.actDetail': '详情', 'rp.id': 'id', 'rp.claim': '断言', 'rp.value': '值',
+    'rp.boundList': '绑定清单', 'rp.detailEmpty': '这条记录没有绑定条目。',
+    'rp.delConfirmTitle': '删除这条导入记录？',
+    'rp.delConfirmBody': '只删草稿记录，报告源文件不动。',
+    'confirm.ok': '确定', 'confirm.cancel': '取消',
+    'more.rpNote': '导入进来的都在待核对区；转正走闸，不在面板里',
+    'more.kbNote': '源文件只读；上传的资料才可删除',
     'vn.venue': '目标刊物 / 会议', 'vn.venuePh': '例如：ACL 2026',
     'vn.deadline': '截稿日期', 'vn.save': '保存版式配置',
     'vn.lockTag': '语言盘锁定',
@@ -447,6 +460,19 @@ const I18N = {
     'kb.noFile': 'No file selected.', 'kb.pending': 'extraction pending',
     'kb.ready': 'Ready',
     'kb.pdfNote': 'PDF: name and size only — text extraction lands in the next stage.',
+    'kb.actPreview': 'Preview', 'kb.actDelete': 'Delete',
+    'kb.sourceNote': 'Source files are managed by the section manager',
+    'kb.delTitle': 'Delete knowledge-base file',
+    'kb.delAsk': 'Delete this knowledge-base file?\n(Only the copy under knowledge/ goes; project sources stay untouched.)',
+    'kb.deleted': 'Knowledge-base file deleted', 'kb.delFail': 'Could not delete: {e}',
+    'kb.sha': 'sha256', 'kb.fullNote': 'Open the original file for the full content',
+    'rp.actDetail': 'Details', 'rp.id': 'id', 'rp.claim': 'Claim', 'rp.value': 'Value',
+    'rp.boundList': 'Bound items', 'rp.detailEmpty': 'This record has no bound items.',
+    'rp.delConfirmTitle': 'Delete this import record?',
+    'rp.delConfirmBody': 'Only the draft record goes; the report source file stays.',
+    'confirm.ok': 'OK', 'confirm.cancel': 'Cancel',
+    'more.rpNote': 'Imported reports sit in the pending-check zone; promoting them goes through the gate, not this panel.',
+    'more.kbNote': 'Source files are read-only; only uploaded material can be deleted.',
     'vn.venue': 'Target journal / conference', 'vn.venuePh': 'e.g. ACL 2026',
     'vn.deadline': 'Deadline', 'vn.save': 'Save venue config',
     'vn.lockTag': 'Language lock',
@@ -2177,7 +2203,10 @@ function reportRowHtml(report) {
         <span>${esc(report.time || '')}</span>
       </div>
     </div>
-    <button type="button" class="np-rp-del" data-del="${esc(report.id || '')}" title="${esc(t('rp.delAsk'))}">${esc(t('rp.card.del'))}</button>
+    <div class="np-rp-acts">
+      <button type="button" class="np-rp-act" data-detail="${esc(report.id || '')}">${esc(t('rp.actDetail'))}</button>
+      <button type="button" class="np-rp-del" data-del="${esc(report.id || '')}" title="${esc(t('rp.delAsk'))}">${esc(t('rp.card.del'))}</button>
+    </div>
   </div>`;
 }
 
@@ -2203,8 +2232,48 @@ function renderReports() {
   }
   list.innerHTML = items.map(reportRowHtml).join('');
   $$('#npReportsList [data-del]').forEach((btn) => {
-    btn.addEventListener('click', () => deleteReport(btn.dataset.del));
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); deleteReport(btn.dataset.del); });
   });
+  $$('#npReportsList [data-detail]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); openReportDetail(btn.dataset.detail); });
+  });
+  $$('#npReportsList .np-rp-row').forEach((row) => {
+    row.addEventListener('click', () => openReportDetail(row.dataset.rp || ''));
+  });
+}
+
+/* 条目 35：实验报告详情模态（报告名＋状态＋来源文件/sha256＋绑定清单）。 */
+async function openReportDetail(id) {
+  if (!id) return;
+  const modal = $('#modalRp');
+  const title = $('#rpModalTitle');
+  const body = $('#rpModalBody');
+  if (!modal || !title || !body) return;
+  const url = reportsApiPath('/detail') + '?name=' + encodeURIComponent(id);
+  try {
+    const data = await getJSON(url);
+    title.textContent = data.name || id;
+    const meta = [
+      `<div class="kbd-kv"><span>${esc(t('rp.card.file'))}</span><span>${esc(data.report || data.file || '')}</span></div>`,
+      `<div class="kbd-kv"><span>${esc(t('kb.sha'))}</span><code>${esc(data.report_sha256 || '—')}</code></div>`,
+      `<div class="kbd-kv"><span>${esc(t('rp.card.time'))}</span><span>${esc(data.time || '')}</span></div>`,
+    ];
+    const rows = (data.facts || []).map((f) => `<tr>`
+      + `<td class="rp-b-id">${esc(f.id || '')}</td>`
+      + `<td class="rp-b-claim">${esc(f.claim || '')}</td>`
+      + `<td class="rp-b-value">${esc(f.value || '')}</td></tr>`).join('');
+    const table = rows
+      ? `<table class="rp-b-table"><thead><tr><th>${esc(t('rp.id'))}</th><th>${esc(t('rp.claim'))}</th><th>${esc(t('rp.value'))}</th></tr></thead><tbody>${rows}</tbody></table>`
+      : `<p class="kbd-note">${esc(t('rp.detailEmpty'))}</p>`;
+    body.innerHTML = `<div class="rp-d-status"><span class="np-rp-chip rp-pending_check">${esc(t('rp.st.pending_check'))}</span></div>`
+      + meta.join('')
+      + `<div class="kbd-title">${esc(t('rp.boundList'))}</div>` + table;
+  } catch (err) {
+    title.textContent = id;
+    body.innerHTML = `<div class="kbd-note err">${esc((err && err.message) || String(err))}</div>`;
+  }
+  modal.dataset.report = id;
+  modal.hidden = false;
 }
 
 async function loadReports() {
@@ -2228,7 +2297,9 @@ async function loadReports() {
 /* 删除导入记录（草稿）：先确认，再走服务端；报告源文件不动。 */
 async function deleteReport(id) {
   if (!id) return;
-  if (!window.confirm(t('rp.delAsk'))) return;
+  const ok = await askConfirm({ title: t('rp.delConfirmTitle'),
+                                body: t('rp.delConfirmBody'), okLabel: t('confirm.ok') });
+  if (!ok) return;
   const path = reportsApiPath('/delete');
   if (!path) return;
   try {
@@ -2241,6 +2312,31 @@ async function deleteReport(id) {
   } catch (err) {
     toast(t('rp.noDelete', { e: (err && err.message) || String(err) }));
   }
+}
+
+/* 条目 35：通用确认模态（删除前问一句；Esc/遮罩/取消都算「不删」）。 */
+let confirmResolver = null;
+
+function askConfirm(opts) {
+  const modal = $('#modalConfirm');
+  const title = $('#cfTitle');
+  const body = $('#cfBody');
+  const ok = $('#cfOk');
+  if (!modal || !title || !body || !ok) return Promise.resolve(false);
+  const conf = opts || {};
+  title.textContent = conf.title || '';
+  body.textContent = conf.body || '';
+  ok.textContent = conf.okLabel || t('confirm.ok');
+  modal.hidden = false;
+  return new Promise((resolve) => { confirmResolver = resolve; });
+}
+
+function closeConfirm(result) {
+  const modal = $('#modalConfirm');
+  if (modal) modal.hidden = true;
+  const fn = confirmResolver;
+  confirmResolver = null;
+  if (typeof fn === 'function') fn(!!result);
 }
 
 /* ---------------------------------------------------------------- 导入向导 */
@@ -2565,15 +2661,13 @@ function kbStatusLabel(file) {
 
 function renderKb() {
   const list = $('#kbFiles');
-  const detail = $('#kbDetail');
-  if (!list || !detail) return;
+  if (!list) return;
   list.innerHTML = '';
   if (state.kb.loading) {
     const li = document.createElement('li');
     li.className = 'kb-empty';
     li.textContent = t('kb.loading');
     list.appendChild(li);
-    detail.innerHTML = '';
     return;
   }
   if (state.kb.error) {
@@ -2581,7 +2675,6 @@ function renderKb() {
     li.className = 'kb-empty';
     li.textContent = state.kb.error;
     list.appendChild(li);
-    detail.innerHTML = '';
     return;
   }
   if (!state.kb.files.length) {
@@ -2589,51 +2682,82 @@ function renderKb() {
     li.className = 'kb-empty';
     li.textContent = t('kb.empty');
     list.appendChild(li);
-    detail.innerHTML = `<p class="kb-pick">${esc(t('kb.pick'))}</p>`;
     return;
   }
   state.kb.files.forEach((file) => {
     const li = document.createElement('li');
     li.className = 'kb-file' + (state.kb.current === file.path ? ' on' : '');
     li.dataset.path = file.path;
+    const head = document.createElement('div');
+    head.className = 'kbf-head';
     const name = document.createElement('span');
     name.className = 'kbf-name';
     name.textContent = file.name;
     const meta = document.createElement('span');
     meta.className = 'kbf-meta';
     meta.textContent = `${file.size_label} · ${kbStatusLabel(file)}`;
-    li.appendChild(name);
-    li.appendChild(meta);
+    head.appendChild(name);
+    head.appendChild(meta);
+    li.appendChild(head);
+    /* 条目 35：行动作收口——人人有「预览」；「删除」只给 knowledge/ 里的
+       文本文件（项目源文件由章节管理管，PDF 只登记不删）。 */
+    const acts = document.createElement('div');
+    acts.className = 'kbf-acts';
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.className = 'kbf-act';
+    prev.textContent = t('kb.actPreview');
+    prev.addEventListener('click', (ev) => { ev.stopPropagation(); previewKbFile(file.path); });
+    acts.appendChild(prev);
+    if (file.in_knowledge && file.status !== 'pending') {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'kbf-act kbf-act-del';
+      del.textContent = t('kb.actDelete');
+      del.addEventListener('click', (ev) => { ev.stopPropagation(); askDeleteKbFile(file); });
+      acts.appendChild(del);
+    }
+    li.appendChild(acts);
+    if (!file.in_knowledge) {
+      const note = document.createElement('div');
+      note.className = 'kbf-note';
+      note.textContent = t('kb.sourceNote');
+      li.appendChild(note);
+    }
     li.addEventListener('click', () => previewKbFile(file.path));
     list.appendChild(li);
   });
-  renderKbDetail();
 }
 
-function renderKbDetail() {
-  const detail = $('#kbDetail');
-  if (!detail) return;
-  const data = state.kb.detail;
-  if (!data) {
-    detail.innerHTML = `<p class="kb-pick">${esc(t('kb.pick'))}</p>`;
-    return;
-  }
-  const head = [
-    `<div class="kbd-h">${esc(data.name || '')}</div>`,
-    `<div class="kbd-kv"><span>${esc(t('kb.path'))}</span><code>${esc(data.path || '')}</code></div>`,
-    `<div class="kbd-kv"><span>${esc(t('kb.size'))}</span><span>${esc(data.size_label || '')}</span></div>`,
-    `<div class="kbd-kv"><span>${esc(t('kb.status'))}</span><span>${esc(data.status === 'pending' ? t('kb.pending') : t('kb.ready'))}</span></div>`,
+/* 条目 35：知识库预览改模态框（不再是侧栏内嵌框）。 */
+function openKbModal(data) {
+  const modal = $('#modalKb');
+  const title = $('#kbModalTitle');
+  const body = $('#kbModalBody');
+  if (!modal || !title || !body) return;
+  const info = data || {};
+  title.textContent = info.name || '';
+  const meta = [
+    `<div class="kbd-kv"><span>${esc(t('kb.path'))}</span><code>${esc(info.path || '')}</code></div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.size'))}</span><span>${esc(info.size_label || '—')}</span></div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.sha'))}</span><code>${esc(info.sha256 || '—')}</code></div>`,
+    `<div class="kbd-kv"><span>${esc(t('kb.status'))}</span><span>${esc(info.status === 'pending' ? t('kb.pending') : t('kb.ready'))}</span></div>`,
   ];
-  if (data.status === 'pending') head.push(`<div class="kbd-note">${esc(t('kb.pdfNote'))}</div>`);
-  let bodyHtml = '';
-  if (data.status === 'pending') {
-    bodyHtml = `<div class="kbd-kv"><span>${esc(t('kb.preview'))}</span><span>${esc(t('kb.pending'))}</span></div>`;
+  let content = '';
+  if (info.error) {
+    content = `<div class="kbd-note err">${esc(info.error)}</div>`;
+  } else if (info.status === 'pending') {
+    content = `<div class="kbd-note">${esc(t('kb.pdfNote'))}</div>`;
   } else {
-    bodyHtml = `<div class="kbd-title">${esc(t('kb.preview'))}</div>`
-      + `<pre class="kbd-text">${esc(data.text || '')}</pre>`
-      + (data.truncated ? `<div class="kbd-note">${esc(t('kb.truncated'))}</div>` : '');
+    const lines = String(info.text || '').split('\n');
+    const cut = lines.slice(0, 200);
+    const more = lines.length > 200 || info.truncated;
+    content = `<div class="kbd-title">${esc(t('kb.preview'))}</div>`
+      + `<pre class="kbd-text">${esc(cut.join('\n'))}</pre>`
+      + (more ? `<div class="kbd-note">${esc(t('kb.fullNote'))}</div>` : '');
   }
-  detail.innerHTML = head.join('') + bodyHtml;
+  body.innerHTML = meta.join('') + content;
+  modal.hidden = false;
 }
 
 async function loadKb() {
@@ -2662,11 +2786,30 @@ async function previewKbFile(path) {
   try {
     const data = await getJSON(url);
     state.kb.detail = data;
+    openKbModal(data);
   } catch (err) {
-    state.kb.detail = { name: path, path: path, text: '', size_label: '—',
-                        status_label: t('kb.loadErr', { e: (err && err.message) || String(err) }) };
+    openKbModal({ name: path, path: path, text: '', size_label: '—',
+                  error: (err && err.message) || String(err) });
   }
-  renderKb();
+}
+
+/* 条目 35：删除知识库文件（只许 knowledge/ 里的）——先确认，再走服务端写闸。 */
+async function deleteKbFile(path) {
+  const url = kbApiPath('/delete');
+  if (!url) return;
+  try {
+    await postJSON(url, { path: path });
+    toast(t('kb.deleted'));
+    if (state.kb.current === path) state.kb.current = '';
+    await loadKb();
+  } catch (err) {
+    toast(t('kb.delFail', { e: (err && err.message) || String(err) }));
+  }
+}
+
+function askDeleteKbFile(file) {
+  askConfirm({ title: t('kb.delTitle'), body: t('kb.delAsk'), okLabel: t('confirm.ok') })
+    .then((ok) => { if (ok) deleteKbFile(file.path); });
 }
 
 async function uploadKbFile(event) {
@@ -3127,6 +3270,25 @@ function bind() {
   });
   // 段五：实验报告列表（导航面板里）
   $('#npImportBtn').addEventListener('click', openWizard);
+  // 条目 35：知识库预览模态 ＋ 报告详情模态 ＋ 通用确认模态
+  $('#kbModalClose').addEventListener('click', () => { $('#modalKb').hidden = true; });
+  $('#modalKb').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalKb') $('#modalKb').hidden = true;
+  });
+  $('#rpModalClose').addEventListener('click', () => { $('#modalRp').hidden = true; });
+  $('#modalRp').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalRp') $('#modalRp').hidden = true;
+  });
+  $('#rpModalDel').addEventListener('click', () => {
+    const id = $('#modalRp').dataset.report || '';
+    $('#modalRp').hidden = true;
+    deleteReport(id);
+  });
+  $('#cfOk').addEventListener('click', () => closeConfirm(true));
+  $('#cfCancel').addEventListener('click', () => closeConfirm(false));
+  $('#modalConfirm').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalConfirm') closeConfirm(false);
+  });
   // 段四：导入向导（选文件 → 字段映射 → 确认绑定）
   $('#wzFiles').addEventListener('change', (ev) => {
     const input = ev.target;
@@ -3207,6 +3369,13 @@ function bind() {
     if (ev.key !== 'Escape') return;
     const modal = $('#modalFindings');
     if (modal && !modal.hidden) modal.hidden = true;
+    // 条目 35：知识库预览／报告详情／确认框都吃 Esc
+    const kbModal = $('#modalKb');
+    if (kbModal && !kbModal.hidden) kbModal.hidden = true;
+    const rpModal = $('#modalRp');
+    if (rpModal && !rpModal.hidden) rpModal.hidden = true;
+    const cfModal = $('#modalConfirm');
+    if (cfModal && !cfModal.hidden) closeConfirm(false);
     const check = $('#modalCheck');
     if (check && !check.hidden) check.hidden = true;
     const action = $('#modalAction');

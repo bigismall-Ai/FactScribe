@@ -402,6 +402,78 @@ def list_drafts(disk_path: str | Path) -> list[dict]:
     return out
 
 
+def _unquote_toml(text: str) -> str:
+    """去掉 TOML 字符串的引号与转义（草稿是本模块自己写的，格式已知）。"""
+    raw = str(text or "").strip()
+    if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+        body = raw[1:-1]
+        out = []
+        i = 0
+        escapes = {"n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\"}
+        while i < len(body):
+            ch = body[i]
+            if ch == "\\" and i + 1 < len(body):
+                out.append(escapes.get(body[i + 1], body[i + 1]))
+                i += 2
+                continue
+            out.append(ch)
+            i += 1
+        return "".join(out)
+    return raw
+
+
+def read_draft(disk_path: str | Path, report_name: str) -> dict:
+    """读一条导入草稿的详情（报告名 / 来源文件 / sha256 / 逐条绑定清单）。
+
+    只读草稿记录本身，不碰活账本、不碰报告源文件。
+    """
+    disk = Path(disk_path).expanduser()
+    target = draft_path(disk, report_name)
+    if not target.is_file():
+        raise ImportError_("找不到这条导入记录：%s" % report_name, "DRAFT_NOT_FOUND")
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise ImportError_("读不了草稿：%s" % exc, "DRAFT_READ_FAILED") from exc
+    head: dict = {}
+    facts: list[dict] = []
+    cur: dict | None = None
+    for line in text.splitlines():
+        item = line.strip()
+        if not item or item.startswith("#"):
+            continue
+        if item == "[[fact]]":
+            cur = {"id": "", "claim": "", "value": "", "source": "",
+                   "status": "", "confidence": "", "mapping": "",
+                   "path": "", "sha256": "", "line": ""}
+            facts.append(cur)
+            continue
+        if item.startswith("["):
+            continue
+        if "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        key = key.strip()
+        if cur is None:
+            head[key] = _unquote_toml(value)
+        else:
+            cur[key] = _unquote_toml(value)
+    try:
+        stat = target.stat()
+        mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
+    except OSError:
+        mtime = ""
+    return {"ok": True, "id": target.stem.replace(".draft", ""),
+            "name": target.name.replace(".draft.toml", ""),
+            "file": target.name, "path": str(target),
+            "time": mtime, "size": len(text.encode("utf-8")),
+            "report": head.get("report", ""),
+            "report_sha256": head.get("report_sha256", ""),
+            "imported_at": head.get("imported_at", ""),
+            "status": head.get("status", ""),
+            "bound": len(facts), "facts": facts}
+
+
 def delete_draft(disk_path: str | Path, report_name: str) -> dict:
     """删掉一条导入草稿（报告记录）。
 

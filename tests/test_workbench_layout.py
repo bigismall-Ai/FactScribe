@@ -186,17 +186,27 @@ class MorePaneTests(unittest.TestCase):
         self.assertIn("$('#npImportBtn').addEventListener('click', openWizard);", JS)
 
     def test_reports_row_delete_goes_through_confirm(self):
-        """每条报告行带删除钮，删除前走一次确认。"""
+        """每条报告行带删除钮，删除前走一次确认模态（条目 35）。"""
         self.assertIn("$$('#npReportsList [data-del]')", JS)
-        self.assertIn("if (!window.confirm(t('rp.delAsk'))) return;", JS)
+        self.assertIn("id=\"modalConfirm\"", HTML)
+        self.assertIn("function askConfirm(", JS)
+        self.assertIn("const ok = await askConfirm(", JS)
         self.assertIn("postJSON(path, { name: id })", JS)
+        self.assertNotIn("window.confirm(t('rp.delAsk'))", JS)
 
-    def test_knowledge_section_keeps_upload_and_preview_chain(self):
+    def test_knowledge_section_keeps_upload_chain(self):
         self.assertIn('id="npKbUploadBtn"', PANE_MORE)
         self.assertIn('id="npKbUpload"', PANE_MORE)
         self.assertIn('id="kbFiles"', PANE_MORE)
-        self.assertIn('id="kbDetail"', PANE_MORE)
         self.assertIn("$('#npKbUploadBtn').addEventListener('click', () => $('#npKbUpload').click());", JS)
+
+    def test_knowledge_preview_moved_to_modal(self):
+        """条目 35：预览改模态框——侧栏里的内嵌详情框没了。"""
+        self.assertNotIn('id="kbDetail"', HTML)
+        self.assertNotIn(".kb-detail{display", CSS.replace(".kb-detail{display:none}", ""))
+        self.assertIn('id="modalKb"', HTML)
+        self.assertIn("function openKbModal(", JS)
+        self.assertIn("openKbModal(data);", JS)
 
     def test_venue_section_keeps_save_and_preview_chain(self):
         for field_id in ("vnVenue", "vnDeadline", "vnSave", "vnPreviewBtn", "vnTemplates"):
@@ -304,6 +314,74 @@ class EmbeddedAssistantPaneTests(unittest.TestCase):
         self.assertIn("'/api/chat'", JS)
         self.assertIn("const AI_FALLBACK_MARK = '模拟回答（未接模型）';", JS)
         self.assertIn("return text.indexOf(AI_FALLBACK_MARK) === 0;", JS)
+
+
+class Item35ManageTests(unittest.TestCase):
+    """条目 35：知识库/实验报告管理收口 ＋ 预览/详情改模态。"""
+
+    def test_kb_preview_modal_exists(self):
+        """知识库预览＝模态框（文件名＋元信息＋内容）。"""
+        self.assertIn('id="modalKb"', HTML)
+        self.assertIn('id="kbModalTitle"', HTML)
+        self.assertIn('id="kbModalBody"', HTML)
+        self.assertIn('id="kbModalClose"', HTML)
+        self.assertIn("t('kb.path')", JS)
+        self.assertIn("t('kb.size')", JS)
+        self.assertIn("t('kb.sha')", JS)
+
+    def test_kb_preview_truncates_at_200_lines(self):
+        """大文件截断 200 行 ＋ 提示「完整内容请打开原文件」。"""
+        self.assertIn("lines.slice(0, 200)", JS)
+        self.assertIn("t('kb.fullNote')", JS)
+
+    def test_kb_modal_closes_by_esc_mask_and_button(self):
+        """Esc/遮罩/关闭钮都能关。"""
+        self.assertIn("const kbModal = $('#modalKb');", JS)
+        self.assertIn("if (kbModal && !kbModal.hidden) kbModal.hidden = true;", JS)
+        self.assertIn("if (ev.target.id === 'modalKb') $('#modalKb').hidden = true;", JS)
+        self.assertIn("$('#kbModalClose').addEventListener('click'", JS)
+
+    def test_kb_delete_only_for_knowledge_files(self):
+        """删除钮只给 knowledge/ 里的文本文件；源文件/PDF 不给。"""
+        self.assertIn("if (file.in_knowledge && file.status !== 'pending') {", JS)
+        self.assertIn("t('kb.sourceNote')", JS)
+
+    def test_kb_delete_goes_through_server_gate(self):
+        """服务端写闸：只许删 knowledge/ 里的文件。"""
+        from factscribe.workbench import knowledge as kbmod
+        self.assertTrue(hasattr(kbmod, "delete_file"))
+        source = (ROOT / "factscribe" / "workbench" / "knowledge.py").read_text(encoding="utf-8")
+        self.assertIn("target = _safe_knowledge_file(disk, rel)", source)
+
+    def test_report_detail_modal_has_all_fields(self):
+        """报告详情模态：报告名＋状态＋来源文件/sha256＋绑定清单＋删除钮。"""
+        self.assertIn('id="modalRp"', HTML)
+        self.assertIn('id="rpModalDel"', HTML)
+        self.assertIn("t('rp.boundList')", JS)
+        self.assertIn("t('rp.claim')", JS)
+        self.assertIn("t('rp.value')", JS)
+        self.assertIn("data.report_sha256", JS)
+        self.assertIn("reportsApiPath('/detail')", JS)
+
+    def test_report_row_has_detail_and_delete(self):
+        self.assertIn('data-detail=', JS)
+        self.assertIn('data-del=', JS)
+        self.assertIn("openReportDetail(", JS)
+
+    def test_confirm_modal_is_shared(self):
+        """通用确认模态：Esc/遮罩/取消＝不删。"""
+        self.assertIn('id="modalConfirm"', HTML)
+        self.assertIn('id="cfOk"', HTML)
+        self.assertIn('id="cfCancel"', HTML)
+        self.assertIn("function closeConfirm(", JS)
+        self.assertIn("if (cfModal && !cfModal.hidden) closeConfirm(false);", JS)
+
+    def test_discipline_notes_in_more_panel(self):
+        """更多面板两段顶部各一行纪律提示。"""
+        self.assertIn('data-i18n="more.rpNote"', HTML)
+        self.assertIn('data-i18n="more.kbNote"', HTML)
+        self.assertIn("'more.rpNote':", JS)
+        self.assertIn("'more.kbNote':", JS)
 
 
 if __name__ == "__main__":

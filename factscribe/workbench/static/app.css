@@ -1166,7 +1166,7 @@ body.nav-collapsed .shell{padding-right:0}
 .kbf-name{font-size:12px;color:#37352f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kbf-meta{font-size:10px;color:#a3a29c}
 .kb-empty{font-size:11.5px;color:#a3a29c;padding:8px 4px;line-height:1.6}
-.kb-detail{flex:1 1 auto;min-width:0;background:#fff;border:1px solid #ececeb;border-radius:8px;padding:9px 10px;
+.kb-detail{display:none}
  max-height:52vh;overflow:auto}
 .kb-pick{font-size:11.5px;color:#a3a29c;margin:4px 0}
 .kbd-h{font-size:12.5px;font-weight:650;color:#1c1e22;word-break:break-all;margin-bottom:6px}
@@ -1334,3 +1334,43 @@ body.nav-collapsed .nav-open{display:flex}
  #paneAi.on{height:auto}
  .np-ai-face .ai-msgs{max-height:320px}
 }
+
+
+/* ================================================================
+   条目 35：知识库/实验报告管理收口 ＋ 预览/详情改模态
+   —— 预览与详情从侧栏内嵌框搬到模态框；删除一律先过确认模态
+   ================================================================ */
+
+/* 更多面板两段顶部的纪律提示（浅色小字） */
+.np-note{font-size:10.5px;line-height:1.55;color:#a3a29c;margin:0 0 6px}
+
+/* 知识库行：名字/元信息一行 ＋ 行动作一行 ＋ 源文件提示 */
+.kb-files{flex:1 1 auto;max-height:none}
+.kbf-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.kbf-acts{display:flex;gap:6px;margin-top:4px}
+.kbf-act{font-family:inherit;font-size:10.5px;color:#5f5e5b;background:#fff;border:1px solid #e3e2df;
+ border-radius:6px;padding:2px 8px;cursor:pointer}
+.kbf-act:hover{border-color:#b8b5ac;color:#37352f}
+.kbf-act-del{color:#9a3b1e;border-color:#e7c4b8}
+.kbf-act-del:hover{background:#f9e4dd}
+.kbf-note{font-size:10px;color:#a3a29c;margin-top:3px;line-height:1.45}
+
+/* 报告行：详情＋删除两枚钮 */
+.np-rp-acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.np-rp-act{font-family:inherit;font-size:11px;color:#2f5279;background:none;border:none;cursor:pointer;
+ padding:0;text-decoration:underline}
+.np-rp-act:hover{color:#1c3d5c}
+
+/* 报告详情模态：绑定清单表 */
+.rp-d-status{margin-bottom:6px}
+.rp-b-table{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:4px}
+.rp-b-table th{text-align:left;font-weight:500;color:#a3a29c;border-bottom:1px solid #ececeb;padding:4px 6px}
+.rp-b-table td{padding:4px 6px;border-bottom:1px solid #f4f2ea;vertical-align:top;color:#3d4550}
+.rp-b-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#5f5e5b;white-space:nowrap}
+.rp-b-value{color:#2f5279;white-space:nowrap}
+.kbd-note.err{color:#9a3b1e}
+
+/* 删除按钮（危险动作） */
+.btn-danger{font-family:inherit;font-size:13px;padding:8px 14px;border-radius:8px;cursor:pointer;
+ border:1px solid #e7c4b8;background:#fdf3f0;color:#9a3b1e;font-weight:600}
+.btn-danger:hover{background:#f9e4dd}

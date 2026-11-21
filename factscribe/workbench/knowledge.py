@@ -217,7 +217,9 @@ def list_files(disk_path: str | Path) -> list[dict]:
             continue
         pending = suffix in PDF_SUFFIXES
         try:
-            in_knowledge = entry.resolve().relative_to(folder).as_posix() == rel
+            # 在知识库目录里吗？（只看是否落在 knowledge/ 内，不比路径写法）
+            entry.resolve().relative_to(folder)
+            in_knowledge = True
         except (OSError, ValueError):
             in_knowledge = False
         rows.append({
@@ -248,6 +250,7 @@ def preview(disk_path: str | Path, rel: str) -> dict:
         return {"ok": True, "name": target.name, "path": str(rel),
                 "ext": suffix, "size": size, "size_label": _human_size(size),
                 "status": "pending", "status_label": STATUS_PENDING,
+                "sha256": sha256_of(target)[:12] if target.is_file() else "",
                 "text": "", "truncated": False,
                 "note": "PDF 只登记文件名与大小，文本提取段七接入。"}
     if suffix not in TEXT_SUFFIXES:
@@ -261,8 +264,26 @@ def preview(disk_path: str | Path, rel: str) -> dict:
             "size": len(text.encode("utf-8")),
             "size_label": _human_size(len(text.encode("utf-8"))),
             "status": "ready", "status_label": STATUS_READY,
+            "sha256": sha256_of(target)[:12],
             "text": text[:PREVIEW_CHARS], "truncated": truncated,
             "note": ""}
+
+
+def delete_file(disk_path: str | Path, rel: str) -> dict:
+    """删一个**知识库目录里**的文件（写闸 `_safe_knowledge_file`）。
+
+    项目源文件（`.tex` 等）不在知识库目录里 → 写闸直接拒，
+    源文件由章节管理管，知识库不碰。
+    """
+    disk = Path(disk_path).expanduser()
+    target = _safe_knowledge_file(disk, rel)     # 写闸：只许 knowledge/ 内的
+    if not target.is_file():
+        raise KnowledgeError("文件不在：%s" % rel, "KNOWLEDGE_NOT_FOUND")
+    try:
+        target.unlink()
+    except OSError as exc:
+        raise KnowledgeError("删不掉：%s" % exc, "KNOWLEDGE_DELETE_FAILED") from exc
+    return {"ok": True, "name": target.name, "path": str(rel)}
 
 
 # ---------------------------------------------------------------- 上传

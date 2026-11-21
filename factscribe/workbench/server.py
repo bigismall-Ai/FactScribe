@@ -207,7 +207,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             parts = [part for part in route.split("/") if part]
             # /api/project/<project>/reports[/<what>]
             if len(parts) in (4, 5) and parts[3] == "reports":
-                return self._reports_get(parts[2], parts[4] if len(parts) > 4 else "")
+                return self._reports_get(parts[2], parts[4] if len(parts) > 4 else "",
+                                         query)
             # 段六：/api/project/<project>/knowledge[/preview]
             if len(parts) in (4, 5) and parts[3] == "knowledge":
                 return self._knowledge_get(parts[2], parts[4] if len(parts) > 4 else "",
@@ -345,6 +346,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                     if parts[4] == "delete":
                         return self._reports_delete(parts[2], body)
                     return self._error(404, "没有这个报告操作：%s" % parts[4])
+                # /api/project/<project>/knowledge/delete
+                if len(parts) == 5 and parts[3] == "knowledge" and parts[4] == "delete":
+                    return self._knowledge_delete(parts[2], body)
                 # /api/project/<project>/venue
                 if len(parts) == 4 and parts[3] == "venue":
                     return self._venue_save(parts[2], body)
@@ -538,9 +542,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             raise ConfigError("没有这个项目：%s" % project_id)
         return reports_dir(disk)
 
-    def _reports_get(self, project_id: str, what: str) -> None:
-        """`GET /api/project/<p>/reports`（卡）｜`…/reports/dir`（真实文件清单）。"""
-        from .importer import list_drafts, list_report_files
+    def _reports_get(self, project_id: str, what: str, query: str = "") -> None:
+        """`GET /api/project/<p>/reports`（卡）｜`…/reports/dir`（真实文件清单）
+        ｜`…/reports/detail?name=`（一条导入记录的详情）。"""
+        from .importer import (ImportError_, list_drafts, list_report_files,
+                                read_draft)
 
         try:
             directory = self._reports_dir(project_id)
@@ -552,6 +558,22 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                                "dir": str(directory),
                                "exists": directory.is_dir(),
                                "count": len(files), "files": files})
+        if what == "detail":
+            from urllib.parse import parse_qs
+
+            params = parse_qs(query or "")
+            name = (params.get("name") or [""])[0]
+            if not name:
+                return self._error(400, "name 要给（导入记录名）")
+            disk = self.index.project_disk_path(project_id)
+            if disk is None:
+                return self._error(404, "没有这个项目：%s" % project_id)
+            try:
+                data = read_draft(disk, name)
+            except ImportError_ as exc:
+                return self._error(400, str(exc))
+            data.update({"project": project_id})
+            return self._json(data)
         if what in ("", "list"):
             disk = self.index.project_disk_path(project_id)
             drafts = list_drafts(disk) if disk else []
@@ -705,6 +727,24 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             data.update({"project": project_id})
             return self._json(data)
         return self._error(404, "没有这个接口：%s" % what)
+
+    def _knowledge_delete(self, project_id: str, body: dict) -> None:
+        """删一个知识库目录里的文件（写闸：只许 knowledge/ 内的）。"""
+        from .knowledge import KnowledgeError, delete_file
+
+        try:
+            disk = self._knowledge_disk(project_id)
+        except ConfigError as exc:
+            return self._error(404, str(exc))
+        rel = str(body.get("path") or "").strip()
+        if not rel:
+            return self._error(400, "path 要给（知识库目录里的相对路径）")
+        try:
+            result = delete_file(disk, rel)
+        except KnowledgeError as exc:
+            return self._error(400, str(exc))
+        result.update({"project": project_id})
+        return self._json(result)
 
     def _knowledge_upload(self, project_id: str) -> None:
         """上传文件进知识库目录（multipart）。"""

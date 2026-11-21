@@ -1283,7 +1283,7 @@ body{padding-top:0}
 
 /* ④ 收起态：窗缘只留一枚图标展开钮（不再是竖排文字钮） */
 /* 条目 39：收起态的展开标签——贴窗口右缘中部，竖排文字，30×90，醒目同族样式 */
-.nav-open{display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:61;
+.nav-open{display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:85;
  width:30px;height:90px;writing-mode:vertical-rl;text-orientation:upright;
  align-items:center;justify-content:center;font-family:inherit;font-size:12.5px;letter-spacing:2px;
  padding:8px 4px;border:1px solid #ddd8c6;border-right:none;border-radius:10px 0 0 10px;
@@ -1376,12 +1376,14 @@ body.nav-collapsed .nav-open{display:flex}
    —— 左栏头部（48px 窄条）固定在顶；进度条从正文流挪出，贴头部下缘
       正文让出「头部高＋进度条高」
    ================================================================ */
-.left-head{position:fixed;top:0;left:0;right:336px;z-index:80;height:48px;padding:0 16px;
+/* 条目 40：固定头部宽度＝左区宽。
+   右缘不写死——用 --side-w（由 DOM 实测的「视口右缘→左区右缘」距离驱动），
+   头部与进度条恒止于侧栏左缘之前，功能钮排绝不进侧栏区。 */
+.left-head{position:fixed;top:0;left:0;right:var(--side-w,336px);z-index:80;height:48px;padding:0 16px;
  background:#fff;border-bottom:1px solid #ececeb;display:flex;align-items:center;gap:10px}
-.progwrap{position:fixed;top:48px;left:0;right:336px;z-index:79;height:3px;margin:0;padding:0;
+.progwrap{position:fixed;top:48px;left:0;right:var(--side-w,336px);z-index:79;height:3px;margin:0;padding:0;
  background:#e9e5d7;border-radius:0;overflow:hidden}
 #prog{height:100%;width:0;background:#b6b0a0;transition:width .15s}
-body.nav-collapsed .left-head,body.nav-collapsed .progwrap{right:0}
 body:not([data-view="workbench"]) .progwrap{display:none}
 /* 正文让出：头部 48px ＋ 进度条 3px */
 .left-col{padding-top:51px}
@@ -1389,6 +1391,8 @@ body:not([data-view="workbench"]) .left-col{padding-top:48px}
 @media (max-width:900px){
  .left-head,.progwrap{right:0}
 }
+
+/* 条目 40：展开标签的 z 序（85）高于固定头部（80）——收起态它恒可点。 */
 
 
 /* 条目 37：编辑态可见的「已保存」角标（1.5s 自动消失） */

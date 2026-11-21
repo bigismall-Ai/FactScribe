@@ -2805,6 +2805,7 @@ function setView(view) {
   // 只在 workbench 视图渲染；项目列表/新建视图整组不渲染。
   const tools = $('#lhTools');
   if (tools) tools.hidden = (view !== 'workbench');
+  scheduleHeaderWidthSync();
   applyLangToggle();
 }
 
@@ -2848,8 +2849,27 @@ function renderAiFace() {
 }
 
 /* 条目 34：半透明浮层整条拆除——助手＝侧栏里的一枚互斥面板钮。 */
+/* 条目 40：把「视口右缘 → 左区右缘」的距离写进 --side-w。
+   固定头部与进度条据此收窄——恒止于侧栏左缘之前，不压侧栏。
+   （侧栏总宽＝面板 320＋间距 16；项目另有钮列时由实测自动带上。） */
+function syncFixedHeaderWidth() {
+  const col = $('#leftCol');
+  if (!col) return;
+  const rect = col.getBoundingClientRect();
+  if (!rect || !rect.width) return;
+  const gap = Math.max(0, Math.round(window.innerWidth - rect.right));
+  document.documentElement.style.setProperty('--side-w', gap + 'px');
+}
+
+/* 收起/展开会改左区宽度（padding-right 有过渡）——过渡前后各同步一次。 */
+function scheduleHeaderWidthSync() {
+  syncFixedHeaderWidth();
+  setTimeout(syncFixedHeaderWidth, 260);
+}
+
 function setNavCollapsed(collapsed) {
   document.body.classList.toggle('nav-collapsed', !!collapsed);
+  scheduleHeaderWidthSync();
 }
 
 /* ---------------------------------------------------------------- 段六：知识库 */
@@ -3593,6 +3613,9 @@ async function main() {
   switchNavPane('toc');
   await loadProjects();
   setView('projects');
+  // 条目 40：固定头部宽度随左区实测（首屏布局落定后同步一次）。
+  scheduleHeaderWidthSync();
+  window.addEventListener('resize', scheduleHeaderWidthSync);
 }
 
 document.addEventListener('DOMContentLoaded', main);

@@ -445,13 +445,13 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
 
     def test_left_head_is_fixed(self):
         """B① 左栏头部固定在顶。"""
-        self.assertIn(".left-head{position:fixed;top:0;left:0;right:336px;z-index:80;height:48px;", CSS)
+        self.assertIn(".left-head{position:fixed;top:0;left:0;right:var(--side-w", CSS)
 
     def test_progress_bar_moved_into_header(self):
         """B② 进度条从正文流挪出，贴头部下缘。"""
         self.assertIn('id="progWrap"', HTML)
         self.assertNotIn('<div class="progwrap"><div id="prog"></div></div>', HTML)
-        self.assertIn(".progwrap{position:fixed;top:48px;left:0;right:336px;z-index:79;height:3px;", CSS)
+        self.assertIn(".progwrap{position:fixed;top:48px;left:0;right:var(--side-w", CSS)
 
     def test_content_makes_room_for_header_and_bar(self):
         """B③ 正文让出「头部高＋进度条高」。"""
@@ -626,6 +626,42 @@ class Item38RegressionTests(unittest.TestCase):
             save_block(disk, rel, block["id"], plain)      # 二次编辑：删掉 ZZEDIT
             self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
             self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后文件没还原")
+
+
+class Item40HeaderWidthTests(unittest.TestCase):
+    """条目 40 三案：头部右缘不压侧栏 / 侧栏工具条首钮可点 / 收起标签 z 序更高。"""
+
+    def _z_of(self, selector: str) -> int:
+        import re
+
+        match = re.search(re.escape(selector) + r"\{[^}]*?z-index:(\d+)", CSS)
+        self.assertTrue(match, "没找到 %s 的 z-index" % selector)
+        return int(match.group(1))
+
+    def test_1_header_right_follows_the_left_column(self):
+        """案一：固定头部宽度＝左区宽——右缘由 --side-w（DOM 实测）驱动，
+        不是写死的 336，更不是横贯全窗的 0。"""
+        self.assertIn(".left-head{position:fixed;top:0;left:0;right:var(--side-w", CSS)
+        self.assertNotIn(".left-head{position:fixed;top:0;left:0;right:0;", CSS)
+        self.assertIn("function syncFixedHeaderWidth(", JS)
+        self.assertIn("'--side-w'", JS)
+        self.assertIn("window.innerWidth - rect.right", JS)
+        self.assertIn("scheduleHeaderWidthSync();", JS)
+        self.assertIn("window.addEventListener('resize', scheduleHeaderWidthSync);", JS)
+
+    def test_2_header_stops_before_the_sidebar(self):
+        """案二：侧栏本体钉在视口右缘，头部止于左区右缘 → 不叠盖侧栏，
+        工具条首钮（最左）不会被头部压住。"""
+        self.assertIn(".navpanel{position:fixed;right:0;", CSS)
+        self.assertIn("right:var(--side-w,336px)", CSS)
+        # 侧栏在文档流里由 .shell 的 padding-right 让位，头部宽度与之同源
+        self.assertIn(".shell{padding-right:336px;transition:padding-right .22s ease}", CSS)
+
+    def test_3_expand_label_is_above_the_header(self):
+        """案三：收起态的展开标签 z 序高于固定头部（恒可点，不被压在其下）。"""
+        self.assertIn("z-index:85;", CSS)
+        self.assertGreater(self._z_of(".nav-open"), self._z_of(".left-head"))
+        self.assertGreater(self._z_of(".nav-open"), self._z_of(".progwrap"))
 
 
 if __name__ == "__main__":

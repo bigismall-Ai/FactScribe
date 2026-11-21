@@ -32,12 +32,14 @@ verify ⇒ 无环。
 许可：官方件来自 DILA 开放数据 INCA 档案（licence ouverte v2.0 / Etalab）。
 """
 import hashlib
+import json
 import re
 import unicodedata
 import xml.etree.ElementTree as ET
 
 __all__ = [
-    "to_plain", "parse_meta", "br_aware_text",
+    "to_plain", "to_plain_faces", "faces_sidecar_json", "read_faces_sidecar",
+    "parse_meta", "br_aware_text",
     "norm_fr_number", "fr_number_tokens", "fr_numbers_in",
     "fr_date_to_iso", "fr_dates_in", "fr_date_variants",
     "norm_case_no", "case_numbers_in_titre", "meta_case_numbers",
@@ -95,13 +97,22 @@ def sha256_bytes(data):
 # XML → 纯文本（确定性：同一份 XML 字节 ⇒ 永远同一份文本字节）
 # ---------------------------------------------------------------------------
 def br_aware_text(el):
-    """元素文本，`<br/>` 与 `<p>` 作硬换行（侦察批 extract_plain.py 同款）。"""
+    """元素文本，`<br/>` 与 `<p>` 作硬换行（侦察批 extract_plain.py 同款）。
+
+    `<p>` 是「换行＋递归取文」：本库 INCA 抽样件（CONTENU 直挂文本＋`<br/>`）
+    无 `<p>` 形状，输出与既有还原逐字节一致（测试钉死）；fr-cass 全量件
+    （Freemium_cass_global，CONTENU 内包 `<p>`）若只落换行会丢掉全部正文
+    （试车线 cardgen 批实测），故 `<p>` 必须递归取文。
+    """
     out = []
     if el.text:
         out.append(el.text)
     for child in el:
-        if child.tag.endswith("br") or child.tag.endswith("p"):
+        if child.tag.endswith("br"):
             out.append("\n")
+        elif child.tag.endswith("p"):
+            out.append("\n")
+            out.append(br_aware_text(child))
         else:
             out.append(br_aware_text(child))
         if child.tail:
@@ -137,6 +148,95 @@ def to_plain(xml_bytes):
                 elif t == "SOMMAIRE":
                     lines.append("[SOMMAIRE] " + br_aware_text(el).strip())
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 分面（faces）：官方 txt 里哪些字符区间来自判决正文（CONTENU），
+# 哪些来自正文之外（摘要段 SOMMAIRE/ANA 等）。
+#
+# 为什么走旁车/现算而不改 txt：official/*.txt 的字节被证据卡哈希钉死
+# （OFFICIAL_TXT_SHA256），任何改动都会让哈希对账全碎 ⇒ 分面信息只能
+# 存放别处：`official/<ID>.faces.json` 旁车（正文区间列表，钉 txt 哈希），
+# 或由闸在核验时从官方 XML 现算（确定性还原，零写盘）。旁车缺省/失效时
+# 一律现算；现算文本与 official txt 不逐字节一致时按「全正文」处理
+# （不定面 ⇒ 不发明面黄码，旧材料缺省视为全正文）。
+# ---------------------------------------------------------------------------
+def to_plain_faces(xml_bytes):
+    """官方判决 XML → (纯文本, 正文区间列表)。
+
+    纯文本与 `to_plain` 逐字节同源（同一还原函数族）；区间为 Python 切片
+    语义 `[start:end)`，标注纯文本里哪些字符段出自 CONTENU（判决正文）。
+    SOMMAIRE/ANA 等摘要段不在区间内 ⇒ 命中全文但不命中区间的引文＝摘要段引文。
+    """
+    root = ET.fromstring(xml_bytes)
+    parts = []  # (行文本, 是否正文)
+    for sec in root:
+        tag = _local(sec.tag)
+        if tag == "META":
+            for el in sec.iter():
+                t = _local(el.tag)
+                txt = (el.text or "").strip()
+                if txt and t not in _META_SKIP_TAGS:
+                    parts.append(("[%s] %s" % (t, txt), False))
+        elif tag == "TEXTE":
+            for el in sec.iter():
+                t = _local(el.tag)
+                if t == "CONTENU":
+                    parts.append(("[CONTENU]", False))
+                    parts.append((br_aware_text(el).strip(), True))
+                elif t == "SOMMAIRE":
+                    parts.append(("[SOMMAIRE] " + br_aware_text(el).strip(), False))
+    text = "\n".join(s for s, _body in parts)
+    faces = []
+    off = 0
+    for s, body in parts:
+        if body and s:
+            faces.append((off, off + len(s)))
+        off += len(s) + 1  # join 的换行
+    return text, faces
+
+
+def faces_sidecar_json(xml_bytes, txt_sha256):
+    """旁车文件 `official/<ID>.faces.json` 的内容（正文区间列表＋钉 txt 哈希）。"""
+    text, faces = to_plain_faces(xml_bytes)
+    payload = {
+        "version": 1,
+        "body": [[s, e] for s, e in faces],
+        "text_chars": len(text),
+        "txt_sha256": txt_sha256,
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+
+
+def read_faces_sidecar(path, txt_text):
+    """读旁车分面文件；无效（缺文件/坏 JSON/版本不符/txt 哈希不符）→ None。
+
+    旁车只是加速面与显式钉版，不是权威面：失效一律回落「从官方 XML 现算」，
+    绝不带着过期的分面判定。
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("version") != 1:
+        return None
+    if data.get("txt_sha256") != sha256_bytes(txt_text.encode("utf-8")):
+        return None
+    body = data.get("body")
+    if not isinstance(body, list):
+        return None
+    out = []
+    n = len(txt_text)
+    for pair in body:
+        if (not isinstance(pair, (list, tuple)) or len(pair) != 2
+                or not isinstance(pair[0], int) or not isinstance(pair[1], int)):
+            return None
+        s, e = pair
+        if not (0 <= s < e <= n):
+            return None
+        out.append((s, e))
+    return out
 
 
 def parse_meta(xml_bytes):

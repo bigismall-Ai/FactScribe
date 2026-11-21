@@ -77,7 +77,7 @@ const I18N = {
     /* ---- 段四：AI 对话（真后端）+ 实验报告导入（真文件） ---- */
     'ai.ask': '问 AI', 'ai.askPara': '这一段有什么可改的？',
     'ai.reportQ': '用大白话解读这份检查报告',
-    'ai.back': '返回', 'ai.clear': '清空',
+    'ai.clear': '清空',
     'ai.note': 'AI 对话接的是真后端（/api/chat）。模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
     'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
     'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
@@ -180,8 +180,6 @@ const I18N = {
     'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
     'check.title': '全检结果', 'check.tabReport': '检查报告',
     'check.tabMachine': '机器底账', 'rp.card.del': '删除',
-    'np.aiNote': '对话层是半透明悬浮层，浮在正文上方；这里放上下文与入口。',
-    'np.aiOpen': '打开对话层', 'np.aiClose': '收起对话层',
     /* ---- 段六 ---- */
     'np.kb': '知识库', 'np.kbUpload': '上传文件',
     'np.venue': '版式', 'np.venueGuide': '选刊指南',
@@ -313,7 +311,7 @@ const I18N = {
     /* ---- stage 4: AI chat (real backend) + experiment report import (real files) ---- */
     'ai.ask': 'Ask AI', 'ai.askPara': 'What could be improved in this paragraph?',
     'ai.reportQ': 'Explain this check report in plain words',
-    'ai.back': 'Back', 'ai.clear': 'Clear',
+    'ai.clear': 'Clear',
     'ai.note': 'AI chat talks to the real backend (/api/chat). When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
     'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
     'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
@@ -422,8 +420,6 @@ const I18N = {
     'fc.locator': 'Locator', 'fc.fp': 'Fingerprint', 'fc.conf': 'Confidence',
     'check.title': 'Full check result', 'check.tabReport': 'Check report',
     'check.tabMachine': 'Machine view', 'rp.card.del': 'Delete',
-    'np.aiNote': 'The chat layer is a translucent overlay floating above the body; context and entry live here.',
-    'np.aiOpen': 'Open chat layer', 'np.aiClose': 'Hide chat layer',
     /* ---- segment six ---- */
     'np.kb': 'Knowledge base', 'np.kbUpload': 'Upload file',
     'np.venue': 'Venue', 'np.venueGuide': 'Venue guide',
@@ -505,7 +501,7 @@ const state = {
   disk: null,
   blocks: [],
   meta: null,
-  nav: { pane: 'toc', aiOpen: false },   // 段五：导航面板（目录/报告 ＋ 助手浮层）
+  nav: { pane: 'toc' },   // 段五：导航面板（目录/智能助手/更多 三面互斥）
   filter: '',
   editing: null,      // 正在编辑的块 {id, file, host}
   assembly: [],       // main.tex 的装配清单
@@ -1897,7 +1893,7 @@ function setAiBusy(busy) {
     send.disabled = !!busy;
     send.textContent = busy ? t('ai.sending') : t('ai.send');
   }
-  $$('#aiFloat .aq').forEach((btn) => { btn.disabled = !!busy; });
+  $$('#aiPane .aq').forEach((btn) => { btn.disabled = !!busy; });
 }
 
 function aiFallbackNote(data) {
@@ -2522,9 +2518,11 @@ function applyLangToggle() {
   });
 }
 
-/* 段五返修七（条目 33）：右栏工具条＝三枚切换钮（目录／智能助手／更多）。
-   目录 ↔ 更多互斥切面板内内容；「智能助手」开合正文上的半透明对话层。 */
+/* 段五返修八（条目 34）：右栏工具条＝三枚切换钮（目录／智能助手／更多）。
+   三面互斥；智能助手＝侧栏里的嵌入式对话面板（不再是浮层）。
+   已激活再点「智能助手」＝无操作（收起整个侧栏用最左的图标收起钮）。 */
 function switchNavPane(name) {
+  if (name === 'ai' && state.nav.pane === 'ai') return;
   state.nav.pane = name;
   $('#paneToc').classList.toggle('on', name === 'toc');
   $('#paneAi').classList.toggle('on', name === 'ai');
@@ -2532,13 +2530,7 @@ function switchNavPane(name) {
   $('#npToc').classList.toggle('on', name === 'toc');
   $('#npAi').classList.toggle('on', name === 'ai');
   $('#npMore').classList.toggle('on', name === 'more');
-  // 互斥：切到别的面就把悬浮对话层收起来（对话层属「智能助手」这一面）。
-  if (name === 'ai') {
-    setAiOpen(true);
-    renderAiFace();
-  } else {
-    setAiOpen(false);
-  }
+  if (name === 'ai') renderAiFace();
   // 条目 33：实验报告／知识库／版式都并进「更多」这一面，切过去就把三段都拉起来。
   if (name === 'more') {
     loadReports();
@@ -2547,31 +2539,14 @@ function switchNavPane(name) {
   }
 }
 
-/* 面板里的智能助手面：上下文 + 打开/收起悬浮对话层。 */
+/* 面板里的智能助手面：条目 34 起助手就在侧栏面板里，这里只刷引用上下文。 */
 function renderAiFace() {
-  const ctx = $('#npAiCtx');
-  if (ctx) ctx.innerHTML = aiCtxHtml();
-  const btn = $('#npAiToggle');
-  if (btn) btn.textContent = state.nav.aiOpen ? t('np.aiClose') : t('np.aiOpen');
+  renderAiCtx();
 }
 
-/* 段五：智能助手＝半透明悬浮层，浮在正文上方。 */
-function setAiOpen(open) {
-  state.nav.aiOpen = !!open;
-  const layer = $('#aiFloat');
-  if (layer) layer.hidden = !open;
-  if (open) {
-    const input = $('#aiText');
-    if (input) input.focus();
-  }
-  renderAiFace();
-}
-
-/* 段五返修三（条目 29）：收起＝导航面板＋右缘钮列全隐，只剩一枚竖排
-   「展开导航」钮；正文拉满。 */
+/* 条目 34：半透明浮层整条拆除——助手＝侧栏里的一枚互斥面板钮。 */
 function setNavCollapsed(collapsed) {
   document.body.classList.toggle('nav-collapsed', !!collapsed);
-  if (collapsed) setAiOpen(false);
 }
 
 /* ---------------------------------------------------------------- 段六：知识库 */
@@ -3067,9 +3042,6 @@ function bind() {
   $('#npAi').addEventListener('click', () => { switchNavPane('ai'); });
   // 条目 33：实验报告／知识库／版式三段合并进「更多」面板，工具条只剩一枚钮。
   $('#npMore').addEventListener('click', () => { switchNavPane('more'); });
-  $('#npAiToggle').addEventListener('click', () => {
-    setAiOpen(!state.nav.aiOpen);
-  });
   // 段五：常用功能（弹模态框操作）
   $('#actPdf').addEventListener('click', runPdfAction);
   $('#actCheck').addEventListener('click', runFullCheck);
@@ -3101,11 +3073,10 @@ function bind() {
     ev.preventDefault();
     $('#aiSend').click();
   });
-  $$('#aiFloat .aq').forEach((btn) => {
+  $$('#aiPane .aq').forEach((btn) => {
     btn.addEventListener('click', () => aiSend(t('ai.q' + btn.dataset.q + '.text'), 'ask'));
   });
   $('#aiFab').addEventListener('click', clearAiConversation);
-  $('#aiBack').addEventListener('click', () => setAiOpen(false));
   // 段六：模式切换（聊想法／写论文）
   $('#aiModes').addEventListener('click', (ev) => {
     const btn = ev.target.closest('button[data-mode]');
@@ -3257,7 +3228,7 @@ function bind() {
   document.addEventListener('click', (ev) => {
     if (!state.editing) return;
     if (state.editing.host.contains(ev.target)) return;
-    if (ev.target.closest('.navpanel') || ev.target.closest('.modal') || ev.target.closest('.ai-float')) return;
+    if (ev.target.closest('.navpanel') || ev.target.closest('.modal')) return;
     saveEdit();
   });
   window.addEventListener('scroll', () => {

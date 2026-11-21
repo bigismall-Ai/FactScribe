@@ -172,12 +172,36 @@
         <div class="np-pane-h" data-i18n="toc.h">目录</div>
         <ul class="toc-list" id="tocList"></ul>
       </section>
+      <!-- 条目 34：智能助手＝嵌进侧栏的对话面板（不再是半透明浮层） -->
       <section class="np-pane" id="paneAi">
         <div class="np-pane-h"><span data-i18n="np.ai">智能助手</span></div>
-        <div class="np-ai-face">
-          <p class="np-ai-note" data-i18n="np.aiNote">对话层是半透明悬浮层，浮在正文上方；这里放上下文与入口。</p>
-          <div class="np-ai-ctx" id="npAiCtx"></div>
-          <button type="button" class="np-btn" id="npAiToggle" data-i18n="np.aiOpen">打开对话层</button>
+        <div class="np-ai-face" id="aiPane">
+          <div class="ai-head">
+            <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
+            <div class="ai-modes" id="aiModes" role="group" aria-label="mode">
+              <button type="button" class="ai-mode" data-mode="idea" data-i18n="ai.modeIdea">聊想法</button>
+              <button type="button" class="ai-mode on" data-mode="paper" data-i18n="ai.modePaper">写论文</button>
+            </div>
+            <button type="button" class="ai-clear" id="aiFab" data-i18n="ai.clear">清空</button>
+          </div>
+          <!-- 段六：纪律角标（常驻） -->
+          <div class="ai-disc"><span class="dot"></span><span data-i18n="ai.discipline">示例数不是你的结果：没有真实跑出来的数，不要写进稿。</span></div>
+          <div class="ai-ctx" id="aiCtx"></div>
+          <div class="ai-msgs" id="aiMsgs">
+            <div class="msg ai">
+              <div class="who">AI</div>
+              <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
+            </div>
+          </div>
+          <div class="ai-quick">
+            <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
+            <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
+            <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
+          </div>
+          <div class="ai-input">
+            <textarea id="aiText" rows="3" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off"></textarea>
+            <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
+          </div>
         </div>
       </section>
       <!-- 条目 33：更多＝三段合并面板（上：实验报告 / 中：知识库 / 下：版式） -->
@@ -233,36 +257,7 @@
     <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3.5L12 8l-3.5 4.5"/><path d="M3.5 2.5v11"/><path d="M12 8H6.5"/></svg>
   </button>
 
-  <!-- ============ 智能助手（半透明悬浮层，浮在正文上方） ============ -->
-  <section class="ai-float" id="aiFloat" hidden>
-    <div class="ai-head">
-      <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
-      <div class="ai-modes" id="aiModes" role="group" aria-label="mode">
-        <button type="button" class="ai-mode" data-mode="idea" data-i18n="ai.modeIdea">聊想法</button>
-        <button type="button" class="ai-mode on" data-mode="paper" data-i18n="ai.modePaper">写论文</button>
-      </div>
-      <button type="button" class="ai-fab" id="aiFab" data-i18n="ai.clear">清空</button>
-      <button type="button" class="ai-close" id="aiBack" data-i18n="ai.back">关闭</button>
-    </div>
-    <!-- 段六：纪律角标（常驻） -->
-    <div class="ai-disc"><span class="dot"></span><span data-i18n="ai.discipline">示例数不是你的结果：没有真实跑出来的数，不要写进稿。</span></div>
-    <div class="ai-ctx" id="aiCtx"></div>
-    <div class="ai-msgs" id="aiMsgs">
-      <div class="msg ai">
-        <div class="who">AI</div>
-        <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
-      </div>
-    </div>
-    <div class="ai-quick">
-      <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
-      <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
-      <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
-    </div>
-    <div class="ai-input">
-      <textarea id="aiText" rows="3" data-i18n-ph="ai.ph" placeholder="问一句…" autocomplete="off"></textarea>
-      <button type="button" id="aiSend" data-i18n="ai.send">发送</button>
-    </div>
-  </section>
+  <!-- 条目 34：半透明悬浮对话层整条拆除；助手已嵌进右栏侧边栏的「智能助手」面板。 -->
 
 </div>
 

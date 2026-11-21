@@ -186,10 +186,7 @@ p.p-edited::after{content:'改';display:inline-block;margin-left:7px;font-size:1
  background:#fdf4e6;border:1px solid #ecd9b2;border-radius:4px;padding:0 4px;vertical-align:super;letter-spacing:.5px}
 p.p-adopted::after{content:'AI 采纳';color:#2f5279;background:#e9f1fa;border-color:#c7dcee}
 /* ---------- v2.1 问 AI 抽屉 ---------- */
-.ai-fab{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:64;writing-mode:vertical-rl;
- font-family:inherit;font-size:13px;letter-spacing:3px;padding:18px 9px;border:1px solid #ddd8c6;border-right:none;
- border-radius:10px 0 0 10px;background:#fffefb;color:#2f5279;cursor:pointer;box-shadow:-4px 0 16px rgba(40,36,20,.1)}
-.ai-fab:hover{background:#f2f7fc;color:#1c3d5c}
+/* 条目 34：浮层的竖排抽屉钮随浮层一起删除；清空钮改用 .ai-clear。 */
 .ai-drawer{position:fixed;top:0;right:0;height:100vh;width:min(412px,96vw);background:#fbfaf6;border-left:1px solid #ddd8c6;
  transform:translateX(102%);transition:transform .22s ease;z-index:78;display:flex;flex-direction:column;
  box-shadow:-8px 0 30px rgba(40,36,20,.12)}
@@ -198,9 +195,6 @@ p.p-adopted::after{content:'AI 采纳';color:#2f5279;background:#e9f1fa;border-c
 .ai-title{font-size:15px;font-weight:650;color:#1c1e22}
 .ai-bound{margin-top:4px;font-size:12px;color:#8a5a10;background:#fdf3e3;border:1px solid #f0dcb8;border-radius:6px;
  padding:3px 8px;display:inline-block}
-.ai-close{margin-left:auto;border:1px solid #ddd8c6;background:#fff;border-radius:7px;font-size:12.5px;padding:4px 10px;
- cursor:pointer;color:#54514a;font-family:inherit}
-.ai-close:hover{background:#f4f2ea}
 .ai-ctx{padding:10px 18px;border-bottom:1px solid #ebe7da;background:#f6f4ec;font-size:12px;color:#6f6a5d;
  line-height:1.65;display:none}
 .ai-ctx.on{display:block}
@@ -374,11 +368,9 @@ p{font-size:16.5px}
 .ai-head{padding:12px 14px 11px;border-bottom:1px solid #ebe7da}
 .ai-title{font-size:13px}
 .ai-bound{font-size:11px;padding:2px 7px}
-.ai-fab{position:static;transform:none;writing-mode:horizontal-tb;font-size:11.5px;letter-spacing:.5px;
- padding:5px 11px;border-radius:999px;border:1px solid #c9d8ea;background:#f4f8fc;color:#2f5279;
- box-shadow:none;margin-left:auto}
-.ai-fab:hover{background:#e6eff8}
-.ai-close{font-size:11px;padding:3px 8px}
+.ai-clear{font-family:inherit;font-size:11.5px;letter-spacing:.5px;padding:4px 10px;border-radius:999px;
+ border:1px solid #c9d8ea;background:#f4f8fc;color:#2f5279;cursor:pointer;margin-left:auto}
+.ai-clear:hover{background:#e6eff8}
 .ai-ctx{font-size:11.5px;padding:8px 14px}
 .ai-msgs{max-height:260px;padding:12px 14px 6px}
 .ai-quick{padding:6px 14px 0}
@@ -1023,20 +1015,7 @@ body.nav-collapsed .shell{padding-right:0}
 .tm-btn:disabled{opacity:.32;cursor:default}
 .tm-btn.tm-del:hover{color:#9a3b1e;border-color:#e7c4b8;background:#fdf3f0}
 
-/* ---- 智能助手：半透明悬浮层（浮在正文上方） ---- */
-.ai-float{position:fixed;right:340px;bottom:22px;width:min(420px,44vw);height:min(560px,calc(100vh - 110px));
- display:flex;flex-direction:column;overflow:hidden;z-index:80;border-radius:14px;
- background:rgba(252,251,248,.82);backdrop-filter:blur(14px) saturate(1.08);
- -webkit-backdrop-filter:blur(14px) saturate(1.08);
- border:1px solid rgba(230,229,224,.92);box-shadow:0 18px 48px rgba(15,15,15,.16)}
-body.nav-collapsed .ai-float{right:22px}
-.ai-float[hidden]{display:none}
-.ai-float .ai-msgs{flex:1 1 auto;min-height:0;overflow:auto}
-.ai-float .ai-input{align-items:flex-end}
-.ai-float .ai-input textarea{flex:1 1 auto;min-width:0;min-height:66px;resize:vertical;font-family:inherit;
- font-size:13.5px;line-height:1.6;padding:9px 11px;border:1px solid #ddd8c6;border-radius:8px;
- background:rgba(255,255,255,.92);color:#1c1e22}
-.ai-float .ai-input textarea:focus{outline:none;border-color:#b6b0a0}
+/* 条目 34：半透明悬浮层整条删除——助手改嵌进侧栏面板。 */
 
 /* ---- 封面摘要（可编辑） ---- */
 .cover-abstract{margin-top:16px;padding-top:12px;border-top:1px solid #ebe7da}
@@ -1094,7 +1073,6 @@ body.nav-collapsed .ai-float{right:22px}
  .navpanel{position:static;width:auto;height:auto;max-height:none;border-left:none;border-bottom:1px solid #ececec}
  .shell{padding-right:0}
  body.nav-collapsed .navpanel{display:none}
- .ai-float{right:16px;left:16px;width:auto}
 }
 
 /* ================= 段五返修三（条目 29）：切换钮回右缘竖排一列 ================= */
@@ -1117,9 +1095,6 @@ body.nav-collapsed .shell{padding-right:0}
 
 /* 面板里的智能助手面 */
 .np-ai-face{padding:2px 0}
-.np-ai-note{font-size:11.5px;line-height:1.7;color:#8f8d86;margin:0 0 8px}
-.np-ai-ctx{font-size:12px;color:#5f5e5b;background:#f7f7f5;border:1px solid #efefee;border-radius:7px;padding:7px 9px}
-.np-ai-ctx:empty{display:none}
 .np-btn{font-family:inherit;font-size:12px;color:#5f5e5b;background:#fff;border:1px solid #e3e2df;
  border-radius:7px;padding:6px 10px;cursor:pointer;margin-top:8px}
 .np-btn:hover{border-color:#b8b5ac;color:#37352f;background:#fafaf8}
@@ -1325,3 +1300,37 @@ body{padding-top:0}
  border:1px solid #e6e6e4;border-right:none;border-radius:8px 0 0 8px;background:#fafaf9;color:#8f8d86;cursor:pointer}
 .nav-open:hover{color:#37352f;background:#f4f2ea}
 body.nav-collapsed .nav-open{display:flex}
+
+/* ================================================================
+   条目 34（段五验收返修八）：智能助手＝侧栏里的嵌入式对话面板
+   —— 半透明浮层整条拆除；
+      消息历史＋快捷问题芯片＋纪律角标＋加高输入框＋发送 原样搬进侧栏
+   ================================================================ */
+
+/* 面板本身：与目录/更多同构同宽，整面撑满侧栏高度 */
+#paneAi.on{display:flex;flex-direction:column;height:100%;min-height:0}
+.np-ai-face{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
+.np-ai-face .ai-head{padding:0 0 8px;border-bottom:1px solid #ececeb;align-items:center;gap:8px}
+.np-ai-face .ai-title{font-size:12px;font-weight:650;color:#37352f}
+.np-ai-face .ai-modes{flex:0 0 auto}
+.np-ai-face .ai-disc{margin:8px 0 0;padding:6px 8px}
+.np-ai-face .ai-ctx{padding:8px 9px;border-bottom:1px solid #ececeb;font-size:11.5px}
+.np-ai-face .ai-msgs{flex:1 1 auto;min-height:0;overflow:auto;padding:10px 0 6px;max-height:none}
+.np-ai-face .msg{margin-bottom:10px}
+.np-ai-face .msg .bub{font-size:12.5px;line-height:1.7;padding:8px 10px}
+.np-ai-face .ai-quick{padding:8px 0 0}
+.np-ai-face .aq{font-size:11px;padding:4px 9px}
+.np-ai-face .ai-input{padding:10px 0 0;margin-top:10px;border-top:1px solid #ececeb;
+ align-items:flex-end;gap:6px}
+.np-ai-face .ai-input textarea{flex:1 1 auto;min-width:0;min-height:66px;resize:vertical;font-family:inherit;
+ font-size:12.5px;line-height:1.6;padding:7px 9px;border:1px solid #ddd8c6;border-radius:8px;
+ background:#fff;color:#1c1e22}
+.np-ai-face .ai-input textarea:focus{outline:none;border-color:#b6b0a0}
+.np-ai-face .ai-input button{flex:0 0 auto;font-family:inherit;font-size:12px;padding:7px 12px;border-radius:8px;
+ border:1px solid #b6d8c4;background:#f2faf5;color:#1c6b4c;cursor:pointer;font-weight:600}
+.np-ai-face .ai-input button:hover{background:#e2f3e9}
+
+@media (max-width:900px){
+ #paneAi.on{height:auto}
+ .np-ai-face .ai-msgs{max-height:320px}
+}

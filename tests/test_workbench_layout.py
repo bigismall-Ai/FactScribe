@@ -242,5 +242,69 @@ class ProtocolGuardTests(unittest.TestCase):
         self.assertIn("return text.indexOf(AI_FALLBACK_MARK) === 0;", JS)
 
 
+class EmbeddedAssistantPaneTests(unittest.TestCase):
+    """条目 34：智能助手改嵌入式面板——浮层元素与 CSS 零残留。"""
+
+    def test_float_layer_is_gone(self):
+        """半透明浮层（#aiFloat / .ai-float）从 HTML/CSS/JS 全部消失。"""
+        self.assertNotIn('id="aiFloat"', HTML)
+        self.assertNotIn("aiFloat", HTML)
+        self.assertNotIn(".ai-float", CSS)
+        self.assertNotIn("aiFloat", JS)
+        self.assertNotIn(".ai-float", JS)
+
+    def test_no_float_only_css_left(self):
+        """浮层专属样式（竖排抽屉钮/关闭钮/浮层本体）一并清掉。"""
+        for dead in (".ai-fab", ".ai-close", ".np-ai-ctx", ".np-ai-note"):
+            self.assertNotIn(dead, CSS)
+
+    def test_ai_pane_embeds_the_whole_chat(self):
+        """对话内容原样搬进侧栏：消息历史＋快捷问题＋纪律角标＋输入框＋发送。"""
+        pane = _slice('<section class="np-pane" id="paneAi">', '<section class="np-pane" id="paneMore">')
+        for piece in ('id="aiModes"', 'id="aiFab"', 'class="ai-disc"', 'id="aiCtx"',
+                      'id="aiMsgs"', 'class="ai-quick"', 'id="aiText"', 'id="aiSend"'):
+            self.assertIn(piece, pane)
+        self.assertEqual(pane.count('class="aq"'), 3)   # 三枚快捷问题芯片
+
+    def test_input_is_a_tall_textarea(self):
+        pane = _slice('<section class="np-pane" id="paneAi">', '<section class="np-pane" id="paneMore">')
+        self.assertIn('<textarea id="aiText" rows="3"', pane)
+
+    def test_panel_is_the_same_width_as_the_others(self):
+        """嵌入式面板：与目录/更多同构（同一个 .np-pane 容器）。"""
+        self.assertIn('<section class="np-pane" id="paneAi">', HTML)
+        self.assertIn("#paneAi.on{display:flex;flex-direction:column;height:100%;min-height:0}", CSS)
+        self.assertIn(".np-ai-face{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}", CSS)
+
+    def test_no_toggle_button_left(self):
+        """不再有「打开对话层」钮。"""
+        self.assertNotIn('id="npAiToggle"', HTML)
+        self.assertNotIn("setAiOpen", JS)
+        self.assertNotIn("state.nav.aiOpen", JS)
+
+    def test_reclicking_active_ai_tab_is_a_noop(self):
+        """已激活再点「智能助手」＝无操作。"""
+        self.assertIn("if (name === 'ai' && state.nav.pane === 'ai') return;", JS)
+
+    def test_ask_ai_prefills_and_switches_to_the_pane(self):
+        """「问 AI」带引用：自动切到智能助手面板并预填问题。"""
+        block = JS[JS.index("function askAiAbout("):JS.index("function showParaTools(")]
+        self.assertIn("switchNavPane('ai');", block)
+        self.assertIn("input.value = t('ai.askPara');", block)
+
+    def test_report_read_ask_switches_to_the_pane(self):
+        """「让 AI 解读这份报告」：自动切到智能助手面板并触发。"""
+        block = JS[JS.index("$('#askReportRead').addEventListener"):]
+        block = block[:block.index("});")]
+        self.assertIn("switchNavPane('ai');", block)
+        self.assertIn("aiSend(t('ai.reportQ'), 'explain');", block)
+
+    def test_chat_still_hits_the_real_endpoint(self):
+        """对话仍走 /api/chat 真端点，fallback 明牌不变。"""
+        self.assertIn("'/api/chat'", JS)
+        self.assertIn("const AI_FALLBACK_MARK = '模拟回答（未接模型）';", JS)
+        self.assertIn("return text.indexOf(AI_FALLBACK_MARK) === 0;", JS)
+
+
 if __name__ == "__main__":
     unittest.main()

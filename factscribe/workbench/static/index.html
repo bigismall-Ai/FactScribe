@@ -130,16 +130,15 @@
 
   <!-- ============ 右栏：切换钮列（锚右栏顶） ＋ 面板 ============ -->
   <aside class="navpanel" id="navPanel">
-    <div class="np-inner">
-      <div class="side-rail" id="sideRail">
-        <button type="button" class="side-tab" id="npCollapse" data-i18n="np.collapse">收起导航</button>
-        <button type="button" class="side-tab" id="npToc" data-i18n="np.toc">目录</button>
-        <button type="button" class="side-tab" id="npAi" data-i18n="np.ai">智能助手</button>
-        <button type="button" class="side-tab" id="npReports" data-i18n="np.reports">实验报告</button>
-        <button type="button" class="side-tab" id="npKb" data-i18n="np.kb">知识库</button>
-        <button type="button" class="side-tab" id="npVenue" data-i18n="np.venue">版式</button>
-      </div>
-      <div class="np-col">
+    <div class="np-toolbar" id="npToolbar">
+      <button type="button" class="np-tab" id="npCollapse" data-i18n="np.collapse">收起导航</button>
+      <button type="button" class="np-tab" id="npToc" data-i18n="np.toc">目录</button>
+      <button type="button" class="np-tab" id="npAi" data-i18n="np.ai">智能助手</button>
+      <button type="button" class="np-tab" id="npReports" data-i18n="np.reports">实验报告</button>
+      <button type="button" class="np-tab" id="npKb" data-i18n="np.kb">知识库</button>
+      <button type="button" class="np-tab" id="npVenue" data-i18n="np.venue">版式</button>
+    </div>
+    <div class="np-col">
     <!-- 头部行：中/EN（单语项目整组隐藏；切换钮列旁） -->
     <div class="np-head" id="npHead">
       <div class="lang-seg" id="langSeg" role="group" aria-label="panel language" hidden>
@@ -225,8 +224,7 @@
           <div class="vn-tpl" id="vnTemplates"></div>
         </div>
       </section>
-      </div><!-- /np-col -->
-    </div><!-- /np-inner -->
+    </div><!-- /np-col -->
   </aside>
 
   <!-- 切换按钮组：固定在窗口右缘，一列纵排（条目 29：恢复段四 side-tab 族） -->

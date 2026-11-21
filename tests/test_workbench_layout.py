@@ -86,18 +86,25 @@ class RightColumnTests(unittest.TestCase):
         panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
         self.assertNotIn('id="goProjects"', panel)
 
-    def test_rail_is_inside_the_panel_not_floating(self):
-        """条目 32：钮列进侧栏内部，不再是窗口右缘的悬浮元素。"""
-        self.assertIn(".side-rail{position:static;", CSS)
-        self.assertNotIn(".side-rail{position:fixed", CSS)
-        self.assertIn("np-inner", HTML)
-        panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
-        self.assertIn('class="side-rail" id="sideRail"', panel)
-        self.assertIn('class="np-col"', panel)
+    def test_no_vertical_rail_anywhere(self):
+        """条目 32 返修六：侧栏左缘的竖排列整条拆掉。"""
+        self.assertNotIn('id="sideRail"', HTML)
+        self.assertNotIn("side-rail{", CSS)
 
-    def test_rail_column_precedes_panel_content(self):
+    def test_toolbar_is_horizontal_at_panel_top(self):
+        """横排工具条置面板顶部；面板内容在它下方。"""
         panel = _block(r'<aside class="navpanel" id="navPanel">.*?</aside>')
-        self.assertLess(panel.index('id="sideRail"'), panel.index('class="np-col"'))
+        self.assertIn('class="np-toolbar" id="npToolbar"', panel)
+        self.assertLess(panel.index('id="npToolbar"'), panel.index('class="np-col"'))
+        self.assertIn("flex-direction:row", CSS)
+
+    def test_toolbar_buttons_are_horizontal_text(self):
+        """横向文字（不再 writing-mode 竖排）、紧凑等宽。"""
+        toolbar = _block(r'<div class="np-toolbar" id="npToolbar">.*?</div>\s*\n')
+        for button_id in ("npCollapse", "npToc", "npAi", "npReports", "npKb", "npVenue"):
+            self.assertIn('id="%s"' % button_id, toolbar)
+        self.assertIn("flex:1 1 0", CSS)     # 等宽
+        self.assertNotIn("writing-mode:vertical-rl", _block(r"\.np-tab\{.*?\}", CSS))
 
     def test_panel_starts_at_top(self):
         self.assertIn(".navpanel{top:0;height:100vh}", CSS)
@@ -116,13 +123,13 @@ class RightColumnTests(unittest.TestCase):
 class RailButtonTests(unittest.TestCase):
     """切换钮列的成员与顺序。"""
 
-    def test_rail_buttons_present(self):
-        rail = _block(r'<div class="side-rail" id="sideRail">.*?</div>\s*\n\s*<div class="np-col">')
+    def test_toolbar_buttons_present(self):
+        toolbar = _block(r'<div class="np-toolbar" id="npToolbar">.*?</div>\s*\n')
         for button_id in ("npCollapse", "npToc", "npAi", "npReports", "npKb", "npVenue"):
-            self.assertIn('id="%s"' % button_id, rail)
+            self.assertIn('id="%s"' % button_id, toolbar)
 
-    def test_rail_is_a_vertical_column(self):
-        self.assertIn("flex-direction:column", CSS)
+    def test_active_tab_has_dark_background(self):
+        self.assertIn(".np-tab.on{background:#2f2e2b;border-color:#2f2e2b;color:#fff}", CSS)
 
 
 if __name__ == "__main__":

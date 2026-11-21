@@ -2516,7 +2516,7 @@ function applyLangToggle() {
 }
 
 /* 段五返修三（条目 29）：三枚内容钮互斥——面板显示当前激活钮对应的面，
-   右缘钮列（side-tab 族）负责切换；激活态深色底。 */
+   面板顶部的横排工具条（np-tab 族）负责切换；激活态深色底。 */
 function switchNavPane(name) {
   state.nav.pane = name;
   $('#paneToc').classList.toggle('on', name === 'toc');

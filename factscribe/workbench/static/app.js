@@ -17,6 +17,12 @@ const TOKEN_RE = /\ue000P\d+\ue001/;
 const I18N = {
   zh: {
     'nav.projects': '项目管理', 'tb.new': '新建',
+    'doc.title': 'FactScribe 工作台',
+    'err.loadProjects': '读项目失败：{e}',
+    'err.loadSections': '读章节失败：{e}',
+    'err.openBlock': '打不开这一段：{e}',
+    'err.saveFailed': '没保存上：{e}',
+    'err.tocFailed': '目录操作失败：{e}',
     'pg.title': '论文项目', 'pg.sub': '打开一篇论文继续写，或新建一个项目。',
     'pg.searchPh': '搜索项目名…', 'pg.empty': '这个根目录下没有找到论文项目（含 factscribe.toml 的目录）。',
     'card.open': '打开', 'card.status': '状态', 'card.last': '最近打开',
@@ -164,6 +170,7 @@ const I18N = {
     'act.openOk': '已在访达里打开', 'act.openUnsupported': '本机不是 macOS：路径如下。',
     'rp.delAsk': '删掉这条导入记录？\n（只删草稿记录；报告源文件不动）',
     'rp.deleted': '已删掉这条导入记录（源文件没动）',
+    'rp.deletedFile': '已删掉这条导入记录（源文件 {f} 没动）',
     'rp.noDelete': '这条记录删不掉：{e}',
     'ab.label': '摘要', 'ab.edit': '点击编辑摘要', 'ab.saved': '摘要已保存',
     'ab.missing': '这个盘的主文件里没有 abstract 环境。',
@@ -242,6 +249,12 @@ const I18N = {
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
+    'doc.title': 'FactScribe Workbench',
+    'err.loadProjects': 'Could not load projects: {e}',
+    'err.loadSections': 'Could not load sections: {e}',
+    'err.openBlock': 'Could not open this paragraph: {e}',
+    'err.saveFailed': 'Save failed: {e}',
+    'err.tocFailed': 'Contents action failed: {e}',
     'pg.title': 'Paper projects', 'pg.sub': 'Open a paper to keep writing, or create a new project.',
     'pg.searchPh': 'Search projects…', 'pg.empty': 'No paper project found under this root (a directory with factscribe.toml).',
     'card.open': 'Open', 'card.status': 'Status', 'card.last': 'Last opened',
@@ -347,7 +360,7 @@ const I18N = {
     'toast.opened': 'Opened: {name}',
     'lang.zh': 'Chinese disk', 'lang.en': 'English disk',
     'disc.zh': 'Chinese disk', 'disc.en': 'English disk',
-    'toc.manage': 'Sections', 'toc.new': '＋ New section', 'toc.newT': 'New section',
+    'toc.manage': 'Sections', 'toc.new': '+ New section', 'toc.newT': 'New section',
     'toc.newTitle': 'Section title', 'toc.newTitlePh': 'e.g. Experimental setup',
     'toc.newSlug': 'File name (optional)', 'toc.newSlugPh': 'setup',
     'toc.create': 'Create', 'toc.up': 'Move up', 'toc.down': 'Move down',
@@ -378,29 +391,35 @@ const I18N = {
     'prog.none': 'No quantitative facts yet',
     'time.never': 'never opened',
     'card.edit': 'Edit',
-    'np.pdf': '渲染PDF', 'np.check': '全检一次', 'np.bundle': '导出投稿包',
-    'np.openDir': '打开目录', 'np.collapse': '收起导航', 'np.toc': '目录',
-    'np.ai': '智能助手', 'np.reports': '实验报告', 'np.import': '从外部导入',
-    'nav.open': '展开导航', 'np.tocEmpty': '这个盘还没有章节。',
-    'act.pdfTitle': '渲染 PDF', 'act.bundleTitle': '导出投稿包',
-    'act.openTitle': '打开项目目录', 'act.close': '关闭',
-    'act.pdfOk': '编译完成', 'act.pdfFail': '编译没成功',
-    'act.pdfPages': '{n} 页 · {b} 字节', 'act.pdfPreview': '预览',
-    'act.pdfDownload': '下载 PDF', 'act.pdfPath': '产物路径',
-    'act.bundleOk': '投稿包已导出', 'act.bundleFail': '清单门没过',
-    'act.bundlePath': '包目录', 'act.bundleFiles': '包内 {n} 件',
-    'act.bundleGate': '清单门：{p} 过 / {f} 不过 / {w} 豁免',
-    'act.openOk': '已在访达里打开', 'act.openUnsupported': '本机不是 macOS：路径如下。',
-    'rp.delAsk': '删掉这条导入记录？\n（只删草稿记录；报告源文件不动）',
-    'rp.deleted': '已删掉这条导入记录（源文件没动）',
-    'rp.noDelete': '这条记录删不掉：{e}',
-    'ab.label': '摘要', 'ab.edit': '点击编辑摘要', 'ab.saved': '摘要已保存',
-    'ab.missing': '这个盘的主文件里没有 abstract 环境。',
-    'fc.title': '证据', 'fc.nofact': '账本里没有这条事实。',
-    'fc.claim': '断言', 'fc.value': '值', 'fc.source': '出处',
-    'fc.locator': '定位', 'fc.fp': '指纹', 'fc.conf': '置信',
-    'check.title': '全检结果', 'check.tabReport': '检查报告',
-    'check.tabMachine': '机器底账', 'rp.card.del': 'Delete',
+    'np.pdf': 'Render PDF', 'np.check': 'Run full check',
+    'np.bundle': 'Export submission bundle',
+    'np.openDir': 'Open project folder', 'np.collapse': 'Hide panel',
+    'np.toc': 'Contents',
+    'np.ai': 'Assistant', 'np.reports': 'Reports', 'np.import': 'Import',
+    'nav.open': 'Show panel', 'np.tocEmpty': 'This disk has no sections yet.',
+    'act.pdfTitle': 'Render PDF', 'act.bundleTitle': 'Export submission bundle',
+    'act.openTitle': 'Open project folder', 'act.close': 'Close',
+    'act.pdfOk': 'Build finished', 'act.pdfFail': 'The build did not succeed',
+    'act.pdfPages': '{n} pages · {b} bytes', 'act.pdfPreview': 'Preview',
+    'act.pdfDownload': 'Download PDF', 'act.pdfPath': 'Output path',
+    'act.bundleOk': 'Submission bundle exported',
+    'act.bundleFail': 'The manifest gate did not pass',
+    'act.bundlePath': 'Bundle folder', 'act.bundleFiles': '{n} files in the bundle',
+    'act.bundleGate': 'Manifest gate: {p} passed / {f} failed / {w} waived',
+    'act.openOk': 'Opened in Finder',
+    'act.openUnsupported': 'This is not macOS — here is the path.',
+    'rp.delAsk': 'Remove this import record?\n(Only the draft record goes; the report file itself stays.)',
+    'rp.deleted': 'Import record removed (source file untouched)',
+    'rp.deletedFile': 'Import record removed (source file {f} untouched)',
+    'rp.noDelete': 'Could not remove this record: {e}',
+    'ab.label': 'Abstract', 'ab.edit': 'Click to edit the abstract',
+    'ab.saved': 'Abstract saved',
+    'ab.missing': 'The root file of this disk has no abstract environment.',
+    'fc.title': 'Evidence', 'fc.nofact': 'No such fact in the ledger.',
+    'fc.claim': 'Claim', 'fc.value': 'Value', 'fc.source': 'Source',
+    'fc.locator': 'Locator', 'fc.fp': 'Fingerprint', 'fc.conf': 'Confidence',
+    'check.title': 'Full check result', 'check.tabReport': 'Check report',
+    'check.tabMachine': 'Machine view', 'rp.card.del': 'Delete',
     'np.aiNote': 'The chat layer is a translucent overlay floating above the body; context and entry live here.',
     'np.aiOpen': 'Open chat layer', 'np.aiClose': 'Hide chat layer',
     /* ---- segment six ---- */
@@ -545,6 +564,7 @@ function toast(text) {
 
 function applyI18n() {
   document.documentElement.lang = state.lang === 'en' ? 'en' : 'zh-CN';
+  document.title = t('doc.title');
   $$('[data-i18n]').forEach((el) => { el.textContent = t(el.getAttribute('data-i18n')); });
   $$('[data-i18n-ph]').forEach((el) => { el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph'))); });
   $$('[data-i18n-title]').forEach((el) => { el.setAttribute('title', t(el.getAttribute('data-i18n-title'))); });
@@ -633,7 +653,7 @@ async function loadProjects() {
     state.projects = data.projects || [];
   } catch (err) {
     state.projects = [];
-    toast('读取项目失败：' + err.message);
+    toast(t('err.loadProjects', { e: err.message }));
   }
   renderProjects();
 }
@@ -1020,7 +1040,7 @@ async function loadDisk() {
     state.blocks = data.blocks || [];
   } catch (err) {
     state.blocks = [];
-    toast('读取章节失败：' + err.message);
+    toast(t('err.loadSections', { e: err.message }));
   }
   try {
     state.meta = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/meta`);
@@ -1573,11 +1593,11 @@ async function enterEdit(blockId, file, targetEl) {
   try {
     model = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/block/${encodeURIComponent(blockId)}`);
   } catch (err) {
-    toast('打不开这一段：' + err.message);
+    toast(t('err.openBlock', { e: err.message }));
     return;
   }
   if (!model || model.ok === false) {
-    toast((model && model.error) || '打不开这一段');
+    toast((model && model.error) || t('err.openBlock', { e: '' }));
     return;
   }
   const target = targetEl || document.getElementById(blockId);
@@ -1614,7 +1634,7 @@ async function saveEdit() {
     toast(t('edit.saved'));
     await loadDisk();
   } catch (err) {
-    toast('没保存上：' + err.message);
+    toast(t('err.saveFailed', { e: err.message }));
     await loadDisk();
   }
 }
@@ -1651,7 +1671,7 @@ async function tocAction(path, body) {
     await loadDisk();
     return result;
   } catch (err) {
-    toast('目录操作失败：' + err.message);
+    toast(t('err.tocFailed', { e: err.message }));
     return null;
   }
 }
@@ -2213,7 +2233,7 @@ async function deleteReport(id) {
     const result = await postJSON(path, { name: id });
     toast(t('rp.deleted'));
     if (result && result.source_file) {
-      toast(t('rp.deleted') + '（' + result.source_file + '）');
+      toast(t('rp.deletedFile', { f: result.source_file }));
     }
     await loadReports();
   } catch (err) {

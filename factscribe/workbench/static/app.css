@@ -162,14 +162,13 @@ table.mt code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#8
 .pt:hover{border-color:#b6b0a0;color:#1c1e22}
 .pt.ask{border-color:#c9d8ea;color:#2f5279;background:#f4f8fc}
 .pt.ask:hover{background:#e6eff8}
-.pt.save{border-color:#b6d8c4;background:#f2faf5;color:#1c6b4c;font-weight:600}
-.pt.save:hover{background:#e2f3e9}
-.pt.cancel{color:#8a8577}
-/* ---------- v4 条目4：Notion 式就地编辑（细淡高亮，无边框框） ---------- */
-p[data-pid]{position:relative;cursor:text}
-p.editing{background:rgba(250,245,232,.55);outline:none;border-radius:6px;cursor:text}
-p.editing:focus{background:rgba(250,245,232,.78)}
-p.editing .fc{cursor:default}
+/* ---------- 事实芯片 ---------- */
+/* 条目 43：正文事实芯片带保护面身份（fc＋prot-chip 一体）——
+   旧的小圆点妆容只留给不带 prot-chip 的遗留场景，不再压扁新芯片。 */
+.fc:not(.prot-chip){display:inline-block;width:.62em;height:.62em;border-radius:50%;background:#dff0e7;border-bottom:1px dashed #4f9d78;
+ color:#1c6b4c;font-size:9px;line-height:.62em;text-align:center;vertical-align:super;margin:0 1px;cursor:help;outline:none}
+.fc:not(.prot-chip):hover,.fc:not(.prot-chip):focus{background:#bfe3cf;box-shadow:0 0 0 3px rgba(79,157,120,.16)}
+.fc.prot-chip{cursor:pointer}
 /* ---------- v2.1 受保护芯片 ---------- */
 .pchip{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 6px;margin:0 2px;
  font-size:14.5px;line-height:1.65;white-space:nowrap;vertical-align:baseline;border:1px solid transparent;
@@ -470,9 +469,8 @@ body.toc-hidden .toc-float{display:none}
 body:not([data-view="workbench"]) .toc-float{display:none}
 #tocList li{display:flex;align-items:center;gap:2px;border-radius:6px;padding-right:2px}
 #tocList li a{flex:1 1 auto;min-width:0}
-#tocList .cn{display:block}
-body.panel-en #tocList .cn{display:none}
-body:not(.panel-en) #tocList .en{display:none}
+/* 条目 44：目录条目槽永不空——.cn/.en 两槽都常显，按语言与数据在 JS 里择一。 */
+#tocList .cn,#tocList .en{display:block}
 .toc-grip{visibility:hidden;color:#b3b0a8;cursor:grab;display:flex;align-items:center;padding:4px 0 4px 2px;flex:0 0 auto}
 #tocList li:hover .toc-grip{visibility:visible}
 #tocList li.dragging{opacity:.4}
@@ -799,17 +797,18 @@ body[data-view="form"] .toc-float{display:none}
  color:#5f5e5b;font-family:inherit;font-size:12.5px;cursor:pointer}
 .btn-ghost:hover{background:#f7f7f5}
 
-/* ---- 正文就地编辑 ---- */
+/* ---- 正文就地编辑（条目 43：页面即编辑器——没有「编辑态」妆容，
+        聚焦圈只是标准的光标落点提示，不是模式切换） ---- */
 .editable-para{cursor:text;border-radius:5px;transition:background .12s}
 .editable-para:hover{background:#fbfbf9;box-shadow:0 0 0 4px #fbfbf9}
-.editing{outline:2px solid #dcdcd6;outline-offset:3px;border-radius:5px;
- background:#fffefa;padding:2px 4px;white-space:pre-wrap;
- font-family:inherit;font-size:inherit;line-height:inherit;color:inherit}
+.editable-para:focus{outline:2px solid #dcdcd6;outline-offset:3px}
 .prot-chip{display:inline-block;padding:0 5px;margin:0 1px;border-radius:5px;
  background:#eef1f6;color:#3f5a86;border:1px solid #d8e0ec;
  font-size:.82em;font-family:ui-monospace,Menlo,monospace;
  cursor:not-allowed;user-select:none;vertical-align:baseline}
 .prot-chip::before{content:"🔒";font-size:.85em;margin-right:3px;opacity:.75}
+/* 事实芯片自带 ✓，不再叠一把锁。 */
+.prot-chip.fc::before{content:none}
 
 /* ---- 章节管理（目录下方） ---- */
 .tf-manage{margin-top:14px;padding-top:12px;border-top:1px solid #eeeeec}

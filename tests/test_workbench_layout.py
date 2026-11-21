@@ -13,8 +13,10 @@
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -413,28 +415,27 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
         self.assertIn('result["affected"] = affected', source)
 
     def test_save_edit_updates_in_place(self):
-        """② 保存只换那一块的 DOM，不整篇 loadDisk。"""
-        save = JS[JS.index("async function saveEdit()"):JS.index("async function cancelEdit()")]
-        self.assertIn("replaceBlockNode(blockId, result.html)", save)
+        """② 保存只原地换块，不整篇 loadDisk（条目 43 起新链路 saveBlockNode）。"""
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("applyBlockHtml(blockId,", save)
         self.assertNotIn("loadDisk()", save)
 
-    def test_cancel_edit_is_local_only(self):
-        """③ 取消编辑：零网络请求，本地还原原文。"""
-        cancel = JS[JS.index("async function cancelEdit()"):]
-        cancel = cancel[:cancel.index("}")]
-        self.assertIn("restoreEditedNode(editing)", cancel)
-        self.assertNotIn("loadDisk()", cancel)
-        self.assertNotIn("fetch(", cancel)
-        self.assertNotIn("postJSON(", cancel)
+    def test_no_cancel_edit_concept(self):
+        """③ 条目 43：没有「取消编辑」——Esc＝主动失焦走保存，克隆还原机已拆。"""
+        self.assertNotIn("function cancelEdit(", JS)
+        self.assertNotIn("restoreEditedNode", JS)
+        esc_block = JS[JS.index("// 条目 43：Esc＝主动失焦"):]
+        esc_block = esc_block[:esc_block.index("});")]
+        self.assertIn("active.blur()", esc_block)
 
-    def test_original_text_copy_is_kept(self):
-        """前端保存进入编辑时的原文副本。"""
-        self.assertIn("orig: target", JS)
-        self.assertIn("function restoreEditedNode(", JS)
-        self.assertIn("host.replaceWith(editing.orig);", JS)
+    def test_focused_sibling_is_skipped_and_marked_stale(self):
+        """条目 43：保存成功刷新兄弟块时，正被聚焦的块跳过并记 stale。"""
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("live.dataset.stale = '1';", save)
+        self.assertIn("live.contains(active)", save)
 
     def test_draft_insert_delete_in_place(self):
-        self.assertIn("insertBlockAfter(data.after, data.block, data.html)", JS)
+        self.assertIn("insertBlockAfter(data.after, data.block, data.html, quote.file)", JS)
         self.assertIn("removeBlockNode(data.block || blockId)", JS)
 
     def test_loaddisk_only_three_triggers(self):
@@ -461,60 +462,66 @@ class Item36InPlaceUpdateTests(unittest.TestCase):
 
 
 class Item37RegressionTests(unittest.TestCase):
-    """条目 37 四案：单击进编辑／写回寻址同源／blur 自动保存／ZZEDIT 全文往返。"""
+    """条目 43（取代条目 37 的旧口径）四案：渲染即可编辑／写回寻址同源／
+    失焦自动保存／ZZEDIT 全文往返（新链路：散文＋token 走 /edit）。"""
 
-    def _enter_edit_body(self) -> str:
-        body = JS[JS.index("function enterEdit("):]
-        return body[:body.index("\n}\n")]
-
-    def test_1_single_click_enters_edit_synchronously(self):
-        """案一：单击即进入编辑——编辑器同步挂载，不等模型（老实现的 await 缺口
-        会让「单击＋输入」落空，也会让两次点击互相串台）。"""
-        body = self._enter_edit_body()
-        self.assertIn("function enterEdit(", JS)
-        self.assertNotIn("async function enterEdit(", JS)
-        self.assertNotIn("await ", body)
-        mount = body.index("target.replaceWith(editor);")
-        fetch = body.index("fetchBlockModel(")
-        self.assertLess(mount, fetch, "编辑器必须先同步挂载，再去后台取模型")
-        self.assertIn("buildPlainEditor(target)", body)
-        # 单击处理器把节点本身传进去（不再靠 id 反查）
-        self.assertIn("enterEdit(block.id, block.file || '', node);", JS)
+    def test_1_rendered_as_editable_no_clone_switch(self):
+        """案一：渲染即 contenteditable——没有「单击进入编辑」的克隆替换，
+        enterEdit/克隆机整体不存在。"""
+        self.assertIn("function collectPlain(", JS)
+        for dead in ("function enterEdit(", "function buildEditor(",
+                     "function buildPlainEditor(", "function upgradeEditor(",
+                     "function fetchBlockModel(", "function tokenizePlain(",
+                     "function placeCaretAtEnd(", "function liveEditorNode(",
+                     "function restoreEditedNode("):
+            self.assertNotIn(dead, JS)
+        self.assertNotIn("replaceWith(editor)", JS)
+        self.assertNotIn("state.blockModels", JS)
+        self.assertNotIn("state.editing", JS)
+        # 渲染循环：段落生来可编辑，不再挂 click→替换
+        blocks_fn = JS[JS.index("function renderBlocks()"):JS.index("/* 段五：目录住进导航面板")]
+        self.assertIn("node.setAttribute('contenteditable', 'true');", blocks_fn)
+        self.assertIn("node.setAttribute('spellcheck', 'false');", blocks_fn)
+        self.assertNotIn("enterEdit(", blocks_fn)
 
     def test_2_save_carries_dom_identity(self):
-        """案二：保存携带的 (file, block-id) 从**正在编辑的 DOM 节点**读回，
-        与渲染闭包同源。"""
-        save = JS[JS.index("async function saveEdit()"):JS.index("/* 条目 36：取消编辑")]
-        self.assertIn("host.dataset.file", save)
-        self.assertIn("host.dataset.blockId", save)
-        self.assertIn("node.dataset.blockId = block.id;", JS)
-        self.assertIn("node.dataset.file = block.file || '';", JS)
-        # 不许再拿异步模型里的 file 当权威
+        """案二：保存携带的 (file, block-id) 从**可编辑块自身的 DOM**读回，
+        与渲染闭包同源（渲染时写进 data-*）。"""
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("node.dataset.blockId", save)
+        self.assertIn("node.dataset.file", save)
+        blocks_fn = JS[JS.index("function renderBlocks()"):JS.index("/* 段五：目录住进导航面板")]
+        self.assertIn("node.dataset.blockId = block.id;", blocks_fn)
+        self.assertIn("node.dataset.file = block.file || '';", blocks_fn)
         self.assertNotIn("file: file || model.file", JS)
 
-    def test_3_blur_auto_saves(self):
-        """案三：blur 自动保存 ＋ 可见的「已保存」反馈。"""
-        body = self._enter_edit_body()
-        self.assertIn("addEventListener('blur'", body)
-        blur = body[body.index("addEventListener('blur'"):]
-        self.assertIn("saveEdit()", blur[:400])
-        self.assertIn("live.contains(document.activeElement)", blur[:400])
+    def test_3_focusout_auto_saves(self):
+        """案三：失焦自动保存（容器级委托＋120ms 守卫）＋ 可见的「已保存」反馈；
+        Esc＝主动失焦走保存。"""
+        self.assertIn("document.addEventListener('focusout'", JS)
+        delegate = JS[JS.index("document.addEventListener('focusout'"):]
+        delegate = delegate[:delegate.index("});")]
+        self.assertIn("closest('[data-block-id]')", delegate)
+        self.assertIn("setTimeout(", delegate)
+        self.assertIn("node.contains(active)", delegate)
+        self.assertIn("saveBlockNode(node);", delegate)
         self.assertIn("function showSavedBadge(", JS)
         self.assertIn("setTimeout(() => { if (badge.parentNode) badge.remove(); }, 1500);", JS)
         self.assertIn("'edit.savedBadge': '已保存',", JS)
         self.assertIn("'edit.savedBadge': 'Saved',", JS)
 
     def test_4_zzedit_round_trip_restores_bytes(self):
-        """案四：ZZEDIT 全文往返（写入→读回→删除→字节还原），跑在真项目样例上。
-
-        样例＝examples/minimal 的真实项目副本；另起一节纯文本段落当受试块
-        （编辑器走的是纯文本，LaTeX 命令不在可编辑面内）。
-        """
+        """案四：ZZEDIT 全文往返（写入→读回→删除→字节还原），跑在真项目样例上，
+        走**新链路**：collect 等价于「散文＋token」，带 expect_sha 调 /edit。"""
         import shutil
         import tempfile
+        import threading
+        import urllib.error
+        import urllib.request
 
         from factscribe.workbench.projects import render_tex
-        from factscribe.workbench.write import save_block
+        from factscribe.workbench.server import create_server
+        from factscribe.workbench.write import TOKEN_RE, editable_model, find_block
 
         src = ROOT / "examples" / "minimal"
         self.assertTrue(src.is_dir(), "真项目样例不在：examples/minimal")
@@ -526,34 +533,54 @@ class Item37RegressionTests(unittest.TestCase):
             target.write_text("\\section{Round Trip Probe}\n\nZZPLAIN body text here.\n",
                               encoding="utf-8")
             original = target.read_bytes()
-            text = target.read_text(encoding="utf-8")
-            blocks = [b for b in render_tex(text, stem="03-zzedit") if b["kind"] == "para"]
+            blocks = [b for b in render_tex(target.read_text(encoding="utf-8"),
+                                            stem="03-zzedit") if b["kind"] == "para"]
             self.assertTrue(blocks, "样例段落没渲染出来")
             block = blocks[0]
-            body = block["raw"].strip()
+            real = find_block(disk, rel, block["id"])
+            model = editable_model(disk, real)
+            body = TOKEN_RE.split(model["plain"])[0].strip()   # collect 的散文等价
 
-            # ① 写入：ZZEDIT 真进文件
-            result = save_block(disk, rel, block["id"], body + " ZZEDIT")
+            server, _index = create_server(tmp, port=0, ttl=0)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            self.addCleanup(server.shutdown)
+
+            def post(payload):
+                request = urllib.request.Request(
+                    "http://127.0.0.1:%d/api/disk/paper/paper/edit" % server.server_address[1],
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}, method="POST")
+                try:
+                    with urllib.request.urlopen(request, timeout=10) as resp:
+                        return resp.status, json.loads(resp.read().decode("utf-8"))
+                except urllib.error.HTTPError as exc:
+                    return exc.code, json.loads(exc.read().decode("utf-8"))
+
+            # ① 写入：ZZEDIT 带指纹闸真进文件（服务端应答 blocks 刷新映射）
+            status, result = post({"file": rel, "block": block["id"],
+                                   "text": body + " ZZEDIT",
+                                   "expect_sha": model["sha"]})
+            self.assertEqual(status, 200, "写入被拒：%s" % result)
             self.assertTrue(result.get("ok"), "写入失败：%s" % result)
-            after = target.read_text(encoding="utf-8")
-            self.assertIn("ZZEDIT", after, "编辑没写进文件")
+            self.assertIn("ZZEDIT", target.read_text(encoding="utf-8"), "编辑没写进文件")
+            self.assertIn(block["id"], result.get("blocks", {}), "应答没带同文件块映射")
 
             # ② 读回：重新渲染这一块，能看到 ZZEDIT
-            blocks2 = render_tex(after, stem="03-zzedit")
+            blocks2 = render_tex(target.read_text(encoding="utf-8"), stem="03-zzedit")
             self.assertTrue(any("ZZEDIT" in b["raw"] for b in blocks2), "读回看不到 ZZEDIT")
 
             # ③ 删除 ④ 字节还原：写回原文，文件回到逐字节相同
-            save_block(disk, rel, block["id"], body)
+            fresh = editable_model(disk, find_block(disk, rel, block["id"]))
+            status, result = post({"file": rel, "block": block["id"],
+                                   "text": body, "expect_sha": fresh["sha"]})
+            self.assertEqual(status, 200)
             self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
             self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后字节没还原")
 
 
 class Item38RegressionTests(unittest.TestCase):
-    """条目 38 两案：收集宿主指向挂载编辑器；ZZEDIT 真落文件、再删真还原。
-
-    两案都跑在**真项目副本**（examples/minimal 的真实项目）上，
-    断言的是**服务器文件内容**，不是 DOM。
-    """
+    """条目 43（取代条目 38 的旧口径）：收集宿主＝可编辑块本身（生来挂载）；
+    ZZEDIT 真落文件、再删真还原——跑在**真项目副本**上，断言服务器文件内容。"""
 
     def _project_copy(self, tmp: str) -> Path:
         import shutil
@@ -565,11 +592,9 @@ class Item38RegressionTests(unittest.TestCase):
         return disk
 
     def _probe_section(self, disk: Path):
-        """造一节纯文本段落当受试块，返回 (rel, 目标文件, 块, 纯文本)。"""
-        import html as htmllib
-        import re
-
+        """造一节纯文本段落当受试块，返回 (rel, 目标文件, 块, 可编辑模型)。"""
         from factscribe.workbench.projects import render_tex
+        from factscribe.workbench.write import editable_model, find_block
 
         rel = "sections/03-zzedit.tex"
         target = disk / rel
@@ -579,53 +604,50 @@ class Item38RegressionTests(unittest.TestCase):
         blocks = [b for b in render_tex(text, stem="03-zzedit") if b["kind"] == "para"]
         self.assertTrue(blocks, "受试段落没渲染出来")
         block = blocks[0]
-        # 前端挂载＝克隆原节点的 innerHTML；从克隆里取纯文本。
-        plain = htmllib.unescape(re.sub(r"<[^>]+>", "", block["html"]))
-        return rel, target, block, plain
+        real = find_block(disk, rel, block["id"])
+        return rel, target, block, editable_model(disk, real)
 
-    def test_1_collect_host_is_the_mounted_dom_node(self):
-        """案一（JS 侧）：保存/blur/还原全链路都用「挂载进 DOM 的那个节点」，
-        不再拿已出 DOM 的旧引用收集文本。"""
-        self.assertIn("function liveEditorNode(", JS)
-        self.assertIn("document.getElementById(editing.id)", JS)
-        self.assertIn("isConnected", JS)
-        save = JS[JS.index("async function saveEdit()"):JS.index("/* 条目 36：取消编辑")]
-        self.assertIn("liveEditorNode(editing)", save)
-        self.assertNotIn("collectPlain(editing.host)", save)
-        blur = JS[JS.index("addEventListener('blur'"):]
-        self.assertIn("liveEditorNode(state.editing)", blur[:500])
-        restore = JS[JS.index("function restoreEditedNode("):]
-        restore = restore[:restore.index("}")]
-        self.assertIn("liveEditorNode(editing)", restore)
+    def test_1_collect_reads_the_block_node_itself(self):
+        """案一（JS 侧）：收集直接走「生来挂载」的可编辑块——没有克隆机，
+        也就没有「已出 DOM 的旧引用」问题；失焦委托把节点交给保存。"""
+        self.assertIn("function collectPlain(", JS)
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("collectPlain(node)", save)
+        delegate = JS[JS.index("document.addEventListener('focusout'"):]
+        delegate = delegate[:delegate.index("});")]
+        self.assertIn("saveBlockNode(node);", delegate)
 
     def test_2_typed_text_reaches_the_server_file(self):
-        """案一（文件侧）：克隆里 insertText 出来的 ZZEDIT 真落进服务器文件。"""
-        import tempfile
-
+        """案二（文件侧）：「散文＋token」客户端文本（含 expect_sha 指纹）
+        真落进服务器文件。"""
         from factscribe.workbench.write import save_block
 
         with tempfile.TemporaryDirectory() as tmp:
             disk = self._project_copy(tmp)
-            rel, target, block, plain = self._probe_section(disk)
-            typed = plain + " ZZEDIT"          # 克隆里插入的那几个字
-            result = save_block(disk, rel, block["id"], typed)
+            rel, target, block, model = self._probe_section(disk)
+            typed = model["plain"] + " ZZEDIT"     # collectPlain 出来的那串
+            result = save_block(disk, rel, block["id"], typed,
+                                expect_sha=model["sha"])
             self.assertTrue(result.get("ok"), "写入失败：%s" % result)
             self.assertIn("ZZEDIT", target.read_text(encoding="utf-8"),
                           "用户敲的字没落到服务器文件里")
+            self.assertTrue(result.get("sha"), "应答没带新块指纹")
 
     def test_3_second_edit_removes_zzedit_and_restores(self):
-        """案二：再二次编辑删掉 ZZEDIT → 文件还原（逐字节相同）。"""
-        import tempfile
-
-        from factscribe.workbench.write import save_block
+        """案三：二次编辑删掉 ZZEDIT → 文件还原（逐字节相同）。"""
+        from factscribe.workbench.write import editable_model, find_block, save_block
 
         with tempfile.TemporaryDirectory() as tmp:
             disk = self._project_copy(tmp)
-            rel, target, block, plain = self._probe_section(disk)
+            rel, target, block, model = self._probe_section(disk)
             original = target.read_bytes()
-            save_block(disk, rel, block["id"], plain + " ZZEDIT")
+            without = model["plain"]               # 用户删掉了 ZZEDIT 的那版文本
+            save_block(disk, rel, block["id"], without + " ZZEDIT",
+                       expect_sha=model["sha"])
             self.assertIn("ZZEDIT", target.read_text(encoding="utf-8"))
-            save_block(disk, rel, block["id"], plain)      # 二次编辑：删掉 ZZEDIT
+            fresh = editable_model(disk, find_block(disk, rel, block["id"]))
+            save_block(disk, rel, block["id"], without,
+                       expect_sha=fresh["sha"])    # 二次编辑：删掉 ZZEDIT
             self.assertNotIn("ZZEDIT", target.read_text(encoding="utf-8"))
             self.assertEqual(target.read_bytes(), original, "删掉 ZZEDIT 后文件没还原")
 
@@ -854,6 +876,121 @@ class Item42AiPanelTests(unittest.TestCase):
         self.assertIn('route == "/api/ai/models"', server)
         self.assertIn("def _ai_models_get(self, query", server)
         self.assertIn("model=model or None", server)
+
+
+class Item43EditableAlwaysTests(unittest.TestCase):
+    """条目 43（用户裁定：正文永远直接可编辑）——前端新口径的静态断言。
+
+    页面本身就是编辑器：渲染即 contenteditable，没有「渲染态↔编辑态」两个
+    状态；保护面芯片由服务端烤进 html（data-token），保存走失焦委托链。
+    """
+
+    def test_paragraphs_are_born_editable(self):
+        """正文段落与 AI 草稿块渲染时就挂 contenteditable＋spellcheck。"""
+        blocks_fn = JS[JS.index("function renderBlocks()"):JS.index("/* 段五：目录住进导航面板")]
+        self.assertIn("node.setAttribute('contenteditable', 'true');", blocks_fn)
+        self.assertIn("body.setAttribute('contenteditable', 'true');", blocks_fn)
+        abstract_fn = JS[JS.index("function renderAbstract()"):JS.index("/* ---------------------------------------------------------------- 证据卡")]
+        self.assertIn("body.setAttribute('contenteditable', 'true');", abstract_fn)
+
+    def test_save_chain_is_focusout_delegation(self):
+        """保存链：容器级 focusout 委托 → 120ms 守卫 → saveBlockNode，
+        带 expect_sha；BLOCK_STALE 走原地重载并 toast 说清。"""
+        self.assertIn("async function saveBlockNode(", JS)
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("expect_sha", save)
+        self.assertIn("res.status === 409", save)
+        self.assertIn("t('edit.stale')", save)
+        self.assertIn("await reloadBlocks();", save)
+        reload_fn = JS[JS.index("async function reloadBlocks()"):JS.index("/* 条目 43：段落菜单")]
+        self.assertIn("state.blockSha[block.id] = block.sha;", reload_fn)
+        self.assertIn("await loadAbstract();", reload_fn)
+
+    def test_success_refreshes_same_file_blocks(self):
+        """保存成功：用应答 blocks 刷新同文件其他块（innerHTML 原地换，
+        保持可编辑外壳），聚焦中的块跳过记 stale。"""
+        save = JS[JS.index("async function saveBlockNode("):JS.index("/* 条目 43：BLOCK_STALE")]
+        self.assertIn("const blocks = data.blocks || {};", save)
+        self.assertIn("applyBlockHtml(id, blocks[id]);", save)
+        self.assertIn("live.dataset.stale = '1';", save)
+        apply_fn = JS[JS.index("function applyBlockHtml("):JS.index("/* 条目 43：保存一个块")]
+        self.assertIn("host.setAttribute('contenteditable', 'true');", apply_fn)
+        self.assertIn("host.setAttribute('spellcheck', 'false');", apply_fn)
+
+    def test_dead_click_to_edit_ui_is_gone(self):
+        """「点段落进入编辑」的口子全拆：抽象芯片拼装、ai_draft 的 click 入场。"""
+        self.assertNotIn("abstractChipHtml", JS)
+        blocks_fn = JS[JS.index("function renderBlocks()"):JS.index("/* 段五：目录住进导航面板")]
+        self.assertNotIn("wrap.addEventListener('click'", blocks_fn)
+        self.assertNotIn("body.onclick", JS)
+
+    def test_para_menu_edit_means_focus(self):
+        """段落工具条菜单的「编辑」＝聚焦该块（focusBlockNode），不再进编辑态。"""
+        self.assertIn("function focusBlockNode(", JS)
+        self.assertIn("focusBlockNode(target.id);", JS)
+
+    def test_server_bakes_tokens_into_rendered_html(self):
+        """服务端：渲染 html 直接带保护面芯片（fc/prot-chip＋data-token＋不可编辑）。"""
+        from factscribe.workbench.projects import render_tex
+
+        blocks = render_tex("Rate 10/16\\fact{A1}，见 \\cite{k1} 与 \\ref{s2}。\n")
+        para = next(b for b in blocks if b["kind"] == "para")
+        self.assertIn('class="fc prot-chip"', para["html"])
+        self.assertIn('data-fact="A1"', para["html"])
+        self.assertIn("data-token=", para["html"])
+        self.assertIn('contenteditable="false"', para["html"])
+        self.assertIn("✓ A1", para["html"])
+        self.assertIn("[k1]", para["html"])
+        self.assertIn("[s2]", para["html"])
+
+    def test_model_endpoint_carries_html_and_sha(self):
+        """/block/<id> 模型应答带 html（带 token 渲染）与 sha。"""
+        from factscribe.workbench.write import Block, editable_model
+
+        block = Block(file="sections/01.tex", block_id="x-p1", kind="para",
+                      start=0, end=20, raw="数字 16\\fact{A1} 在此。")
+        model = editable_model(Path("."), block)   # 无盘上下文：数字绑定段不编
+        self.assertIn("html", model)
+        self.assertIn("sha", model)
+        self.assertIn("data-token=", model["html"])
+
+    def test_editing_css_is_dismantled(self):
+        """CSS：.editing 模式妆容拆除，聚焦圈替代；死掉的保存/取消钮妆容清掉。"""
+        self.assertNotIn(".editing", CSS)
+        self.assertNotIn("p[data-pid]", CSS)
+        self.assertNotIn(".pt.save", CSS)
+        self.assertNotIn(".pt.cancel", CSS)
+        self.assertIn(".editable-para:focus{outline:2px solid #dcdcd6;outline-offset:3px}", CSS)
+
+
+class Item44TocSlotTests(unittest.TestCase):
+    """条目 44：界面英文态目录条目灭字修复——条目槽永不空。
+
+    病根：CSS 按 body.panel-en 把 .cn 槽藏掉，而 JS 从不出 .en 槽 → EN 态条目
+    空无一字。修法：JS 按语言与数据择一（有英文标题走 .en，否则 .cn），
+    CSS 两槽常显；只切界面语言时目录槽跟着刷。
+    """
+
+    def test_css_no_longer_hides_slots_by_body_class(self):
+        self.assertNotIn("body.panel-en #tocList .cn{display:none}", CSS)
+        self.assertNotIn("body:not(.panel-en) #tocList .en{display:none}", CSS)
+        self.assertIn("#tocList .cn,#tocList .en{display:block}", CSS)
+
+    def test_toc_entries_pick_one_nonempty_slot(self):
+        """renderTocList 按 title_en 与界面语言择槽：EN 态英文标题走 .en，
+        其余走 .cn（EN 盘标题本就是英文，.cn 槽照常显示）。"""
+        toc_fn = JS[JS.index("function renderTocList()"):JS.index("function renderCover()")]
+        self.assertIn("const enTitle = block.title_en || '';", toc_fn)
+        self.assertIn("(state.lang === 'en' && enTitle)", toc_fn)
+        self.assertIn("'<span class=\"en\">' + esc(enTitle) + '</span>'", toc_fn)
+        self.assertIn("'<span class=\"cn\">' + esc(block.title || block.file || '') + '</span>'", toc_fn)
+
+    def test_lang_only_switch_refreshes_toc_slots(self):
+        """workbench 下无对应盘、只切界面语言的分支，applyI18n 之后刷 renderTocList。"""
+        seg = JS[JS.index("$('#langSeg').addEventListener('click'"):]
+        seg = seg[:seg.index("});")]
+        self.assertIn("applyI18n();", seg)
+        self.assertIn("else renderTocList();", seg)
 
 
 if __name__ == "__main__":

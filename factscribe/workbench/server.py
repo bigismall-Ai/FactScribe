@@ -6,14 +6,15 @@
 
 端点：
   GET  /api/projects                              项目 + 盘 + 计数 + 进度
-  GET  /api/disk/<project>/<disk>/sections        节列表 + 轻量 HTML
+  GET  /api/disk/<project>/<disk>/sections        节列表 + 带保护面芯片的 HTML（条目 43：每块带 sha）
   GET  /api/disk/<project>/<disk>/meta            状态行数据
-  GET  /api/disk/<project>/<disk>/assembly        装配清单（main.tex 的 \\input 列表）
-  GET  /api/disk/<project>/<disk>/block/<id>      一段的可编辑模型（散文 + 保护面）
+  GET  /api/disk/<project>/<disk>/assembly        装配清单（main.tex 的 \\input 列表，条目 43：每条带 sha）
+  GET  /api/disk/<project>/<disk>/block/<id>      一段的可编辑模型（散文 + 保护面 + html + sha）
   GET  /api/disk/<project>/<disk>/pdf              盘里已编译好的 PDF（预览/下载）
   GET  /api/disk/<project>/<disk>/report          检查报告（体检摘要 + 发现 + 四步链）
   GET  /api/disk/<project>/<disk>/machine         机器视图（账本表/正文扫描/证据链/命令）
-  POST /api/disk/<project>/<disk>/edit            写回一段（block=cover-abstract 写摘要）
+  POST /api/disk/<project>/<disk>/edit            写回一段（block=cover-abstract 写摘要；条目 43：带 expect_sha 保存闸，
+                                                  应答 blocks=同文件全部块的新鲜 html，指纹不符 → 409 BLOCK_STALE）
   POST /api/disk/<project>/<disk>/action          常用功能（pdf / bundle / open_dir）
   POST /api/disk/<project>/<disk>/toc/move        调序
   POST /api/disk/<project>/<disk>/toc/delete      删除（挪 attic）
@@ -50,10 +51,10 @@ from urllib.parse import unquote, urlparse
 
 from ..config import ConfigError
 from .projects import MAX_DEPTH, disk_meta, disk_sections, load_projects
-from .write import (ABSTRACT_BLOCK_ID, abstract_block, create_paper_project,
-                    create_section, delete_section, editable_model, find_block,
-                    move_section, save_abstract, save_block, touch_opened,
-                    update_paper_project)
+from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE, abstract_block,
+                    create_paper_project, create_section, delete_section,
+                    editable_model, find_block, move_section, save_abstract,
+                    save_block, touch_opened, update_paper_project)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_TYPES = {
@@ -387,21 +388,43 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             rel = str(body.get("file") or "")
             block_id = str(body.get("block") or "")
             text = body.get("text")
+            # 条目 43：保存闸——客户端上报它所基于的块原文指纹，对不上拒写。
+            expect = str(body.get("expect_sha") or "")
             if not block_id or not isinstance(text, str):
                 return self._error(400, "block / text 都要给")
             if block_id == ABSTRACT_BLOCK_ID:
                 # 封面摘要：根文件 abstract 环境（id 固定，不带 file）。
-                result = save_abstract(disk, text)
+                try:
+                    result = save_abstract(disk, text, expect_sha=expect)
+                except ConfigError as exc:
+                    if getattr(exc, "code", "") == BLOCK_STALE_CODE:
+                        stale_file = ""
+                        try:
+                            stale_file = abstract_block(disk).file
+                        except ConfigError:
+                            stale_file = ""
+                        return self._stale_response(disk, stale_file, block_id)
+                    raise
                 # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
                 result["block"] = block_id
                 result["html"] = self._rerender_block(disk, "", block_id)
+                # 条目 43：同文件全部块的新鲜渲染（带 token），兄弟段就地刷新。
+                result["blocks"] = self._fresh_blocks(
+                    disk, str(result.get("file") or ""))
                 return self._json(result)
             if not rel:
                 return self._error(400, "file / block / text 都要给")
-            result = save_block(disk, rel, block_id, text)
+            try:
+                result = save_block(disk, rel, block_id, text, expect_sha=expect)
+            except ConfigError as exc:
+                if getattr(exc, "code", "") == BLOCK_STALE_CODE:
+                    return self._stale_response(disk, rel, block_id)
+                raise
             # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
             result["block"] = block_id
             result["html"] = self._rerender_block(disk, rel, block_id)
+            # 条目 43：同文件全部块的新鲜渲染（带 token），兄弟段就地刷新。
+            result["blocks"] = self._fresh_blocks(disk, rel)
             return self._json(result)
         if action == "action":
             return self._disk_action(project_id, disk_id, disk, body)
@@ -430,6 +453,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         """写回之后，对**这一个块**做轻渲染，返回它的新 html。
 
         条目 36：前端不再整篇重载，靠这个 html 原地换掉那一块的 DOM。
+        条目 43：渲染带盘上下文（拿事实账认绑定数字），token 与模型同源。
         """
         from .projects import disk_sections, render_tex
 
@@ -443,12 +467,43 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 return ""
             path = Path(disk) / rel
             text = path.read_text(encoding="utf-8", errors="replace")
-            for block in render_tex(text, stem=Path(rel).stem):
+            for block in render_tex(text, stem=Path(rel).stem, disk_root=disk):
                 if block.get("id") == block_id:
                     return str(block.get("html") or "")
         except (OSError, ValueError):
             return ""
         return ""
+
+    def _fresh_blocks(self, disk: Path, rel: str) -> dict:
+        """条目 43：同一文件全部块的新鲜渲染（带 token）：``{block_id: html}``。
+
+        本轮保存后，同文件其他段落烤在 DOM 里的 token 能立刻刷新，
+        杜绝「兄弟段 token 过期」错映射。``rel`` 为空＝不限文件。
+        """
+        out: dict = {}
+        try:
+            for block in disk_sections(disk).get("blocks", []):
+                if rel and block.get("file") != rel:
+                    continue
+                html = str(block.get("html") or "")
+                if html:
+                    out[str(block.get("id"))] = html
+        except (OSError, ValueError):
+            return out
+        return out
+
+    def _stale_response(self, disk: Path, rel: str, block_id: str) -> None:
+        """条目 43：保存闸拒写（HTTP 409 BLOCK_STALE）。
+
+        附同文件全部块的新鲜渲染，前端原地重载（未保存的字会丢，提示说清）。
+        """
+        return self._json({
+            "ok": False,
+            "error": "这段在别处已被改动，请重新编辑。",
+            "code": BLOCK_STALE_CODE,
+            "block": block_id,
+            "blocks": self._fresh_blocks(disk, rel),
+        }, code=409)
 
     def _draft_post(self, disk: Path, what: str, body: dict) -> None:
         """段六：AI 草稿块——写进稿 ＋ 删除。"""

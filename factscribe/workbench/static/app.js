@@ -132,8 +132,9 @@ const I18N = {
     'toc.create': '创建', 'toc.up': '上移', 'toc.down': '下移',
     'toc.del': '删除', 'toc.delAsk': '把这一节挪到 sections/attic/（可恢复）？',
     'toc.done': '目录已更新',
-    'edit.hint': '点段落进入编辑；Esc 或点外面保存。',
-'edit.savedBadge': '已保存',     'edit.saved': '已保存（原稿留在 .bak）',
+    'edit.hint': '正文可直接编辑；失焦或 Esc 就保存。',
+    'edit.savedBadge': '已保存',     'edit.saved': '已保存（原稿留在 .bak）',
+    'edit.stale': '这段在别处已被改动，已换上最新内容；您刚输入的字没有保存。',
     'edit.prot': '锁',
     'pf.title': '论文标题', 'pf.titlePh': '例如：多臂实验台的调度策略',
     'pf.lang': '写作语言', 'pf.langEn': '英文盘', 'pf.langZh': '中文盘',
@@ -175,7 +176,7 @@ const I18N = {
     'rp.deleted': '已删掉这条导入记录（源文件没动）',
     'rp.deletedFile': '已删掉这条导入记录（源文件 {f} 没动）',
     'rp.noDelete': '这条记录删不掉：{e}',
-    'ab.label': '摘要', 'ab.edit': '点击编辑摘要', 'ab.saved': '摘要已保存',
+    'ab.label': '摘要', 'ab.edit': '可直接编辑', 'ab.saved': '摘要已保存',
     'ab.missing': '这个盘的主文件里没有 abstract 环境。',
     'fc.title': '证据', 'fc.nofact': '账本里没有这条事实。',
     'fc.claim': '断言', 'fc.value': '值', 'fc.source': '出处',
@@ -257,7 +258,7 @@ const I18N = {
     'guide.foot': '目标刊物定了以后，把它填进上面的表单——版式面会照着它给首页预览，' +
       '截稿日临近时导航钮会提醒你。语言盘不动：中文稿还是中文稿。',
     'draft.badge': 'AI 草稿',
-    'draft.hint': '这是 AI 写的草稿块，不是正文。点它可以改，也可以删掉。',
+    'draft.hint': '这是 AI 写的草稿块，不是正文；直接改字，也可以删掉。',
     'draft.deleted': 'AI 草稿块已删掉',
     'draft.delFail': '删不掉：{e}',
   },
@@ -381,9 +382,10 @@ const I18N = {
     'toc.create': 'Create', 'toc.up': 'Move up', 'toc.down': 'Move down',
     'toc.del': 'Delete', 'toc.delAsk': 'Move this section to sections/attic/ (reversible)?',
     'toc.done': 'Contents updated',
-    'edit.hint': 'Click a paragraph to edit; Esc or click outside to save.',
+    'edit.hint': 'Body text is editable in place; blur or Esc saves.',
     'edit.savedBadge': 'Saved',
     'edit.saved': 'Saved (original kept as .bak)',
+    'edit.stale': 'This block changed elsewhere. Latest content loaded; your unsaved typing was dropped.',
     'edit.prot': 'locked',
     'pf.title': 'Paper title', 'pf.titlePh': 'e.g. Scheduling policies for multi-arm testbeds',
     'pf.lang': 'Writing language', 'pf.langEn': 'English disk',
@@ -430,7 +432,7 @@ const I18N = {
     'rp.deleted': 'Import record removed (source file untouched)',
     'rp.deletedFile': 'Import record removed (source file {f} untouched)',
     'rp.noDelete': 'Could not remove this record: {e}',
-    'ab.label': 'Abstract', 'ab.edit': 'Click to edit the abstract',
+    'ab.label': 'Abstract', 'ab.edit': 'Editable in place',
     'ab.saved': 'Abstract saved',
     'ab.missing': 'The root file of this disk has no abstract environment.',
     'fc.title': 'Evidence', 'fc.nofact': 'No such fact in the ledger.',
@@ -519,7 +521,7 @@ const I18N = {
       'the first page against it, and the navigation button warns you as the deadline nears. ' +
       'The language disk never changes: a Chinese draft stays a Chinese draft.',
     'draft.badge': 'AI draft',
-    'draft.hint': 'This is an AI-written draft block, not body text. Click it to edit, or delete it.',
+    'draft.hint': 'An AI-written draft block, not body text. Edit it in place, or delete it.',
     'draft.deleted': 'AI draft block deleted',
     'draft.delFail': 'Could not delete: {e}',
   },
@@ -534,9 +536,8 @@ const state = {
   meta: null,
   nav: { pane: 'toc' },   // 段五：导航面板（目录/智能助手/更多 三面互斥）
   blocksMeta: {},          // 条目 37：块身份（文件＋章节）——原地替换后重新绑定用
-  blockModels: {},         // 条目 38：可编辑模型缓存（保护面 token 在里面）
+  blockSha: {},           // 条目 43：块原文短指纹（保存闸 expect_sha 用）
   filter: '',
-  editing: null,      // 正在编辑的块 {id, file, host}
   assembly: [],       // main.tex 的装配清单
   form: null,         // 新建/编辑项目表单 {mode, project, disk}
   abstract: null,     // 段五：封面摘要块模型（cover-abstract）
@@ -753,7 +754,7 @@ function renderBlocks() {
     } else if (block.kind === 'abstract') {
       // 段五：摘要归封面（封面摘要区可编辑），正文里不重复渲染。
     } else if (block.kind === 'ai_draft') {
-      // 段六：AI 草稿块——独立成块，不混进正文；可再编辑，也可删掉。
+      // 段六：AI 草稿块——独立成块，不混进正文；生来可编辑，也可删掉。
       const holder = document.createElement('div');
       holder.innerHTML = block.html || '';
       const node = holder.firstElementChild;
@@ -769,6 +770,12 @@ function renderBlocks() {
         const body = document.createElement('div');
         body.className = 'ai-draft-body';
         body.innerHTML = node.innerHTML || '';
+        // 条目 43：正文永远直接可编辑——芯片由服务端烤进 html，没有「进入编辑」。
+        body.dataset.blockId = block.id;
+        body.dataset.file = block.file || '';
+        body.setAttribute('contenteditable', 'true');
+        body.setAttribute('spellcheck', 'false');
+        if (block.sha) state.blockSha[block.id] = block.sha;
         const hint = document.createElement('div');
         hint.className = 'ai-draft-hint';
         hint.textContent = t('draft.hint');
@@ -785,11 +792,6 @@ function renderBlocks() {
         wrap.appendChild(body);
         wrap.appendChild(hint);
         wrap.appendChild(del);
-        wrap.dataset.blockId = block.id;
-        wrap.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          enterEdit(block.id, block.file || '', wrap);
-        });
         host.appendChild(wrap);
       }
     } else {
@@ -802,12 +804,13 @@ function renderBlocks() {
         // 条目 37：块身份写进 DOM——保存时读回，与渲染闭包同源，杜绝错位。
         node.dataset.blockId = block.id;
         node.classList.add('editable-para');
+        // 条目 43：生来可编辑——没有「单击进入编辑」这个动作，
+        // 保护面芯片（data-token）由服务端烤进渲染 html。
+        node.setAttribute('contenteditable', 'true');
+        node.setAttribute('spellcheck', 'false');
+        if (block.sha) state.blockSha[block.id] = block.sha;
         // 条目 37：块身份（文件＋章节）留一份，原地替换后据此重新绑定。
         state.blocksMeta[block.id] = { file: block.file || '', section: curSec };
-        node.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          enterEdit(block.id, block.file || '', node);
-        });
         bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(), curSec, block.id, block.file || '');
         host.appendChild(node);
       }
@@ -857,7 +860,12 @@ function renderTocList() {
     li.className = 'toc-item' + ((block.level || 1) > 1 ? ' sub' : '');
     const link = document.createElement('a');
     link.href = '#' + block.id;
-    link.innerHTML = `<span class="cn">${esc(block.title || block.file || '')}</span>`;
+    // 条目 44：条目槽按语言与数据择一，永不空槽——EN 态有英文标题走 .en 槽，
+    // 其余走 .cn 槽（EN 盘的标题本就是英文，走 .cn 槽照常显示）。
+    const enTitle = block.title_en || '';
+    link.innerHTML = (state.lang === 'en' && enTitle)
+      ? '<span class="en">' + esc(enTitle) + '</span>'
+      : '<span class="cn">' + esc(block.title || block.file || '') + '</span>';
     li.appendChild(link);
     if (row.ops) {
       const last = row.ops.index === assembly.length - 1;
@@ -943,17 +951,6 @@ async function loadAbstract() {
   renderAbstract();
 }
 
-function abstractChipHtml(chip) {
-  const raw = chip.raw || '';
-  const label = chip.label || '';
-  if (label === 'fact') {
-    const match = /\\fact\s*\{([^{}]*)\}/.exec(raw);
-    const id = match ? match[1].trim() : '';
-    return `<span class="prot-chip fc-fact" data-fact="${esc(id)}" tabindex="0" role="button" title="${esc(raw)}">✓ ${esc(id)}</span>`;
-  }
-  return `<span class="prot-chip" title="${esc(raw)}">${esc(chip.display || raw)}</span>`;
-}
-
 function renderAbstract() {
   const box = $('#coverAbstract');
   const body = $('#coverAbstractBody');
@@ -963,26 +960,15 @@ function renderAbstract() {
   if (!model) { box.hidden = true; return; }
   box.hidden = false;
   if (label) label.textContent = t('ab.label');
-  const parts = String(model.plain || '').split(/(\ue000P\d+\ue001)/);
-  let html = '';
-  parts.forEach((part) => {
-    if (!part) return;
-    if (/^\ue000P\d+\ue001$/.test(part)) {
-      const index = part.replace(/\D/g, '');
-      const chip = (model.chips || []).find((c) => String(c.i) === index);
-      html += chip ? abstractChipHtml(chip) : '';
-      return;
-    }
-    html += esc(part);
-  });
-  body.innerHTML = html;
+  // 条目 43：保护面芯片由服务端烤进 html（模型应答的 html 字段），整段挂上。
+  body.innerHTML = model.html || '';
   body.classList.add('editable-para');
   body.title = t('ab.edit');
-  body.onclick = (ev) => {
-    if (ev.target.closest('.fc-fact')) return;   // 芯片走证据卡，不进编辑
-    ev.stopPropagation();
-    enterEdit(ABSTRACT_BLOCK, '', body);
-  };
+  body.dataset.blockId = ABSTRACT_BLOCK;
+  body.dataset.file = model.file || '';
+  body.setAttribute('contenteditable', 'true');
+  body.setAttribute('spellcheck', 'false');
+  if (model.sha) state.blockSha[ABSTRACT_BLOCK] = model.sha;
   bindFactChips(body);
 }
 
@@ -1098,6 +1084,8 @@ async function loadDisk() {
     state.blocks = [];
     toast(t('err.loadSections', { e: err.message }));
   }
+  // 条目 43：换一篇稿子，块指纹跟着换（保存闸的 expect_sha 按当前盘算）。
+  state.blockSha = {};
   try {
     state.meta = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/meta`);
   } catch (err) {
@@ -1601,193 +1589,179 @@ async function rerunCheck() {
   }
 }
 
-/* ---------------------------------------------------------------- 就地编辑 */
+/* ---------------------------------------------------------------- 就地编辑（条目 43：页面即编辑器）
+
+正文段落生来 contenteditable——没有「进入编辑」这个动作，也没有渲染态↔编辑态
+两个状态。保护面芯片由服务端烤进渲染 html（data-token），失焦即保存：
+容器级 focusout 委托 → 120ms 守卫（焦点还在块内就不存）→ saveBlockNode 收
+「散文＋token」POST /edit（带 expect_sha 指纹闸）。保存成功用应答的 blocks
+刷新同文件其他块（杜绝兄弟段 token 过期）；409 BLOCK_STALE 原地重载新文。 */
 
 function collectPlain(host) {
-  /* 把编辑区里的内容还原成「散文 + 占位符」的串（占位符＝保护面芯片）。 */
+  /* 把块里的内容还原成「散文 + 占位符」的串（占位符＝保护面芯片自带 data-token）。 */
   let out = '';
   host.childNodes.forEach((node) => {
     if (node.nodeType === 3) { out += node.nodeValue; return; }
     if (node.nodeType !== 1) return;
     if (node.dataset && node.dataset.token) { out += node.dataset.token; return; }
+    if (node.dataset && node.dataset.badge) { return; }   // 「已保存」角标不是正文
     out += collectPlain(node);
   });
   return out;
 }
 
-function buildEditor(model) {
-  const host = document.createElement('div');
-  host.className = 'editing';
+/* 块的 DOM 节点：优先按 id，再按块身份（data-block-id）。 */
+function blockNodeById(blockId) {
+  if (!blockId) return null;
+  const byId = document.getElementById(blockId);
+  if (byId && byId.dataset && byId.dataset.blockId) return byId;
+  let probe = blockId;
+  try { if (window.CSS && CSS.escape) probe = CSS.escape(blockId); } catch (err) { /* 原样查 */ }
+  return document.querySelector('[data-block-id="' + probe + '"]');
+}
+
+/* 块的内容宿主：AI 草稿块的可编辑面是 .ai-draft-body，其余就是块本身。 */
+function blockContentHost(node) {
+  if (node && node.classList && node.classList.contains('ai-draft')) {
+    return (node.querySelector('.ai-draft-body') || node);
+  }
+  return node;
+}
+
+/* 条目 43：把一个块的新鲜 html 原地换进内容宿主（外壳、id、身份属性不动，
+   可编辑性跟内容一起恢复；芯片绑定重新挂）。 */
+function applyBlockHtml(blockId, html) {
+  if (!html) return false;
+  const node = blockNodeById(blockId);
+  if (!node) return false;
+  const host = blockContentHost(node);
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  const fresh = holder.firstElementChild;
+  if (!fresh) return false;
+  host.innerHTML = fresh.innerHTML;
   host.setAttribute('contenteditable', 'true');
   host.setAttribute('spellcheck', 'false');
-  const parts = String(model.plain || '').split(/(\ue000P\d+\ue001)/);
-  parts.forEach((part) => {
-    if (!part) return;
-    if (TOKEN_RE.test(part)) {
-      const index = part.replace(/\D/g, '');
-      const chip = (model.chips || []).find((c) => String(c.i) === index);
-      const span = document.createElement('span');
-      span.className = 'prot-chip';
-      span.setAttribute('contenteditable', 'false');
-      span.dataset.token = part;
-      span.title = (chip && chip.raw) || '';
-      span.textContent = (chip && chip.display) || part;
-      host.appendChild(span);
+  delete node.dataset.stale;
+  bindFactChips(host);
+  return true;
+}
+
+/* 条目 43：保存一个块。node＝带 data-block-id 的可编辑块。 */
+async function saveBlockNode(node) {
+  if (!node || !node.isConnected) return;
+  if (node.dataset.saving === '1') {
+    // 在飞期间的再失焦：记一笔，本轮落定后补一轮保存（不丢字）。
+    node.dataset.resave = '1';
+    return;
+  }
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  const blockId = (node.dataset && node.dataset.blockId) || node.id || '';
+  const file = (node.dataset && node.dataset.file) || '';
+  if (!blockId) return;
+  const body = { file: file, block: blockId, text: collectPlain(node) };
+  const expect = state.blockSha[blockId] || '';
+  if (expect) body.expect_sha = expect;
+  node.dataset.saving = '1';
+  try {
+    const res = await fetch(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    let data = null;
+    try { data = await res.json(); } catch (err) { data = null; }
+    if (res.status === 409 || (data && data.code === 'BLOCK_STALE')) {
+      // 条目 43：这段在别处已被改动——未保存的字会丢，原地换上服务器的新文。
+      toast(t('edit.stale'));
+      await reloadBlocks();
       return;
     }
-    host.appendChild(document.createTextNode(part));
+    if (!res.ok || !data || data.ok === false) {
+      toast(t('err.saveFailed', { e: (data && data.error) || ('HTTP ' + res.status) }));
+      return;
+    }
+    (data.warnings || []).forEach((w) => toast(w));
+    toast(t('edit.saved'));
+    if (data.sha) state.blockSha[blockId] = data.sha;
+    // 自己先换成服务端重建的新文（被删的芯片按原文补回来了，DOM 要对齐）；
+    // 用户在这轮保存期间又点回来打字 → 先不动，记 stale，等下一轮失焦保存。
+    const selfNode = blockNodeById(blockId);
+    const activeNow = document.activeElement;
+    if (selfNode && activeNow && selfNode.contains(activeNow)) {
+      selfNode.dataset.stale = '1';
+    } else {
+      applyBlockHtml(blockId, (data.blocks && data.blocks[blockId]) || data.html);
+    }
+    // 条目 43：同文件其他块的新鲜 html 原地换；正被聚焦的块跳过，记 stale，
+    // 它失焦保存若遇 BLOCK_STALE 走 reloadBlocks 对齐。
+    const blocks = data.blocks || {};
+    Object.keys(blocks).forEach((id) => {
+      if (id === blockId) return;
+      const live = blockNodeById(id);
+      if (!live) return;
+      const active = document.activeElement;
+      if (active && live.contains(active)) { live.dataset.stale = '1'; return; }
+      applyBlockHtml(id, blocks[id]);
+    });
+    showSavedBadge(blockId);
+  } catch (err) {
+    toast(t('err.saveFailed', { e: (err && err.message) || String(err) }));
+  } finally {
+    delete node.dataset.saving;
+    if (node.dataset.resave === '1') {
+      delete node.dataset.resave;
+      if (node.isConnected) saveBlockNode(node);   // 补上在飞期间欠的那一轮
+    }
+  }
+}
+
+/* 条目 43：BLOCK_STALE 之后的原地重载——GET /sections 换回全盘新文（含 sha）。 */
+async function reloadBlocks() {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  let data = null;
+  try {
+    data = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/sections`);
+  } catch (err) {
+    return;
+  }
+  const active = document.activeElement;
+  (data.blocks || []).forEach((block) => {
+    if (!block.id) return;
+    if (block.sha) state.blockSha[block.id] = block.sha;
+    if (!block.html) return;
+    const live = blockNodeById(block.id);
+    if (live && active && live.contains(active)) return;   // 聚焦中的块不动
+    applyBlockHtml(block.id, block.html);
   });
-  return host;
+  // 摘要走模型端点对齐（html＋sha 同源）；正在打字就不动它。
+  const abBody = document.getElementById('coverAbstractBody');
+  if (!(abBody && active && abBody.contains(active))) await loadAbstract();
 }
 
-/* 条目 37：同步挂载的编辑器——不等模型，先把这一段变成可输入的。
-   （老实现先 await 模型再挂载，点两段时后到的模型会盖掉先到的，
-   于是保存带错 (file, block-id)——根因就在这个 await 缺口。） */
-function buildPlainEditor(source) {
-  const host = document.createElement('div');
-  host.className = 'editing';
-  host.setAttribute('contenteditable', 'true');
-  host.setAttribute('spellcheck', 'false');
-  host.innerHTML = source.innerHTML || '';
-  host.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
-  return host;
-}
-
-/* 模型到了再补保护面芯片——用户没动过字才补，不吃掉输入。 */
-function upgradeEditor(host, model) {
-  const fresh = buildEditor(model);
-  host.innerHTML = '';
-  while (fresh.firstChild) host.appendChild(fresh.firstChild);
-}
-
-function placeCaretAtEnd(host) {
+/* 条目 43：段落菜单的「编辑」＝把光标落进那一块（页面本就是编辑器）。 */
+function focusBlockNode(blockId) {
+  const node = blockNodeById(blockId);
+  if (!node) return;
+  const host = blockContentHost(node);
+  const editable = host.getAttribute('contenteditable') === 'true'
+    ? host
+    : (host.querySelector('[contenteditable="true"]') || host);
+  editable.focus();
   const range = document.createRange();
-  range.selectNodeContents(host);
+  range.selectNodeContents(editable);
   range.collapse(false);
   const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
 }
 
-/* 条目 37：单击即进入编辑——编辑器**同步**挂载，敲字一定落在编辑态里。 */
-function enterEdit(blockId, file, targetEl) {
-  if (state.editing) saveEdit();          // 上一次编辑先落盘（不阻塞本次挂载）
-  const project = state.project;
-  const disk = currentDisk();
-  if (!project || !disk) return;
-  const target = targetEl || document.getElementById(blockId);
-  if (!target) return;
-  // 身份以 DOM 为准：渲染闭包写进去的 data-block-id / data-file。
-  const realId = target.dataset.blockId || blockId;
-  const realFile = target.dataset.file || file || '';
-  const keepId = target.id || realId;
-  const cached = state.blockModels[realId];
-  // 条目 38：有缓存模型就用**带保护面芯片**的编辑器（客户端文本自带 token，
-  // 服务端才对得齐；否则整段编辑会被丢掉）。
-  const editor = cached ? buildEditor(cached) : buildPlainEditor(target);
-  const plainAtMount = collectPlain(editor);
-  target.replaceWith(editor);
-  editor.id = keepId;
-  editor.dataset.blockId = realId;
-  editor.dataset.file = realFile;
-  state.editSeq = (state.editSeq || 0) + 1;
-  state.editing = { id: realId, file: realFile, host: editor, orig: target,
-                    seq: state.editSeq };
-  editor.focus();
-  placeCaretAtEnd(editor);
-  // 可编辑模型（保护面芯片）后台补齐；失败也不影响编辑与保存。
-  fetchBlockModel(project, disk, realId).then((model) => {
-    if (!model) return;
-    if (!state.editing) return;
-    const live = liveEditorNode(state.editing);
-    if (!live || live !== editor) return;                // 节点已被接管 → 不动
-    if (collectPlain(live) !== plainAtMount) return;      // 用户已经动手了 → 不动
-    upgradeEditor(live, model);
-  });
-  // blur 自动保存（点芯片不算离开）。
-  editor.addEventListener('blur', () => {
-    setTimeout(() => {
-      if (!state.editing) return;
-      // 条目 38：blur 后重新解析宿主——节点被换过也照样能存。
-      const live = liveEditorNode(state.editing);
-      if (!live) return;
-      if (live.contains(document.activeElement)) return;
-      saveEdit();
-    }, 120);
-  });
-}
-
-/* 条目 38：取可编辑模型（带缓存）。保护面 token 就藏在这里。 */
-async function fetchBlockModel(project, disk, blockId) {
-  if (!project || !disk || !blockId) return null;
-  const key = String(blockId);
-  if (state.blockModels[key]) return state.blockModels[key];
-  try {
-    const model = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/block/${encodeURIComponent(blockId)}`);
-    if (!model || model.ok === false) return null;
-    state.blockModels[key] = model;
-    return model;
-  } catch (err) {
-    return null;
-  }
-}
-
-/* 条目 38：客户端文本里没有保护面标记时，服务端对不齐 → 整段编辑会被丢。
-   按模型把受保护的值换回 token 再发。 */
-function tokenizePlain(text, model) {
-  const chips = (model && model.chips) || [];
-  if (!chips.length) return text;
-  let out = String(text || '');
-  chips.forEach((chip) => {
-    const disp = String(chip.display || '');
-    if (!disp) return;
-    const at = out.indexOf(disp);
-    if (at < 0) return;
-    const token = '\ue000P' + chip.i + '\ue001';
-    out = out.slice(0, at) + token + out.slice(at + disp.length);
-  });
-  return out;
-}
-
-const HAS_TOKEN_RE = /\ue000P\d+\ue001/;
-
-/* 条目 38：编辑宿主一律解析成**挂载进 DOM 的那个节点**。
-   挂载是「克隆替换原节点」——若还攥着已出 DOM 的旧引用，收集到的就是原文，
-   用户敲的字（ZZEDIT）永远到不了服务器。保存/blur/还原全链路统一走这里。 */
-function liveEditorNode(editing) {
-  if (!editing) return null;
-  const live = document.getElementById(editing.id);
-  if (live && live.isConnected) return live;
-  if (editing.host && editing.host.isConnected) return editing.host;
-  return editing.host || null;
-}
-
-/* 条目 36：把一个块原地换成新 html（不整篇重载，滚动位置不动）。 */
-function replaceBlockNode(blockId, html) {
-  const old = document.getElementById(blockId);
-  if (!old || !html) return false;
-  const holder = document.createElement('div');
-  holder.innerHTML = html;
-  const node = holder.firstElementChild;
-  if (!node) return false;
-  node.id = blockId;
-  // 条目 37：块身份与可编辑性跟着走——存一次之后这一段还能再点开编辑。
-  const meta = (state.blocksMeta && state.blocksMeta[blockId]) || {};
-  node.classList.add('editable-para');
-  node.dataset.blockId = blockId;
-  node.dataset.file = old.dataset.file || meta.file || '';
-  node.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    enterEdit(blockId, node.dataset.file || '', node);
-  });
-  bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(),
-                meta.section || '', blockId, node.dataset.file || '');
-  old.replaceWith(node);
-  return true;
-}
-
-/* 条目 36：把一个新块插到锚点之后（AI 草稿插入用）。 */
-function insertBlockAfter(anchorId, blockId, html) {
+/* 条目 36：把一个新块插到锚点之后（AI 草稿插入用）；插进来就能直接改。 */
+function insertBlockAfter(anchorId, blockId, html, file) {
   const anchor = document.getElementById(anchorId);
   if (!anchor || !html) return false;
   const holder = document.createElement('div');
@@ -1795,82 +1769,38 @@ function insertBlockAfter(anchorId, blockId, html) {
   const node = holder.firstElementChild;
   if (!node) return false;
   node.id = blockId;
+  node.dataset.blockId = blockId;
+  node.dataset.file = file || '';
+  const editable = node.matches('p') ? node : (node.querySelector('p') || node);
+  editable.classList.add('editable-para');
+  editable.setAttribute('contenteditable', 'true');
+  editable.setAttribute('spellcheck', 'false');
   anchor.after(node);
+  bindFactChips(node);
   return true;
 }
 
 /* 条目 36：原地删掉一个块（AI 草稿删除用）。 */
 function removeBlockNode(blockId) {
-  const node = document.getElementById(blockId);
+  const node = blockNodeById(blockId) || document.getElementById(blockId);
   if (!node) return false;
-  node.remove();
+  const wrap = node.closest('.ai-draft') || node;
+  wrap.remove();
   return true;
 }
 
-/* 条目 36：本地还原进入编辑前的那个节点（取消编辑 / 保存失败时用）。 */
-function restoreEditedNode(editing) {
-  if (!editing || !editing.orig) return false;
-  const host = liveEditorNode(editing);
-  if (!host) return false;
-  host.replaceWith(editing.orig);
-  return true;
-}
-
-/* 条目 37：可见的「已保存」角标（1.5s 自动消失）。 */
+/* 条目 37：可见的「已保存」角标（1.5s 自动消失；不算正文，收集时跳过）。 */
 function showSavedBadge(blockId) {
-  const node = document.getElementById(blockId);
+  const node = blockNodeById(blockId);
   if (!node) return;
   const badge = document.createElement('span');
   badge.className = 'save-badge';
+  badge.dataset.badge = '1';
+  badge.setAttribute('contenteditable', 'false');
   badge.textContent = t('edit.savedBadge');
-  node.appendChild(badge);
+  const host = blockContentHost(node);
+  host.appendChild(badge);
   setTimeout(() => { if (badge.parentNode) badge.remove(); }, 1500);
-}
-
-async function saveEdit() {
-  const editing = state.editing;
-  if (!editing) return;
-  state.editing = null;
-  const project = state.project;
-  const disk = currentDisk();
-  if (!project || !disk) return;
-  // 条目 38：宿主＝挂载进 DOM 的那个节点（不是已出 DOM 的旧引用）。
-  const host = liveEditorNode(editing);
-  if (!host) return;
-  let text = collectPlain(host);
-  // 条目 37：写回寻址与渲染闭包同源——身份从**正在编辑的这个 DOM 节点**读回。
-  const file = host.dataset.file || editing.file || '';
-  const blockId = host.dataset.blockId || editing.id;
-  // 条目 38：客户端文本缺保护面标记 → 服务端对不齐会丢整段编辑。
-  // 先按模型把 token 补回去再发。
-  if (!HAS_TOKEN_RE.test(text)) {
-    const model = await fetchBlockModel(project, disk, blockId);
-    if (model) text = tokenizePlain(text, model);
-  }
-  try {
-    const result = await postJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/edit`, {
-      file: file,
-      block: blockId,
-      text: text,
-    });
-    (result.warnings || []).forEach((text) => toast(text));
-    toast(t('edit.saved'));
-    // 条目 36：只换掉这一块，不整篇 loadDisk（滚动位置保持）。
-    if (state.editSeq !== editing.seq) return;   // 期间又开了一段新编辑 → 不动 DOM
-    if (replaceBlockNode(blockId, result.html)) { showSavedBadge(blockId); return; }
-    restoreEditedNode(editing);
-  } catch (err) {
-    toast(t('err.saveFailed', { e: err.message }));
-    if (state.editSeq === editing.seq) restoreEditedNode(editing);
-  }
-}
-
-/* 条目 36：取消编辑＝零网络请求，本地还原进入编辑前的原文。 */
-async function cancelEdit() {
-  if (!state.editing) return;
-  const editing = state.editing;
-  state.editing = null;
-  restoreEditedNode(editing);
 }
 
 /* ---------------------------------------------------------------- 章节管理 */
@@ -2237,8 +2167,8 @@ async function writeIntoDraft(text) {
       return;
     }
     toast(t('ai.written'));
-    // 条目 36：草稿块原地插到那一段之后，不整篇重载。
-    if (data.block && data.html && insertBlockAfter(data.after, data.block, data.html)) return;
+    // 条目 36：草稿块原地插到那一段之后，不整篇重载；条目 43：插进来就能直接改。
+    if (data.block && data.html && insertBlockAfter(data.after, data.block, data.html, quote.file)) return;
     await loadDisk();
   } catch (err) {
     toast(t('ai.writeFail', { e: (err && err.message) || String(err) }));
@@ -2323,12 +2253,6 @@ function hideParaTools() {
 /* 段落 → 悬浮工具条的绑定（原型同款：悬停段落才浮出「问 AI」）。 */
 function bindParaTools(node, text, section, id, file) {
   node.addEventListener('mouseenter', () => {
-    // 条目 38：悬停即预取可编辑模型——单击挂载时就能直接带上保护面芯片。
-    const project = state.project;
-    const disk = currentDisk();
-    if (project && disk && id && !state.blockModels[id]) {
-      fetchBlockModel(project, disk, id);
-    }
     paraAskTarget = { text: text, section: section, id: id, file: file || '',
                       rect: node.getBoundingClientRect() };
     showParaTools(node);
@@ -3421,6 +3345,7 @@ function bind() {
     if (state.project && document.body.getAttribute('data-view') === 'workbench') {
       const disk = state.project.disks.find((d) => d.lang === lang);
       if (disk) openProject(state.project.id, disk.id);
+      else renderTocList();   // 条目 44：只切界面语言时，目录条目槽跟着刷
       return;
     }
     renderProjects();
@@ -3494,10 +3419,11 @@ function bind() {
     openParaMenu();
   });
   $('#miEdit').addEventListener('click', () => {
+    // 条目 43：页面本就是编辑器——「编辑」＝把光标落进那一块。
     const target = paraAskTarget;
     closeParaMenu();
     if (!target) return;
-    enterEdit(target.id, target.file || '');
+    focusBlockNode(target.id);
   });
   $('#miContinue').addEventListener('click', () => paraAction('continue'));
   $('#miRewrite').addEventListener('click', () => paraAction('rewrite'));
@@ -3639,18 +3565,29 @@ function bind() {
     closeFactCard();
     closeParaMenu();
   });
-  // 段二：编辑态的提交键（Esc / 点外面）
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && state.editing) {
-      ev.preventDefault();
-      saveEdit();
-    }
+  // 条目 43：失焦即保存（容器级委托，会冒泡；120ms 守卫焦点去向——
+  // 点块内的芯片不算离开）。没有「进入编辑」，也就没有「取消编辑」。
+  document.addEventListener('focusout', (ev) => {
+    const target = ev.target;
+    if (!target || !target.closest) return;
+    const node = target.closest('[data-block-id]');
+    if (!node || !node.isConnected) return;
+    if (node.dataset.saving === '1') return;
+    setTimeout(() => {
+      if (!node.isConnected) return;
+      const active = document.activeElement;
+      if (active && node.contains(active)) return;
+      saveBlockNode(node);
+    }, 120);
   });
-  document.addEventListener('click', (ev) => {
-    if (!state.editing) return;
-    if (state.editing.host.contains(ev.target)) return;
-    if (ev.target.closest('.navpanel') || ev.target.closest('.modal')) return;
-    saveEdit();
+  // 条目 43：Esc＝主动失焦 → 走保存；没有「取消编辑」的概念。
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    const active = document.activeElement;
+    if (active && active.closest && active.closest('[data-block-id]')) {
+      ev.preventDefault();
+      active.blur();
+    }
   });
   window.addEventListener('scroll', () => {
     const doc = document.documentElement;

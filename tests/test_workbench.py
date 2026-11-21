@@ -134,17 +134,25 @@ class RenderTests(unittest.TestCase):
         self.assertIn("&lt;", para["html"])
         self.assertIn("&amp;", para["html"])
 
-    def test_commands_are_removed(self):
+    def test_commands_are_protected_chips(self):
+        """条目 43：页面即编辑器——命令不再被「渲染态」剥掉，
+        而是带 token 的保护面芯片（与编辑态所见一致）。"""
         blocks = wbp.render_tex("Value \\textbf{bold} and \\label{x:1} end.\n")
         text = " ".join(b.get("html", "") for b in blocks)
-        self.assertIn("<b>bold</b>", text)
-        self.assertNotIn("\\label", text)
+        self.assertIn('class="prot-chip"', text)
+        self.assertIn("data-token=", text)
+        self.assertIn('contenteditable="false"', text)
+        self.assertIn("[x:1]", text)           # \\label 以芯片显示，参数可见
+        self.assertNotIn("<b>bold</b>", text)  # 不再另出一套排版态
 
     def test_fact_chip_is_rendered(self):
+        """条目 43：事实芯片带保护面身份（fc＋prot-chip＋data-token）。"""
         blocks = wbp.render_tex("Rate 10/16\\fact{A1} here.\n")
         text = " ".join(b.get("html", "") for b in blocks)
         self.assertIn('data-fact="A1"', text)
-        self.assertIn('class="fc"', text)
+        self.assertIn('class="fc prot-chip"', text)
+        self.assertIn("data-token=", text)
+        self.assertIn("✓ A1", text)
 
     def test_sections_endpoint_shape(self):
         with tempfile.TemporaryDirectory() as tmp:

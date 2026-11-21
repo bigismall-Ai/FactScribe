@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import html
 import re
 from datetime import datetime, timezone
@@ -347,6 +348,23 @@ _TEXT_CMD_RE = re.compile(
     r"\\(textbf|bfseries|emph|textit|texttt|underline|textsf)\s*\{")
 _INLINE_KEEP = ("url", "href")
 
+
+def short_sha(text: str) -> str:
+    """块指纹：raw 的 sha256（hex 前 16 位）——前端保存时带回当凭证。"""
+    return hashlib.sha256(str(text or "").encode("utf-8")).hexdigest()[:16]
+
+
+def bound_values_of(disk_root) -> set[str]:
+    """盘里事实账上的 value（用于认「已绑定数字令牌」）；读不到就空集。"""
+    from ..config import load_config, load_facts
+
+    try:
+        cfg = load_config(disk_root)
+        facts = load_facts(cfg)
+    except Exception:  # noqa: BLE001 - 账读不到就不按账认数字
+        return set()
+    return {fact.value for fact in facts if getattr(fact, "value", "")}
+
 # ---------------------------------------------------------------- AI 草稿块
 
 #: AI 草稿块的标记（写进 .tex 的注释行，渲染层与写回层共用）。
@@ -484,15 +502,113 @@ def _inline(text: str) -> str:
     return out
 
 
-def render_tex(text: str, stem: str = "sec") -> list[dict]:
+# ------------------------------------------------ 条目 43：保护面芯片烤进渲染
+
+#: 客户端与服务端之间的占位符（私用区字符，LaTeX 正文里不会出现）。
+#: 定义在渲染层（芯片烤进 html 要用），写回层从这里 import——单一来源，
+#: 两边口径永不走样。
+TOKEN_OPEN = "\ue000"
+TOKEN_CLOSE = "\ue001"
+TOKEN_RE = re.compile(TOKEN_OPEN + r"P(\d+)" + TOKEN_CLOSE)
+
+#: 芯片显示文案的字数上限（与写回层 _display 同口径：>18 截到 17＋省略号）。
+_CHIP_DISPLAY_LIMIT = 18
+
+
+def token_of(index: int) -> str:
+    """段内第 i 个保护面的占位符：\\ue000P<i>\\ue001。"""
+    return "%sP%d%s" % (TOKEN_OPEN, index, TOKEN_CLOSE)
+
+
+def chip_display(label: str, text: str) -> str:
+    """芯片上的字（写回层 _display 的同源实现，两边不许走样）：
+
+    \\fact{A1} → 「✓ A1」，\\cite{k} → 「[k]」，数字 → 数字，
+    环境 → 「⟨名⟩」，其余原样（过长截断）。
+    """
+    if label == "fact":
+        match = re.match(r"\\fact\s*\{([^{}]*)\}", text)
+        if match:
+            return "✓ %s" % match.group(1).strip()
+        return "✓"
+    if label in ("cite", "ref"):
+        match = re.search(r"\{([^{}]*)\}", text)
+        if match:
+            return "[%s]" % match.group(1).strip()
+        return text
+    if label == "num":
+        return text
+    if label == "env":
+        env = re.search(r"\{([^{}]*)\}", text)
+        return "⟨%s⟩" % (env.group(1) if env else "env")
+    if len(text) > _CHIP_DISPLAY_LIMIT:
+        return text[:_CHIP_DISPLAY_LIMIT - 1] + "…"
+    return text
+
+
+def _prot_chip_html(index: int, label: str, raw: str) -> str:
+    """一枚保护面芯片的 html：data-token 带身份，芯片内不可编辑。"""
+    token = token_of(index)
+    display = chip_display(label, raw)
+    if label == "fact":
+        match = re.match(r"\\fact\s*\{([^{}]*)\}", raw)
+        fact_id = match.group(1).strip() if match else ""
+        return ('<span class="fc prot-chip" tabindex="0" data-fact="%s" '
+                'data-token="%s" contenteditable="false" role="button" '
+                'title="%s" aria-label="有据的数字，查看出处">%s</span>'
+                % (html.escape(fact_id, quote=True), token,
+                   html.escape(raw, quote=True), html.escape(display)))
+    return ('<span class="prot-chip" data-token="%s" contenteditable="false" '
+            'title="%s">%s</span>'
+            % (token, html.escape(raw, quote=True), html.escape(display)))
+
+
+def render_prot_html(chunk: str, bound_values=frozenset()) -> str:
+    """一段原文 → 带保护面芯片的行内 html（不含 ``<p>`` 外壳）。
+
+    条目 43：页面本身就是编辑器——保护面（``\\fact{}``、``\\cite{}``、
+    ``\\ref{}``、绑定数字、整块环境……）直接以芯片形态烤进渲染 html，
+    每枚芯片自带 ``data-token``（与写回层 scan 的段内序号一一对应）。
+    前端收集文本时读回「散文＋token」，服务端原样拼回，不再有渲染态↔编辑态。
+    """
+    from .write import scan
+
+    segments = scan(chunk, bound_values)
+    plain = "".join(
+        seg.text if seg.kind == "text" else token_of(seg.index)
+        for seg in segments)
+    body = _inline(html.escape(plain, quote=False))
+    body = re.sub(r"[ \t]+", " ", body)
+    body = re.sub(r"\n+", " ", body).strip()
+    if not body:
+        return ""
+    # 占位符换成芯片（最后一步做：芯片里的显示文本不再过转义/剥命令管线）。
+    for seg in segments:
+        if seg.kind != "prot":
+            continue
+        body = body.replace(token_of(seg.index),
+                            _prot_chip_html(seg.index, seg.label, seg.text))
+    return body
+
+
+def render_tex(text: str, stem: str = "sec",
+               disk_root=None) -> list[dict]:
     """把一段 LaTeX 渲染成块列表。
 
     块：`{"kind", "id", "level", "title", "title_en", "html", "start", "end",
-    "raw"}`。`kind` 取 abstract / section / subsection / para。
+    "raw", "sha"}`。`kind` 取 abstract / section / subsection / para。
 
     `start`/`end` 是这一块在**原文**里的偏移（`_strip_comments` 等长替换，
     偏移与原文一一对应），`raw` 是原文片段——段二的写回按偏移精确回填。
+
+    条目 43：`disk_root` 给了就拿盘上的事实账认绑定数字，保护面以芯片形态
+    烤进 html（`data-token` 序号与写回层 `editable_model` 的 scan 完全一致）；
+    没给就退化——命令类片段（fact/cite/ref/env）与紧跟 `\\fact` 的数字照编，
+    账本同值数字（规则二）无账可对不编。每块另带 `sha`（raw 的短指纹，
+    保存闸用）。
     """
+    values = (bound_values_of(disk_root)
+              if disk_root is not None else frozenset())
     source = _strip_comments(text)
     blocks: list[dict] = []
     buffer: list[str] = []
@@ -515,9 +631,11 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
         buffer_start = index
         if not chunk:
             return
-        body = _inline(html.escape(chunk, quote=False))
-        body = re.sub(r"[ \t]+", " ", body)
-        body = re.sub(r"\n+", " ", body).strip()
+        # 条目 43：html 一律从**块原文（span）**烤出——环境标记虽不进缓冲区，
+        # 却落在 span 里；写回层的模型对同一份 raw scan，两边 token 序号
+        # 只有在同一份原文上才对得齐（烤自缓冲区会错位）。
+        span = text[start:end]
+        body = render_prot_html(span, values)
         if not body:
             return
         blocks.append({
@@ -525,7 +643,8 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
             "id": "%s-p%d" % (stem, len(blocks)),
             "level": 0, "title": "", "title_en": "",
             "html": "<p>%s</p>" % body,
-            "start": start, "end": end, "raw": text[start:end],
+            "start": start, "end": end, "raw": span,
+            "sha": short_sha(span),
         })
 
     while index < length:
@@ -534,9 +653,7 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
             region_at += 1
             flush()
             inner = text[region["inner_start"]:region["inner_end"]]
-            body = _inline(html.escape(inner, quote=False))
-            body = re.sub(r"[ \t]+", " ", body)
-            body = re.sub(r"\n+", " ", body).strip()
+            body = render_prot_html(inner, values)
             blocks.append({
                 "kind": "ai_draft",
                 "id": "%s-%s" % (stem, region["id"]),
@@ -544,6 +661,7 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
                 "html": ('<div class="aidraft"><p>%s</p></div>' % body) if body else "",
                 "start": region["inner_start"], "end": region["inner_end"],
                 "raw": inner,
+                "sha": short_sha(inner),
                 "draft_id": region["id"],
                 "region_start": region["region_start"],
                 "region_end": region["region_end"],
@@ -575,6 +693,7 @@ def render_tex(text: str, stem: str = "sec") -> list[dict]:
                     "html": "",
                     "start": index, "end": index + end,
                     "raw": text[index:index + end],
+                    "sha": short_sha(text[index:index + end]),
                 })
                 index += end
                 continue
@@ -672,7 +791,7 @@ def disk_sections(path: str | Path, lang: str = "") -> dict:
     blocks: list[dict] = []
     for name, text in _section_files(root):
         stem = Path(name).stem
-        for block in render_tex(text, stem=stem):
+        for block in render_tex(text, stem=stem, disk_root=root):
             block["file"] = name
             if block["kind"] == "section" and not block["title_en"]:
                 block["title_en"] = paired.get(stem, "")
@@ -797,6 +916,7 @@ def cover_abstract_block(path: str | Path) -> dict | None:
     找不到就返回 None（前端据此不渲染封面摘要区）。
     """
     root = Path(path)
+    values = bound_values_of(root)
     # 1) 闭包里的节文件：优先「像摘要文件」的，其次任何带 abstract 环境的。
     fallback = None
     for name, text in _section_files(root):
@@ -804,10 +924,13 @@ def cover_abstract_block(path: str | Path) -> dict | None:
         if not span:
             continue
         start, end, lead, trail = span
+        raw = text[start + lead:end - trail]
         info = {"id": ABSTRACT_BLOCK_ID, "kind": "abstract", "file": name,
                 "start": start + lead, "end": end - trail,
-                "raw": text[start + lead:end - trail], "title": "",
-                "level": 0, "html": "", "title_en": ""}
+                "raw": raw, "title": "",
+                "level": 0,
+                "html": render_abstract_html(raw, values),
+                "sha": short_sha(raw), "title_en": ""}
         if _looks_like_abstract_file(name):
             return info
         if fallback is None:
@@ -826,10 +949,19 @@ def cover_abstract_block(path: str | Path) -> dict | None:
     if not span:
         return None
     start, end, lead, trail = span
+    raw = text[start + lead:end - trail]
     return {"id": ABSTRACT_BLOCK_ID, "kind": "abstract", "file": rel,
             "start": start + lead, "end": end - trail,
-            "raw": text[start + lead:end - trail], "title": "",
-            "level": 0, "html": "", "title_en": ""}
+            "raw": raw, "title": "",
+            "level": 0,
+            "html": render_abstract_html(raw, values),
+            "sha": short_sha(raw), "title_en": ""}
+
+
+def render_abstract_html(raw: str, values=frozenset()) -> str:
+    """摘要散文的带芯片渲染（``<p>`` 一层壳，前端就地换 innerHTML 用）。"""
+    body = render_prot_html(raw, values)
+    return ("<p>%s</p>" % body) if body else ""
 
 
 def _root_tex_rel_and_path(root: Path) -> tuple[str, Path | None]:

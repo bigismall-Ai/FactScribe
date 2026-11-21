@@ -33,13 +33,13 @@ from pathlib import Path
 
 from ..config import ConfigError, load_config, load_facts
 from .projects import (ABSTRACT_BLOCK_ID as _ABSTRACT_BLOCK_ID,
-                       CONFIG_NAME, abstract_env_span as _abstract_env_span,
-                       abstract_prose as _abstract_prose, render_tex)
-
-#: 客户端与本层之间的占位符（私用区字符，LaTeX 正文里不会出现）。
-TOKEN_OPEN = "\ue000"
-TOKEN_CLOSE = "\ue001"
-TOKEN_RE = re.compile(TOKEN_OPEN + r"P(\d+)" + TOKEN_CLOSE)
+                       CONFIG_NAME, TOKEN_CLOSE, TOKEN_OPEN, TOKEN_RE,
+                       abstract_env_span as _abstract_env_span,
+                       abstract_prose as _abstract_prose,
+                       bound_values_of as _bound_values_of,
+                       render_abstract_html as _render_abstract_html,
+                       render_prot_html as _render_prot_html, render_tex,
+                       short_sha as _short_sha)
 
 #: 章节删除后的归档目录名（放在章节文件所在目录下）。
 ATTIC_DIR = "attic"
@@ -578,13 +578,12 @@ def atomic_write(path: Path, text: str, backup: bool = True) -> dict:
 # ---------------------------------------------------------------- 段落定位
 
 def _bound_values(disk_root: Path) -> set[str]:
-    """盘里事实账上的 value（用于认「已绑定数字令牌」）。"""
-    try:
-        cfg = load_config(disk_root)
-        facts = load_facts(cfg)
-    except Exception:  # noqa: BLE001 - 账读不到就不按账认数字
-        return set()
-    return {fact.value for fact in facts if getattr(fact, "value", "")}
+    """盘里事实账上的 value（用于认「已绑定数字令牌」）。
+
+    实现在渲染层（projects.bound_values_of）——渲染与写回共用同一份，
+    保证 html 里烤的 token 与可编辑模型的 chips 口径一致。
+    """
+    return _bound_values_of(disk_root)
 
 
 def _safe_section_file(disk_root: Path, rel: str) -> Path:
@@ -710,7 +709,8 @@ def _writable_target(disk_root: Path, rel: str) -> Path:
     return _safe_section_file(disk_root, rel)
 
 
-def save_abstract(disk_root: Path, client_text: str) -> dict:
+def save_abstract(disk_root: Path, client_text: str,
+                  expect_sha: str = "") -> dict:
     """把改后的摘要写回它所在的那个文件。
 
     **span 权威**：写回位置＝渲染闭包给出的那块（file/start/end），块外的东西
@@ -722,9 +722,11 @@ def save_abstract(disk_root: Path, client_text: str) -> dict:
     稳定。
 
     保护通道不变：保护面（`\\fact{}` 等）原样保留、删了按原位补回、花括号不
-    配平不落盘、原子写、保存前留 `.bak`。
+    配平不落盘、原子写、保存前留 `.bak`。条目 43：带 `expect_sha` 保存闸与
+    新块 `sha`（同 save_block）。
     """
     block = abstract_block(disk_root)
+    _check_expect_sha(block, expect_sha)
     prose = _abstract_prose(client_text)
     segments = scan(block.raw, _bound_values(disk_root))
     new_raw, warnings = _rebuild(segments, prose)
@@ -749,6 +751,7 @@ def save_abstract(disk_root: Path, client_text: str) -> dict:
     result = atomic_write(path, new_text)
     return {"ok": True, "file": rel, "block": ABSTRACT_BLOCK_ID,
             "before": block.raw, "after": new_raw,
+            "sha": _short_sha(new_raw),
             "backup": result["backup"], "warnings": warnings}
 
 
@@ -761,7 +764,7 @@ def find_block(disk_root: Path, rel_file: str, block_id: str) -> Block:
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
                           code="SECTION_MISSING")
-    for block in render_tex(text, stem=Path(rel_file).stem):
+    for block in render_tex(text, stem=Path(rel_file).stem, disk_root=disk_root):
         if block["id"] == block_id:
             return Block(file=rel_file, block_id=block_id, kind=block["kind"],
                          start=block["start"], end=block["end"],
@@ -773,8 +776,13 @@ def find_block(disk_root: Path, rel_file: str, block_id: str) -> Block:
 
 
 def editable_model(disk_root: Path, block: Block) -> dict:
-    """给前端的可编辑模型：散文 + 保护面芯片。"""
-    segments = scan(block.raw, _bound_values(disk_root))
+    """给前端的可编辑模型：散文 + 保护面芯片。
+
+    条目 43：另带 ``html``（与渲染层同一套芯片烤法——前端摘要就用它渲染）
+    与 ``sha``（raw 短指纹，保存闸 expect_sha 用）。
+    """
+    values = _bound_values(disk_root)
+    segments = scan(block.raw, values)
     plain = ""
     chips: list[dict] = []
     for seg in segments:
@@ -785,8 +793,14 @@ def editable_model(disk_root: Path, block: Block) -> dict:
         plain += token
         chips.append({"i": seg.index, "label": seg.label,
                       "raw": seg.text, "display": _display(seg)})
+    html = ""
+    if block.kind in ("para", "abstract", "ai_draft"):
+        html = (_render_abstract_html(block.raw, values) if
+                block.kind in ("abstract", "para")
+                else "<p>%s</p>" % _render_prot_html(block.raw, values))
     return {"id": block.block_id, "file": block.file, "kind": block.kind,
             "title": block.title, "plain": plain, "chips": chips,
+            "html": html, "sha": _short_sha(block.raw),
             "raw": block.raw}
 
 
@@ -813,10 +827,34 @@ def _display(seg: Segment) -> str:
     return text
 
 
+#: 指纹闸（条目 43）：客户端上报的 expect_sha 与服务端现算的不一致 → 拒写。
+BLOCK_STALE_CODE = "BLOCK_STALE"
+
+
+def _check_expect_sha(block: Block, expect_sha: str) -> None:
+    """保存闸：客户端所基于的块原文与服务端当前原文必须同一份。
+
+    不一致说明这段在别处（另一个窗口／外部编辑器）已被改过——照单写回会
+    覆盖别人的字，抛 ``BLOCK_STALE`` 拒写（HTTP 409），让前端重载新文。
+    """
+    expect = str(expect_sha or "").strip()
+    if not expect:
+        return
+    if expect != _short_sha(block.raw):
+        raise ConfigError("这段在别处已被改动，请重新编辑。",
+                          code=BLOCK_STALE_CODE)
+
+
 def save_block(disk_root: Path, rel_file: str, block_id: str,
-               client_text: str) -> dict:
-    """把改后的段落写回原文件。"""
+               client_text: str, expect_sha: str = "") -> dict:
+    """把改后的段落写回原文件。
+
+    条目 43：`expect_sha` 是客户端所基于的该块 raw 指纹（sha256 前 16 位）；
+    给了就对不上拒写（BLOCK_STALE）。应答带 `sha`（新块的指纹），前端存下
+    供下一次保存用。
+    """
     block = find_block(disk_root, rel_file, block_id)
+    _check_expect_sha(block, expect_sha)
     segments = scan(block.raw, _bound_values(disk_root))
     new_raw, warnings = _rebuild(segments, client_text)
     if not _balanced_ok(new_raw):
@@ -832,6 +870,7 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
     result = atomic_write(path, new_text)
     return {"ok": True, "file": rel_file, "block": block_id,
             "before": block.raw, "after": new_raw,
+            "sha": _short_sha(new_raw),
             "backup": result["backup"], "warnings": warnings}
 
 
@@ -984,21 +1023,22 @@ def read_assembly(disk_root: Path, cfg=None) -> dict:
                 rel = candidate.resolve().relative_to(disk_root.resolve()).as_posix()
             except (OSError, ValueError):
                 continue
+            title, sha = _section_meta(candidate)
             entries.append({"rel": rel, "target": target, "line": number,
-                            "raw": line, "title": _section_title(candidate)})
+                            "raw": line, "title": title, "sha": sha})
     return {"file": str(path), "entries": entries}
 
 
-def _section_title(path: Path) -> str:
-    """章节文件的一级标题（给目录管理显示）。"""
+def _section_meta(path: Path) -> tuple[str, str]:
+    """章节文件的（一级标题, 短指纹）——目录显示与条目 43 的 sha 同源。"""
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
-        return ""
+        return "", ""
     for block in render_tex(text, stem=path.stem):
         if block["kind"] == "section" and block.get("title"):
-            return block["title"]
-    return ""
+            return block["title"], _short_sha(text)
+    return "", _short_sha(text)
 
 
 def _rewrite_assembly(path: Path, entries: list[dict], text: str) -> str:

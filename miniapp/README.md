@@ -112,6 +112,12 @@ macOS `open`（「打开目录」按钮）。这些进程随 MiniApp 停止而�
    宿主接管时改写成当前运行端口（miniapp-creator 的 `references/mcp.md` 口径）。
    接管发生在**下一次模型请求**前：本回合 `tool_search` 查不到 `mcp__factscribe__*` 属正常，
    下一回合才进工具表。
+   复核（2026-11-22 10:26）：下一回合工具表已出现六个 `mcp__factscribe__*`，逐个实调——
+   `fs_status` 返回 4 个项目 / 6 个稿盘；`fs_query_facts` 读出 minimal 的三条账（A1 10/16、A3 8/16、
+   A2 56.25%，带来源、定位与指纹）；`fs_get_outline` 给出两个章节条目与 sha；
+   `fs_read_section` 还原 `sections/01-intro.tex` 的原始 LaTeX（芯片回到 `\fact{}` 形态）；
+   `fs_get_report` 读出 paper-b 真报告（health=ok，red 0 / yellow 0，facts 62 / sections 10）；
+   `fs_search_kb` 列得 21 个知识库文件。
 3. **宿主的 `plugin_uninstall` 对本地插件报 INTERNAL**（`Plugin System Cloud request was rejected`）。
    退路：移除 `~/.minimax/plugins/<id>` 与 `~/.minimax/v2/plugin-data/liveboards/<id>`；
    插件簿是扫目录得出的，目录一删条目即消失。

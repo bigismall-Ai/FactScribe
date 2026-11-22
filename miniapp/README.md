@@ -90,3 +90,34 @@ macOS `open`（「打开目录」按钮）。这些进程随 MiniApp 停止而�
   并做插件包契约自检（≤1024 文件、单文件 ≤16 MiB、总 ≤64 MiB、路径纯 ASCII、无软链）。
 - 独立自验 harness 在仓外（不入仓）：伪造宿主 context 起 `server.mjs`，断言代理、页面、
   MCP 六工具与 dispose 收尸。
+
+## 宿主侧验收（2026-11-22 实测）
+
+装用四步：`./build.sh` → `./install.sh` → 重启宿主桌面端 → 对助手说「打开 FactScribe 工作台」。
+读数（macOS，Node 26.7，Python 3.14）：
+
+- 插件簿里 `factscribe` 为 local 且 running；页面落在 `http://127.0.0.1:<宿主分配端口>/workbench`，
+  项目列表与章节渲染都读的是真引擎数据（4 个论文项目、双语盘聚合）；
+- MCP 六工具（`fs_status` / `fs_get_outline` / `fs_read_section` / `fs_get_report` /
+  `fs_query_facts` / `fs_search_kb`）在本机 `/mcp/factscribe` 上 `initialize` → `tools/list` →
+  `tools/call` 三步全通；
+- 仓外 harness（伪造宿主 context）13/13 全绿：设置页 → 收表 → 页面 → 静态三件 → 引擎代理 →
+  六工具 → 回环守卫（非回环 Host 403、跨站 Origin 403、合规 200）→ dispose 收掉 Python 子进程。
+
+### 宿主侧三个已知接缝（排查时先看这里，别误判成薄壳坏了）
+
+1. **401 是宿主加的，不是薄壳**。宿主在薄壳前面加了一层认证门：直连
+   `127.0.0.1:<端口>` 一律回 401，正经通路是宿主分配的页面端口（面板里打开即是）。
+2. **`servers.mcp.json` 里的 `http://127.0.0.1:9/mcp/factscribe` 是官方 fail-closed 占位**，
+   宿主接管时改写成当前运行端口（miniapp-creator 的 `references/mcp.md` 口径）。
+   接管发生在**下一次模型请求**前：本回合 `tool_search` 查不到 `mcp__factscribe__*` 属正常，
+   下一回合才进工具表。
+3. **宿主的 `plugin_uninstall` 对本地插件报 INTERNAL**（`Plugin System Cloud request was rejected`）。
+   退路：移除 `~/.minimax/plugins/<id>` 与 `~/.minimax/v2/plugin-data/liveboards/<id>`；
+   插件簿是扫目录得出的，目录一删条目即消失。
+
+### 首启配置在哪
+
+插件私有 dataDir：`~/.minimax/v2/plugin-data/liveboards/factscribe/`。
+里面 `config.json` 就是 `{"root": "<论文根目录>"}`——未配置时页面给中文设置页，
+填完由薄壳原子写回并换根重启引擎。论文根是**目录**（含 `factscribe.toml` 的子目录会被扫成项目）。

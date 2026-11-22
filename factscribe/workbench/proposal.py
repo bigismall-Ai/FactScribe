@@ -19,10 +19,17 @@ import secrets
 import time
 from pathlib import Path
 
+from ..config import ConfigError
+
 PROPOSAL_VERSION = 1
 
 KIND_BLOCK_EDIT = "block_edit"
 KIND_AI_DRAFT = "ai_draft"
+#: 账与证据面的提议单（见 workbench/proposals.py）。正文改稿仍是上面两种。
+KIND_EVIDENCE_FREEZE = "evidence_freeze"
+KIND_EVIDENCE_UNFREEZE = "evidence_unfreeze"
+KIND_ADD_FACT = "add_fact"
+KIND_EXPORT_BUNDLE = "export_bundle"
 
 STATUS_PENDING = "pending"
 STATUS_APPLIED = "applied"
@@ -150,6 +157,35 @@ def resolve_proposal(state: str | Path, pid: str, status: str) -> dict:
     return record
 
 
+def _propose_non_text(disk_root: Path, kind: str, body: dict,
+                     source: str, rationale: str) -> dict:
+    """账与证据面的提议（不碰正文）——算完就停，等人点。
+
+    与正文提议单同一形状：kind / before_sha / before_text / after_text / warnings。
+    """
+    from .proposals import (KIND_ADD_FACT, KIND_EVIDENCE_FREEZE,
+                            KIND_EVIDENCE_UNFREEZE, KIND_EXPORT_BUNDLE,
+                            propose_add_fact, propose_evidence_freeze,
+                            propose_evidence_unfreeze, propose_export_bundle)
+
+    if kind == KIND_EVIDENCE_FREEZE:
+        return propose_evidence_freeze(disk_root,
+                                        reason=str(body.get("reason") or ""),
+                                        source=source, rationale=rationale)
+    if kind == KIND_EVIDENCE_UNFREEZE:
+        return propose_evidence_unfreeze(
+            disk_root, reason=str(body.get("reason") or ""),
+            at=str(body.get("at") or ""), source=source, rationale=rationale)
+    if kind == KIND_ADD_FACT:
+        return propose_add_fact(disk_root, body, source=source,
+                                rationale=rationale)
+    if kind == KIND_EXPORT_BUNDLE:
+        return propose_export_bundle(disk_root, source=source,
+                                      rationale=rationale)
+    raise ConfigError("不会认的提议类型：%s" % kind,
+                      code="PROPOSAL_KIND_INVALID")
+
+
 def create_proposal(state: str | Path, project: str, disk: str,
                     disk_root: Path, body: dict) -> dict:
     """建一张提议单（**不碰正文**）。
@@ -171,6 +207,9 @@ def create_proposal(state: str | Path, project: str, disk: str,
         calc = propose_ai_draft(disk_root, rel, anchor, text,
                                 expect_sha=expect, source=source,
                                 rationale=rationale)
+    elif kind in (KIND_EVIDENCE_FREEZE, KIND_EVIDENCE_UNFREEZE,
+                  KIND_ADD_FACT, KIND_EXPORT_BUNDLE):
+        calc = _propose_non_text(disk_root, kind, body or {}, source, rationale)
     else:
         calc = propose_block_edit(disk_root, rel, block, text,
                                   expect_sha=expect, source=source,

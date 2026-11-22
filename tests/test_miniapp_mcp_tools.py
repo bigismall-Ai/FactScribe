@@ -81,6 +81,21 @@ class McpToolSurfaceTests(unittest.TestCase):
                      "fs_propose_edit", "fs_list_proposals"):
             self.assertIn(name, self.tools, "工具面上少了 %s" % name)
 
+    def test_the_new_read_tools_are_listed_and_read_only(self):
+        for name in ("fs_get_evidence_status", "fs_get_brief",
+                     "fs_get_venue"):
+            self.assertIn(name, self.tools, "工具面上少了 %s" % name)
+            self.assertTrue(self.tools[name]["readOnly"],
+                            "%s 不是只读工具" % name)
+
+    def test_the_new_propose_tools_are_not_read_only(self):
+        for name in ("fs_propose_evidence_freeze",
+                     "fs_propose_evidence_unfreeze", "fs_propose_add_fact",
+                     "fs_propose_export_bundle"):
+            self.assertIn(name, self.tools, "工具面上少了 %s" % name)
+            self.assertFalse(self.tools[name]["readOnly"],
+                             "%s 不该标成只读" % name)
+
 
 class McpToolCallTests(unittest.TestCase):
     """② 两条新工具：宿主直接调用拿回结构化读数。"""
@@ -131,6 +146,50 @@ class McpToolCallTests(unittest.TestCase):
             self.assertTrue(CJK_RE.search(finding.get("message") or ""),
                             "%s 的中文文案不该变成英文：%s"
                             % (finding.get("code"), finding.get("message")))
+
+    def test_evidence_status_reading_has_the_diff_shape(self):
+        payload = self.calls.get("fs_get_evidence_status") or {}
+        self.assertIsInstance(payload, dict, "fs_get_evidence_status 没给回读数")
+        self.assertIn("frozen", payload)
+        self.assertIn("entries", payload)
+        self.assertIn("sha256", payload)
+        self.assertIn("mismatch", payload)
+        self.assertIn("unfrozen", payload)
+        self.assertIn("diff", payload)
+        self.assertIn("last_log", payload)
+
+    def test_brief_reading_separates_usable_and_bound(self):
+        payload = self.calls.get("fs_get_brief") or {}
+        self.assertIsInstance(payload, dict, "fs_get_brief 没给回读数")
+        sections = payload.get("sections") or []
+        self.assertTrue(sections, "简报里一节都没有？")
+        for row in sections:
+            for key in ("usable", "bound", "unbound", "reconciled"):
+                self.assertIn(key, row)
+        self.assertIn("counts", payload)
+        self.assertIn("facts", payload)
+
+    def test_venue_reading_has_the_publication_deadline(self):
+        payload = self.calls.get("fs_get_venue") or {}
+        self.assertIsInstance(payload, dict, "fs_get_venue 没给回读数")
+        for key in ("venue", "deadline", "days_left", "lang_lock"):
+            self.assertIn(key, payload)
+
+    def test_proposals_land_in_the_state_dir_not_on_the_paper(self):
+        freeze = self.calls.get("fs_propose_evidence_freeze") or {}
+        self.assertTrue(freeze.get("id"), "冻结提议单没建起来")
+        self.assertEqual(freeze.get("status"), "pending")
+        fact = self.calls.get("fs_propose_add_fact") or {}
+        self.assertTrue(fact.get("id"), "追加事实的提议单没建起来")
+        self.assertIn("Z9", str(fact.get("after_text") or ""))
+        rows = (self.calls.get("fs_list_proposals") or {}).get("proposals") or []
+        kinds = {row.get("kind") for row in rows}
+        self.assertIn("evidence_freeze", kinds)
+        self.assertIn("add_fact", kinds)
+
+    def test_the_paper_directory_is_untouched(self):
+        self.assertTrue(self.data.get("paperUnchanged"),
+                        "提议单碰了论文目录——它只该落状态目录")
 
     def test_findings_carry_the_i18n_raw_material(self):
         payload = self.calls.get("report_en") or {}

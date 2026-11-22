@@ -77,6 +77,43 @@ def render(key: str, params: dict | None = None, lang: str = DEFAULT_LANG) -> st
     return _SLOT_RE.sub(sub, text)
 
 
+def issue_dict(issue, lang: str = DEFAULT_LANG) -> dict:
+    """一条审计发现 → 报告用的字典：旧形状一字不动，另给 i18n 原料。
+
+    ``message_key`` ＋ ``params`` 始终给出（只增键）；
+    ``lang`` 不是 zh 时，``message`` 走目录里的对应语言模板。
+    """
+    data = issue.as_dict()
+    key = getattr(issue, "message_key", "") or finding_key(
+        str(data.get("code") or ""))
+    params = dict(getattr(issue, "params", {}) or {})
+    if str(lang or DEFAULT_LANG).lower() != DEFAULT_LANG:
+        message = render(key, params, str(lang).lower())
+        if message:
+            data["message"] = message
+    data["message_key"] = key
+    data["params"] = params
+    return data
+
+
+def style_finding_dict(finding, lang: str = DEFAULT_LANG) -> dict:
+    """一条文风发现 → 报告用的字典：旧形状一字不动，另给 message ＋ i18n 原料。
+
+    文风发现的旧形状里没有 ``message``（只有 ``suggestion``）；这里补一条
+    ``message``（按 lang 渲染）——与工作台报告里的那条一一对应。
+    """
+    data = finding.as_dict()
+    key = getattr(finding, "message_key", "") or finding_key(
+        str(data.get("code") or ""))
+    params = dict(getattr(finding, "params", {}) or {})
+    message = render(key, params, str(lang or DEFAULT_LANG).lower())
+    if message:
+        data["message"] = message
+    data["message_key"] = key
+    data["params"] = params
+    return data
+
+
 def catalog_for(keys, langs=LANGS) -> dict:
     """报告里出现过的 key 的模板子集（前端按它翻译，省得再抄一份目录）。"""
     out = {}

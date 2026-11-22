@@ -1056,6 +1056,10 @@ def apply_proposal(disk_root: Path, proposal: dict) -> dict:
     复用既有写回通道：`block_edit` → `save_block`；`ai_draft` → `insert_ai_draft`。
     两条都带 `expect_sha`（提议时记下的块指纹）：正文在提议之后被别处改过，
     这里抛 `BLOCK_STALE` 拒写，不覆盖别人的字。
+
+    账与证据面（`evidence_freeze` / `evidence_unfreeze` / `add_fact` /
+    `export_bundle`）走 `workbench/proposals.py`：它们不碰正文，但同样是
+    「人点才写」，同样带指纹闸。
     """
     kind = str(proposal.get("kind") or "")
     expect = str(proposal.get("before_sha") or "")
@@ -1070,6 +1074,19 @@ def apply_proposal(disk_root: Path, proposal: dict) -> dict:
                                anchor,
                                str(proposal.get("proposed_text") or ""),
                                expect_sha=expect)
+    if kind in ("evidence_freeze", "evidence_unfreeze", "add_fact",
+                "export_bundle"):
+        # 账与证据面的提议（workbench/proposals.py）：不碰正文，但同样
+        # 「人点才写」——指纹闸对不上就拒写。
+        from .proposals import (apply_add_fact, apply_evidence_freeze,
+                                apply_evidence_unfreeze, apply_export_bundle)
+        if kind == "evidence_freeze":
+            return apply_evidence_freeze(disk_root, proposal)
+        if kind == "evidence_unfreeze":
+            return apply_evidence_unfreeze(disk_root, proposal)
+        if kind == "add_fact":
+            return apply_add_fact(disk_root, proposal)
+        return apply_export_bundle(disk_root, proposal)
     raise ConfigError("不会认的提议类型：%s" % kind,
                       code="PROPOSAL_KIND_INVALID")
 

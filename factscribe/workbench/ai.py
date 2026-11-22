@@ -211,7 +211,8 @@ def ai_config(disk_path: str | Path) -> dict:
 # ---------------------------------------------------------------- 调用
 
 def chat_completion(base_url: str, model: str, messages: list[dict],
-                    api_key: str = "", timeout: float = TIMEOUT) -> str:
+                    api_key: str = "", timeout: float = TIMEOUT,
+                    effort: str = "") -> str:
     """打一次 OpenAI 兼容的 `chat/completions`，返回文本。
 
     任何异常都收敛成 `AIError`——调用方只有「成功」与「降级」两条路。
@@ -219,6 +220,10 @@ def chat_completion(base_url: str, model: str, messages: list[dict],
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {"model": model, "messages": messages, "stream": False,
                "temperature": 0.2}
+    # effort（思考等级）：缺省＝不给，后端按自己的默认走。
+    level = str(effort or "").strip()
+    if level:
+        payload["reasoning_effort"] = level
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(url, data=data, method="POST")
     request.add_header("Content-Type", "application/json")
@@ -381,7 +386,7 @@ def _last_question(messages: list[dict]) -> str:
 def chat(disk_path: str | Path, messages: list[dict],
          quote: dict | None = None, mode: str = "ask",
          action: str = "ask", timeout: float = TIMEOUT,
-         model: str | None = None) -> dict:
+         model: str | None = None, effort: str = "") -> dict:
     """工作台的 AI 入口。
 
     返回结构**恒定**：
@@ -418,7 +423,8 @@ def chat(disk_path: str | Path, messages: list[dict],
     payload.extend(history)
     try:
         reply = chat_completion(config["base_url"], config["model"], payload,
-                                api_key=config["api_key"], timeout=timeout)
+                                api_key=config["api_key"], timeout=timeout,
+                                effort=str(effort or ""))
     except AIError as exc:
         return {
             "ok": False, "fallback": True,
@@ -520,3 +526,32 @@ def available_models(disk_path: str | Path) -> list[str]:
     if default and default not in models:
         models.insert(0, default)
     return models if models else ([default] if default else [])
+
+
+#: 模型 id 的来源前缀（与 MiniApp 薄壳同一套）。
+MODEL_PREFIX_ENGINE = "engine:"
+
+
+def model_catalog(disk_path: str | Path) -> dict:
+    """模型档位声明——**两侧共用的那一份**。
+
+    形状＝MiniApp 面板用的那套：``id`` / ``kind`` / ``label`` /
+    ``model`` / ``efforts`` / ``defaultEffort``。核心的 ``[ai].models``
+    与 MiniApp 的三路（宿主／引擎／自定义）都按这个形状声明——
+    这样「同一个模型」在两侧是同一个概念，换机器也不会断。
+
+    核心这一路只有引擎本地后端（``kind="engine"``）， efforts 留空：
+    本地 OpenAI 兼容端点没有思考等级的概念。
+    """
+    default = str(ai_config(disk_path).get("model") or "").strip()
+    models = []
+    for name in available_models(disk_path):
+        models.append({"id": MODEL_PREFIX_ENGINE + name,
+                       "kind": "engine",
+                       "label": name,
+                       "model": name,
+                       "efforts": [],
+                       "defaultEffort": "",
+                       "default": bool(default) and name == default})
+    return {"source": "engine", "default": default,
+            "defaultEffort": "", "models": models}

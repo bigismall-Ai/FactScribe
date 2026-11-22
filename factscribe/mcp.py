@@ -111,8 +111,16 @@ _READ_TOOLS = {
     },
     "factscribe_audit": {
         "description": "Run the mechanical gate. Returns exit (0 green / 1 red / 3 yellow), "
-                       "summary and findings. HTTP-free; verdict is in `exit`.",
-        "inputSchema": {"type": "object", "properties": {},
+                       "summary and findings. HTTP-free; verdict is in `exit`. "
+                       "Every finding carries message_key and params (the i18n raw "
+                       "material); lang=en renders the finding text in English "
+                       "(default zh = the gate's own wording).",
+        "inputSchema": {"type": "object",
+                        "properties": {
+                            "lang": {"type": "string", "enum": ["zh", "en"],
+                                     "description": "Language of the finding text "
+                                                    "(default zh)"},
+                        },
                         "additionalProperties": False},
     },
 }
@@ -135,7 +143,7 @@ def _dispatch(project: Path, allow_write: bool, name: str,
     if name == "factscribe_brief":
         return brief_data(project, args.get("section"))
     if name == "factscribe_audit":
-        return audit_data(project)
+        return audit_data(project, str(args.get("lang") or "zh"))
     if name == "factscribe_evidence_status":
         return evidence_status_data(project)
     if name == "factscribe_evidence_freeze":

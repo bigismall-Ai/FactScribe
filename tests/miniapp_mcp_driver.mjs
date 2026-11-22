@@ -10,7 +10,7 @@
 // 结果写成 JSON 文件（FS_RESULT_PATH），进程退出码 0＝全程没抛异常。
 import { pathToFileURL } from 'node:url';
 import { createServer as createNetServer } from 'node:http';
-import { mkdtempSync, cpSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, cpSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -23,6 +23,21 @@ const paperRoot = mkdtempSync(join(tmpdir(), 'fs-mcp-root-'));
 cpSync(PAPER_SRC, paperRoot, { recursive: true });
 
 const out = { ok: false, tools: [], calls: {}, errors: [] };
+
+/** 论文目录的文件清单（相对路径 + 大小 + mtime）：用来证明「提议单没碰盘」。 */
+function listFiles(dir, prefix = '') {
+  const rows = [];
+  for (const name of readdirSync(dir).sort()) {
+    const full = join(dir, name);
+    const st = statSync(full);
+    if (st.isDirectory()) {
+      rows.push(...listFiles(full, prefix + name + '/'));
+    } else {
+      rows.push(prefix + name + ':' + st.size + ':' + st.mtimeMs);
+    }
+  }
+  return rows;
+}
 
 const port = await new Promise((resolve, reject) => {
   const s = createNetServer();
@@ -116,6 +131,24 @@ try {
   // 6) 两条新工具
   out.calls.fs_get_style = (await callTool(6, 'fs_get_style', out.target)).payload;
   out.calls.fs_mirror_check = (await callTool(7, 'fs_mirror_check', out.target)).payload;
+
+  // 7) 本批新增：证据锁读数、写作简报、版式、账与证据面的提议单
+  const beforeFiles = listFiles(paperRoot);
+  out.calls.fs_get_evidence_status =
+    (await callTool(8, 'fs_get_evidence_status', out.target)).payload;
+  out.calls.fs_get_brief = (await callTool(9, 'fs_get_brief', out.target)).payload;
+  out.calls.fs_get_venue =
+    (await callTool(10, 'fs_get_venue', { project: out.target.project })).payload;
+  out.calls.fs_propose_evidence_freeze =
+    (await callTool(11, 'fs_propose_evidence_freeze', { ...out.target, reason: '驱动测试留底' })).payload;
+  out.calls.fs_propose_add_fact =
+    (await callTool(12, 'fs_propose_add_fact', {
+      ...out.target, id: 'Z9', claim: '驱动测试主张', value: '7/8',
+      source: 'results/swb16.md', confidence: 'high',
+    })).payload;
+  out.calls.fs_list_proposals = (await callTool(13, 'fs_list_proposals', out.target)).payload;
+  // 提议单只落状态目录：论文目录一个字节都不许动。
+  out.paperUnchanged = JSON.stringify(beforeFiles) === JSON.stringify(listFiles(paperRoot));
 
   out.ok = true;
 } catch (error) {

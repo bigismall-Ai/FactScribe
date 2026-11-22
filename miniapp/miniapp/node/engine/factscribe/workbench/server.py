@@ -83,6 +83,18 @@ def _lang_of(query: str) -> str:
     return "zh"
 
 
+def _param_of(query: str, name: str) -> str:
+    """查询串里的一个参数（没有就是空串）。
+
+    只认 ``name=value``；值原样返回（调用方自己收拾）。
+    """
+    prefix = name + "="
+    for part in str(query or "").split("&"):
+        if part.startswith(prefix):
+            return part[len(prefix):].strip()
+    return ""
+
+
 def _parse_multipart_file(content_type: str, raw: bytes) -> tuple[str, bytes]:
     """从 multipart/form-data 里取出第一个文件：(文件名, 字节)。
 
@@ -307,6 +319,16 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                     disk_path,
                     self.index.sibling_disk_path(project_id, disk_id),
                     lang=_lang_of(query))
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "evidence":
+                from .readings import evidence_gate
+                data = evidence_gate(disk_path)
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "brief":
+                from .readings import brief_reading
+                data = brief_reading(disk_path, _param_of(query, "section"))
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
             if what == "machine":
@@ -784,8 +806,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         action = str(body.get("action") or "ask")
         # 条目 42：可选 model 字段透传给 chat()（给了非空串就覆盖配置模型）。
         model = str(body.get("model") or "").strip()
+        # effort（思考等级）：缺省＝不给，后端按自己的默认走（口径不变）。
+        effort = str(body.get("effort") or "").strip()
         result = chat(disk, messages, quote=quote, mode=mode, action=action,
-                      model=model or None)
+                      model=model or None, effort=effort)
         result.update({"project": project_id, "disk": disk_id})
         # 降级也是 200：前端要拿 reply 渲染，并靠 fallback 分辨真假。
         return self._json(result, code=200)
@@ -798,7 +822,7 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         """
         from urllib.parse import parse_qs
 
-        from .ai import ai_config, available_models
+        from .ai import ai_config, available_models, model_catalog
 
         params = parse_qs(query or "")
         project_id = (params.get("project") or [""])[0]
@@ -806,9 +830,12 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         disk = self.index.disk_path(project_id, disk_id)
         if disk is None:
             return self._error(404, "没有这个盘：%s/%s" % (project_id, disk_id))
+        # catalog＝**两侧共用的模型档位声明**（id / kind / label / model /
+        # efforts / defaultEffort）；models / model 是旧字段，一字不动。
         return self._json({"ok": True, "project": project_id, "disk": disk_id,
                            "models": available_models(disk),
-                           "model": ai_config(disk)["model"]})
+                           "model": ai_config(disk)["model"],
+                           "catalog": model_catalog(disk)})
 
     # ---- 段四：实验报告导入 ----
 

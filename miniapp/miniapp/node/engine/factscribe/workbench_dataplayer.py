@@ -15,6 +15,7 @@ from .brief import build_brief, payload as brief_payload
 from .config import (ConfigError, load_config, load_facts, load_sections)
 from .evidence import (freeze_evidence, lock_check, log_state, read_lock,
                        unfreeze_evidence, unfrozen_info)
+from .i18n import issue_dict
 from .report import _config_block, _severity_of
 from .scaffold import add_fact
 
@@ -97,7 +98,7 @@ def brief_data(project: Path | str, section: str | None = None) -> dict:
     return {**brief_payload(brief), **_config_bits(cfg)}
 
 
-def audit_data(project: Path | str) -> dict:
+def audit_data(project: Path | str, lang: str = "zh") -> dict:
     cfg = load_config(Path(project))
     facts = load_facts(cfg)
     sections = load_sections(cfg)
@@ -109,10 +110,11 @@ def audit_data(project: Path | str) -> dict:
         "exit": code,
         "verdict": _severity_of(code),
         "summary": summary,
-        "findings": [i.as_dict() for i in red] + [w.as_dict() for w in yellow],
-        "issues": [i.as_dict() for i in red],
-        "warnings": [w.as_dict() for w in yellow],
-        "hints": [h.as_dict() for h in hints],
+        "findings": ([issue_dict(i, lang) for i in red]
+                     + [issue_dict(w, lang) for w in yellow]),
+        "issues": [issue_dict(i, lang) for i in red],
+        "warnings": [issue_dict(w, lang) for w in yellow],
+        "hints": [issue_dict(h, lang) for h in hints],
         "coverage": summary.get("coverage", {}),
         "resolved": unresolved,
         **_config_bits(cfg),

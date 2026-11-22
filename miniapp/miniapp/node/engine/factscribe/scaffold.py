@@ -524,10 +524,15 @@ def _ledger_path(root: Path, cfg: Config) -> Path:
         % cfg.facts_glob)
 
 
-def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
-             locator: str = "", confidence: str = "med", expr: str = "",
-             derived_from=None, note: str = "") -> dict:
-    """往项目声明的账本追加一条事实；返回落账信息（含 sha256）。"""
+def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
+                   source: str, locator: str = "", confidence: str = "med",
+                   expr: str = "", derived_from=None, note: str = "") -> dict:
+    """校验一条事实并算出要落盘的账本片段（**不写盘**）。
+
+    它就是 ``add_fact`` 的前半段——同一套校验、同一个 ``render_fact_block``，
+    拆出来是为了让「提议-确认」通道能先算出差异卡上那一段（所见即落盘）：
+    返回的 ``block`` 就是真正会追加进账本的那几行 TOML。
+    """
     root = Path(root)
     cfg = load_config(root)
     if cfg.is_v3:
@@ -574,18 +579,6 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
         locator=locator, confidence=confidence, derived_from=parents,
         expr=expr, note=str(note or "").strip())
 
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    if ledger.is_file():
-        existing = ledger.read_bytes()
-    else:
-        existing = _FACTS_TOML["zh"].encode("utf-8")
-    sep = b""
-    if existing:
-        if not existing.endswith(b"\n"):
-            sep += b"\n"
-        sep += b"\n"
-    ledger.write_bytes(existing + sep + block.encode("utf-8"))
-
     manifest_line = "%s = %s" % (toml_string(rel), toml_string(sha))
     return {
         "id": fid,
@@ -601,4 +594,31 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
         "ledger": ledger.relative_to(root).as_posix(),
         "manifest": cfg.manifest,
         "manifest_line": manifest_line,
+        # block＝真正会追加进账本的那几行 TOML（差异卡上展示它）。
+        "block": block,
     }
+
+
+def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
+             locator: str = "", confidence: str = "med", expr: str = "",
+             derived_from=None, note: str = "") -> dict:
+    """往项目声明的账本追加一条事实；返回落账信息（含 sha256）。"""
+    root = Path(root)
+    prepared = prepare_fact(root, fid=fid, claim=claim, value=value,
+                            source=source, locator=locator,
+                            confidence=confidence, expr=expr,
+                            derived_from=derived_from, note=note)
+    block = prepared.pop("block")
+    ledger = root / str(prepared.get("ledger") or "")
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    if ledger.is_file():
+        existing = ledger.read_bytes()
+    else:
+        existing = _FACTS_TOML["zh"].encode("utf-8")
+    sep = b""
+    if existing:
+        if not existing.endswith(b"\n"):
+            sep += b"\n"
+        sep += b"\n"
+    ledger.write_bytes(existing + sep + block.encode("utf-8"))
+    return prepared

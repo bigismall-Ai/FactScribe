@@ -36,6 +36,7 @@ from .evidence import (freeze_evidence, render_toml, suggest_evidence,
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
 from .fonts import render_fetch as render_fonts_fetch
 from .fonts import render_status as render_fonts_status
+from .i18n import issue_dict, style_finding_dict
 from .pdfgate import verify_pdf
 from .polish import (build_plan, plan_payload, playbook_text, render_plan)
 from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
@@ -291,6 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--strict", action="store_true",
                             help="黄也当红（CI 用：未核验不许过）")
         if name == "audit":
+            sp.add_argument("--lang", choices=("zh", "en"), default=None,
+                            help="findings 文案语言（只影响 --json 的输出；"
+                                 "不给＝中文原话，一字不动）")
             sp.add_argument("--resolve", action="store_true",
                             help="联网核验 arXiv/DOI（超时 5 秒；失败标 unverified 黄）")
             sp.add_argument("--build", action="store_true",
@@ -571,6 +575,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
     sp.add_argument("--prompt", action="store_true",
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
+    sp.add_argument("--lang", choices=("zh", "en"), default=None,
+                    help="findings 文案语言（只影响 --json 的输出；"
+                         "不给＝中文原话）")
     sp.add_argument("--rules", default=None,
                     help="style-rules.toml 路径（默认项目根，其次仓根）")
     sp.add_argument("--stage", choices=list(STAGE_VALUES), default=STAGE_DRAFT,
@@ -1592,13 +1599,27 @@ def cmd_audit(args) -> int:
         text += "\nbuild  : 已编译（%d 字节）" % build["pdf_bytes"]
     if cfg.warnings:
         text += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
-    findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
+    # --lang：只影响 JSON 里的 findings 文案。**不给就是现在的样子**
+    # （金样例 tests/golden/audit_findings_baseline.json 逐字节锁着这条路的
+    # 四个数组，所以默认路径一个字都不许动）。
+    lang = str(getattr(args, "lang", "") or "")
+    if lang:
+        findings = ([issue_dict(i, lang) for i in red]
+                    + [issue_dict(w, lang) for w in yellow])
+        issues = [issue_dict(i, lang) for i in red]
+        warnings = [issue_dict(w, lang) for w in yellow]
+        hint_items = [issue_dict(h, lang) for h in hints]
+    else:
+        findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
+        issues = [i.as_dict() for i in red]
+        warnings = [i.as_dict() for i in yellow]
+        hint_items = [h.as_dict() for h in hints]
     payload = _payload("audit", _severity_of(code), code,
                        summary=summary,
                        findings=findings,
-                       issues=[i.as_dict() for i in red],
-                       warnings=[i.as_dict() for i in yellow],
-                       hints=[h.as_dict() for h in hints],
+                       issues=issues,
+                       warnings=warnings,
+                       hints=hint_items,
                        coverage=summary.get("coverage", {}),
                        resolved=unresolved,
                        build=build,
@@ -1740,13 +1761,20 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
     human = render_human(result, root)
     human += "\n文档模式：%d 个文件（%s）" % (
         len(sections), "、".join(formats.get(p, "text") for p in paths))
+    # --lang：findings 的文案语言。**只增键**——message_key / params 始终
+    # 给出，message 按 lang 渲染（不给＝中文原话）。
+    lang = str(getattr(args, "lang", "") or "zh")
+    style_findings = [style_finding_dict(f, lang) for f in result.findings]
+    style_info = [style_finding_dict(f, lang)
+                    for f in getattr(result, "info", [])]
+    style_advisories = [style_finding_dict(f, lang)
+                         for f in getattr(result, "advisories", [])]
     payload = _payload("style", _severity_of(code), code,
                        metrics=result.metrics,
                        thresholds=dict(result.thresholds),
-                       findings=[f.as_dict() for f in result.findings],
-                       info=[f.as_dict() for f in getattr(result, "info", [])],
-                       advisories=[f.as_dict()
-                                   for f in getattr(result, "advisories", [])],
+                       findings=style_findings,
+                       info=style_info,
+                       advisories=style_advisories,
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
@@ -1804,13 +1832,20 @@ def cmd_style(args) -> int:
                      len(result.findings)))
     if cfg.warnings:
         human += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
+    # --lang：findings 的文案语言。**只增键**——message_key / params 始终
+    # 给出，message 按 lang 渲染（不给＝中文原话）。
+    lang = str(getattr(args, "lang", "") or "zh")
+    style_findings = [style_finding_dict(f, lang) for f in result.findings]
+    style_info = [style_finding_dict(f, lang)
+                    for f in getattr(result, "info", [])]
+    style_advisories = [style_finding_dict(f, lang)
+                         for f in getattr(result, "advisories", [])]
     payload = _payload("style", _severity_of(code), code,
                        metrics=result.metrics,
                        thresholds=dict(result.thresholds),
-                       findings=[f.as_dict() for f in result.findings],
-                       info=[f.as_dict() for f in getattr(result, "info", [])],
-                       advisories=[f.as_dict()
-                                   for f in getattr(result, "advisories", [])],
+                       findings=style_findings,
+                       info=style_info,
+                       advisories=style_advisories,
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,

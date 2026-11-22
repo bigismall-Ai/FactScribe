@@ -976,6 +976,63 @@ const TOOLS = [
     annotations: READ_ANNOTATIONS,
   },
   {
+    name: 'fs_get_evidence_status',
+    title: '看证据锁读数',
+    description:
+      '【只读】看某个稿盘的证据冻结状态：frozen（有没有冻结件）/ entries（冻结了多少条）/ ' +
+      'sha256（冻结件指纹）/ current_sha256（当前清单的指纹）/ mismatch（冻结后清单被改过的明细，null＝一致）/ ' +
+      'diff{added,removed,moved}（哪几节、哪几个 fact 动了）/ unfrozen（解冻状态与理由）/ ' +
+      'last_log{action,reason,at}（最后一条日志）。' +
+      '看到 EVIDENCE_SET_CHANGED 这条发现时，用它回答「哪几节动了、为什么红」。' +
+      '本工具只读——冻结/解冻是写操作，走 fs_propose_evidence_freeze / fs_propose_evidence_unfreeze' +
+      '（落提议单，人点「采纳写回」才写盘）。',
+    inputSchema: {
+      type: 'object',
+      properties: PROJECT_DISK,
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
+  {
+    name: 'fs_get_brief',
+    title: '看写作简报',
+    description:
+      '【只读】看某个稿盘的写作简报：这一节能引哪些已核验的数字。' +
+      'sections 里每节给 file / title / facts / usable（可引用的事实 id）/ bound（这一节正文里已绑的）/ ' +
+      'unbound（可引用但还没绑的）/ reconciled（声明是否都绑上了）；' +
+      'facts 里每条给 id / claim / value / bound_in（绑在哪些节）/ status（bound / unbound）；' +
+      'counts 给账上总数、已绑、未绑；terms 是术语表；constraints 是五条硬约束。' +
+      '写稿前先来这里对账：账上没有的数字不得编造。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        section: { type: 'string', maxLength: 120, description: '可选：节文件名词干前缀（如 04）' },
+      },
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
+  {
+    name: 'fs_get_venue',
+    title: '看版式配置',
+    description:
+      '【只读】看这个项目的版式配置：venue（刊物）/ deadline（截稿日）/ days_left（还剩几天）/ ' +
+      'due_soon（临近截稿）/ overdue（已过期）/ lang_lock（语言锁定：中文稿不能换英文刊）/ ' +
+      'templates（内置模板清单）。' +
+      '刊物要求会约束改稿建议（页数上限、语言锁定），改稿前先对一眼。' +
+      '本工具只读——改版式请人在页面里操作。',
+    inputSchema: {
+      type: 'object',
+      properties: { project: { type: 'string', minLength: 1, maxLength: 200, description: '项目 ID（先 fs_status 拿清单）' } },
+      required: ['project'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
+  {
     name: 'fs_query_facts',
     title: '查事实账本',
     description:
@@ -1033,6 +1090,87 @@ const TOOLS = [
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
   {
+    name: 'fs_propose_evidence_freeze',
+    title: '提议冻结证据清单（待人确认）',
+    description:
+      '【提议，不写盘】把「冻结当前 [evidence] 清单」提成一**张提议单**：落宿主私有目录，' +
+      '**不碰冻结件**。人在页面的「待确认」差异卡里看过，由人点「采纳写回」才真正写 audit/evidence.lock；' +
+      '不采纳就什么都不写。reason 可选（会写进证据流水账）。' +
+      '冻结的是提议时那份清单——提议之后清单被改过，采纳时会拒写（指纹闸）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        reason: { type: 'string', maxLength: 500, description: '可选：冻结理由（写进 audit/evidence-log.ndjson）' },
+      },
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'fs_propose_evidence_unfreeze',
+    title: '提议解冻证据清单（待人确认）',
+    description:
+      '【提议，不写盘】把「解冻证据清单」提成一**张提议单**：不碰冻结件。' +
+      'reason 必填——它会写进 audit/evidence-log.ndjson，是给未来的人看的「为什么当时改了清单」。' +
+      'at 可选（YYYY-MM-DD）。由人在页面的「待确认」差异卡里点「采纳写回」才落盘。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        reason: { type: 'string', maxLength: 500, description: '解冻理由（必填，写进证据流水账）' },
+        at: { type: 'string', maxLength: 10, description: '可选：日期 YYYY-MM-DD' },
+      },
+      required: ['project', 'disk', 'reason'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'fs_propose_add_fact',
+    title: '提议追加一条事实（待人确认）',
+    description:
+      '【提议，不写盘】把「往事实账追加一条」提成一**张提议单**：落宿主私有目录，**不碰账**。' +
+      '人在页面的「待确认」差异卡里看过，由人点「采纳写回」才真正写进 facts/*.toml。' +
+      'id / claim / value / source 必填——source 是 results/ 下的相对路径；value 是正文要绑的那个数字原文。' +
+      'id 按大小写不敏感判重，账上已有的 id 会被拒。' +
+      '铁律：账上没有的数字不得编造——先 fs_query_facts / fs_get_brief 对账。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        id: { type: 'string', maxLength: 80, description: '事实 id（唯一键；只许字母开头，后接字母/数字/_ . : -）' },
+        claim: { type: 'string', maxLength: 400, description: '这条事实主张什么' },
+        value: { type: 'string', maxLength: 200, description: '正文要绑的那个数字原文' },
+        source: { type: 'string', maxLength: 300, description: '来源文件（results/ 下的相对路径）' },
+        locator: { type: 'string', maxLength: 200, description: '可选：来源里的定位（如 line 12）' },
+        confidence: { type: 'string', enum: ['high', 'med', 'low'], description: '置信度（默认 med）' },
+        expr: { type: 'string', maxLength: 200, description: '可选：推算式（derived_from 给了就必须给）' },
+        derived_from: { type: 'string', maxLength: 300, description: '可选：父事实 id（逗号分隔）' },
+        note: { type: 'string', maxLength: 300, description: '可选：备注' },
+      },
+      required: ['project', 'disk', 'id', 'claim', 'value', 'source'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'fs_propose_export_bundle',
+    title: '提议导出投稿包（待人确认）',
+    description:
+      '【提议，不写盘】把「导出投稿包」提成一**张提议单**：不碰盘。' +
+      '由人在页面的「待确认」差异卡里点「采纳写回」才真收集一次（正文＋账＋文献＋PDF）并过清单门；' +
+      '门不过就不出包，提议单留在待确认。',
+    inputSchema: {
+      type: 'object',
+      properties: PROJECT_DISK,
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
     name: 'fs_list_proposals',
     title: '看待确认的提议单',
     description:
@@ -1051,11 +1189,11 @@ const TOOLS = [
 const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 const INSTRUCTIONS = [
-  'FactScribe 论文工作台（本机论文写作工具）的只读检索面：查稿况 → 看目录 → 读正文 → 看检查报告 → 看文风闸 → 看双语对账 → 对事实账 → 搜知识库。',
-  '典型顺序：fs_status 拿项目与稿盘 ID → fs_get_outline 看目录 → fs_read_section 读某文件/某段 → fs_get_report 看体检 → fs_get_style 看文风闸 → fs_mirror_check 看双语对账 → fs_query_facts 对数字与引用的账 → fs_search_kb 翻项目资料。',
+  'FactScribe 论文工作台（本机论文写作工具）的检索面：查稿况 → 看目录 → 读正文 → 看检查报告 → 看文风闸 → 看双语对账 → 看证据锁 → 看写作简报 → 对事实账 → 搜知识库 → 看版式。',
+  '典型顺序：fs_status 拿项目与稿盘 ID → fs_get_outline 看目录 → fs_read_section 读某文件/某段 → fs_get_report 看体检 → fs_get_style 看文风闸 → fs_mirror_check 看双语对账 → fs_get_evidence_status 看证据锁 → fs_get_brief 看这一节能引哪些数 → fs_query_facts 对数字与引用的账 → fs_search_kb 翻项目资料 → fs_get_venue 看刊物要求。',
   'fs_get_report 与 fs_get_style 的 findings 文案默认中文（真闸原话）；要英文版就传 lang=en。',
-  '铁律：正文里 \\fact{}、\\cite{} 与绑定数字是事实账锚点；账上没有的数字与文献不得编造；涉及数字的论述先 fs_query_facts 对账。',
-  'v1 的六个检索工具全部只读；v2 加了写稿面，但只有「提议」：fs_propose_edit 建一张提议单（不写盘），由人在页面的「待确认」差异卡里点「采纳写回」才落盘。助手这边没有任何直接改正文的接口。',
+  '铁律：正文里 \\fact{}、\\cite{} 与绑定数字是事实账锚点；账上没有的数字与文献不得编造；涉及数字的论述先 fs_get_brief / fs_query_facts 对账。',
+  '写稿面只有「提议」这一条路，没有直写：fs_propose_edit（改一段正文）、fs_propose_add_fact（追加一条事实）、fs_propose_evidence_freeze / fs_propose_evidence_unfreeze（冻结/解冻证据清单）、fs_propose_export_bundle（导出投稿包）都只是落一张提议单（不写盘），由人在页面的「待确认」差异卡里点「采纳写回」才落盘；不采纳就什么都不写。助手这边没有任何直接改正文、直接改账、直接改冻结件的接口。',
   '工具结果设了长度上限，超限会带 truncated 标记——需要更多请让用户打开 FactScribe 工作台页面查看。',
 ].join('\n');
 
@@ -1070,6 +1208,27 @@ function createToolService(get, post, options) {
   const cap = (s, max) => {
     const text = String(s ?? '');
     return text.length > max ? { text: text.slice(0, max), truncated: true } : { text, truncated: false };
+  };
+
+  /** 提一张「账与证据面」的提议单（只建单，不写盘）。 */
+  const proposeLedger = async (project, disk, kind, body) => {
+    const base = `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}`;
+    const data = await post(`${base}/proposal`, { kind, source: 'mcp', ...body });
+    const proposal = data.proposal || {};
+    const before = cap(proposal.before_text, 2000);
+    const after = cap(proposal.after_text, 2000);
+    return {
+      project, disk,
+      id: proposal.id || '',
+      kind: proposal.kind || kind,
+      before_sha: proposal.before_sha || '',
+      before_text: before.text,
+      after_text: after.text,
+      warnings: proposal.warnings || [],
+      rationale: proposal.rationale || '',
+      status: proposal.status || 'pending',
+      note: '这是一张提议单，**账与证据面还没动**。请用户在 FactScribe 工作台的「待确认」差异卡里看过再采纳——不采纳就什么都不写。',
+    };
   };
 
   return {
@@ -1278,6 +1437,114 @@ function createToolService(get, post, options) {
         out.note = TRUNCATE_NOTE;
       }
       return out;
+    },
+
+    /** fs_get_evidence_status */
+    async evidenceStatus(args) {
+      const { project, disk } = args;
+      const data = await get(
+        `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/evidence`);
+      return {
+        project, disk,
+        frozen: Boolean(data.frozen),
+        entries: data.entries ?? 0,
+        sha256: data.sha256 || '',
+        sha256_short: data.sha256_short || '',
+        current_sha256: data.current_sha256 || '',
+        current_sha256_short: data.current_sha256_short || '',
+        declared_sections: data.declared_sections ?? 0,
+        declared: data.declared || {},
+        mismatch: data.mismatch || null,
+        diff: data.diff || { added: [], removed: [], moved: [] },
+        unfrozen: data.unfrozen || null,
+        last_log: data.last_log || {},
+        note: 'mismatch 为 null 表示冻结件与当前清单一致；unfrozen 为 null 表示没解冻。',
+      };
+    },
+
+    /** fs_get_brief */
+    async brief(args) {
+      const { project, disk, section } = args;
+      const query = section ? `?section=${encodeURIComponent(String(section))}` : '';
+      const data = await get(
+        `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/brief${query}`);
+      const sections = /** @type {any[]} */ (data.sections || []);
+      const facts = /** @type {any[]} */ (data.facts || []);
+      return {
+        project, disk,
+        project_name: data.project || '',
+        section: data.section || '',
+        facts_total: data.facts_total ?? facts.length,
+        counts: data.counts || {},
+        sections: sections.map((s) => ({
+          file: s.file || '', title: s.title || '',
+          facts: s.facts ?? 0, budget: s.budget ?? 0,
+          usable: s.usable || [], bound: s.bound || [], unbound: s.unbound || [],
+          reconciled: Boolean(s.reconciled),
+          evidence_source: s.evidence_source || '',
+        })),
+        facts: facts.map((f) => ({
+          id: f.id || '', claim: f.claim || '', value: f.value || '',
+          bound_in: f.bound_in || [], status: f.status || 'unbound',
+        })),
+        terms: data.terms || [],
+        constraints: data.constraints || [],
+        notes: data.notes || [],
+        hint: 'usable＝可引用；bound＝正文里已绑；unbound＝可引用但还没绑。',
+      };
+    },
+
+    /** fs_get_venue */
+    async venue(args) {
+      const { project } = args;
+      const data = await get(`/api/project/${encodeURIComponent(project)}/venue`);
+      const lock = data.lang_lock || {};
+      return {
+        project,
+        venue: data.venue || '',
+        deadline: data.deadline || '',
+        days_left: data.days_left ?? 0,
+        due_soon: Boolean(data.due_soon),
+        overdue: Boolean(data.overdue),
+        deadline_label: data.deadline_label || '',
+        warn_days: data.warn_days ?? 0,
+        lang_lock: { lang: lock.lang || '', locked: Boolean(lock.locked),
+          note: lock.note || '', note_key: lock.note_key || '' },
+        templates: (data.templates || []).map((t) => ({
+          id: t.id || '', name: t.name || '', note: t.note || '',
+          name_key: t.name_key || '', note_key: t.note_key || '',
+        })),
+      };
+    },
+
+    /** fs_propose_evidence_freeze —— 只建单，不写盘 */
+    async proposeEvidenceFreeze(args) {
+      const { project, disk, reason } = args;
+      return proposeLedger(project, disk, 'evidence_freeze', { reason: String(reason || '') });
+    },
+
+    /** fs_propose_evidence_unfreeze —— 只建单，不写盘 */
+    async proposeEvidenceUnfreeze(args) {
+      const { project, disk, reason, at } = args;
+      return proposeLedger(project, disk, 'evidence_unfreeze',
+        { reason: String(reason || ''), at: String(at || '') });
+    },
+
+    /** fs_propose_add_fact —— 只建单，不写盘 */
+    async proposeAddFact(args) {
+      const { project, disk, id, claim, value, source, locator, confidence, expr, derived_from, note } = args;
+      return proposeLedger(project, disk, 'add_fact', {
+        id: String(id || ''), claim: String(claim || ''), value: String(value || ''),
+        source: String(source || ''), locator: String(locator || ''),
+        confidence: String(confidence || 'med'), expr: String(expr || ''),
+        derived_from: String(derived_from || ''), note: String(note || ''),
+      });
+    },
+
+    /** fs_propose_export_bundle —— 只建单，不写盘 */
+    async proposeExportBundle(args) {
+      const { project, disk } = args;
+      return proposeLedger(project, disk, 'export_bundle', {});
     },
 
     /** fs_query_facts */
@@ -1532,9 +1799,16 @@ function dispatch(services, name, args) {
     case 'fs_get_report': return services.report(args);
     case 'fs_get_style': return services.style(args);
     case 'fs_mirror_check': return services.mirrorCheck(args);
+    case 'fs_get_evidence_status': return services.evidenceStatus(args);
+    case 'fs_get_brief': return services.brief(args);
+    case 'fs_get_venue': return services.venue(args);
     case 'fs_query_facts': return services.facts(args);
     case 'fs_search_kb': return services.searchKb(args);
     case 'fs_propose_edit': return services.proposeEdit(args);
+    case 'fs_propose_evidence_freeze': return services.proposeEvidenceFreeze(args);
+    case 'fs_propose_evidence_unfreeze': return services.proposeEvidenceUnfreeze(args);
+    case 'fs_propose_add_fact': return services.proposeAddFact(args);
+    case 'fs_propose_export_bundle': return services.proposeExportBundle(args);
     case 'fs_list_proposals': return services.listProposals(args);
     default: throw new Error('unreachable');
   }
@@ -1728,6 +2002,24 @@ export async function start(context) {
     }
     if (!catalog || !Array.isArray(catalog.models)) return null;
     return catalog;
+  }
+
+  /**
+   * 引擎那一条路的模型条目：核心的共用声明（catalog）转成面板的形状。
+   * 形状与宿主／自定义两路一致：id / kind / label / model / efforts / defaultEffort。
+   * @param {any} entry
+   */
+  function engineModelEntry(entry) {
+    const label = String(entry?.label || entry?.model || '').trim();
+    if (!label) return null;
+    return {
+      id: String(entry?.id || (ENGINE_MODEL_PREFIX + label)),
+      kind: 'engine',
+      label,
+      model: String(entry?.model || label),
+      efforts: Array.isArray(entry?.efforts) ? entry.efforts : [],
+      defaultEffort: String(entry?.defaultEffort || ''),
+    };
   }
 
   /** 宿主目录条目 → 面板条目（含这个模型支持哪些思考等级）。 */
@@ -2182,7 +2474,7 @@ export async function start(context) {
       // 选了引擎本地后端的模型（宿主没有模型目录时的老路径）→ 直接问引擎，
       // 宿主 Agent 不接管这一路。
       const engineBody = selection && selection.kind === 'engine'
-        ? { ...body, model: selection.key }
+        ? { ...body, model: selection.key, effort: selection.effort || '' }
         : body;
       if (!(selection && selection.kind === 'engine')
         && agentClient() && await tryAgentChat(request, response, body, selection)) {
@@ -2221,10 +2513,20 @@ export async function start(context) {
             + '?project=' + encodeURIComponent(url.searchParams.get('project') || '')
             + '&disk=' + encodeURIComponent(url.searchParams.get('disk') || '');
           const data = await engineGet(engine.port, query);
-          for (const name of (Array.isArray(data?.models) ? data.models : [])) {
-            const label = String(name || '').trim();
-            if (!label) continue;
-            models.push({ id: ENGINE_MODEL_PREFIX + label, kind: 'engine', label, model: label, efforts: [] });
+          // 引擎那一份直接用核心的**共用声明**（catalog：id / kind / label /
+          // model / efforts / defaultEffort）——两侧的「同一个模型」是同一个概念。
+          // 老引擎没有 catalog 就退回按 models 拼（形状一样）。
+          const declared = Array.isArray(data?.catalog?.models) ? data.catalog.models : null;
+          if (declared) {
+            for (const entry of declared) {
+              const item = engineModelEntry(entry);
+              if (item) models.push(item);
+            }
+          } else {
+            for (const name of (Array.isArray(data?.models) ? data.models : [])) {
+              const item = engineModelEntry({ id: ENGINE_MODEL_PREFIX + name, label: name, model: name });
+              if (item) models.push(item);
+            }
           }
         } catch (error) {
           log.warn('factscribe.models.engine_failed ' + String(error?.message || error));
@@ -2238,6 +2540,7 @@ export async function start(context) {
           label: entry.label,
           model: entry.model,
           efforts: [],
+          defaultEffort: '',
         });
       }
       let model = '';

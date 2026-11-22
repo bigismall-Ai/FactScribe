@@ -314,6 +314,10 @@ const I18N = {
     'proposal.fromUnknown': '来源不明',
     'proposal.kindEdit': '改稿',
     'proposal.kindDraft': '插入草稿',
+    'proposal.kindEvidenceFreeze': '冻结证据清单',
+    'proposal.kindEvidenceUnfreeze': '解冻证据清单',
+    'proposal.kindAddFact': '追加事实',
+    'proposal.kindExportBundle': '导出投稿包',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -631,6 +635,10 @@ const I18N = {
     'proposal.fromUnknown': 'Unknown source',
     'proposal.kindEdit': 'Edit',
     'proposal.kindDraft': 'Insert draft',
+    'proposal.kindEvidenceFreeze': 'Freeze evidence list',
+    'proposal.kindEvidenceUnfreeze': 'Unfreeze evidence list',
+    'proposal.kindAddFact': 'Append fact',
+    'proposal.kindExportBundle': 'Export submission bundle',
   },
 };
 
@@ -3962,7 +3970,7 @@ function proposalCard(row) {
   src.textContent = proposalSourceLabel(row);
   const kind = document.createElement('span');
   kind.className = 'prop-kind';
-  kind.textContent = (String(row.kind || '') === 'ai_draft') ? t('proposal.kindDraft') : t('proposal.kindEdit');
+  kind.textContent = proposalKindLabel(row);
   const time = document.createElement('span');
   time.className = 'prop-time';
   time.textContent = t('proposal.created', { time: formatTime(row.created_at) });
@@ -4009,6 +4017,19 @@ function proposalCard(row) {
   acts.appendChild(reject);
   card.appendChild(acts);
   return card;
+}
+
+/* 类型标签：改稿／插入草稿／冻结证据／解冻证据／追加事实／导出投稿包。 */
+function proposalKindLabel(row) {
+  const kind = String((row && row.kind) || '');
+  const keys = {
+    ai_draft: 'proposal.kindDraft',
+    evidence_freeze: 'proposal.kindEvidenceFreeze',
+    evidence_unfreeze: 'proposal.kindEvidenceUnfreeze',
+    add_fact: 'proposal.kindAddFact',
+    export_bundle: 'proposal.kindExportBundle',
+  };
+  return t(keys[kind] || 'proposal.kindEdit');
 }
 
 /* 来源标签：mcp（助手）还是页面自己发的。 */
@@ -4183,6 +4204,13 @@ async function applyProposalResult(response) {
       applyFreshBlocks(data.blocks, data.block);
       return;
     }
+    await loadDisk();
+    return;
+  }
+  if (kind === 'evidence_freeze' || kind === 'evidence_unfreeze'
+      || kind === 'add_fact' || kind === 'export_bundle') {
+    // 账与证据面：不碰正文。追加事实后正文里的事实芯片要跟着账走，
+    // 所以重载一次盘；读数面板由 confirmProposal 里的 rerunCheck 刷新。
     await loadDisk();
     return;
   }

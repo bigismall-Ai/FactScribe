@@ -518,12 +518,16 @@ def machine_payload(disk: Path) -> dict:
     groups = {
         "ledger": {
             "title": "账本表",
+            # title_key＝前端 i18n key（界面一直用它翻文案）；title 保留中文
+            # 原值，兼容只读旧的消费者。
+            "title_key": "mv.ledger",
             "rows": rows,
             "total": len(rows),
             "digest_short": (_safe_digest(cfg) or "")[:8],
         },
         "scan": {
             "title": "正文扫描",
+            "title_key": "mv.scan",
             "rows": scan_rows,
             "sections": len(sections),
             "numbers_total": total,
@@ -535,6 +539,7 @@ def machine_payload(disk: Path) -> dict:
         },
         "chain": {
             "title": "文献与证据链",
+            "title_key": "mv.evidence",
             "cites_total": int(summary.get("cites_total") or 0),
             "cites_unique": int(summary.get("cites_unique") or 0),
             "bib_entries": int(summary.get("bib_entries") or 0),
@@ -549,6 +554,7 @@ def machine_payload(disk: Path) -> dict:
         },
         "export": {
             "title": "导出与命令",
+            "title_key": "mv.export",
             "commands": [
                 {"label": "真闸体检（只读）", "cmd": "factscribe audit --json %s" % disk},
                 {"label": "账本体检（只读）", "cmd": "factscribe check --json %s" % disk},

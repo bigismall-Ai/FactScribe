@@ -163,6 +163,15 @@ def _bound_fact_ids(text: str) -> set[str]:
     return {fid.strip() for fid, _line in scan_tex(text).markers if fid.strip()}
 
 
+def bound_fact_ids(text: str) -> tuple:
+    """该文件里绑到的不同 fact id（确定顺序的列表）。
+
+    与 ``_bound_fact_ids`` 同一口径，只是给出**排序后**的列表——
+    工作台的简报读数要按「这一节已回账哪些数」逐条列出来。
+    """
+    return tuple(sorted(_bound_fact_ids(text)))
+
+
 def build_sections(cfg: Config, sections: list[tuple[str, str]]
                    ) -> list[SectionRow]:
     """按主文件 ``\\input`` 顺序出节清单；未出现在主文件里的节按文件名补在后面。"""

@@ -861,7 +861,7 @@ async function engineGet(port, pathWithQuery) {
   return payload.data;
 }
 
-// ---------------------------------------------------------------- MCP 工具面（6 个，全部只读）
+// ---------------------------------------------------------------- MCP 工具面（只读检索面）
 
 const READ_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 
@@ -924,7 +924,49 @@ const TOOLS = [
     description:
       '【只读】看某个稿盘的最新检查报告（体检摘要＋发现清单＋声明→绑定→回账→出证四步链）。' +
       'health.status 为 red/yellow/ok；findings 里每条带 severity / code / message / location，' +
-      '改稿建议要以报告读数为依据；报告本身不会因读它而变化。',
+      '另带 message_key 与 params（i18n 读数：同一条发现的模板 key 与槽位取值）。' +
+      '可选 lang=en 让文案出英文版（默认中文＝真闸原话）；改稿建议要以报告读数为依据；' +
+      '报告本身不会因读它而变化。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        lang: { type: 'string', enum: ['zh', 'en'], description: 'findings 文案的语言（默认 zh）' },
+      },
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
+  {
+    name: 'fs_get_style',
+    title: '看文风闸读数',
+    description:
+      '【只读】看某个稿盘的文风闸读数（与 CLI factscribe style 同一条分析路）：' +
+      'status 为 ok/yellow/red；findings 里每条带 code / severity / message / location；' +
+      'summary 与 metrics 给文风指标（句长、名词化率、连接词密度、段落模板等）；' +
+      'rules 是实际生效的规则文件路径。' +
+      '文风闸只读正文与规则文件，不改盘；它判的是「写得像不像论文」，不判事实真伪。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        lang: { type: 'string', enum: ['zh', 'en'], description: 'findings 文案的语言（默认 zh）' },
+      },
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
+  {
+    name: 'fs_mirror_check',
+    title: '看双语对账读数',
+    description:
+      '【只读】比对同一项目的两个稿盘（语言盘）之间的事实账与参考文献：' +
+      'status 为 ok/drift；drift 里每条带 code / kind（field=同一条两侧值不同、' +
+      'missing=只在盘 A 有、extra=只在盘 B 有）/ target（fact 或 bib）/ id / field，' +
+      '以及 disk_a 与 disk_b 两侧的取值与出处文件。' +
+      '同一项目只有一个语言盘时报「不适用」（status=na）。对账只读两个盘，不改盘。',
     inputSchema: {
       type: 'object',
       properties: PROJECT_DISK,
@@ -1009,8 +1051,9 @@ const TOOLS = [
 const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 
 const INSTRUCTIONS = [
-  'FactScribe 论文工作台（本机论文写作工具）的只读检索面：查稿况 → 看目录 → 读正文 → 看检查报告 → 对事实账 → 搜知识库。',
-  '典型顺序：fs_status 拿项目与稿盘 ID → fs_get_outline 看目录 → fs_read_section 读某文件/某段 → fs_get_report 看体检 → fs_query_facts 对数字与引用的账 → fs_search_kb 翻项目资料。',
+  'FactScribe 论文工作台（本机论文写作工具）的只读检索面：查稿况 → 看目录 → 读正文 → 看检查报告 → 看文风闸 → 看双语对账 → 对事实账 → 搜知识库。',
+  '典型顺序：fs_status 拿项目与稿盘 ID → fs_get_outline 看目录 → fs_read_section 读某文件/某段 → fs_get_report 看体检 → fs_get_style 看文风闸 → fs_mirror_check 看双语对账 → fs_query_facts 对数字与引用的账 → fs_search_kb 翻项目资料。',
+  'fs_get_report 与 fs_get_style 的 findings 文案默认中文（真闸原话）；要英文版就传 lang=en。',
   '铁律：正文里 \\fact{}、\\cite{} 与绑定数字是事实账锚点；账上没有的数字与文献不得编造；涉及数字的论述先 fs_query_facts 对账。',
   'v1 的六个检索工具全部只读；v2 加了写稿面，但只有「提议」：fs_propose_edit 建一张提议单（不写盘），由人在页面的「待确认」差异卡里点「采纳写回」才落盘。助手这边没有任何直接改正文的接口。',
   '工具结果设了长度上限，超限会带 truncated 标记——需要更多请让用户打开 FactScribe 工作台页面查看。',
@@ -1138,8 +1181,10 @@ function createToolService(get, post, options) {
 
     /** fs_get_report */
     async report(args) {
-      const { project, disk } = args;
-      const data = await get(`/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/report`);
+      const { project, disk, lang } = args;
+      const query = lang === 'en' ? '?lang=en' : '';
+      const data = await get(
+        `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/report${query}`);
       const health = data.health || {};
       const findings = /** @type {any[]} */ (data.findings || []);
       const truncated = findings.length > 40;
@@ -1158,9 +1203,75 @@ function createToolService(get, post, options) {
         finding_count: findings.length,
         findings: (truncated ? findings.slice(0, 40) : findings).map((f) => ({
           severity: f.severity, code: f.code, message: f.message, location: f.location || '',
+          message_key: f.message_key || '', params: f.params || {},
         })),
         chain: data.chain || [],
         evidence: data.evidence || {},
+        // 文风闸与双语对账的读数（报告里同源的两道附加闸）。
+        gates: {
+          style: (data.gates && data.gates.style) || null,
+          mirror: (data.gates && data.gates.mirror) || null,
+        },
+      };
+      if (truncated) {
+        out.truncated = true;
+        out.note = TRUNCATE_NOTE;
+      }
+      return out;
+    },
+
+    /** fs_get_style */
+    async style(args) {
+      const { project, disk, lang } = args;
+      const query = lang === 'en' ? '?lang=en' : '';
+      const data = await get(
+        `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/style${query}`);
+      const findings = /** @type {any[]} */ (data.findings || []);
+      const truncated = findings.length > 40;
+      const out = {
+        project, disk,
+        status: data.status || 'ok',
+        gate: data.gate || 'style',
+        red: data.red || 0,
+        yellow: data.yellow || 0,
+        count: data.count ?? findings.length,
+        rules: data.rules || '',
+        summary: data.summary || {},
+        metrics: data.metrics || {},
+        finding_count: findings.length,
+        findings: (truncated ? findings.slice(0, 40) : findings).map((f) => ({
+          severity: f.severity, code: f.code, message: f.message,
+          location: f.location || '', message_key: f.message_key || '',
+          params: f.params || {},
+        })),
+      };
+      if (truncated) {
+        out.truncated = true;
+        out.note = TRUNCATE_NOTE;
+      }
+      return out;
+    },
+
+    /** fs_mirror_check */
+    async mirrorCheck(args) {
+      const { project, disk } = args;
+      const data = await get(
+        `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/mirror`);
+      const drift = /** @type {any[]} */ (data.drift || []);
+      const truncated = drift.length > 40;
+      const out = {
+        project, disk,
+        status: data.status || 'na',
+        count: data.count ?? drift.length,
+        disk_a: data.disk_a || '',
+        disk_b: data.disk_b || '',
+        summary: data.summary || {},
+        drift_count: drift.length,
+        drift: (truncated ? drift.slice(0, 40) : drift).map((d) => ({
+          code: d.code, kind: d.kind, target: d.target, id: d.id,
+          field: d.field || '', disk_a: d.disk_a || {}, disk_b: d.disk_b || {},
+        })),
+        note: data.note || '',
       };
       if (truncated) {
         out.truncated = true;
@@ -1419,6 +1530,8 @@ function dispatch(services, name, args) {
     case 'fs_get_outline': return services.outline(args);
     case 'fs_read_section': return services.readSection(args);
     case 'fs_get_report': return services.report(args);
+    case 'fs_get_style': return services.style(args);
+    case 'fs_mirror_check': return services.mirrorCheck(args);
     case 'fs_query_facts': return services.facts(args);
     case 'fs_search_kb': return services.searchKb(args);
     case 'fs_propose_edit': return services.proposeEdit(args);

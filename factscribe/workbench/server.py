@@ -71,6 +71,18 @@ STATIC_TYPES = {
 }
 
 
+def _lang_of(query: str) -> str:
+    """查询串里的 lang（zh / en）——发现文案的渲染语言。
+
+    缺省＝zh（中文界面＝真闸原话）。认不出的一律当 zh。
+    """
+    for part in str(query or "").split("&"):
+        if part.startswith("lang="):
+            value = part[5:].strip().lower()
+            return "en" if value == "en" else "zh"
+    return "zh"
+
+
 def _parse_multipart_file(content_type: str, raw: bytes) -> tuple[str, bytes]:
     """从 multipart/form-data 里取出第一个文件：(文件名, 字节)。
 
@@ -280,7 +292,21 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 data = report_payload(
                     disk_path,
                     sibling_disk=self.index.sibling_disk_path(project_id,
-                                                               disk_id))
+                                                               disk_id),
+                    lang=_lang_of(query))
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "style":
+                from .checkreport import style_gate
+                data = style_gate(disk_path, lang=_lang_of(query))
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "mirror":
+                from .checkreport import mirror_gate
+                data = mirror_gate(
+                    disk_path,
+                    self.index.sibling_disk_path(project_id, disk_id),
+                    lang=_lang_of(query))
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
             if what == "machine":

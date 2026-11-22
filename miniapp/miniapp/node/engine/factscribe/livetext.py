@@ -187,11 +187,11 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                     "APPROVAL_MISSING_ASSERTIONS",
                     "fact %r 有定量值 %r，但活跃正文里没有任何 \\fact{%s} 标记——"
                     "没有断言可签（宏定义体/被丢弃的宏参数/附录外都算没写）"
-                    % (f.id, f.value, f.id), location=loc, token=f.id))
+                    % (f.id, f.value, f.id), location=loc, token=f.id, message_key="finding.APPROVAL_MISSING_ASSERTIONS.v2", params={"fact": repr(f.id), "value": repr(f.value), "fact1": str(f.id)}))
                 out.append(Issue(
                     "ASSERTION_DRIFT",
                     "fact %r 的定量断言不在活跃正文里（标记缺失或只出现在不会渲染的位置）"
-                    % f.id, location=loc, token=f.id))
+                    % f.id, location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v4", params={"fact": repr(f.id)}))
             continue
 
         # 规则 2：标记活着，但句子里没有任何数字，也没有 \\fact{ID}{值} 的第二参数。
@@ -203,7 +203,7 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                     "ASSERTION_DRIFT",
                     "fact %r 的标记所在句子没有任何数字——定量值不是源文本字面量"
                     "（计数器/表达式算出来的数无法核对）" % f.id,
-                    location=loc, token=f.id))
+                    location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v5", params={"fact": repr(f.id)}))
                 drift_emitted = True
 
         # 规则 3：正文角色的事实，标记只在 \\appendix 之后出现。
@@ -216,12 +216,12 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                     "FACT_OUT_OF_SPAN",
                     "fact %r 声明 role=%r，但标记只在 \\appendix 之后出现——"
                     "事实落在正文跨度之外（R-03）" % (f.id, f.role),
-                    location=loc, token=f.id))
+                    location=loc, token=f.id, params={"fact": repr(f.id), "fact1": repr(f.role)}))
                 out.append(Issue(
                     "ASSERTION_DRIFT",
                     "fact %r 声明 role=%r，但标记只在 \\appendix 之后出现——"
                     "结论被搬进附录，正文角色对不上（S-03）" % (f.id, f.role),
-                    location=loc, token=f.id))
+                    location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v6", params={"fact": repr(f.id), "fact1": repr(f.role)}))
 
         # 规则 4（批 58/62）：定量 fact 的标记在正文只剩指代，数字只在附录里。
         # 附录里的数字可以带 \fact{} 标记，也可以只是同值的裸数字
@@ -240,10 +240,10 @@ def live_text_issues(cfg, facts, sections) -> list[Issue]:
                 "fact %r 的 \\fact{} 标记留在正文，但正文这一句没有任何数字承载 "
                 "value=%r（只剩指代）——定量断言不在正文跨度里，数字只出现在 "
                 "\\appendix 之后（R-03）" % (f.id, f.value),
-                location=loc, token=f.id, severity=SEV_YELLOW))
+                location=loc, token=f.id, severity=SEV_YELLOW, params={"fact": repr(f.id), "value": repr(f.value)}))
             if not drift_emitted:
                 out.append(Issue(
                     "ASSERTION_DRIFT",
                     "fact %r 的定量断言不在正文跨度里：正文只剩指代，数字落在附录"
-                    % f.id, location=loc, token=f.id))
+                    % f.id, location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v7", params={"fact": repr(f.id)}))
     return out

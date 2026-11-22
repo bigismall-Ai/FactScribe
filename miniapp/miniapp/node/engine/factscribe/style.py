@@ -35,6 +35,7 @@ from . import mdscan
 from .config import Config, ConfigError, load_toml, section_budget
 from .constants import EXIT_OK, EXIT_RED, EXIT_YELLOW
 from .evidence import EVIDENCE_CODES, check_evidence
+from .i18n import finding_key
 from .livetext import _live_text
 from .segment import segment
 from .terms import Glossary, key_of, load_glossary
@@ -998,6 +999,10 @@ class Finding:
     suggestion: str
     metric: str = ""
     severity: str = "yellow"
+    # i18n（只增字段）：message_key 指向 factscribe/i18n.py 的双语目录，
+    # params 是模板槽位的取值。suggestion 仍是中文原文。
+    message_key: str = ""
+    params: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {"code": self.code, "severity": self.severity,
@@ -1970,7 +1975,7 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                     "「%s」）。两截结构没变，不算改写：删掉类别词，重写成能"
                     "独立指路的名词短语，正文事实不动。"
                     % (kind, token, _clip(old_title, 80), _clip(new_title, 80)),
-                    "heading_substituted"))
+                    "heading_substituted", params={"kind": str(kind), "token": str(token), "clip": str(_clip(old_title, 80)), "clip1": str(_clip(new_title, 80))}))
             old_rel = _relation_hits(old_title, relation_words)
             new_rel = _relation_hits(new_title, relation_words)
             old_set = {_canon_relation(w) for w in old_rel}
@@ -1983,7 +1988,7 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                     "关系词承载论证方向，替换或删除前先确认结论没变；"
                     "要改就连正文一起改。"
                     % ("、".join(old_rel), "、".join(new_rel) or "无"),
-                    "heading_relation_changed"))
+                    "heading_relation_changed", params={"arg0": str('、'.join(old_rel)), "arg1": str('、'.join(new_rel) or '无')}))
             stop_line = None
             if idx + 1 < len(new_heads) and new_heads[idx + 1]["cmd"] not in (
                     "paragraph", "subparagraph"):
@@ -1997,7 +2002,7 @@ def _rewrite_heading_findings(docs: list["_Doc"], before_docs: list["_Doc"],
                     _clip(new_title, 160),
                     "旧标题的实义成分在新标题与新首句里都消失了（%s）：要么写回"
                     "新标题，要么在新首句里交代它去了哪里。" % "、".join(lost),
-                    "heading_subject_lost"))
+                    "heading_subject_lost", params={"arg0": str('、'.join(lost))}))
     return findings
 
 
@@ -2052,7 +2057,7 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
                     "术语表声明的禁用变体出现了：%s；正名是「%s」。"
                     "只把这个写法改回正名，不改事实、数字与引用。"
                     % ("、".join(pieces), canonical),
-                    "term_variant"))
+                    "term_variant", message_key="finding.TERM_VARIANT.v2", params={"arg0": str('、'.join(pieces)), "canonical": str(canonical)}))
                 continue
             forms = group["forms"]
             # 只把中文表面形式计入「用词不一致」：英文列是同一术语的译法，
@@ -2077,7 +2082,7 @@ def _term_variant_findings(docs: list["_Doc"], glossary: Glossary,
                 "同一概念在一篇里用了 %d 种写法；统一用规范形「%s」，"
                 "其余写法改回它（只改措辞，不改事实）。"
                 % (len(cjk_forms), canonical),
-                "term_variant"))
+                "term_variant", message_key="finding.TERM_VARIANT.v3", params={"arg0": str(int(len(cjk_forms))), "canonical": str(canonical)}))
     return findings
 
 
@@ -2105,7 +2110,7 @@ def _unregistered_findings(doc: "_Doc", line: int, text: str,
             "TERM_UNREGISTERED", doc.file, line, _clip(cand, 160),
             "「%s」不在术语表内：建议登记到 paper.tsv，或换用已登记的"
             "规范形。本条只提示，不进 findings 计数、不影响退出码。" % cand,
-            "term_unregistered", severity="info"))
+            "term_unregistered", severity="info", params={"cand": str(cand)}))
     return out
 
 
@@ -2340,7 +2345,7 @@ def _light_verb_findings(sentences, rules: dict, thresholds: dict) -> list[Findi
                     _clip(sentence, 180),
                     "「%s」是轻动词＋名义化：动词是空的，动作藏在名词里。%s"
                     % (_norm_space(m.group(0)), hint),
-                    "light_verb_nominalization"))
+                    "light_verb_nominalization", params={"norm_space": str(_norm_space(m.group(0))), "hint": str(hint)}))
     # P-152：只报「重度」——同一篇里命中数达到 light_verb_doc_min 才算系统性
     # 写法；个别措辞（盲评 R1 轴 18 条双洁＋3 条分歧全判无缺陷）不报。
     doc_min = int(thresholds["light_verb_doc_min"])
@@ -2386,7 +2391,7 @@ def _zh_de_stack_findings(sentences, thresholds: dict) -> list[Finding]:
             "把其中一层改成动词句，或拆成两句（例：'A 的 B 的 C' → "
             "'C 由 B 做，B 属于 A'）；事实与数字不动。"
             % (len_a, len_b, gap_a, gap_b),
-            "zh_de_stack"))
+            "zh_de_stack", params={"len_a": str(int(len_a)), "len_b": str(int(len_b)), "gap_a": str(gap_a), "gap_b": str(gap_b)}))
     return out
 
 
@@ -2415,7 +2420,7 @@ def _zh_postposed_condition_findings(sentences, rules: dict
             "条件从句后置（英文语序）：中文条件在前。把「%s」移到逗号前 → "
             "「%s，%s」" % (cond.rstrip("。！？"),
                             cond.rstrip("。！？"), main),
-            "zh_postposed_condition"))
+            "zh_postposed_condition", params={"cond": str(cond.rstrip('。！？')), "cond1": str(cond.rstrip('。！？')), "main": str(main)}))
     return out
 
 
@@ -2441,7 +2446,7 @@ def _zh_due_to_make_findings(sentences, rules: dict) -> list[Finding]:
             "自己当主语，后半句直接给结果（例：「由于数据缺失，使得结果"
             "不可靠」→「数据缺失，结果不可靠」）；这是语法错，不只是文风。"
             % (m.group("prep"), m.group("prep")),
-            "zh_due_to_make"))
+            "zh_due_to_make", params={"m": str(m.group('prep')), "m1": str(m.group('prep'))}))
     return out
 
 
@@ -2507,7 +2512,7 @@ def _zh_light_verb_noun_findings(sentences, rules: dict) -> list[Finding]:
                 "「%s」是轻动词＋名词：动词是空的，动作藏在名词里。动作"
                 "其实是什么——「%s」；直接写「%s」，把「%s」删掉。"
                 % (phrase, direct, direct, token),
-                "zh_light_verb_noun"))
+                "zh_light_verb_noun", params={"phrase": str(phrase), "direct": str(direct), "direct1": str(direct), "token": str(token)}))
     return out
 
 
@@ -2561,7 +2566,7 @@ def _nominalization_rate_findings(sentences, rules: dict
             "%s。已剥离本文高频术语（前 %d 个）：%s。"
             % (rate, float((rules.get("thresholds") or {}).get(
                 "nominalization_rate", 4.5)), fix, strip_top, listed),
-            "nominalization_rate"))
+            "nominalization_rate", params={"rate": format(rate, ".2f"), "arg1": format(float((rules.get('thresholds') or {}).get('nominalization_rate', 4.5)), ".1f"), "fix": str(fix), "strip_top": str(int(strip_top)), "listed": str(listed)}))
     return out, rate, stripped
 
 
@@ -2607,7 +2612,7 @@ def _zh_aspect_zhe_findings(sentences, rules: dict
                    if phrase.startswith(("有着", "存在著", "存在着", "存在著"))
                    else "多数时候删掉「着」更干净，或改成「了」「过」；"
                         "只有确实在进行时才保留进行体。"),
-                "zh_aspect_zhe"))
+                "zh_aspect_zhe", params={"phrase": str(phrase), "arg1": str('写「有」或「存在」即可，删掉「着」；只有确实在进行时才保留进行体。' if phrase.startswith(('有着', '存在著', '存在着', '存在著')) else '多数时候删掉「着」更干净，或改成「了」「过」；只有确实在进行时才保留进行体。')}))
     return out, hits
 
 
@@ -2661,7 +2666,7 @@ def _zh_dang_when_findings(paragraph_sentences, rules: dict) -> list[Finding]:
                 _clip(sentence, 180),
                 "「%s」是翻译腔的「当…%s」结构（英文 when 语序）。%s。%s。"
                 % (m.group(0), tail, fix, note),
-                "zh_dang_when"))
+                "zh_dang_when", params={"m": str(m.group(0)), "tail": str(tail), "fix": str(fix), "note": str(note)}))
     return out
 
 
@@ -2689,7 +2694,7 @@ def _zh_collocation_findings(sentences, rules: dict) -> list[Finding]:
                     _line_of(doc, start), _clip(sentence, 180),
                     "「%s」是搭配冗余（%s，两个词说同一件事）：%s。"
                     % (m.group(0), label, fix),
-                    "zh_collocation_redundancy"))
+                    "zh_collocation_redundancy", params={"m": str(m.group(0)), "label": str(label), "fix": str(fix)}))
     return out
 
 
@@ -2728,7 +2733,7 @@ def _abbrev_first_use_findings(sentences, rules: dict) -> list[Finding]:
                     "缩写「%s」首次出现时没有展开。同句或前一句写成"
                     "「全称（%s）」或「Expanded Name (%s)」，后文再用缩写。"
                     % (token, token, token),
-                    "abbrev_first_use"))
+                    "abbrev_first_use", params={"token": str(token), "token1": str(token), "token2": str(token)}))
             previous = sentence
     return out
 
@@ -2754,7 +2759,7 @@ def _wordiness_bloat_findings(sentences, rules: dict) -> list[Finding]:
                 _clip(sentence, 180),
                 "「%s」是膨胀短语：直接写「%s」，信息不减"
                 % (phrase, repl or "更短的写法"),
-                "wordiness_bloat"))
+                "wordiness_bloat", params={"phrase": str(phrase), "arg1": str(repl or '更短的写法')}))
     return out
 
 
@@ -2862,14 +2867,14 @@ def _numeral_density_findings(docs: list["_Doc"], threshold,
                 "--stage revision：本条只报告、不要求删数字。改稿阶段数字受 "
                 "PROTECT_NUMBER_CHANGED 保护，删数字会被保护面判红；起草阶段"
                 "（--stage draft）才用 thin-the-numbers。",
-                "numeral_density", severity="info"))
+                "numeral_density", severity="info", message_key="finding.NUMERAL_DENSITY.v2"))
         else:
             findings.append(Finding(
                 "NUMERAL_DENSITY", doc.file, _line_of(doc, pos), text,
                 "数字太密：每个论点只留一条证据，其余数字删掉或改成定性说法"
                 "（多数/少量/接近）。本条只用于起草阶段；进入改写验收前加 "
                 "--stage revision，避免与 PROTECT_NUMBER_CHANGED 冲突。",
-                "numeral_density"))
+                "numeral_density", message_key="finding.NUMERAL_DENSITY.v3"))
     details.sort(key=lambda item: item["file"])
     return findings, details, round(worst, 1), info
 
@@ -3130,7 +3135,10 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
         cfg, sections, before=before)
     evidence_findings = [
         Finding(issue.code, issue.file, issue.line, issue.text,
-                issue.suggestion, issue.metric, severity="red")
+                issue.suggestion, issue.metric, severity="red",
+                message_key=getattr(issue, "message_key", "")
+                or finding_key(issue.code),
+                params=dict(getattr(issue, "params", {}) or {}))
         for issue in evidence_issues]
 
     total_units = sum(units_of(d.prose) for d in docs)
@@ -3232,7 +3240,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             instances["CONNECTIVE_DENSITY"].append(Finding(
                 "CONNECTIVE_DENSITY", doc.file, _line_of(doc, start), _clip(sentence, 180),
                 "删去「%s」，直接陈述：%s" % (token, _clip(replacement, 120)),
-                "connective_density"))
+                "connective_density", params={"token": str(token), "clip": str(_clip(replacement, 120))}))
 
     # ---- 1b. 解释性套语：密度 + 反射式解释链（批 99）----
     explainer_hits = 0
@@ -3248,7 +3256,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             _clip(sentence, 180),
             "句首「%s」是解释性套语：先删掉它，让断言自己站住（例：'%s'）；"
             "证据只在真正需要它的那一处出现一次。" % (token, _clip(replacement, 120)),
-            "explainer_density"))
+            "explainer_density", params={"token": str(token), "clip": str(_clip(replacement, 120))}))
 
     chain_findings: list[Finding] = []
     for doc in docs:
@@ -3269,7 +3277,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     _clip(second[1], 180),
                     "同一段有 %d 句以解释套语开头：留一句解释就够，其余删掉；"
                     "让断言自己站住，不要每句都补一个理由。" % len(hits),
-                    "justify_chain"))
+                    "justify_chain", message_key="finding.JUSTIFY_CHAIN.v2", params={"arg0": str(int(len(hits)))}))
             last_start, last_text, last_token = sents[-1]
             closing.append((_line_of(doc, last_start), last_text,
                             bool(last_token)))
@@ -3289,7 +3297,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "JUSTIFY_CHAIN", doc.file, line, _clip(text, 180),
                     "连续 %d 段都用解释句收尾：删掉最后一段的解释句，让段落停在"
                     "事实或结论上；解释只在读者会误解的地方出现一次。" % run,
-                    "justify_chain"))
+                    "justify_chain", message_key="finding.JUSTIFY_CHAIN.v3", params={"run": str(int(run))}))
             i = j + 1
 
     seen_chain: set = set()
@@ -3318,7 +3326,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "EMPTY_ADJECTIVE", doc.file, _line_of(doc, start), _clip(sentence, 180),
                 "删掉「%s」这个标签，改成可核验的事实（例：'This step is %s' → "
                 "'This step raises resolved instances from 5 to 10'）" % (phrase, token),
-                "empty_adjective"))
+                "empty_adjective", params={"phrase": str(phrase), "token": str(token)}))
 
     # ---- 3. 插入语破折号（逐处报；数值范围/页码/数学环境排除）----
     dash_hits = 0
@@ -3362,7 +3370,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "HEADING_TOO_LONG", doc.file, line, _clip(title, 160),
                     "标题压到 %s 以内：把副标题或解释移到正文首句，标题只留"
                     "名词短语；不改正文事实。" % limit_txt,
-                    "heading_too_long"))
+                    "heading_too_long", params={"limit_txt": str(limit_txt)}))
             # v5：首句只是复述标题（复述/垫话/设问）——只判本节自己的正文。
             # 下一标题若是行内 \paragraph，它的首句可能和标题同在一行，
             # 仍算本节正文，不能用 stop_line 跳过。
@@ -3415,7 +3423,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     "计划的做法）；复述标题、垫话（如「相关工作里，」）与设问"
                     "都不算定义。可在 term-allow.txt 登记白名单，只改措辞，"
                     "不改事实。" % cand,
-                    "term_first_in_heading"))
+                    "term_first_in_heading", params={"cand": str(cand)}))
             # ---- 批 91：TERM_UNREGISTERED（默认关；打开时只查标题）----
             if report_unregistered:
                 instances["TERM_UNREGISTERED"].extend(
@@ -3512,7 +3520,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     _clip(_norm_space(text), 180),
                     "本段与上一段（第 %d 行）都以「%s」开头：把本段首句改成以研究对象"
                     "开头（例：'We use X to ...' → 'X is used to ...'）"
-                    % (prev_line, info.first_word), "repeated_opener"))
+                    % (prev_line, info.first_word), "repeated_opener", params={"prev_line": str(int(prev_line)), "info": str(info.first_word)}))
         prev_first = info.first_word
         prev_line = info.line
         prev_file = doc.file
@@ -3540,7 +3548,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             instances["HEDGE_STACK"].append(Finding(
                 "HEDGE_STACK", doc.file, line, _clip(excerpt, 180),
                 "双重限定叠在一起：把「%s」减成一层「%s」；能给出证据就删掉限定"
-                % (token, short), "hedge_stack"))
+                % (token, short), "hedge_stack", params={"token": str(token), "short": str(short)}))
 
     # ---- 7. 超长句（只报「又长又没有结构」的；长而有结构的句子不报） ----
     extreme_hits = 0
@@ -3574,7 +3582,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                 "又长又平铺，保留原有结构，考虑在语义边界换气（例：%s）；"
                 "长而有结构的句子不必改，也不要整段拆短"
                 % (units, limit, _clip(_extreme_split(sentence), 120)),
-                "sentence_length_extreme"))
+                "sentence_length_extreme", params={"units": str(int(units)), "limit": str(int(limit)), "clip": str(_clip(_extreme_split(sentence), 120))}))
 
     # ---- 7b. 节奏平台：连续 >=N 句落在同一 10 词区间 ----
     plateau_run = int(thresholds["rhythm_plateau_run"])
@@ -3605,7 +3613,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
                     % (where, j - i, bucket * plateau_window,
                        bucket * plateau_window + plateau_window - 1, unit,
                        unit),
-                    "rhythm_plateau"))
+                    "rhythm_plateau", params={"where": str(where), "arg1": str(int(j - i)), "arg2": str(int(bucket * plateau_window)), "arg3": str(int(bucket * plateau_window + plateau_window - 1)), "unit": str(unit), "unit1": str(unit)}))
                 i = j
             else:
                 i += 1
@@ -3775,7 +3783,7 @@ def analyze(cfg: Config, sections: list[tuple[str, str]], rules: dict,
             % (uniformity, thresholds["sentence_uniformity"],
                short[1].file, _line_of(short[1], short[2]), short[0],
                long[1].file, _line_of(long[1], long[2]), long[0]),
-            "sentence_uniformity"))
+            "sentence_uniformity", params={"uniformity": format(uniformity, ".2f"), "thresholds": format(thresholds['sentence_uniformity'], ".2f"), "short": str(short[1].file), "line_of": str(int(_line_of(short[1], short[2]))), "short1": str(int(short[0])), "long": str(long[1].file), "line_of1": str(int(_line_of(long[1], long[2]))), "long1": str(int(long[0]))}))
 
     # ---- findings：只对触发的指标出具体条目；单点指标已按条目计 ----
     fired_metrics = {f["metric"] for f in fired}

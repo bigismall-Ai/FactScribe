@@ -680,15 +680,32 @@ async function postJSON(url, body) {
   return data;
 }
 
+/* 槽位填充：{name} → 值。一处填，两处用（t() 与发现文案共用）。 */
+function fill(text, vars) {
+  let out = String(text === null || text === undefined ? '' : text);
+  if (!vars) return out;
+  Object.keys(vars).forEach((name) => {
+    out = out.split('{' + name + '}').join(vars[name]);
+  });
+  return out;
+}
+
 function t(key, vars) {
   const dict = I18N[state.lang] || I18N.zh;
-  let text = dict[key] !== undefined ? dict[key] : (I18N.zh[key] !== undefined ? I18N.zh[key] : key);
-  if (vars) {
-    Object.keys(vars).forEach((name) => {
-      text = text.split('{' + name + '}').join(vars[name]);
-    });
-  }
-  return text;
+  const text = dict[key] !== undefined ? dict[key] : (I18N.zh[key] !== undefined ? I18N.zh[key] : key);
+  return fill(text, vars);
+}
+
+/* 发现文案：后端给了 message_key ＋ params，i18n 目录子集随报告一起到
+   （report.i18n）。目录里没有这一条、或这个语言没有，就回落到后端给的
+   原文（中文原话）。EN 界面因此不留中文。 */
+function findingMsg(f) {
+  if (!f) return '';
+  const report = state.report;
+  const catalog = (report && report.i18n) || {};
+  const entry = f.message_key ? catalog[f.message_key] : null;
+  if (entry && entry[state.lang]) return fill(entry[state.lang], f.params || {});
+  return f.message || '';
 }
 
 function esc(s) {
@@ -1345,6 +1362,11 @@ function resetReportState() {
 async function loadReport() {
   const reportPath = diskApiPath('report');
   const machinePath = diskApiPath('machine');
+  // lang 跟着界面语言走：后端直接出这一语言的文案（目录里没有的回落原文）。
+  if (reportPath) {
+    reportPath += (reportPath.indexOf('?') >= 0 ? '&' : '?') + 'lang='
+      + (state.lang === 'en' ? 'en' : 'zh');
+  }
   if (!reportPath || !machinePath) return;
   resetReportState();
   const [rep, mach] = await Promise.allSettled([getJSON(reportPath), getJSON(machinePath)]);
@@ -1371,7 +1393,7 @@ async function loadReport() {
 function findingRowHtml(f) {
   return `<div class="fp-item">
     <div class="fp-h"><span class="fp-sev ${sevClass(f.severity)}">${esc(sevLabel(f.severity))}</span><span class="fp-code">${esc(f.code || '')}</span></div>
-    <div class="fp-msg">${esc(f.message || '')}</div>
+    <div class="fp-msg">${esc(findingMsg(f))}</div>
     ${f.location ? `<div class="fp-loc">${esc(f.location)}</div>` : ''}
   </div>`;
 }
@@ -1379,7 +1401,7 @@ function findingRowHtml(f) {
 function findingDetailHtml(f) {
   return `<div class="fd-item">
     <div class="fd-h"><span class="fp-sev ${sevClass(f.severity)}">${esc(sevLabel(f.severity))}</span><span class="fp-code">${esc(f.code || '')}</span></div>
-    <div class="fd-msg">${esc(f.message || '')}</div>
+    <div class="fd-msg">${esc(findingMsg(f))}</div>
     <div class="fd-kv"><span class="fd-k">location</span><span class="fd-v">${esc(f.location || '—')}</span></div>
     <div class="fd-kv"><span class="fd-k">token</span><span class="fd-v">${esc(f.token || '—')}</span></div>
     <div class="fd-kv"><span class="fd-k">context</span><span class="fd-v fd-pre">${esc(f.context || '—')}</span></div>

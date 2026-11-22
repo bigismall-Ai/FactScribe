@@ -308,7 +308,7 @@ def _whitelist(report: dict, issues: list[Issue]) -> Counter:
         if not isinstance(item, dict):
             issues.append(Issue(
                 "PDF_WHITELIST_UNPROVENANCED",
-                "pdf_whitelist 条目不是对象：%r" % (item,), exit_code=5))
+                "pdf_whitelist 条目不是对象：%r" % (item,), exit_code=5, message_key="finding.PDF_WHITELIST_UNPROVENANCED.v2", params={"item": repr(item)}))
             continue
         key = str(item.get("key") or "").strip()
         count = item.get("count")
@@ -317,7 +317,7 @@ def _whitelist(report: dict, issues: list[Issue]) -> Counter:
             issues.append(Issue(
                 "PDF_WHITELIST_UNPROVENANCED",
                 "白名单条目缺 key/count/source：%r（人签声明必须可追溯）" % (item,),
-                token=key, exit_code=5))
+                token=key, exit_code=5, message_key="finding.PDF_WHITELIST_UNPROVENANCED.v3", params={"item": repr(item)}))
             continue
         counts[key] += count
     return counts
@@ -351,7 +351,7 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
         issues.append(Issue(
             "STAMP_KEY_UNTRUSTED",
             "可信公钥文件位于项目根内部（%s）——项目内公钥＝自签自验，不是信任根"
-            % keys_resolved, location=str(keys_path), exit_code=5))
+            % keys_resolved, location=str(keys_path), exit_code=5, message_key="finding.STAMP_KEY_UNTRUSTED.v2", params={"keys_resolved": str(keys_resolved)}))
         return issues
     except ValueError:
         pass
@@ -361,20 +361,20 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
         registry = _load_json(keys_path)
     except (OSError, json.JSONDecodeError) as exc:
         issues.append(Issue("STAMP_MISSING", "stamp/公钥文件读不了：%s" % exc,
-                            location=str(stamp_path), exit_code=5))
+                            location=str(stamp_path), exit_code=5, params={"detail": str(exc)}))
         return issues
 
     payload = stamp.get("payload")
     if not isinstance(payload, dict):
         issues.append(Issue("STAMP_REPORT_MISMATCH", "stamp 缺 payload 对象",
-                            exit_code=5))
+                            exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v2"))
         return issues
 
     schema = payload.get("schema") or stamp.get("schema")
     if str(schema or "") != "factscribe-stamp/3.0":
         issues.append(Issue("STAMP_REPORT_MISMATCH",
                             "stamp schema 必须是 factscribe-stamp/3.0，实际 %r"
-                            % schema, exit_code=5))
+                            % schema, exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v3", params={"schema": repr(schema)}))
         return issues
 
     key_id = str(stamp.get("signer_key_id") or payload.get("signer_key_id") or "")
@@ -383,12 +383,12 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
     if key_id not in registry_keys:
         issues.append(Issue("KEY_UNREGISTERED",
                             "signer_key_id %r 不在公钥登记里" % key_id,
-                            token=key_id, exit_code=5))
+                            token=key_id, exit_code=5, message_key="finding.KEY_UNREGISTERED.v2", params={"key_id": repr(key_id)}))
         return issues
     key = registry_keys[key_id]
     if key.get("revoked_at"):
         issues.append(Issue("KEY_REVOKED", "签名 key %r 已吊销" % key_id,
-                            token=key_id, exit_code=5))
+                            token=key_id, exit_code=5, message_key="finding.KEY_REVOKED.v2", params={"key_id": repr(key_id)}))
         return issues
 
     try:
@@ -396,12 +396,12 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
         sig = base64.b64decode(str(stamp.get("signature") or "").split(":", 1)[-1])
     except (ValueError, TypeError):
         issues.append(Issue("STAMP_SIGNATURE_INVALID", "公钥/签名不是合法 base64",
-                            exit_code=5))
+                            exit_code=5, message_key="finding.STAMP_SIGNATURE_INVALID.v2"))
         return issues
     if not ed25519_verify(pub, sig, jcs(payload)):
         issues.append(Issue(
             "STAMP_SIGNATURE_INVALID",
-            "ed25519 验签失败——签名体必须等于 JCS(stamp.payload)", exit_code=5))
+            "ed25519 验签失败——签名体必须等于 JCS(stamp.payload)", exit_code=5, message_key="finding.STAMP_SIGNATURE_INVALID.v3"))
         return issues
 
     pdf_sha = _sha256_bytes(pdf.read_bytes())
@@ -410,13 +410,13 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
             "STAMP_PDF_MISMATCH",
             "PDF 字节与 stamp 记录不符（磁盘 %s…，stamp %s…）——重存/换件都算过期"
             % (pdf_sha[:12], _strip_sha((payload.get("compiled") or {}).get("pdf_sha256", ""))[:12]),
-            exit_code=7))
+            exit_code=7, params={"pdf_sha": str(pdf_sha[:12]), "strip_sha": str(_strip_sha((payload.get('compiled') or {}).get('pdf_sha256', ''))[:12])}))
         return issues
 
     if report_digest(report) != _strip_sha(payload.get("report_sha256", "")):
         issues.append(Issue(
             "STAMP_REPORT_MISMATCH",
-            "report 指纹与 stamp 不符（盘上报告不是被签的那一份）", exit_code=5))
+            "report 指纹与 stamp 不符（盘上报告不是被签的那一份）", exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v4"))
         return issues
 
     links = (
@@ -433,14 +433,14 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
             issues.append(Issue(
                 "STAMP_REPORT_MISMATCH",
                 "%s 与 stamp 不符：report=%r stamp=%r" % (name, actual, expected),
-                token=name, exit_code=5))
+                token=name, exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v5", params={"name": str(name), "actual": repr(actual), "expected": repr(expected)}))
             return issues
 
     if report.get("verdict") != "PASS" or report.get("level") != "L2":
         issues.append(Issue(
             "STAMP_REPORT_MISMATCH",
             "被签 report 的 verdict/level 不是 PASS/L2（实际 %r/%r）"
-            % (report.get("verdict"), report.get("level")), exit_code=5))
+            % (report.get("verdict"), report.get("level")), exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v6", params={"report": repr(report.get('verdict')), "report1": repr(report.get('level'))}))
         return issues
 
     signed_at = _parse_time(payload.get("signed_at", ""))
@@ -448,7 +448,7 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
     now = datetime.now(timezone.utc)
     if signed_at is None or signed_at.tzinfo is None:
         issues.append(Issue("STAMP_TIME_INVALID", "stamp.signed_at 不是带时区的 ISO-8601",
-                            exit_code=7))
+                            exit_code=7, message_key="finding.STAMP_TIME_INVALID.v2"))
         return issues
     # 时钟基准取「系统当前时间」与「report.generated_at」的较大者：夹具与 CI
     # 可能在不同时区/时钟偏移的机器上跑，但 signed_at 不能早于报告生成。
@@ -458,10 +458,10 @@ def _stamp_issues(pdf: Path, report: dict, stamp_path: Path,
         if signed_at < generated - timedelta(minutes=5):
             issues.append(Issue("STAMP_TIME_INVALID",
                                 "signed_at 早于 report.generated_at 超过 5 分钟",
-                                exit_code=7))
+                                exit_code=7, message_key="finding.STAMP_TIME_INVALID.v3"))
     if signed_at > ref_now + timedelta(minutes=10):
         issues.append(Issue("STAMP_TIME_INVALID", "signed_at 在未来超过 10 分钟",
-                            exit_code=7))
+                            exit_code=7, message_key="finding.STAMP_TIME_INVALID.v4"))
     return issues
 
 
@@ -502,7 +502,7 @@ def stale_pdf_issue(pdf: Path, sources) -> Issue | None:
         "PDF 比源文件旧，先重编：%s 比 %s 新——旧 PDF 可以当答案提示，"
         "过期时它的数字不参与比对；请跑 `--build` 或手动重编后再审（P-01S）"
         % (newest_path.name, pdf.name),
-        location=str(newest_path), exit_code=EXIT_INTEGRITY)
+        location=str(newest_path), exit_code=EXIT_INTEGRITY, params={"newest_path": str(newest_path.name), "pdf": str(pdf.name)})
 
 
 # --------------------------------------------------------------------------
@@ -540,7 +540,7 @@ def verify_document(pdf: Path, report: dict,
         total_pages = page_count(pdf) or len(texts)
     except Exception as exc:  # noqa: BLE001 - poppler 输出不可解析按工具错处理
         issues.append(Issue("PDF_TOOL_MISSING", "pdftotext/pdfinfo 解析失败：%s" % exc,
-                            exit_code=EXIT_MISSING))
+                            exit_code=EXIT_MISSING, message_key="finding.PDF_TOOL_MISSING.v2", params={"detail": str(exc)}))
         return issues, warnings
     while len(texts) < total_pages:
         texts.append("")
@@ -552,7 +552,7 @@ def verify_document(pdf: Path, report: dict,
                 "PDF_PAGE_NO_TEXT",
                 "第 %d 页可抽取文本只有 %d 个非空白字符（<20）——整页图必须带 caption，"
                 "空白页必须删除（P-02）" % (idx, chars),
-                location="page %d" % idx, exit_code=5))
+                location="page %d" % idx, exit_code=5, params={"page": str(int(idx)), "chars": str(int(chars))}))
 
     # P-03：栅格化与图片结构
     pwidth, pheight = page_size(pdf)
@@ -572,13 +572,13 @@ def verify_document(pdf: Path, report: dict,
                 "PDF_PAGE_RASTERIZED",
                 "第 %d 页图片覆盖面积 %.0f%%，文本层仅 %d 字符——正文被整页栅格化（P-03）"
                 % (page_no, cov * 100, chars),
-                location="page %d" % page_no, exit_code=5))
+                location="page %d" % page_no, exit_code=5, params={"page_no": str(int(page_no)), "arg1": format(cov * 100, ".0f"), "chars": str(int(chars))}))
         elif cov >= 0.5:
             warnings.append(Issue(
                 "PDF_PAGE_IMAGE_DOMINANT",
                 "第 %d 页图片覆盖面积 %.0f%%（文本 %d 字符）——请人工确认没有把数字烧进图里"
                 % (page_no, cov * 100, chars),
-                location="page %d" % page_no, severity=SEV_YELLOW))
+                location="page %d" % page_no, severity=SEV_YELLOW, params={"page_no": str(int(page_no)), "arg1": format(cov * 100, ".0f"), "chars": str(int(chars))}))
 
     # P-04 / P-05：双向多重集（先按 W1/W3/W4 上下文掩码；数字与数字之间的
     # 空白一律保留，防止 "9 1.4" 被拼成 91.4）。
@@ -598,7 +598,7 @@ def verify_document(pdf: Path, report: dict,
             issues.append(Issue(
                 "PDF_LEDGER_TOKEN_MISSING",
                 "账上数字 key=%s 出现 %d 次，PDF 只有 %d 次——ledger ⊆ PDF 不成立（P-04）"
-                % (key, expected, actual), token=key, exit_code=5))
+                % (key, expected, actual), token=key, exit_code=5, params={"key": str(key), "expected": str(int(expected)), "actual": str(int(actual))}))
     for key, actual in sorted(pdf_counts.items()):
         surplus = actual - allowed.get(key, 0)
         if surplus <= 0:
@@ -609,13 +609,13 @@ def verify_document(pdf: Path, report: dict,
         issues.append(Issue(
             "PDF_UNACCOUNTED_NUMBER",
             "PDF 里数字 key=%s 出现 %d 次，允许集只有 %d 次——账外数字（P-05）"
-            % (key, actual, allowed.get(key, 0)), token=key, exit_code=5))
+            % (key, actual, allowed.get(key, 0)), token=key, exit_code=5, params={"key": str(key), "actual": str(int(actual)), "allowed": str(int(allowed.get(key, 0)))}))
     for key, count in sorted(whitelist.items()):
         if pdf_counts.get(key, 0) == 0:
             warnings.append(Issue(
                 "PDF_WHITELIST_UNUSED",
                 "白名单声明了 key=%s（%d 次）但 PDF 里没出现" % (key, count),
-                token=key, severity=SEV_YELLOW))
+                token=key, severity=SEV_YELLOW, params={"key": str(key), "count": str(int(count))}))
 
     if stats is not None:
         by_category: Counter = Counter()
@@ -646,21 +646,21 @@ def verify_pdf(pdf: Path, report_path: Path, stamp_path: Path | None,
         issues.append(Issue(
             "PDF_TOOL_MISSING",
             "缺 PDF 工具链：%s——不许静默放行；装上 poppler 后重跑"
-            % "、".join(missing), exit_code=EXIT_MISSING))
+            % "、".join(missing), exit_code=EXIT_MISSING, message_key="finding.PDF_TOOL_MISSING.v3", params={"arg0": str('、'.join(missing))}))
         return issues, warnings, EXIT_MISSING
 
     try:
         report = _load_json(report_path)
     except (OSError, json.JSONDecodeError) as exc:
         issues.append(Issue("REPORT_SCHEMA_INVALID", "读不了 report：%s" % exc,
-                            location=str(report_path), exit_code=2))
+                            location=str(report_path), exit_code=2, message_key="finding.REPORT_SCHEMA_INVALID.v2", params={"detail": str(exc)}))
         return issues, warnings, 2
 
     # 写死顺序：P-08 信任链先过；不过就不得用未验签的 report 继续判允许集。
     if stamp_path is not None and Path(stamp_path).is_file():
         if keys_path is None or not Path(keys_path).is_file():
             issues.append(Issue("STAMP_KEY_UNTRUSTED", "有 stamp 但没提供公钥登记文件",
-                                exit_code=5))
+                                exit_code=5, message_key="finding.STAMP_KEY_UNTRUSTED.v3"))
             return issues, warnings, 5
         stamp_red = _stamp_issues(pdf, report, Path(stamp_path), Path(keys_path))
         if stamp_red:

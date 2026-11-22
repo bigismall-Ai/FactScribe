@@ -158,7 +158,7 @@ def assertion_issues(facts, index: dict[str, BU]) -> list[Issue]:
                 out.append(Issue(
                     "ASSERTION_DRIFT",
                     "fact %r 的断言指向 %r，但闭包里没有这个 BU——句子被删/被搬走"
-                    % (f.id, bu_id), location=loc, token=f.id))
+                    % (f.id, bu_id), location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v8", params={"fact": repr(f.id), "bu_id": repr(bu_id)}))
                 continue
             if claimed and bu.sha256.removeprefix("sha256:") == claimed:
                 continue
@@ -170,7 +170,7 @@ def assertion_issues(facts, index: dict[str, BU]) -> list[Issue]:
                     "fact %r 的断言句子指纹不符（%s 声明 %s…，现值 %s…），"
                     "且该 BU 里没有 \\fact{%s} 标记——值被搬到别的句子"
                     % (f.id, bu_id, claimed[:12], bu.sha256[7:19], f.id),
-                    location=loc, token=f.id))
+                    location=loc, token=f.id, message_key="finding.ASSERTION_DRIFT.v9", params={"fact": repr(f.id), "bu_id": str(bu_id), "claimed": str(claimed[:12]), "bu": str(bu.sha256[7:19]), "fact1": str(f.id)}))
     return out
 
 
@@ -202,7 +202,7 @@ def key_trust_issues(cfg) -> list[Issue]:
             "STAMP_KEY_UNTRUSTED",
             "%s 指向项目根内部的公钥文件（%s）——项目内公钥＝自签自验，"
             "不是项目外信任根（§2.4 / P-08）" % (label, raw),
-            location=str(raw), token=label, exit_code=5))
+            location=str(raw), token=label, exit_code=5, message_key="finding.STAMP_KEY_UNTRUSTED.v4", params={"label": str(label), "raw": str(raw)}))
     return out
 
 
@@ -291,13 +291,13 @@ def approval_issues(cfg, facts, report: dict | None = None) -> list[Issue]:
         if not isinstance(target, dict):
             out.append(Issue("APPROVAL_MISSING_ASSERTIONS",
                              "审批目标 %s 读不了或不是对象" % loc,
-                             location=loc, exit_code=1))
+                             location=loc, exit_code=1, message_key="finding.APPROVAL_MISSING_ASSERTIONS.v3", params={"loc": str(loc)}))
             continue
         fid = str(target.get("id") or "").strip()
         if fid and fid not in fact_ids:
             out.append(Issue("APPROVAL_STALE",
                              "审批目标 %s 指向账上没有的 fact %r" % (loc, fid),
-                             location=loc, token=fid))
+                             location=loc, token=fid, message_key="finding.APPROVAL_STALE.v3", params={"loc": str(loc), "fid": repr(fid)}))
             continue
 
         digest = _target_digest(target)
@@ -306,18 +306,18 @@ def approval_issues(cfg, facts, report: dict | None = None) -> list[Issue]:
         if not key:
             out.append(Issue("KEY_UNREGISTERED",
                              "审批目标 %s 的 key_id=%r 不在项目外公钥登记里"
-                             % (loc, key_id), location=loc, token=key_id))
+                             % (loc, key_id), location=loc, token=key_id, message_key="finding.KEY_UNREGISTERED.v3", params={"loc": str(loc), "key_id": repr(key_id)}))
             continue
         if key.get("revoked_at"):
             out.append(Issue("KEY_REVOKED",
                              "审批 key %r 已吊销（%s）" % (key_id, loc),
-                             location=loc, token=key_id))
+                             location=loc, token=key_id, message_key="finding.KEY_REVOKED.v3", params={"key_id": repr(key_id), "loc": str(loc)}))
             continue
         sig = _sig_of(target, Path(str(tpath).replace(".target.json", ".sig")))
         if sig is None:
             out.append(Issue("APPROVAL_MISSING_ASSERTIONS",
                              "审批目标 %s 没有签名（缺 .sig / signature）" % loc,
-                             location=loc, token=fid))
+                             location=loc, token=fid, message_key="finding.APPROVAL_MISSING_ASSERTIONS.v4", params={"loc": str(loc)}))
             continue
         try:
             pub = base64.b64decode(str(key.get("public_key") or "").split(":", 1)[-1])
@@ -326,7 +326,7 @@ def approval_issues(cfg, facts, report: dict | None = None) -> list[Issue]:
         if not ed25519_verify(pub, sig, digest.encode("utf-8")):
             out.append(Issue("APPROVAL_STALE",
                              "审批签名无效：签名消息必须是 target_sha256=%s"
-                             % digest, location=loc, token=fid))
+                             % digest, location=loc, token=fid, message_key="finding.APPROVAL_STALE.v4", params={"digest": str(digest)}))
             continue
 
         if report_approvals:
@@ -334,18 +334,18 @@ def approval_issues(cfg, facts, report: dict | None = None) -> list[Issue]:
             if entry and str(entry.get("target_sha256") or "") != digest:
                 out.append(Issue("APPROVAL_STALE",
                                  "report.approvals[%s].target_sha256 与现值不符——"
-                                 "签过的目标被换过" % fid, location=loc, token=fid))
+                                 "签过的目标被换过" % fid, location=loc, token=fid, message_key="finding.APPROVAL_STALE.v5", params={"fid": str(fid)}))
             entry_digest = str((entry or {}).get("assertion_digest") or "")
             if entry_digest and entry_digest != str(target.get("assertions_digest") or ""):
                 out.append(Issue("APPROVAL_STALE",
                                  "report 里的 assertion_digest 与审批目标不符（%s）" % fid,
-                                 location=loc, token=fid))
+                                 location=loc, token=fid, message_key="finding.APPROVAL_STALE.v6", params={"fid": str(fid)}))
 
         nonce = str(target.get("nonce") or "")
         if nonce and nonce in nonces:
             out.append(Issue("APPROVAL_REPLAY",
                              "审批 nonce %s 已在账上出现过——重放" % nonce,
-                             location=loc, token=fid))
+                             location=loc, token=fid, params={"nonce": str(nonce)}))
     return out
 
 
@@ -381,14 +381,14 @@ def numeric_macro_issues(cfg) -> list[Issue]:
                 "NUMERIC_MACRO_SHAPE_INVALID",
                 "%s 的形状不合法：parameter_kind=%r，body_regex=%r——"
                 "只允许逐字等于内置长度/宽度/计数模板（S-08）"
-                % (label, kind, body), location="factscribe.toml", token=name))
+                % (label, kind, body), location="factscribe.toml", token=name, message_key="finding.NUMERIC_MACRO_SHAPE_INVALID.v2", params={"label": str(label), "kind": repr(kind), "body": repr(body)}))
         if kind == "count" and name and not name.endswith(_COUNT_NAMES):
             out.append(Issue(
                 "NUMERIC_MACRO_SHAPE_INVALID",
                 "%s 声明 parameter_kind=count，但宏名不以 %s 结尾——"
                 "计数宏只允许这一族名字（S-08）"
                 % (label, "/".join(_COUNT_NAMES)),
-                location="factscribe.toml", token=name))
+                location="factscribe.toml", token=name, message_key="finding.NUMERIC_MACRO_SHAPE_INVALID.v3", params={"label": str(label), "arg1": str('/'.join(_COUNT_NAMES))}))
         signers = rule.get("signed_by") or []
         if isinstance(signers, str):
             signers = [signers]
@@ -397,7 +397,7 @@ def numeric_macro_issues(cfg) -> list[Issue]:
                 "NUMERIC_MACRO_DOUBLE_SIGN",
                 "%s 的双签没有两个不同的 key（signed_by=%r）——"
                 "数值宏必须双 key 签署（S-08）" % (label, signers),
-                location="factscribe.toml", token=name))
+                location="factscribe.toml", token=name, params={"label": str(label), "signers": repr(signers)}))
         expires = str(rule.get("expires") or "").strip()
         if expires:
             try:
@@ -408,7 +408,7 @@ def numeric_macro_issues(cfg) -> list[Issue]:
                 out.append(Issue(
                     "NUMERIC_MACRO_EXPIRED",
                     "%s 已于 %s 过期——过期登记不放行（S-08）" % (label, expires),
-                    location="factscribe.toml", token=name))
+                    location="factscribe.toml", token=name, params={"label": str(label), "expires": str(expires)}))
     return out
 
 
@@ -429,14 +429,14 @@ def approval_report_issues(cfg) -> list[Issue]:
     report = _load_json(rpath)
     if not isinstance(report, dict):
         out.append(Issue("REPORT_SCHEMA_INVALID", "audit/report.json 不是合法 JSON",
-                         location="audit/report.json", exit_code=2))
+                         location="audit/report.json", exit_code=2, message_key="finding.REPORT_SCHEMA_INVALID.v3"))
         return out
     body = {k: v for k, v in report.items() if k != "report_sha256"}
     want = "sha256:" + hashlib.sha256(jcs(body)).hexdigest()
     if report.get("report_sha256") and str(report["report_sha256"]) != want:
         out.append(Issue("STAMP_REPORT_MISMATCH",
                          "report_sha256 与报告内容不符——报告被改过",
-                         location="audit/report.json", exit_code=5))
+                         location="audit/report.json", exit_code=5, message_key="finding.STAMP_REPORT_MISMATCH.v7"))
     for rel, digest in (report.get("inputs") or {}).items():
         path = cfg.root / str(rel)
         if not path.is_file():
@@ -445,6 +445,6 @@ def approval_report_issues(cfg) -> list[Issue]:
         if str(digest) != actual:
             out.append(Issue("REPORT_STALE",
                              "report.inputs 里的 %s 已被改动（审后改源）" % rel,
-                             location=str(rel), token=str(rel), exit_code=7))
+                             location=str(rel), token=str(rel), exit_code=7, params={"rel": str(rel)}))
             break
     return out

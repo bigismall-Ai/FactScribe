@@ -51,6 +51,7 @@ from typing import Callable
 
 from .config import Config, ConfigError, _config_warn, load_toml
 from .constants import EXIT_RED, EXIT_YELLOW, SEV_INFO
+from .i18n import finding_key
 
 # --------------------------------------------------------------------------
 # 退出码全闭集（裁定②：全闭集入宪表述；值↔语义配对以 SPEC-V3.0 §2.5
@@ -296,12 +297,16 @@ def _style_verify(cfg: Config, facts, sections, resolve: bool = False):
             code=f.code, message=f.suggestion,
             location="%s:%d" % (f.file, f.line), token=f.metric or "",
             context=f.text, severity=sev,
-            exit_code=EXIT_RED if sev == "red" else EXIT_YELLOW))
+            exit_code=EXIT_RED if sev == "red" else EXIT_YELLOW,
+            message_key=getattr(f, "message_key", "") or finding_key(f.code),
+            params=dict(getattr(f, "params", {}) or {})))
     for f in list(result.info) + list(result.advisories):
         hints.append(Issue(
             code=f.code, message=f.suggestion,
             location="%s:%d" % (f.file, f.line), token=f.metric or "",
-            context=f.text, severity=SEV_INFO, exit_code=0))
+            context=f.text, severity=SEV_INFO, exit_code=0,
+            message_key=getattr(f, "message_key", "") or finding_key(f.code),
+            params=dict(getattr(f, "params", {}) or {})))
 
     summary = dict(result.summary)
     summary["domain"] = STYLE_DOMAIN

@@ -31,6 +31,7 @@ from ..constants import (EXIT_ATTACK_OPEN, EXIT_CONFIG, EXIT_INTEGRITY,
                          EXIT_INTERNAL, EXIT_MISSING, EXIT_OK, EXIT_PROOF,
                          EXIT_RED, EXIT_STALE, EXIT_YELLOW)
 from ..evidence import read_lock
+from ..i18n import FINDING_MESSAGES, finding_key, render as render_message
 
 # 真闸：与 CLI `factscribe audit` 同一条路（不带 --build，绝不编译落盘）。
 GATE_COMMAND = ("audit", "--json")
@@ -171,20 +172,30 @@ def run_gate(disk: Path):
 # * 可缺席：单语项目没有第二个盘，双语对账就是「不适用」，不是错。
 
 
-def _style_finding_dict(item) -> dict:
-    """style 的 Finding → 报告里那条 finding 的形状（字段名与 audit 那套一致）。"""
+def _style_finding_dict(item, lang: str = "zh") -> dict:
+    """style 的 Finding → 报告里那条 finding 的形状（字段名与 audit 那套一致）。
+
+    文案同样走 i18n 目录（message_key ＋ params）；目录里没有这一条时，
+    message 回落到 style 的原话（中文 suggestion）。
+    """
+    code = getattr(item, "code", "") or ""
+    key = getattr(item, "message_key", "") or finding_key(code)
+    params = dict(getattr(item, "params", {}) or {})
+    fallback = getattr(item, "suggestion", "") or getattr(item, "text", "")
     return {
-        "code": getattr(item, "code", "") or "",
+        "code": code,
         "severity": getattr(item, "severity", "yellow") or "yellow",
-        "message": getattr(item, "suggestion", "") or getattr(item, "text", ""),
+        "message": render_message(key, params, lang) or fallback,
         "location": "%s:%s" % (getattr(item, "file", "") or "",
                               getattr(item, "line", 0) or 0),
         "token": getattr(item, "text", "") or "",
         "context": getattr(item, "metric", "") or "",
+        "message_key": key,
+        "params": params,
     }
 
 
-def _style_gate(cfg, sections) -> dict:
+def _style_gate(cfg, sections, lang: str = "zh") -> dict:
     """文风闸读数（只读）。跑的是 CLI factscribe style 同一条分析路。"""
     from ..style import analyze, load_style_rules_info
 
@@ -200,7 +211,7 @@ def _style_gate(cfg, sections) -> dict:
         gate.update({"ok": False, "status": "error", "error": "STYLE_FAILED",
                      "error_detail": str(exc)})
         return gate
-    findings = [_style_finding_dict(f) for f in result.findings]
+    findings = [_style_finding_dict(f, lang) for f in result.findings]
     red = sum(1 for f in findings if f["severity"] == "red")
     yellow = sum(1 for f in findings if f["severity"] == "yellow")
     gate.update({
@@ -246,6 +257,37 @@ def _mirror_gate(disk: Path, sibling: Path | None) -> dict:
     return gate
 
 
+def _i18n_subset(*finding_lists) -> dict:
+    """报告里出现过的那些发现，其 i18n 模板子集（前端按它翻，不抄第二份）。"""
+    keys = set()
+    for items in finding_lists:
+        for item in items or []:
+            key = item.get("message_key") or ""
+            if key and key in FINDING_MESSAGES:
+                keys.add(key)
+    return {key: dict(FINDING_MESSAGES[key]) for key in sorted(keys)}
+
+
+def style_gate(disk: Path, lang: str = "zh") -> dict:
+    """文风闸读数（只读，对外的一份）。
+
+    与报告里的 gates.style 同一条路：跑 CLI factscribe style 的同一套分析，
+    只读，不改盘。
+    """
+    disk = Path(disk)
+    cfg = load_config(disk)
+    sections = load_sections(cfg)
+    return _style_gate(cfg, sections, lang)
+
+
+def mirror_gate(disk: Path, sibling: Path | None = None, lang: str = "zh") -> dict:
+    """双语双盘对账读数（只读，对外的一份）。
+
+    sibling＝同一项目的另一个盘；没有就出「不适用」。
+    """
+    return _mirror_gate(Path(disk), Path(sibling) if sibling else None)
+
+
 def _safe_digest(cfg) -> str:
     """账本指纹：读不动就给空串，不让整页崩（指纹只是徽标，不是判定）。"""
     try:
@@ -254,16 +296,26 @@ def _safe_digest(cfg) -> str:
         return ""
 
 
-def _finding_dict(issue) -> dict:
-    """发现条目：code / severity / 信息 / 定位。"""
+def _finding_dict(issue, lang: str = "zh") -> dict:
+    """发现条目：code / severity / 信息 / 定位 ＋ i18n 读数。
+
+    message 按 lang 渲染（中文界面＝真闸原话，一字不改；EN 界面＝英文
+    模板）。message_key 与 params 一并给出——前端或宿主想自己翻也有
+    原料。目录里没有这一条时，message 回落到真闸的原话。
+    """
     data = issue.as_dict()
+    key = getattr(issue, "message_key", "") or finding_key(data.get("code", ""))
+    params = dict(getattr(issue, "params", {}) or {})
+    message = render_message(key, params, lang) or data.get("message", "")
     return {
         "code": data.get("code", ""),
         "severity": data.get("severity", "red"),
-        "message": data.get("message", ""),
+        "message": message,
         "location": data.get("location", ""),
         "token": data.get("token", ""),
         "context": data.get("context", ""),
+        "message_key": key,
+        "params": params,
     }
 
 
@@ -314,11 +366,15 @@ def _chain_steps(summary: dict, lock: dict | None, facts_count: int) -> list:
     return steps
 
 
-def report_payload(disk: Path, sibling_disk: Path | None = None) -> dict:
+def report_payload(disk: Path, sibling_disk: Path | None = None,
+                   lang: str = "zh") -> dict:
     """检查报告：体检摘要 ＋ 发现列表 ＋ 四步链 ＋ 附加只读闸。
 
     sibling_disk＝同一项目的另一个盘（双语对账用）；没有就传 None，
     双语对账读数就是「不适用」。
+
+    lang＝发现文案的渲染语言（zh / en）：中文界面出真闸原话，EN 界面出
+    英文模板；报告里同时带上 i18n 目录子集，前端想自己翻也有原料。
 
     读不到就结构化报错。
     """
@@ -334,7 +390,8 @@ def report_payload(disk: Path, sibling_disk: Path | None = None) -> dict:
         return {**base, "ok": False, "code": "READ_FAILED",
                 "error": "读项目失败：%s" % exc, "findings": [], "chain": []}
 
-    findings = [_finding_dict(i) for i in red] + [_finding_dict(w) for w in yellow]
+    findings = ([_finding_dict(i, lang) for i in red]
+                 + [_finding_dict(w, lang) for w in yellow])
     findings.sort(key=lambda f: (SEV_ORDER.get(f["severity"], 9), f["code"]))
     digest = _safe_digest(cfg)
     lock = None
@@ -363,13 +420,14 @@ def report_payload(disk: Path, sibling_disk: Path | None = None) -> dict:
         "coverage": dict(summary.get("coverage") or {}),
     }
     gates = {
-        "style": _style_gate(cfg, sections),
+        "style": _style_gate(cfg, sections, lang),
         "mirror": _mirror_gate(disk, sibling_disk),
     }
     return {
         **base,
         "health": health,
         "findings": findings,
+        "i18n": _i18n_subset(findings, gates["style"].get("findings") or []),
         "chain": _chain_steps(summary, lock, len(facts)),
         "gates": gates,
         "evidence": {"frozen": bool(lock),

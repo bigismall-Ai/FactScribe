@@ -1368,7 +1368,9 @@ function resetReportState() {
 
 /* 读检查报告与机器视图：两个 GET 并发，谁失败都不拖垮另一个。 */
 async function loadReport() {
-  const reportPath = diskApiPath('report');
+  // 下面要给 reportPath 追加 lang 参数 → 必须 let（const += 会抛
+  // TypeError: Assignment to constant variable，整条 openProject 链当场断掉）。
+  let reportPath = diskApiPath('report');
   const machinePath = diskApiPath('machine');
   // lang 跟着界面语言走：后端直接出这一语言的文案（目录里没有的回落原文）。
   if (reportPath) {

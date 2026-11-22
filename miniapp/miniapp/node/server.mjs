@@ -226,12 +226,18 @@ function setupPageHtml(presetRoot, warnings) {
          background: #f2f5f9; color: #1d2b3a; display: flex; min-height: 100vh; align-items: center; }
   main { margin: 0 auto; max-width: 560px; padding: 32px 28px; background: #fff; border-radius: 12px;
          box-shadow: 0 6px 24px rgba(29, 43, 58, .08); }
-  h1 { font-size: 20px; margin: 0 0 12px; }
+  h1 { font-size: 20px; margin: 0; }
   p { line-height: 1.7; font-size: 14px; }
+  /* 中/EN 常显：首启页也有界面语言开关（同一枚，不藏）。 */
+  .top { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
   form { display: flex; gap: 8px; margin: 18px 0 6px; }
   input { flex: 1; font-size: 14px; padding: 9px 12px; border: 1px solid #c6d0dc; border-radius: 8px; }
   button { font-size: 14px; padding: 9px 20px; border: 0; border-radius: 8px; background: #2b4a6f; color: #fff; cursor: pointer; }
   button:disabled { opacity: .6; cursor: default; }
+  .lang-seg { display: flex; gap: 2px; background: #ececeb; border-radius: 8px; padding: 3px; margin-left: auto; }
+  .lang-seg button { min-width: 40px; font-family: inherit; font-size: 12.5px; padding: 4px 10px; border: none;
+                     border-radius: 6px; background: transparent; color: #6b7a8c; cursor: pointer; }
+  .lang-seg button.on { background: #fff; color: #1d2b3a; font-weight: 600; box-shadow: 0 1px 2px rgba(29, 43, 58, .12); }
   .warn { color: #a5482a; }
   .fine { color: #6b7a8c; font-size: 12px; }
   #msg { min-height: 20px; }
@@ -239,13 +245,22 @@ function setupPageHtml(presetRoot, warnings) {
     body { background: #131a22; color: #dbe4ee; }
     main { background: #1d2733; box-shadow: none; }
     input { background: #131a22; color: #dbe4ee; border-color: #3a4a5c; }
+    .lang-seg { background: #27323f; }
+    .lang-seg button { color: #9fb0c3; }
+    .lang-seg button.on { background: #131a22; color: #dbe4ee; }
   }
 </style>
 </head>
 <body>
 <main>
-  <h1>FactScribe 论文工作台</h1>
-  <p>第一次使用，先告诉我论文文件夹在哪里：这个目录下面（三层以内）放着一个个含
+  <div class="top">
+    <h1 id="h1">FactScribe 论文工作台</h1>
+    <div class="lang-seg" id="langSeg" role="group" aria-label="language">
+      <button type="button" data-lang="zh" class="on">中</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+  </div>
+  <p id="desc">第一次使用，先告诉我论文文件夹在哪里：这个目录下面（三层以内）放着一个个含
      <code>factscribe.toml</code> 的论文项目。我只读它来列出项目和章节；之后在页面里改正文时，
      才会写入该目录下 sections/ 的 .tex 文件（原子写、留 .bak、改动有指纹闸保护）。</p>
   ${warnHtml}
@@ -255,32 +270,86 @@ function setupPageHtml(presetRoot, warnings) {
     <button type="submit" id="go">应用</button>
   </form>
   <p id="msg"></p>
-  <p class="fine">支持 ~ 开头的家目录写法。配置只存在本插件的私有数据目录里，随时回这里改。</p>
+  <p class="fine" id="fine">支持 ~ 开头的家目录写法。配置只存在本插件的私有数据目录里，随时回这里改。</p>
 </main>
 <script>
+  var DICT = {
+    zh: {
+      title: 'FactScribe · 首次设置',
+      h1: 'FactScribe 论文工作台',
+      desc: '第一次使用，先告诉我论文文件夹在哪里：这个目录下面（三层以内）放着一个个含 <code>factscribe.toml</code> 的论文项目。我只读它来列出项目和章节；之后在页面里改正文时，才会写入该目录下 sections/ 的 .tex 文件（原子写、留 .bak、改动有指纹闸保护）。',
+      go: '应用',
+      ph: '/Users/you/papers',
+      fine: '支持 ~ 开头的家目录写法。配置只存在本插件的私有数据目录里，随时回这里改。',
+      empty: '先填一个文件夹路径。',
+      applying: '正在应用……',
+      saved: '已保存，正在进入工作台……',
+      savedWarn: '已保存，但引擎没起来：',
+      fail: '保存失败，请检查路径。',
+      neterr: '网络出错，请重试。'
+    },
+    en: {
+      title: 'FactScribe · First-time setup',
+      h1: 'FactScribe Paper Workbench',
+      desc: 'First run: tell me where your papers live. That folder holds one paper project per subfolder (within three levels) containing a <code>factscribe.toml</code>. I only read it to list projects and sections; only when you edit text in the page do I write .tex files under that project sections/ directory (atomic write, a .bak kept, every change guarded by a fingerprint check).',
+      go: 'Apply',
+      ph: '/Users/you/papers',
+      fine: 'A leading ~ means your home folder. The setting lives only in this plugin private data directory; come back here any time to change it.',
+      empty: 'Type a folder path first.',
+      applying: 'Applying…',
+      saved: 'Saved. Opening the workbench…',
+      savedWarn: 'Saved, but the engine did not start: ',
+      fail: 'Could not save. Please check the path.',
+      neterr: 'Network error. Please retry.'
+    }
+  };
+  var lang = 'zh';
+  function applyLang(next) {
+    lang = (next === 'en') ? 'en' : 'zh';
+    var d = DICT[lang];
+    document.documentElement.lang = (lang === 'en') ? 'en' : 'zh-CN';
+    document.title = d.title;
+    document.getElementById('h1').textContent = d.h1;
+    document.getElementById('desc').innerHTML = d.desc;
+    document.getElementById('go').textContent = d.go;
+    document.getElementById('fine').textContent = d.fine;
+    document.getElementById('root').setAttribute('placeholder', d.ph);
+    var buttons = document.querySelectorAll('#langSeg button');
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].classList.toggle('on', buttons[i].getAttribute('data-lang') === lang);
+    }
+  }
+  document.getElementById('langSeg').addEventListener('click', function (event) {
+    var target = event.target;
+    var button = (target && target.closest) ? target.closest('button[data-lang]') : null;
+    if (!button) return;
+    applyLang(button.getAttribute('data-lang'));
+  });
+  applyLang(lang);
   var form = document.getElementById('f');
   var msg = document.getElementById('msg');
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     var button = document.getElementById('go');
+    var d = DICT[lang];
     var root = document.getElementById('root').value.trim();
-    if (!root) { msg.textContent = '先填一个文件夹路径。'; return; }
+    if (!root) { msg.textContent = d.empty; return; }
     button.disabled = true;
-    msg.textContent = '正在应用……';
+    msg.textContent = d.applying;
     fetch('${SETUP_PATHS.api}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: root })
     }).then(function (res) { return res.json(); }).then(function (data) {
       if (data && data.ok) {
-        msg.textContent = data.warning ? ('已保存，但引擎没起来：' + data.warning) : '已保存，正在进入工作台……';
+        msg.textContent = data.warning ? (d.savedWarn + data.warning) : d.saved;
         setTimeout(function () { location.reload(); }, data.warning ? 2500 : 400);
       } else {
-        msg.textContent = (data && data.error) || '保存失败，请检查路径。';
+        msg.textContent = (data && data.error) || d.fail;
         button.disabled = false;
       }
     }).catch(function () {
-      msg.textContent = '网络出错，请重试。';
+      msg.textContent = d.neterr;
       button.disabled = false;
     });
   });

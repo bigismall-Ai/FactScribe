@@ -968,7 +968,8 @@ body.nav-collapsed .shell{padding-right:0}
 /* 收起后：窗缘只剩一枚展开钮（条目 33 起改为纯图标，样式见文件末尾条目 33 段） */
 
 /* 条目 33：面板头部行（#npHead）与侧栏常用功能行（.np-tools）都已搬家——
-   中/EN 与四枚功能钮搬去左栏头部（.lh-tools），右栏只留工具条＋面板。
+   中/EN 搬去左栏头部（.lh-lang，常显）、四枚功能钮搬去 .lh-tools（只 workbench 视图渲染），
+   右栏只留工具条＋面板。
    .np-tools / .np-tool 的旧样式随元素一起删除。 */
 
 /* ---- 切换按钮组（四枚纵排） ---- */
@@ -1259,10 +1260,13 @@ body{padding-top:0}
 .lh-brand{font-family:inherit;border:none;background:none;padding:0;margin-right:2px;
  cursor:pointer;font-size:14px;font-weight:700;letter-spacing:.2px;color:#37352f}
 .lh-brand:hover{color:#2f5279}
-.lh-tools{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+/* 中/EN 常显：它是界面语言开关，不属于任何单一视图，因此独立于 #lhTools
+   （#lhTools 只装工作台专属的按钮，列表视图会整组藏掉）。 */
+.lh-lang{margin-left:auto;display:flex;align-items:center;flex:0 0 auto}
+.lh-tools{display:flex;align-items:center;gap:6px;margin-left:0;flex:0 0 auto}
 .lh-tools[hidden]{display:none}
-.lh-tools .lang-seg{margin-left:0;flex:0 0 auto;height:26px}
-.lh-tools .lang-seg button{min-width:34px;padding:0 8px;line-height:22px;height:22px;font-size:12px}
+.lh-lang .lang-seg{margin-left:0;flex:0 0 auto;height:26px}
+.lh-lang .lang-seg button{min-width:34px;padding:0 8px;line-height:22px;height:22px;font-size:12px}
 /* 条目 41：中/EN 切换常显——它同时是界面语言开关，单语言项目不再整组隐藏 */
 .lh-tool{display:inline-flex;align-items:center;gap:5px;font-family:inherit;font-size:12px;line-height:1.2;
  color:#5f5e5b;background:#fff;border:1px solid #e3e2df;border-radius:7px;padding:5px 9px;cursor:pointer;

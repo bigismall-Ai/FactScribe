@@ -6,8 +6,9 @@
 1. **顶栏整条拆除**——页面里没有 ``.topbar`` 元素，也没有 ``<header>``；
    ``body`` 不留 52px 顶部留白。
 2. **左栏＝顶部窄条 ＋ 其下正文**——``.left-head`` 左侧是可点的 FactScribe 字标
-   与「项目管理」钮，右侧是**仅 workbench 视图渲染**的常用功能组
-   （中/EN ＋ 渲染PDF/全检一次/导出投稿包/打开目录）；新建钮只在项目列表页。
+   与「项目管理」钮；右侧先是**常显的中/EN 界面语言开关**（``.lh-lang``，任何视图都在），
+   后面才是**仅 workbench 视图渲染**的常用功能组
+   （渲染PDF/全检一次/导出投稿包/打开目录）；新建钮只在项目列表页。
 3. **右栏＝工具条 ＋ 面板**——工具条最左一枚**纯图标**收起钮，右侧三枚互斥切换钮
    （目录／智能助手／更多）；「更多」面板＝实验报告 / 知识库 / 版式 三段合并。
 """
@@ -94,7 +95,8 @@ class LeftColumnTests(unittest.TestCase):
 
 
 class LeftHeadToolsTests(unittest.TestCase):
-    """条目 33：常用功能组搬进左栏头部，且只在 workbench 视图渲染。"""
+    """条目 33：常用功能组搬进左栏头部，且只在 workbench 视图渲染；
+    中/EN 界面语言开关独立成组，任何视图都在。"""
 
     def test_tools_group_lives_in_left_head(self):
         self.assertIn('class="lh-tools" id="lhTools"', LEFT_HEAD)
@@ -116,17 +118,38 @@ class LeftHeadToolsTests(unittest.TestCase):
         self.assertIn("$('#actOpenDir').addEventListener('click', runOpenDirAction);", JS)
 
     def test_tools_group_hidden_outside_workbench(self):
-        """项目管理列表视图时，右侧这组不渲染。"""
+        """项目管理列表视图时，工作台专属那组不渲染（切换钮不在其中，见上两条）。"""
         self.assertIn("tools.hidden = (view !== 'workbench');", JS)
         self.assertIn(".lh-tools[hidden]{display:none}", CSS)
 
     def test_lang_toggle_is_always_visible(self):
-        """条目 41：中/EN 切换常显——它同时是界面语言开关，
-        单语言项目不许整组隐藏；整组仍只随 #lhTools 在 workbench 视图渲染。"""
+        """中/EN 切换常显——它同时是界面语言开关。
+
+        做法：把切换钮从 #lhTools 里提出来，独立成 #lhLang。
+        #lhTools 装的是工作台专属按钮（列表视图要整组藏掉），
+        切换钮若还在里面，藏组＝藏切换钮，界面语言就再也切不了。
+        """
         self.assertNotIn("seg.hidden", JS)
         self.assertNotIn(".lang-seg[hidden]", CSS)
         self.assertNotIn('id="langSeg" role="group" aria-label="panel language" hidden', HTML)
         self.assertIn("tools.hidden = (view !== 'workbench');", JS)
+
+    def test_lang_toggle_lives_outside_the_hideable_tools_group(self):
+        """结构钉：#langSeg 在 #lhTools 之前，且不属于它。"""
+        self.assertIn('class="lh-lang" id="lhLang"', LEFT_HEAD)
+        self.assertLess(LEFT_HEAD.index('id="langSeg"'), LEFT_HEAD.index('id="lhTools"'))
+        tools_group = LEFT_HEAD[LEFT_HEAD.index('id="lhTools"'):]
+        self.assertNotIn('id="langSeg"', tools_group)
+        self.assertNotIn('id="lhLang"', tools_group)
+
+    def test_lang_toggle_is_never_hidden_by_script(self):
+        """脚本不许藏切换钮（或它的容器）：界面语言开关任何时候都在。"""
+        self.assertNotIn("langSeg').hidden", JS)
+        self.assertNotIn("lhLang').hidden", JS)
+        for line in JS.splitlines():
+            if "langSeg" in line or "lhLang" in line:
+                self.assertNotIn(".hidden", line)
+        self.assertIn(".lh-lang{", CSS)
 
 
 class RightColumnTests(unittest.TestCase):

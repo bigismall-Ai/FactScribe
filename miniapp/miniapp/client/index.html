@@ -20,12 +20,15 @@
         <button type="button" class="tb-brand lh-brand" id="goBrand" title="FactScribe">FactScribe</button>
         <button type="button" class="tb-btn" id="goProjects" data-i18n="nav.projects">项目管理</button>
       </div>
-      <!-- 条目 33：常用功能组从侧栏搬到左栏头部；仅 workbench 视图渲染（列表视图不渲染） -->
-      <div class="lh-tools" id="lhTools" hidden>
+      <!-- 中/EN 常显：界面语言开关（workbench 里顺带切盘），任何视图都在，不随工具组一起藏。 -->
+      <div class="lh-lang" id="lhLang">
         <div class="lang-seg" id="langSeg" role="group" aria-label="panel language">
           <button type="button" data-lang="zh" class="on">中</button>
           <button type="button" data-lang="en">EN</button>
         </div>
+      </div>
+      <!-- 条目 33：常用功能组从侧栏搬到左栏头部；仅 workbench 视图渲染（列表视图不渲染） -->
+      <div class="lh-tools" id="lhTools" hidden>
         <button type="button" class="lh-tool" id="actPdf">
           <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 2.5h5l3 3v8H4z"/><path d="M9 2.5v3h3"/></svg>
           <span data-i18n="np.pdf">渲染PDF</span>

@@ -308,7 +308,7 @@ python3 -m factscribe workbench --root /path/to/papers
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1987 例，全离线
+python3 -m unittest discover -s tests     # 1998 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

@@ -2787,17 +2787,17 @@ function setView(view) {
   // 段落悬浮工具条只在正文里用。
   const bar = $('#ptools');
   if (bar) bar.classList.remove('on');
-  // 条目 33：左栏头部的常用功能组（中/EN ＋ PDF/全检/导出/开目录）
+  // 条目 33：左栏头部的常用功能组（PDF/全检/导出/开目录/待确认）
   // 只在 workbench 视图渲染；项目列表/新建视图整组不渲染。
+  // 中/EN 不在这组里——它是界面语言开关，常显（见 #lhLang）。
   const tools = $('#lhTools');
   if (tools) tools.hidden = (view !== 'workbench');
   scheduleHeaderWidthSync();
   applyLangToggle();
 }
 
-/* 条目 41（返修十五）：中/EN 切换常显——它同时是界面语言开关，
-   单语言项目藏掉它之后界面语言就没法切了，所以不再整组隐藏。
-   #lhTools 本身只在 workbench 视图渲染，这个语义保留。 */
+/* 中/EN 切换常显——它同时是界面语言开关（workbench 里顺带切盘）。
+   它独立在 #lhLang 里，不属于 #lhTools，所以项目列表视图里也照样能切界面语言。 */
 function applyLangToggle() {
   const seg = $('#langSeg');
   if (!seg) return;

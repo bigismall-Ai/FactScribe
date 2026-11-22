@@ -155,6 +155,97 @@ def run_gate(disk: Path):
     return cfg, facts, sections, red, yellow, hints, summary
 
 
+# --------------------------------------------------------------------------
+# 附加只读闸（体检报告的第二层读数）
+# --------------------------------------------------------------------------
+#
+# 「只看 miniapp」的人看不到文风闸与双语双盘对账的读数（2026-11-22 体检
+# 报告 P0-1）。这两道闸在 CLI 里本来就是只读命令（factscribe style /
+# factscribe mirror-check），这里把它们当只读读数并进检查报告：
+#
+# * 只读：style 只读正文与规则文件；mirror-check 只读两个盘的事实账与
+#   参考文献。全程没有写路径，不改盘、不改稿。
+# * 不改判定面：主体检（health）与发现清单（findings）仍然只认 audit ＋
+#   清单门那两道闸。文风黄牌不混进主黄牌计数——否则一个干净的稿子会
+#   凭空多出几条黄牌，吓人（体检报告 P0-1 的副作用须知）。
+# * 可缺席：单语项目没有第二个盘，双语对账就是「不适用」，不是错。
+
+
+def _style_finding_dict(item) -> dict:
+    """style 的 Finding → 报告里那条 finding 的形状（字段名与 audit 那套一致）。"""
+    return {
+        "code": getattr(item, "code", "") or "",
+        "severity": getattr(item, "severity", "yellow") or "yellow",
+        "message": getattr(item, "suggestion", "") or getattr(item, "text", ""),
+        "location": "%s:%s" % (getattr(item, "file", "") or "",
+                              getattr(item, "line", 0) or 0),
+        "token": getattr(item, "text", "") or "",
+        "context": getattr(item, "metric", "") or "",
+    }
+
+
+def _style_gate(cfg, sections) -> dict:
+    """文风闸读数（只读）。跑的是 CLI factscribe style 同一条分析路。"""
+    from ..style import analyze, load_style_rules_info
+
+    gate = {"ok": True, "gate": "style", "status": "ok",
+            "red": 0, "yellow": 0, "count": 0, "findings": [],
+            "summary": {}, "rules": "", "note": ""}
+    try:
+        info = load_style_rules_info(cfg.root, None)
+        result = analyze(cfg, sections, info.rules, rules_path=info.path,
+                         stage="draft", rule_report=info.report)
+    except Exception as exc:  # noqa: BLE001 - 附加读数读不动不该掀翻整页
+        # error 给机器码，界面文案由前端翻译（error_detail 留给 API 消费者）。
+        gate.update({"ok": False, "status": "error", "error": "STYLE_FAILED",
+                     "error_detail": str(exc)})
+        return gate
+    findings = [_style_finding_dict(f) for f in result.findings]
+    red = sum(1 for f in findings if f["severity"] == "red")
+    yellow = sum(1 for f in findings if f["severity"] == "yellow")
+    gate.update({
+        "status": "red" if red else ("yellow" if yellow else "ok"),
+        "red": red, "yellow": yellow, "count": len(findings),
+        "findings": findings,
+        "summary": dict(result.summary or {}),
+        "rules": result.rules_path or info.path,
+        "metrics": dict(result.metrics or {}),
+    })
+    return gate
+
+
+def _mirror_gate(disk: Path, sibling: Path | None) -> dict:
+    """双语双盘对账读数（只读）。跑的是 CLI factscribe mirror-check 同一条路。"""
+    from .. import mirror
+
+    gate = {"ok": True, "gate": "mirror-check", "status": "na",
+            "count": 0, "drift": [], "summary": {},
+            "disk_a": str(disk), "disk_b": "", "note": ""}
+    if sibling is None:
+        # note 给机器码：界面上的解释由前端 i18n 出，后端不塞中文。
+        gate["note"] = "MIRROR_NO_SIBLING"
+        return gate
+    gate["disk_b"] = str(sibling)
+    try:
+        result = mirror.check(Path(disk), Path(sibling))
+    except ConfigError as exc:
+        gate.update({"ok": False, "status": "error",
+                     "error": str(getattr(exc, "code", "") or "MIRROR_CONFIG_INVALID"),
+                     "error_detail": str(exc)})
+        return gate
+    except Exception as exc:  # noqa: BLE001
+        gate.update({"ok": False, "status": "error", "error": "MIRROR_FAILED",
+                     "error_detail": str(exc)})
+        return gate
+    gate.update({
+        "status": "drift" if result.drifts else "ok",
+        "count": result.drift_count,
+        "drift": mirror.drift_dicts(result),
+        "summary": result.summary(),
+    })
+    return gate
+
+
 def _safe_digest(cfg) -> str:
     """账本指纹：读不动就给空串，不让整页崩（指纹只是徽标，不是判定）。"""
     try:
@@ -186,20 +277,35 @@ def _chain_steps(summary: dict, lock: dict | None, facts_count: int) -> list:
     pdf = summary.get("pdf") or {}
     pdf_ok = bool(pdf.get("checked")) and not pdf.get("stale")
 
+    # label/detail 是旧字段（MCP 工具的对外形状不变，仍给得出中文标签）；
+    # label_key/detail_key 是结构化 i18n key——界面文案一律由前端翻译，
+    # 免得 EN 界面下半中半英（P0-4）。
     steps = [
-        {"key": "declare", "label": "声明", "detail": "facts/*.toml 里的事实条数",
+        {"key": "declare", "label": "声明",
+         "label_key": "chain.declare",
+         "detail": "facts/*.toml 里的事实条数",
+         "detail_key": "chain.declare.detail",
          "value": facts_count, "total": facts_count,
          "ok": facts_count > 0,
          "state": "ok" if facts_count else "missing"},
-        {"key": "bind", "label": "绑定", "detail": "正文里 \\fact{} 绑定的数字",
+        {"key": "bind", "label": "绑定",
+         "label_key": "chain.bind",
+         "detail": "正文里 \\fact{} 绑定的数字",
+         "detail_key": "chain.bind.detail",
          "value": bound, "total": total,
          "ok": total == 0 or bound >= total,
          "state": "ok" if (total == 0 or bound >= total) else "partial"},
-        {"key": "reconcile", "label": "回账", "detail": "正文数字回对到事实账",
+        {"key": "reconcile", "label": "回账",
+         "label_key": "chain.reconcile",
+         "detail": "正文数字回对到事实账",
+         "detail_key": "chain.reconcile.detail",
          "value": matched, "total": total,
          "ok": unmatched == 0,
          "state": "ok" if unmatched == 0 else "partial"},
-        {"key": "certify", "label": "出证", "detail": "证据冻结与 PDF 闸",
+        {"key": "certify", "label": "出证",
+         "label_key": "chain.certify",
+         "detail": "证据冻结与 PDF 闸",
+         "detail_key": "chain.certify.detail",
          "value": entries, "total": entries,
          "ok": bool(lock) and pdf_ok,
          "state": ("ok" if (lock and pdf_ok) else
@@ -208,8 +314,14 @@ def _chain_steps(summary: dict, lock: dict | None, facts_count: int) -> list:
     return steps
 
 
-def report_payload(disk: Path) -> dict:
-    """检查报告：体检摘要 ＋ 发现列表 ＋ 四步链。读不到就结构化报错。"""
+def report_payload(disk: Path, sibling_disk: Path | None = None) -> dict:
+    """检查报告：体检摘要 ＋ 发现列表 ＋ 四步链 ＋ 附加只读闸。
+
+    sibling_disk＝同一项目的另一个盘（双语对账用）；没有就传 None，
+    双语对账读数就是「不适用」。
+
+    读不到就结构化报错。
+    """
     disk = Path(disk)
     base = {"ok": True, "disk": str(disk), "generated_at": time.strftime(
         "%Y-%m-%dT%H:%M:%S%z")}
@@ -250,11 +362,16 @@ def report_payload(disk: Path) -> dict:
         "pdf": dict(summary.get("pdf") or {}),
         "coverage": dict(summary.get("coverage") or {}),
     }
+    gates = {
+        "style": _style_gate(cfg, sections),
+        "mirror": _mirror_gate(disk, sibling_disk),
+    }
     return {
         **base,
         "health": health,
         "findings": findings,
         "chain": _chain_steps(summary, lock, len(facts)),
+        "gates": gates,
         "evidence": {"frozen": bool(lock),
                      "entries": int((lock or {}).get("entries") or 0),
                      "sha256": (lock or {}).get("sha256", ""),

@@ -272,6 +272,35 @@ def _disk_last_opened(path: Path) -> str:
     return str(_workbench_table(path).get("last_opened") or "").strip()
 
 
+def _disk_last_disk(path: Path) -> str:
+    """这个盘自己记的「当前盘」标记：`[workbench].last_disk`。
+
+    打开一个盘时由 `write.touch_opened` 写进去，值＝这个盘自己的盘号
+    （目录名）。标记是**自指的**：某个盘的标记指向自己，就说明这个盘是
+    这个项目最近打开的那一个。
+    """
+    return str(_workbench_table(path).get("last_disk") or "").strip()
+
+
+def _opened_sort_key(text: str) -> float:
+    """`last_opened` 的排序键（ISO 时间戳；认不出来的排最后）。"""
+    raw = str(text or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return datetime.fromisoformat(raw).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _config_mtime(disk_path: str) -> float:
+    """盘配置文件的修改时间——`last_opened` 只到秒，同秒内靠它定先后。"""
+    try:
+        return (Path(disk_path) / CONFIG_NAME).stat().st_mtime
+    except (OSError, TypeError, ValueError):
+        return 0.0
+
+
 def aggregate(disks: list[Path]) -> list[dict]:
     """把盘按根名聚合成项目。
 
@@ -304,17 +333,32 @@ def aggregate(disks: list[Path]) -> list[dict]:
                 "facts": facts,
                 "progress": _disk_progress(member),
                 "last_opened": _disk_last_opened(member),
+                "last_disk": _disk_last_disk(member),
                 "project_dir": str(bench.get("project_dir") or member.name),
                 "reports_dir": str(bench.get("reports_dir")
                                    or (bench.get("project_dir") or member.name)
                                    + "/reports"),
             })
         primary = next((d for d in disks_out if d["lang"] == "en"), disks_out[0])
+        # 当前盘（P0-5）：项目里**最近打开过**的那一个盘——判据是盘自己的
+        # [workbench].last_disk 指向自己，且 last_opened 最新。
+        # 没有标记（从没在这个工作台打开过）就回落英文盘 → 第一个盘。
+        marked = [d for d in disks_out
+                  if d.get("last_disk") == d["id"] and d.get("last_opened")]
+        current = primary
+        if marked:
+            # 次序：先看打开时间（到秒），同一秒里再看配置文件谁写得晚
+            # （原子写会更新 mtime，精度到纳秒）——同秒内切盘也记得住。
+            current = max(marked, key=lambda d: (
+                _opened_sort_key(d.get("last_opened")),
+                _config_mtime(d.get("path")),
+                str(d.get("id") or "")))
         projects.append({
             "id": project_id,
             "name": _config_title(Path(primary["path"])) or primary["name"],
             "root": parent,
             "disks": disks_out,
+            "last_disk": current["id"],
             # 单语项目（只有一个盘）→ 导航面板上的中/EN 切换整组隐藏。
             "multi_lang": len(disks_out) > 1,
             "langs": sorted({d["lang"] for d in disks_out if d.get("lang")}),

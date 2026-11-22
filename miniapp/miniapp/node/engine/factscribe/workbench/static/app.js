@@ -48,7 +48,8 @@ const I18N = {
     'rp.ry': '红 {r} · 黄 {y}', 'rp.n': '{n} 条',
     'rp.findings': '发现', 'rp.chain': '四步链',
     'rp.findingsT': '发现明细', 'rp.close': '关闭', 'rp.details': '查看明细 ▸',
-    'rp.empty': '没有发现：这盘干净。',
+    'rp.findingsEmpty': '没有发现：这盘干净。',
+    'rp.chainEmpty': '没有四步链读数。',
     'rp.idle': '先打开一篇论文。',
     'rp.loading': '读取中…',
     'rp.loadErr': '读检查报告失败：{e}',
@@ -60,6 +61,21 @@ const I18N = {
     'rp.roChanged': '只读：有改动 {files}',
     'rp.stepOk': '就绪', 'rp.stepPartial': '未齐', 'rp.stepMissing': '缺',
     'rp.chainVal': '{v} / {t}',
+    /* 四步链：标签与说明由前端翻译（后端给的是结构化 key） */
+    'chain.declare': '声明', 'chain.declare.detail': 'facts/*.toml 里的事实条数',
+    'chain.bind': '绑定', 'chain.bind.detail': '正文里 \\fact{} 绑定的数字',
+    'chain.reconcile': '回账', 'chain.reconcile.detail': '正文数字回对到事实账',
+    'chain.certify': '出证', 'chain.certify.detail': '证据冻结与 PDF 闸',
+    /* 附加只读闸（文风闸 / 双语对账）：P0-1 */
+    'rp.style': '文风闸', 'rp.styleT': '文风闸读数（只读）：公式化写法与证据钢印。',
+    'rp.styleOk': '没有文风命中', 'rp.styleYellow': '黄 {n} 条', 'rp.styleRed': '红 {n} 条',
+    'rp.styleErr': '文风闸读不到：{e}', 'rp.styleNone': '没有文风读数。',
+    'rp.mirror': '双语对账', 'rp.mirrorT': '两个盘的事实账与文献逐条比对（只读）。',
+    'rp.mirrorOk': '两盘一致', 'rp.mirrorDrift': '{n} 处漂移',
+    'rp.mirrorNa': '本项目只有一个盘，没有第二个盘可比。',
+    'rp.mirrorErr': '对账读不到：{e}', 'rp.mirrorNone': '没有对账读数。',
+    'rp.mirrorDriftOne': '漂移', 'rp.mirrorA': '甲', 'rp.mirrorB': '乙',
+    'rp.gateNote': '只读读数：不改稿、不改盘。',
     'rp.sevRed': '红', 'rp.sevYellow': '黄', 'rp.sevInfo': '提示',
     'mv.ledger': '账本表', 'mv.scan': '正文扫描',
     'mv.evidence': '文献与证据链', 'mv.export': '导出与命令',
@@ -107,8 +123,8 @@ const I18N = {
     'rp.card.time': '导入时间', 'rp.card.bound': '绑定 {n} 个数字', 'rp.card.from': '来源', 'rp.card.file': '文件',
     'rp.st.pending_check': '待核对', 'rp.st.signed': '已签收', 'rp.st.confirmed': '已确认',
     'rp.from.import': '来自导入', 'rp.from.unknown': '未知来源',
-    'rp.empty': '该项目还没有报告，点右上角「导入实验报告」。',
-    'rp.loading': '读取中…', 'rp.loadErr': '读实验报告失败：{e}',
+    'rp.reportsEmpty': '该项目还没有报告，点右上角「导入实验报告」。',
+    'rp.loadingReports': '读取中…', 'rp.loadErrReports': '读实验报告失败：{e}',
     'rp.read': '让 AI 解读这份报告', 'rp.readT': 'AI 用大白话总评当前检查结果',
     'rp.d.bound': '数字绑定清单', 'rp.d.file': '原始文件', 'rp.d.draft': '导入草稿',
     'rp.d.nobound': '这份报告还没有绑定数字。',
@@ -333,7 +349,8 @@ const I18N = {
     'rp.ry': '{r} red · {y} yellow', 'rp.n': '{n}',
     'rp.findings': 'Findings', 'rp.chain': 'Four-step chain',
     'rp.findingsT': 'Finding details', 'rp.close': 'Close', 'rp.details': 'View details ▸',
-    'rp.empty': 'No findings — this disk is clean.',
+    'rp.findingsEmpty': 'No findings — this disk is clean.',
+    'rp.chainEmpty': 'No four-step chain reading.',
     'rp.idle': 'Open a paper first.',
     'rp.loading': 'Loading…',
     'rp.loadErr': 'Failed to load the check report: {e}',
@@ -346,6 +363,22 @@ const I18N = {
     'rp.roChanged': 'Read-only: changed {files}',
     'rp.stepOk': 'ready', 'rp.stepPartial': 'partial', 'rp.stepMissing': 'missing',
     'rp.chainVal': '{v} / {t}',
+    /* Four-step chain: labels and details are translated by the front end
+       (the backend hands over structured keys). */
+    'chain.declare': 'Declare', 'chain.declare.detail': 'fact entries in facts/*.toml',
+    'chain.bind': 'Bind', 'chain.bind.detail': 'numbers bound by \\fact{} in the body',
+    'chain.reconcile': 'Reconcile', 'chain.reconcile.detail': 'body numbers reconciled against the ledger',
+    'chain.certify': 'Certify', 'chain.certify.detail': 'evidence freeze and the PDF gate',
+    /* Extra read-only gates (style / bilingual check): P0-1 */
+    'rp.style': 'Style gate', 'rp.styleT': 'Style gate reading (read-only): formulaic writing and the evidence stamp.',
+    'rp.styleOk': 'No style hits', 'rp.styleYellow': '{n} yellow', 'rp.styleRed': '{n} red',
+    'rp.styleErr': 'Style gate unavailable: {e}', 'rp.styleNone': 'No style reading.',
+    'rp.mirror': 'Bilingual check', 'rp.mirrorT': 'Field-by-field comparison of the two disks (read-only).',
+    'rp.mirrorOk': 'Both disks agree', 'rp.mirrorDrift': '{n} drifts',
+    'rp.mirrorNa': 'This project has one disk only — nothing to compare against.',
+    'rp.mirrorErr': 'Comparison unavailable: {e}', 'rp.mirrorNone': 'No comparison reading.',
+    'rp.mirrorDriftOne': 'drift', 'rp.mirrorA': 'A', 'rp.mirrorB': 'B',
+    'rp.gateNote': 'Read-only readings: nothing is rewritten.',
     'rp.sevRed': 'red', 'rp.sevYellow': 'yellow', 'rp.sevInfo': 'info',
     'mv.ledger': 'Ledger', 'mv.scan': 'Body scan',
     'mv.evidence': 'Citations & evidence', 'mv.export': 'Export & commands',
@@ -394,8 +427,8 @@ const I18N = {
     'rp.card.time': 'Imported', 'rp.card.bound': '{n} numbers bound', 'rp.card.from': 'Source', 'rp.card.file': 'File',
     'rp.st.pending_check': 'To check', 'rp.st.signed': 'Signed off', 'rp.st.confirmed': 'Confirmed',
     'rp.from.import': 'From import', 'rp.from.unknown': 'Unknown source',
-    'rp.empty': 'No reports for this project yet — import one from the top-right button.',
-    'rp.loading': 'Loading…', 'rp.loadErr': 'Failed to load the experiment reports: {e}',
+    'rp.reportsEmpty': 'No reports for this project yet — import one from the top-right button.',
+    'rp.loadingReports': 'Loading…', 'rp.loadErrReports': 'Failed to load the experiment reports: {e}',
     'rp.read': 'Let AI explain this report', 'rp.readT': 'AI summarizes the current check results in plain words',
     'rp.d.bound': 'Bound numbers', 'rp.d.file': 'Original file', 'rp.d.draft': 'Import draft',
     'rp.d.nobound': 'This report has no bound numbers yet.',
@@ -1162,9 +1195,12 @@ async function openProject(projectId, diskId) {
   const project = state.projects.find((p) => p.id === projectId);
   if (!project) return;
   state.project = project;
+  // P0-5：没有指定盘就回到上次打开的那个盘（项目数据里的 last_disk）；
+  // 记不住（或盘没了）才回落英文盘 → 第一个盘。
   const disk = diskId
     ? project.disks.find((d) => d.id === diskId)
-    : (project.disks.find((d) => d.lang === 'en') || project.disks[0]);
+    : (project.disks.find((d) => d.id === project.last_disk) ||
+       project.disks.find((d) => d.lang === 'en') || project.disks[0]);
   if (!disk) return;
   state.disk = disk.id;
   state.lang = disk.lang === 'zh' ? 'zh' : 'en';
@@ -1354,9 +1390,15 @@ function chainStepHtml(step, index) {
   const st = (step && step.state) || (step && step.ok ? 'ok' : 'partial');
   const cls = st === 'ok' ? 'done' : (st === 'partial' ? 'partial' : 'missing');
   const badgeCls = st === 'ok' ? 'done' : (st === 'partial' ? 'todo' : '');
-  const label = (step && (step.label || step.key)) || '';
+  // P0-4：标签与说明一律走 i18n——后端给结构化 key（label_key / detail_key）；
+  // 老字段（label / detail）留着兜底，别让读数空掉。
+  const label = (step && step.label_key)
+    ? t(step.label_key)
+    : ((step && (step.label || step.key)) || '');
   const val = t('rp.chainVal', { v: Number((step && step.value) || 0), t: Number((step && step.total) || 0) });
-  const detail = (step && step.detail) ? ' · ' + step.detail : '';
+  const detail = (step && step.detail_key)
+    ? ' · ' + t(step.detail_key)
+    : ((step && step.detail) ? ' · ' + step.detail : '');
   return `<div class="rstep ${cls}">
     <div class="rstep-h"><span class="rstep-no">${index + 1}</span><span>${esc(label)}</span><span class="badge ${badgeCls}">${esc(t(CHAIN_STATE_KEY[st] || 'rp.stepPartial'))}</span></div>
     <div class="rstep-c">${esc(val)}${esc(detail)}</div>
@@ -1449,7 +1491,7 @@ function renderReport() {
     } else if (state.reportError) {
       html = `<div class="ff-empty">${esc(t('rp.loadErr', { e: state.reportError }))}</div>`;
     } else if (!findings.length) {
-      html = `<div class="ff-empty">${esc(t('rp.empty'))}</div>`;
+      html = `<div class="ff-empty">${esc(t('rp.findingsEmpty'))}</div>`;
     } else {
       html = '<div class="fp-list">' + findings.map(findingRowHtml).join('') + '</div>';
     }
@@ -1481,10 +1523,90 @@ function renderReport() {
     } else if (state.reportLoading) {
       cbody.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
     } else if (!chain.length) {
-      cbody.innerHTML = `<div class="ff-empty">${esc(state.reportError ? t('rp.loadErr', { e: state.reportError }) : t('rp.empty'))}</div>`;
+      cbody.innerHTML = `<div class="ff-empty">${esc(state.reportError ? t('rp.loadErr', { e: state.reportError }) : t('rp.chainEmpty'))}</div>`;
     } else {
       cbody.innerHTML = chain.map(chainStepHtml).join('');
     }
+  }
+
+  /* —— 附加只读闸卡（文风闸 / 双语对账）—— */
+  renderGateCards();
+}
+
+
+/* ---------------------------------------------------------------- 附加只读闸（文风闸 / 双语对账）
+   P0-1：这两道闸在 CLI 里本来就是只读命令（factscribe style / mirror-check），
+   这里当只读读数并进检查报告：主红黄计数仍只认 audit ＋ 清单门那两道闸，
+   不改判定面，也不触发任何改写。 */
+
+function reportGates() {
+  const report = state.report;
+  if (!report || report.ok === false) return null;
+  const gates = report.gates;
+  return (gates && typeof gates === 'object') ? gates : null;
+}
+
+function gateNoteHtml() {
+  return `<div class="st-sub">${esc(t('rp.gateNote'))}</div>`;
+}
+
+function mirrorDriftHtml(d) {
+  const a = d.disk_a || {};
+  const b = d.disk_b || {};
+  const field = d.field ? ' · ' + esc(d.field) : '';
+  const aVal = (a.present && a.value) ? a.value : '—';
+  const bVal = (b.present && b.value) ? b.value : '—';
+  return `<div class="fp-item">
+    <div class="fp-h"><span class="fp-sev red">${esc(t('rp.mirrorDriftOne'))}</span><span class="fp-code">${esc(d.code || '')}</span></div>
+    <div class="fp-msg">${esc(d.target || '')} · ${esc(d.id || '')}${field}</div>
+    <div class="fp-loc">${esc(t('rp.mirrorA'))}: ${esc(aVal)} ｜ ${esc(t('rp.mirrorB'))}: ${esc(bVal)}</div>
+  </div>`;
+}
+
+function renderGateCards() {
+  const gates = reportGates();
+  const idle = reportIdle();
+  const loading = state.reportLoading;
+
+  /* —— 文风闸 —— */
+  const style = gates ? gates.style : null;
+  const sBadge = $('#badgeStyle');
+  const sBody = $('#bodyStyle');
+  if (sBadge) {
+    if (!style) { sBadge.textContent = '—'; sBadge.className = 'fold-badge'; }
+    else if (style.status === 'ok') { sBadge.textContent = t('rp.styleOk'); sBadge.className = 'fold-badge ok'; }
+    else if (style.status === 'red') { sBadge.textContent = t('rp.styleRed', { n: style.red || 0 }); sBadge.className = 'fold-badge red'; }
+    else if (style.status === 'yellow') { sBadge.textContent = t('rp.styleYellow', { n: style.yellow || 0 }); sBadge.className = 'fold-badge warn'; }
+    else { sBadge.textContent = '—'; sBadge.className = 'fold-badge warn'; }
+  }
+  if (sBody) {
+    if (idle) sBody.innerHTML = `<div class="ff-empty">${esc(t('rp.idle'))}</div>`;
+    else if (loading) sBody.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
+    else if (!style) sBody.innerHTML = `<div class="ff-empty">${esc(t('rp.styleNone'))}</div>`;
+    else if (style.status === 'error') sBody.innerHTML = `<div class="ff-empty">${esc(t('rp.styleErr', { e: style.error || '' }))}</div>`;
+    else if (style.status === 'ok') sBody.innerHTML = `<div class="ff-empty">${esc(t('rp.styleOk'))}</div>` + gateNoteHtml();
+    else sBody.innerHTML = `<div class="fp-list">${((style.findings || []).map(findingRowHtml).join(''))}</div>` + gateNoteHtml();
+  }
+
+  /* —— 双语对账 —— */
+  const mirror = gates ? gates.mirror : null;
+  const mBadge = $('#badgeMirror');
+  const mBody = $('#bodyMirror');
+  if (mBadge) {
+    if (!mirror) { mBadge.textContent = '—'; mBadge.className = 'fold-badge'; }
+    else if (mirror.status === 'ok') { mBadge.textContent = t('rp.mirrorOk'); mBadge.className = 'fold-badge ok'; }
+    else if (mirror.status === 'drift') { mBadge.textContent = t('rp.mirrorDrift', { n: mirror.count || 0 }); mBadge.className = 'fold-badge red'; }
+    else if (mirror.status === 'na') { mBadge.textContent = t('rp.mirrorNa'); mBadge.className = 'fold-badge'; }
+    else { mBadge.textContent = '—'; mBadge.className = 'fold-badge warn'; }
+  }
+  if (mBody) {
+    if (idle) mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.idle'))}</div>`;
+    else if (loading) mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
+    else if (!mirror) mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.mirrorNone'))}</div>`;
+    else if (mirror.status === 'error') mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.mirrorErr', { e: mirror.error || '' }))}</div>`;
+    else if (mirror.status === 'na') mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.mirrorNa'))}</div>`;
+    else if (mirror.status === 'ok') mBody.innerHTML = `<div class="ff-empty">${esc(t('rp.mirrorOk'))}</div>` + gateNoteHtml();
+    else mBody.innerHTML = `<div class="fp-list">${((mirror.drift || []).map(mirrorDriftHtml).join(''))}</div>` + gateNoteHtml();
   }
 }
 
@@ -1494,7 +1616,7 @@ function openFindingsModal() {
   if (body) {
     body.innerHTML = findings.length
       ? findings.map(findingDetailHtml).join('')
-      : `<div class="ff-empty">${esc(t('rp.empty'))}</div>`;
+      : `<div class="ff-empty">${esc(t('rp.findingsEmpty'))}</div>`;
   }
   const modal = $('#modalFindings');
   if (modal) modal.hidden = false;
@@ -2567,16 +2689,16 @@ function renderReports() {
     return;
   }
   if (state.reports.loading) {
-    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`;
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loadingReports'))}</div>`;
     return;
   }
   if (state.reports.error) {
-    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loadErr', { e: state.reports.error }))}</div>`;
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.loadErrReports', { e: state.reports.error }))}</div>`;
     return;
   }
   const items = state.reports.list || [];
   if (!items.length) {
-    list.innerHTML = `<div class="ff-empty">${esc(t('rp.empty'))}</div>`;
+    list.innerHTML = `<div class="ff-empty">${esc(t('rp.reportsEmpty'))}</div>`;
     return;
   }
   list.innerHTML = items.map(reportRowHtml).join('');

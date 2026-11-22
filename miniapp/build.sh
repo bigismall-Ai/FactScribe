@@ -24,6 +24,13 @@ find "$ENGINE/factscribe" -name '__pycache__' -type d -prune -exec rm -rf {} + 2
 find "$ENGINE/factscribe" -name '*.pyc' -delete 2>/dev/null || true
 find "$ENGINE/factscribe" -name '.DS_Store' -delete 2>/dev/null || true
 
+# 文风闸的规则文件也要跟着走：规则的查找顺序是「项目根 → 发行包根 → 包内」，
+# 发行包根 = <engine>/。少了它，miniapp 的文风读数会退回内置默认值，
+# 与仓里 CLI 的读数不一致（style-rules.toml 覆盖了几十个键）。
+if [ -f "$REPO_ROOT/style-rules.toml" ]; then
+  cp "$REPO_ROOT/style-rules.toml" "$ENGINE/style-rules.toml"
+fi
+
 echo "[2/4] 同步前端：workbench/static/ 三件 → miniapp/client/（零改动拷贝）"
 mkdir -p "$CLIENT"
 for f in index.html app.js app.css; do

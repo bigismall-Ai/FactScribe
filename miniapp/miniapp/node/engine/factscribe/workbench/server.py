@@ -159,6 +159,25 @@ class ProjectIndex:
                 return list(project.get("disks") or [])
         return []
 
+    def sibling_disk_path(self, project_id: str, disk_id: str) -> Path | None:
+        """同一项目里**另一个**盘（优先另一个语言）——双语双盘对账用。
+
+        没有第二个盘就返回 None（对账读数就是「不适用」，不是错）。
+        """
+        disks = self.project_disks(project_id)
+        current = next((d for d in disks if d["id"] == disk_id), None)
+        if current is None:
+            return None
+        others = [d for d in disks if d["id"] != disk_id]
+        if not others:
+            return None
+        other = next((d for d in others
+                      if d.get("lang") != current.get("lang")), others[0])
+        try:
+            return Path(other["path"])
+        except (KeyError, TypeError):
+            return None
+
     def project_disk_path(self, project_id: str) -> Path | None:
         """项目的主盘（英文盘优先）：报告目录与草稿都跟着它走。"""
         disks = self.project_disks(project_id)
@@ -258,7 +277,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 return self._serve_pdf(disk_path)
             if what == "report":
                 from .checkreport import report_payload
-                data = report_payload(disk_path)
+                data = report_payload(
+                    disk_path,
+                    sibling_disk=self.index.sibling_disk_path(project_id,
+                                                               disk_id))
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
             if what == "machine":

@@ -845,6 +845,107 @@ def _check_expect_sha(block: Block, expect_sha: str) -> None:
                           code=BLOCK_STALE_CODE)
 
 
+# ---------------------------------------------------------------- 块形状闸
+#
+# 挡的是一类真踩过的坑（2026-11-22 体检报告 P0-2 实测）：把**整个文件**当成
+# 某一段的替换文本传进来，引擎照单全收——采纳后文件里多了一份
+# \section{Introduction} 与其后的内容，而指纹闸、保护面重建、花括号配平、
+# 原子写四道全部放行、零告警。
+#
+# 根因：替换文本原来只查「非空／指纹／花括号」，没有「块形状」这一道。
+#
+# 判据与 projects.render_tex 的切块命令集保持一致：只有 \section／\subsection／
+# \subsubsection 会自成一个块。它们出现在**正文段**的替换文本里，就一定是
+# 「别的块的节标题」混进来了。
+
+#: 会自成一个块的标题命令（与 render_tex 的 _HEADING_RE 同集）。
+_SHAPE_HEADING_RE = re.compile(
+    r"\\(section|subsection|subsubsection)\s*\*?\s*\{([^{}]*)\}")
+#: 锚命令（LaTeX 里全篇必须唯一）。
+_SHAPE_LABEL_RE = re.compile(r"\\label\s*\{([^{}]*)\}")
+#: 整块搬进来的命令（正文段里出现就是形状不对）。
+_SHAPE_INPUT_RE = re.compile(r"\\(input|include)\s*\{([^{}]*)\}")
+
+#: 形状不匹配的机器码（提议单用 PROPOSAL_…，直接保存用 EDIT_…）。
+SHAPE_MISMATCH_CODE = "PROPOSAL_SHAPE_MISMATCH"
+
+
+def _block_shape_guard(block: Block, text: str, disk_root: Path,
+                       code: str = SHAPE_MISMATCH_CODE) -> list[str]:
+    r"""替换文本的**块形状**校验：形状不对直接拒收，形状可疑只给告警。
+
+    返回告警列表（不拦）；形状不匹配抛 ConfigError（拦）。
+
+    拦的三条（硬闸）：
+
+    1. 正文段（para/abstract/ai_draft）的替换文本里出现节标题命令
+       ——「混进了别的块的节标题」，最常见成因是整份文件贴了进来；
+    2. 标题块（section/subsection）的替换文本里出现**一个以上**节标题
+       ——一份替换文本只该对应一个标题；
+    3. 替换文本里的 \label{} 与**同文件别的块**重名 ——重复锚。
+
+    告警的两条（软闸，只提示，不拦）：
+
+    4. 标题块的替换文本里没有节标题 ——写下去标题就没了；
+    5. 替换文本比原文长出很多 ——多半是贴错了地方。
+    """
+    warnings: list[str] = []
+    headings = _SHAPE_HEADING_RE.findall(text)
+    is_heading_block = block.kind in ("section", "subsection")
+    if is_heading_block:
+        if len(headings) > 1:
+            names = "、".join("\\%s{%s}" % (cmd, title)
+                              for cmd, title in headings[:3])
+            raise ConfigError(
+                "替换文本里有 %d 个节标题（%s）——这一段本身就是一个标题，"
+                "一份替换文本只能对应一个标题。" % (len(headings), names),
+                code=code)
+        if not headings:
+            warnings.append(
+                "这一段本身是节标题，但替换文本里没有节标题命令——"
+                "采纳后这个标题会消失，请确认这是你要的。")
+    elif headings:
+        names = "、".join("\\%s{%s}" % (cmd, title)
+                          for cmd, title in headings[:3])
+        raise ConfigError(
+            "替换文本里混进了别的块的节标题（%s）——这一段是正文段落"
+            "（%s），不带节标题。你是不是把整个文件贴进来了？"
+            "请只改这一段的文字。" % (names, block.block_id),
+            code=code)
+
+    # 重复锚：替换文本里的 label 若与同文件**别的块**重名 → 拒收。
+    own_labels = set(_SHAPE_LABEL_RE.findall(block.raw))
+    if _SHAPE_LABEL_RE.search(text):
+        try:
+            file_text = _writable_target(disk_root, block.file).read_text(
+                encoding="utf-8")
+        except (ConfigError, OSError, UnicodeDecodeError):
+            file_text = ""
+        file_labels = set(_SHAPE_LABEL_RE.findall(file_text))
+        dup = sorted({lab for lab in _SHAPE_LABEL_RE.findall(text)
+                      if lab and lab in file_labels and lab not in own_labels})
+        if dup:
+            raise ConfigError(
+                "替换文本里的锚 \\label{%s} 与 %s 里另一处重复——"
+                "锚必须全篇唯一，请换个锚，或只改这一段。"
+                % ("、".join(dup[:3]), block.file),
+                code=code)
+
+    inputs = _SHAPE_INPUT_RE.findall(text)
+    if inputs and not is_heading_block:
+        warnings.append(
+            "替换文本里有 \\input/\\include{%s}——正文段里搬整个文件进来，"
+            "形状不对。" % inputs[0][1])
+
+    old_len = len(block.raw.strip())
+    new_len = len(text.strip())
+    if new_len > max(3 * old_len, old_len + 2000):
+        warnings.append(
+            "替换文本比原文长很多（%d 字 → %d 字）——确认不是贴错了地方吗？"
+            % (old_len, new_len))
+    return warnings
+
+
 def save_block(disk_root: Path, rel_file: str, block_id: str,
                client_text: str, expect_sha: str = "") -> dict:
     """把改后的段落写回原文件。
@@ -855,8 +956,11 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
     """
     block = find_block(disk_root, rel_file, block_id)
     _check_expect_sha(block, expect_sha)
+    shape_warnings = _block_shape_guard(block, client_text, disk_root,
+                                       code="EDIT_SHAPE_MISMATCH")
     segments = scan(block.raw, _bound_values(disk_root))
     new_raw, warnings = _rebuild(segments, client_text)
+    warnings = list(warnings) + shape_warnings
     if not _balanced_ok(new_raw):
         raise ConfigError("这段的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
@@ -892,8 +996,11 @@ def propose_block_edit(disk_root: Path, rel_file: str, block_id: str,
     if not text.strip():
         raise ConfigError("提议内容是空的，没什么可改的。",
                           code="PROPOSAL_TEXT_EMPTY")
+    shape_warnings = _block_shape_guard(block, text, disk_root,
+                                       code=SHAPE_MISMATCH_CODE)
     segments = scan(block.raw, _bound_values(disk_root))
     new_raw, warnings = _rebuild(segments, text)
+    warnings = list(warnings) + shape_warnings
     if not _balanced_ok(new_raw):
         raise ConfigError("这段的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
@@ -1382,12 +1489,23 @@ def save_workbench_config(disk_root: Path, values: dict) -> None:
 
 
 def touch_opened(disk_root: Path) -> dict:
-    """记「最近打开」时间（写进项目配置的 `[workbench].last_opened`）。"""
+    """记「最近打开」（写进项目配置的 `[workbench]` 表）。
+
+    写两样：
+      * last_opened＝打开时间（原本就有）；
+      * last_disk＝这个盘自己的盘号——「打开」据此记住上次开的是哪个盘
+        （P0-5）。双语项目不再每次回落英文盘。
+
+    写的是**被打开的那个盘自己的 factscribe.toml**，[workbench] 同一张表、
+    同一次原子写（同一个 .bak），不碰 facts/ 与正文。
+    """
     when = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+    disk_id = Path(disk_root).name
     values = workbench_config(disk_root)
     values["last_opened"] = when
+    values["last_disk"] = disk_id
     save_workbench_config(disk_root, values)
-    return {"last_opened": when}
+    return {"last_opened": when, "last_disk": disk_id}
 
 
 def create_paper_project(root: Path, *, slug: str, title: str,

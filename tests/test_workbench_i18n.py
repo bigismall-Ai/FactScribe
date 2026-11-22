@@ -92,6 +92,17 @@ class EnglishDictIsPureEnglishTests(unittest.TestCase):
         self.assertEqual(en_keys - zh_keys, set(), "en 有、zh 缺的键")
         self.assertEqual(len(zh_keys), len(en_keys))
 
+    def test_no_duplicate_keys_in_a_dictionary(self):
+        """同一个键在一个字典里不许定义两次（后者会覆盖前者）。"""
+        for name, (start, end) in (("zh", (self.zh_start, self.zh_end)),
+                                   ("en", (self.en_start, self.en_end))):
+            block = "\n".join(self.lines[start + 1:end])
+            keys = KEY_RE.findall(block)
+            seen = set()
+            dupes = sorted({k for k in keys if k in seen or seen.add(k)})
+            self.assertEqual(dupes, [],
+                             "%s 字典里有重名键（后者覆盖前者）：%s" % (name, dupes))
+
     def test_no_hardcoded_chinese_in_ui_toasts(self):
         """界面文案不许硬编码中文（注释与协议标记除外）。"""
         offenders = []

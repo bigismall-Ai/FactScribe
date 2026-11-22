@@ -972,6 +972,11 @@ body.nav-collapsed .shell{padding-right:0}
    右栏只留工具条＋面板。
    .np-tools / .np-tool 的旧样式随元素一起删除。 */
 
+/* v3：AI 面板顶上标出这轮是谁答的（宿主 Agent＝MCode 模型／本地后端） */
+.ai-src{font-size:11.5px;color:#8a8577;border:1px solid #e3e2df;border-radius:7px;padding:3px 8px;white-space:nowrap}
+.ai-src.agent{color:#2f5279;border-color:#c8d6e6;background:#f2f7fd}
+.ai-src.engine{color:#8a8577}
+
 /* ---- 切换按钮组（四枚纵排） ---- */
 .np-switches{display:flex;flex-direction:column;gap:2px;padding:8px 12px;border-bottom:1px solid #ececeb;flex:0 0 auto}
 .np-switch{width:100%;text-align:left;font-family:inherit;font-size:12.5px;color:#5f5e5b;padding:7px 10px;

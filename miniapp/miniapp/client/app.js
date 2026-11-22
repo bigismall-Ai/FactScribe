@@ -78,9 +78,11 @@ const I18N = {
     'ai.ask': '问 AI', 'ai.askPara': '这一段有什么可改的？',
     'ai.reportQ': '用大白话解读这份检查报告',
     'ai.clear': '清空',
-    'ai.note': 'AI 对话接的是真后端（/api/chat）。模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
+    'ai.note': 'AI 对话接的是真后端：MiniApp 里走 MCode 宿主模型，浏览器里走 workbench.toml 配的后端；模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
     'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
     'ai.model': '模型',
+    'ai.srcIdle': '后端：—', 'ai.srcAgent': '后端：MCode 宿主模型', 'ai.srcEngine': '后端：本地后端',
+    'ai.toolsDenied': '这一轮没有授权工具调用，模型只按材料回答。',
     'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
     'ai.ctxHead': '当前段落 · {sec}', 'ai.ctxHeadNone': '当前段落',
     'ai.fbChip': '模拟', 'ai.fbNote': '未接模型{d}',
@@ -351,9 +353,11 @@ const I18N = {
     'ai.ask': 'Ask AI', 'ai.askPara': 'What could be improved in this paragraph?',
     'ai.reportQ': 'Explain this check report in plain words',
     'ai.clear': 'Clear',
-    'ai.note': 'AI chat talks to the real backend (/api/chat). When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
+    'ai.note': 'AI chat talks to the real backend: the MCode host model inside MiniApp, the endpoint configured in workbench.toml in the browser. When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
     'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
     'ai.model': 'Model',
+    'ai.srcIdle': 'Backend: —', 'ai.srcAgent': 'Backend: MCode host model', 'ai.srcEngine': 'Backend: local backend',
+    'ai.toolsDenied': 'No tool call was authorised this turn; the model answered from the material only.',
     'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
     'ai.ctxHead': 'Current paragraph · {sec}', 'ai.ctxHeadNone': 'Current paragraph',
     'ai.fbChip': 'Mock', 'ai.fbNote': 'model not connected{d}',
@@ -594,7 +598,7 @@ const state = {
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
   ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper',
-        model: '', models: [], modelsKey: '' },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）
+        model: '', models: [], modelsKey: '', sessionId: '', source: '' },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）；v3：宿主 Agent 会话 id 与本轮后端
   reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
@@ -2005,16 +2009,56 @@ const AI_FALLBACK_MARK = '模拟回答（未接模型）';
 
 /* 这条接口永远 200；ok=false 表示「模型没接上」，不是请求失败。
    所以不能走 postJSON（它见 ok===false 就抛），要自己接。 */
-async function postChat(body) {
+/* v3：宿主 Agent 通道走 SSE（text/event-stream）——delta 增量、done 收尾；
+   老后端（浏览器模式／workbench.toml 配的端点）照旧回 JSON，两种都吃。 */
+async function postChat(body, onDelta) {
   const res = await fetch('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
     body: JSON.stringify(body || {}),
   });
+  const kind = String(res.headers.get('content-type') || '');
+  if (kind.indexOf('text/event-stream') >= 0) return readChatStream(res, onDelta);
   let data = null;
   try { data = await res.json(); } catch (err) { data = null; }
   if (!data) throw new Error('HTTP ' + res.status);
   return data;
+}
+
+/* 读 SSE：逐帧解 data: 行；delta 推给页面，done／error 收尾。 */
+async function readChatStream(res, onDelta) {
+  const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+  if (!reader) throw new Error('这个浏览器读不了流式回复');
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let final = null;
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    let cut = buffer.indexOf('\n\n');
+    while (cut >= 0) {
+      const frame = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      cut = buffer.indexOf('\n\n');
+      const line = frame.split('\n')
+        .filter((row) => row.indexOf('data:') === 0)
+        .map((row) => row.slice(5).trim()).join('');
+      if (!line) continue;
+      let evt = null;
+      try { evt = JSON.parse(line); } catch (err) { continue; }
+      const type = String((evt && evt.type) || '');
+      if (type === 'delta') {
+        if (typeof onDelta === 'function') onDelta(String(evt.text || ''));
+      } else if (type === 'done') {
+        final = evt;
+      } else if (type === 'error') {
+        final = { ok: false, fallback: true, code: 'AGENT_ERROR', error: String(evt.message || '') };
+      }
+    }
+  }
+  if (!final) throw new Error('对话流中断了');
+  return final;
 }
 
 /* ---------------------------------------------------------------- AI 对话 */
@@ -2087,6 +2131,7 @@ function clearAiConversation() {
   state.ai.messages = [];
   state.ai.quote = null;
   state.ai.seq += 1;      // 作废在途的请求回复
+  state.ai.sessionId = ''; // v3：宿主 Agent 会话也从头开
   renderAiCtx();
   const host = $('#aiMsgs');
   if (!host) return;
@@ -2116,6 +2161,15 @@ function isFallbackReply(data, reply) {
   return text.indexOf(AI_FALLBACK_MARK) === 0;
 }
 
+/* v3：面板顶上标出这轮是谁答的（宿主 Agent＝MCode 模型；否则是本地后端）。 */
+function setAiSource(kind) {
+  state.ai.source = kind === 'agent' ? 'agent' : 'engine';
+  const el = $('#aiSrc');
+  if (!el) return;
+  el.textContent = t(state.ai.source === 'agent' ? 'ai.srcAgent' : 'ai.srcEngine');
+  el.className = 'ai-src ' + state.ai.source;
+}
+
 async function aiSend(question, mode, action) {
   if (state.ai.waiting) return;
   const q = String(question || '').trim();
@@ -2137,12 +2191,23 @@ async function aiSend(question, mode, action) {
     quote: quote,
     mode: useMode,
     action: useAction,
+    lang: state.lang === 'en' ? 'en' : 'zh',
   };
+  // v3：宿主 Agent 通道——接着上一轮同一个会话（模型记得上文）。
+  if (state.ai.sessionId) payload.sessionId = state.ai.sessionId;
   // 条目 42：选了模型就带上（后端给了非空串才覆盖配置缺省）。
   const useModel = String(state.ai.model || '').trim();
   if (useModel) payload.model = useModel;
   try {
-    const data = await postChat(payload);
+    const data = await postChat(payload, (chunk) => {
+      // 增量：把「模型正在想…」那个气泡换成正在写的文本。
+      if (!wait) return;
+      const bub = wait.querySelector('.bub');
+      if (!bub) return;
+      wait.__text = (wait.__text || '') + chunk;
+      bub.textContent = wait.__text;
+      wait.classList.remove('waiting');
+    });
     if (seq !== state.ai.seq) return;      // 期间清空过：这次回复作废
     if (wait && wait.parentNode) wait.parentNode.removeChild(wait);
     const reply = data && data.reply ? String(data.reply) : '';
@@ -2151,6 +2216,13 @@ async function aiSend(question, mode, action) {
       return;
     }
     const fallback = isFallbackReply(data, reply);
+    // v3：记下这轮是谁答的——宿主 Agent（MCode 模型）还是本地后端。
+    const source = String((data && data.source) || '');
+    const isAgent = source === 'mcode-agent';
+    if (isAgent) state.ai.sessionId = String((data && data.sessionId) || '');
+    setAiSource(isAgent ? 'agent' : 'engine');
+    const notes = Array.isArray(data && data.notes) ? data.notes : [];
+    const denied = notes.filter((row) => String(row).indexOf('tools_denied:') === 0);
     /* 段六：段落三动作的回复带「复制」「写进稿」两枚钮。 */
     const actions = (useAction !== 'ask' && quote && quote.file)
       ? [
@@ -2160,7 +2232,7 @@ async function aiSend(question, mode, action) {
       : [];
     pushAiMsg('ai', reply, {
       fallback: fallback,
-      note: fallback ? aiFallbackNote(data) : '',
+      note: fallback ? aiFallbackNote(data) : (denied.length ? t('ai.toolsDenied') : ''),
       actions: actions,
     });
     state.ai.messages.push({ role: 'assistant', content: reply });

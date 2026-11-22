@@ -36,6 +36,13 @@ const SURFACE_PATH = '/workbench';
 /** 设置路由：v1 的论文根目录配置页与收表接口。 */
 const SETUP_PATHS = { api: '/api/miniapp/setup' };
 
+// AI 对话：宿主 Agent 通道。声明了 agentAccess 的插件宿主才会给 context.agent；
+// 没有它就照旧走引擎的本地后端（workbench.toml 的 [ai]）。
+const AGENT_CHAT_PATH = '/api/chat';
+const AGENT_PREPARE_PATH = '/api/chat/prepare';
+const AGENT_MODELS_PATH = '/api/ai/models';
+const AGENT_MODEL_LABEL = '宿主 Agent（MCode 当前模型）';
+
 /** 插件包内的载荷位置（相对 context.pluginRoot）。 */
 const CLIENT_DIR = join('miniapp', 'client');
 const ENGINE_DIR = join('miniapp', 'node', 'engine');
@@ -842,7 +849,8 @@ const INSTRUCTIONS = [
  * @param {(pathWithQuery: string) => Promise<any>} get 引擎 GET 客户端
  * @param {(path: string, body: object) => Promise<any>} post 引擎 POST 客户端
  */
-function createToolService(get, post) {
+function createToolService(get, post, options) {
+  const opts = options || {};
   /** @param {string} s @param {number} max */
   const cap = (s, max) => {
     const text = String(s ?? '');
@@ -870,7 +878,14 @@ function createToolService(get, post) {
           last_opened: d.last_opened || '',
         })),
       }));
-      return { root: data.root, count: data.count, projects, note: '后续 fs_* 工具都要传这里拿到的 project 与 disk。' };
+      return {
+        root: data.root,
+        count: data.count,
+        projects,
+        // v3：宿主 Agent（MCode 模型）在不在——AI 面板能不能用它，就看这个。
+        hostAgent: Boolean(opts.hostAgent),
+        note: '后续 fs_* 工具都要传这里拿到的 project 与 disk。',
+      };
     },
 
     /** fs_get_outline */
@@ -1311,6 +1326,8 @@ export async function start(context) {
       await engine.ensureReady();
       return enginePost(engine.port, path, body);
     },
+    // v3：宿主 Agent 在不在（MCode 模型能不能用）——fs_status 会回报它。
+    { hostAgent: Boolean(context.agent) },
   );
   const handleMcp = createMcpHandler(toolService, (message) => log.info(message));
 
@@ -1397,6 +1414,148 @@ export async function start(context) {
     void handle(request, response);
   });
 
+  // ------------------------------------------------------------ 宿主 Agent 通道（AI 对话）
+  //
+  // 页面问一句 → 薄壳先用引擎把「材料」组好（与 /api/chat 同一套口径），
+  // 再交给宿主 Agent 跑一轮——用的模型就是 mcode 自己那个。
+  // 没有 context.agent（宿主旧版／未声明 agentAccess）→ 照旧走引擎的本地后端。
+
+  /** @returns {any} 宿主 Agent 客户端（没有就是 undefined） */
+  function agentClient() {
+    return /** @type {any} */ (context).agent;
+  }
+
+  /**
+   * 用宿主 Agent 跑一轮对话。
+   * 返回 true＝这个响应已经写出（不再回落引擎）；false＝该回落引擎。
+   * @param {import('node:http').IncomingMessage} request
+   * @param {import('node:http').ServerResponse} response
+   * @param {any} body
+   */
+  async function tryAgentChat(request, response, body) {
+    const agent = agentClient();
+    if (!agent || typeof agent.run !== 'function') return false;
+    let prepared;
+    try {
+      await engine.ensureReady();
+      prepared = await enginePost(engine.port, AGENT_PREPARE_PATH, body);
+    } catch (error) {
+      log.warn('factscribe.agent.prepare_failed ' + String(error?.message || error));
+      return false;
+    }
+    const prompt = String(prepared?.prompt || '');
+    if (!prompt) return false;
+    const wantsStream = String(request.headers.accept || '').includes('text/event-stream');
+    const sessionId = String(body?.sessionId || '').trim();
+    /** @type {any[]} */
+    const pending = [];
+    const denied = [];
+    let skipped = 0;
+    let streaming = false;
+    /** @type {((payload: any) => void) | null} */
+    let send = null;
+    const startStream = () => {
+      if (streaming) return;
+      streaming = true;
+      response.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-store',
+        connection: 'keep-alive',
+      });
+      send = (payload) => {
+        try { response.write('data: ' + JSON.stringify(payload) + '\n\n'); } catch { /* 页面断了就算了 */ }
+      };
+      for (const item of pending) send(item);
+      pending.length = 0;
+    };
+    const onEvent = (event) => {
+      const type = String(event?.type || '');
+      if (type === 'text.delta') {
+        const text = String(event.text || '');
+        if (!text) return;
+        if (streaming) send?.({ type: 'delta', text });
+        else pending.push({ type: 'delta', text });
+        return;
+      }
+      if (type === 'permission.requested') {
+        // 面板是只读的：工具调用一律回绝（模型会知道原因，改按材料回答）。
+        denied.push(String(event.toolName || ''));
+        try {
+          const reply = agent.reply({
+            sessionId: String(event.sessionId || ''),
+            requestId: String(event.requestId || ''),
+            decision: 'deny',
+          });
+          if (reply && typeof reply.catch === 'function') reply.catch(() => {});
+        } catch { /* 旧宿主没有 reply */ }
+        return;
+      }
+      if (type === 'question.requested') {
+        // 面板里没有问卷界面：全部跳过，别把回合挂死。
+        skipped += 1;
+        const steps = Array.isArray(event?.request?.steps) ? event.request.steps : [];
+        try {
+          if (typeof agent.answer === 'function') {
+            const answer = agent.answer({
+              sessionId: String(event.sessionId || ''),
+              requestId: String(event.requestId || ''),
+              answers: steps.map((step) => ({
+                stepId: String(step?.id || ''),
+                selectedOptionIds: [],
+                selectedOther: false,
+                skipped: true,
+              })),
+            });
+            if (answer && typeof answer.catch === 'function') answer.catch(() => {});
+          }
+        } catch { /* 旧宿主没有 answer */ }
+      }
+    };
+    let result;
+    try {
+      const input = { text: prompt };
+      if (sessionId) input.sessionId = sessionId;
+      result = await agent.run(input, { onEvent });
+    } catch (error) {
+      if (!streaming) {
+        log.warn('factscribe.agent.failed ' + String(error?.message || error));
+        return false; // 还没写响应 → 回落引擎
+      }
+      send?.({ type: 'error', message: String(error?.message || error) });
+      try { response.end(); } catch { /* ignore */ }
+      return true;
+    }
+    const reply = String(result?.text || '').trim();
+    const notes = [];
+    if (denied.length) notes.push('tools_denied:' + denied.join(','));
+    if (skipped) notes.push('questions_skipped:' + String(skipped));
+    const payload = {
+      ok: true,
+      fallback: false,
+      reply,
+      source: 'mcode-agent',
+      model: AGENT_MODEL_LABEL,
+      sessionId: String(result?.sessionId || sessionId || ''),
+      code: '',
+      error: '',
+      notes,
+    };
+    if (streaming) {
+      send?.({ type: 'done', ...payload });
+      try { response.end(); } catch { /* ignore */ }
+      return true;
+    }
+    if (!reply) return false; // 宿主这一轮没出文本 → 回落引擎
+    if (wantsStream) {
+      startStream();
+      send?.({ type: 'done', ...payload });
+      try { response.end(); } catch { /* ignore */ }
+      return true;
+    }
+    sendJson(response, 200, payload);
+    return true;
+  }
+
   async function handle(request, response) {
     const url = new URL(request.url ?? '/', 'http://miniapp.local');
     const path = url.pathname;
@@ -1481,6 +1640,41 @@ export async function start(context) {
       return serveStatic(response, path.slice('/static/'.length));
     }
 
+    // AI 对话：宿主 Agent 优先（用的模型就是 mcode 自己那个）。
+    // 没有 context.agent（宿主旧版／未声明 agentAccess）→ 照旧透传引擎的本地后端。
+    if (method === 'POST' && path === AGENT_CHAT_PATH && agentClient()) {
+      let body;
+      try {
+        body = /** @type {any} */ (await readJsonBody(request));
+      } catch (error) {
+        const e = /** @type {HttpError} */ (error);
+        return sendJson(response, e.status, { ok: false, error: e.userMessage, code: e.status });
+      }
+      if (await tryAgentChat(request, response, body)) return;
+      // 宿主 Agent 这轮没答成 → 回落引擎的本地后端。
+      // 注意：请求体已经被读掉了，不能再走代理（代理会等一个永远不来的 body），
+      // 所以直接问引擎、直接把结果写回去。
+      try {
+        await engine.ensureReady();
+        const data = await enginePost(engine.port, AGENT_CHAT_PATH, body);
+        return sendJson(response, 200, data);
+      } catch (error) {
+        const e = /** @type {HttpError} */ (error);
+        const status = typeof e?.status === 'number' ? e.status : 502;
+        return sendJson(response, status, { ok: false, error: e?.userMessage || '引擎暂不可用', code: status });
+      }
+    }
+    if ((method === 'GET' || method === 'HEAD') && path === AGENT_MODELS_PATH && agentClient()) {
+      return sendJson(response, 200, {
+        ok: true,
+        project: url.searchParams.get('project') || '',
+        disk: url.searchParams.get('disk') || '',
+        models: [AGENT_MODEL_LABEL],
+        model: AGENT_MODEL_LABEL,
+        source: 'mcode-agent',
+      });
+    }
+
     // 业务请求：全部透传 Python 引擎（设置接口除外，上面已收）。
     if (path === '/api' || path.startsWith('/api/')) {
       try {
@@ -1496,6 +1690,7 @@ export async function start(context) {
   }
 
   await listen(server, context.listen.host, context.listen.port);
+  log.info('factscribe.agent.available ' + String(Boolean(context.agent)));
   log.info('factscribe.listening');
 
   let disposed = false;

@@ -3,7 +3,7 @@
   "name": "factscribe",
   "displayName": "FactScribe 论文工作台",
   "version": "1.0.0",
-  "description": "本地论文写作工作台：扫论文根目录聚合多语言稿盘，章节芯片渲染、检查报告、事实账与知识库一目了然；AI 助手可用 8 个 MCP 工具查稿况、读段落、对事实账，以及提改稿提议单（提议不写盘，由人在页面差异卡里确认才落盘）。",
+  "description": "本地论文写作工作台：扫论文根目录聚合多语言稿盘，章节芯片渲染、检查报告、事实账与知识库一目了然；页面里的 AI 助手直接用 mcode 自己的模型（宿主 Agent 回合），MCP 工具给助手 8 个：查稿况、读段落、对事实账，以及提改稿提议单（提议不写盘，由人在页面差异卡里确认才落盘）。",
   "author": "factscribe contributors",
   "icon": "icon.png",
   "category": "Office",

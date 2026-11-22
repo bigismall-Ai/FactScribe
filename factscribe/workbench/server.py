@@ -24,6 +24,7 @@
   POST /api/project/update                        改项目（标题等）
   POST /api/project/opened                        记「最近打开」
   POST /api/chat                                  AI 对话（OpenAI 兼容后端；不可达→降级）
+  POST /api/chat/prepare                          只组装给宿主 Agent 的提示词（**不调模型**）
   GET  /api/ai/models?project=&disk=              可选模型清单（[ai].models；缺省模型保证在列）
   GET  /api/project/<p>/reports                   报告页的卡（含导入草稿）
   GET  /api/project/<p>/reports/dir               列实验报告目录下的真实文件
@@ -332,6 +333,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         # 只有这几个接口接受写；其余的路由仍是只读（405，跟段一一致）。
         if route == "/api/chat":
             return self._chat(body)
+        if route == "/api/chat/prepare":
+            return self._chat_prepare(body)
         if not (route.startswith("/api/disk/") or route.startswith("/api/project/")):
             return self._error(405, "这个接口只有 GET（段一就是只读的）")
         try:
@@ -681,6 +684,34 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         return self._json({"ok": True, **result})
 
     # ---- 段四：AI 对话 ----
+
+    def _chat_prepare(self, body: dict) -> None:
+        """组装给宿主 Agent 的提示词（**不调模型**）。
+
+        MiniApp 侧由薄壳用宿主 Agent 跑这一轮：宿主 Agent 自带系统提示，
+        改不了它的角色，所以把「角色＋材料＋此前对话＋用户提问」拼成一段
+        用户消息交给它。材料与 `/api/chat` 用的是同一套 `build_context`。
+        """
+        from .ai import prepare_prompt
+
+        project_id = str(body.get("project") or "")
+        disk_id = str(body.get("disk") or "")
+        messages = body.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return self._error(400, "messages 要给（非空数组）")
+        disk = self.index.disk_path(project_id, disk_id)
+        if disk is None:
+            return self._error(404, "没有这个盘：%s/%s" % (project_id, disk_id))
+        quote = body.get("quote")
+        if not isinstance(quote, dict):
+            quote = None
+        result = prepare_prompt(disk, messages, quote=quote,
+                                mode=str(body.get("mode") or "ask"),
+                                action=str(body.get("action") or "ask"),
+                                lang=str(body.get("lang") or ""))
+        result.update({"project": project_id, "disk": disk_id})
+        return self._json(result, code=200)
+
 
     def _chat(self, body: dict) -> None:
         """AI 对话：组装上下文 → 打真后端 → 渲染回复。

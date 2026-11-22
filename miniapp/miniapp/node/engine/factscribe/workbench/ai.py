@@ -98,6 +98,68 @@ MODE_PROMPTS = {
 }
 
 
+
+#: 英文界面的角色提示（宿主 Agent 通道用；界面切英文时整套提示也切英文）。
+SYSTEM_PROMPT_EN = (
+    "You are FactScribe's paper-writing assistant. Answer only from the given material; "
+    "if it is not in the material, say so — never invent numbers or sources. "
+    "Answer in English, concise and bulleted."
+)
+
+EXPLAIN_SYSTEM_PROMPT_EN = (
+    "You are FactScribe's paper-writing assistant. Below is a summary of the current "
+    "manuscript's check report. Explain it in plain words: what the red and yellow marks "
+    "mean, what to fix, and what can be ignored. Do not invent numbers that are not in "
+    "the material. Answer in English, concise and bulleted."
+)
+
+IDEA_SYSTEM_PROMPT_EN = (
+    "You are in the \"brainstorm\" mode: no writing yet — help the author think the problem "
+    "through. Ask where the contribution really is, which claim still lacks evidence, and "
+    "say plainly when a path does not work. Answer only from the given material; if it is "
+    "not there, say so — never invent numbers or sources. Answer in English, concise and "
+    "bulleted."
+)
+
+PAPER_SYSTEM_PROMPT_EN = (
+    "You are in the \"write the paper\" mode: stay on the current manuscript — compare "
+    "against the existing text and say how this passage should connect and what would "
+    "fit the surrounding context. Answer only from the given material; if it is not there, "
+    "say so — never invent numbers or sources. Answer in English, concise and bulleted."
+)
+
+ACTION_CONTINUE_PROMPT_EN = (
+    "You must **continue** the passage the user quoted: carry on from it, matching its "
+    "tone, topic and level of detail. Output only the continued text — do not repeat the "
+    "quoted passage and do not add explanations."
+)
+
+ACTION_REWRITE_PROMPT_EN = (
+    "You must **rewrite** the passage the user quoted: same meaning, clearer and tighter. "
+    "Keep markers such as \\fact{} / \\cite{} verbatim and in place. Output only the "
+    "rewritten text — do not add explanations."
+)
+
+ACTION_ASK_PROMPT_EN = (
+    "You must **answer** the question about the passage the user quoted: answer first, "
+    "then give one concrete change that can land on the page. Answer only from the given "
+    "material — never invent numbers or sources."
+)
+
+#: 模式名 → 英文角色提示。
+MODE_PROMPTS_EN = {
+    "idea": IDEA_SYSTEM_PROMPT_EN,
+    "paper": PAPER_SYSTEM_PROMPT_EN,
+    "ask": PAPER_SYSTEM_PROMPT_EN,
+}
+
+#: 动作名 → 英文动作提示。
+ACTION_PROMPTS_EN = {
+    "continue": ACTION_CONTINUE_PROMPT_EN,
+    "rewrite": ACTION_REWRITE_PROMPT_EN,
+    "ask": ACTION_ASK_PROMPT_EN,
+}
+
 class AIError(Exception):
     """后端不可达 / 超时 / 返回体不认。调用方据此降级。"""
 
@@ -371,6 +433,67 @@ def chat(disk_path: str | Path, messages: list[dict],
         "code": "", "error": "",
         "mode": str(mode or "ask"), "action": str(action or "ask"),
     }
+
+
+#: 宿主 Agent 回合的「不许动手」要求（面板是只读的，不授权工具调用）。
+AGENT_NO_TOOLS = {
+    "zh": "不要调用任何工具、不要读写文件、不要执行命令；只按上面的材料回答。",
+    "en": ("Do not call any tools, do not read or write files, do not run commands; "
+           "answer only from the material above."),
+}
+
+#: 界面语言 → 回答口径（面板跟界面走）。
+ANSWER_LANG = {
+    "zh": "只依据上面的材料回答；材料里没有的，就说材料里没有，不要编造数字或出处。回答用中文，简洁分条。",
+    "en": ("Only answer from the material above; if it is not there, say so. "
+           "Never invent numbers or sources. Answer in English, concise and bulleted."),
+}
+
+
+def prepare_prompt(disk_path: str | Path, messages: list[dict],
+                   quote: dict | None = None, mode: str = "ask",
+                   action: str = "ask", lang: str = "") -> dict:
+    """把一轮提问组装成**给宿主 Agent 的一段提示词**（不调任何模型）。
+
+    宿主 Agent 回合自带系统提示，我们改不了它的角色设定；所以这里把
+    「角色说明 ＋ 材料 ＋ 此前对话 ＋ 用户提问」拼成一段用户消息交给它，
+    材料那部分与 `chat()` 用的是同一套 `build_context`，两边口径一致。
+
+    返回：`{"ok", "prompt", "mode", "action", "question"}`。
+    """
+    history = [m for m in (messages or [])
+               if isinstance(m, dict) and m.get("role")
+               and isinstance(m.get("content"), str)]
+    question = _last_question(history)
+    context = build_context(disk_path, quote=quote, mode=mode, action=action)
+    speak = "en" if str(lang or "").lower() == "en" else "zh"
+    if speak == "en":
+        system = EXPLAIN_SYSTEM_PROMPT_EN if mode == "explain" \
+            else MODE_PROMPTS_EN.get(str(mode or "ask"), PAPER_SYSTEM_PROMPT_EN)
+        action_prompt = ACTION_PROMPTS_EN.get(str(action or "ask"))
+    else:
+        system = EXPLAIN_SYSTEM_PROMPT if mode == "explain" \
+            else MODE_PROMPTS.get(str(mode or "ask"), PAPER_SYSTEM_PROMPT)
+        action_prompt = ACTION_PROMPTS.get(str(action or "ask"))
+    if action_prompt and mode != "explain":
+        if action in ("continue", "rewrite") or quote:
+            system = system + "\n\n" + action_prompt
+    parts = ["【角色】\n" + system]
+    if context:
+        parts.append("【材料】\n" + context)
+    older = [m for m in history[:-1]][-6:]
+    if older:
+        lines = []
+        for item in older:
+            who = "用户" if str(item.get("role")) == "user" else "助手"
+            lines.append("%s：%s" % (who, str(item.get("content") or "").strip()))
+        parts.append("【此前对话】\n" + "\n".join(lines))
+    parts.append("【用户提问】\n" + (question or "（空）"))
+    tail = ANSWER_LANG[speak] + " " + AGENT_NO_TOOLS[speak]
+    parts.append("【要求】" + tail)
+    return {"ok": True, "prompt": "\n\n".join(parts),
+            "mode": str(mode or "ask"), "action": str(action or "ask"),
+            "question": question}
 
 
 def available_models(disk_path: str | Path) -> list[str]:

@@ -211,6 +211,8 @@
           </div>
           <!-- 条目 42：模型选择行（label＋select，清单由 JS 按当前盘拉取） -->
           <div class="ai-modelrow">
+            <!-- v3：这轮是谁答的（宿主 Agent＝MCode 模型／本地后端） -->
+            <span class="ai-src" id="aiSrc" data-i18n="ai.srcIdle">后端：—</span>
             <label for="aiModel" data-i18n="ai.model">模型</label>
             <select id="aiModel" autocomplete="off" aria-label="model"></select>
           </div>

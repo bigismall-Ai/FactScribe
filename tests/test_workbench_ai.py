@@ -457,5 +457,133 @@ class TestModelsEndpoint(unittest.TestCase):
         self.fail("应当 404")
 
 
+class TestPreparePrompt(unittest.TestCase):
+    """v3：给宿主 Agent 用的提示词组装（**不调任何模型**）。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.project = _sample_copy(self.tmp)
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_prompt_carries_role_material_and_question(self):
+        """角色、材料、用户提问三块都在。"""
+        result = ai.prepare_prompt(self.project,
+                                   [{"role": "user", "content": "盲评对数？"}])
+        self.assertTrue(result["ok"])
+        prompt = result["prompt"]
+        self.assertIn("【角色】", prompt)
+        self.assertIn("【材料】", prompt)
+        self.assertIn("【用户提问】", prompt)
+        self.assertIn("盲评对数？", prompt)
+        self.assertIn("当前稿件正文", prompt)
+        self.assertEqual(result["question"], "盲评对数？")
+
+    def test_prompt_forbids_tools_and_file_writes(self):
+        """面板是只读的：提示词里明说不要调工具、不要读写文件。"""
+        prompt = ai.prepare_prompt(
+            self.project, [{"role": "user", "content": "在？"}])["prompt"]
+        self.assertIn("不要调用任何工具", prompt)
+        self.assertIn("不要读写文件", prompt)
+
+    def test_english_ui_asks_for_english_answer(self):
+        """界面切到英文 → 要求用英文答，且不许调工具的规矩也换成英文。"""
+        prompt = ai.prepare_prompt(
+            self.project, [{"role": "user", "content": "hi"}],
+            lang="en")["prompt"]
+        self.assertIn("Answer in English", prompt)
+        self.assertIn("Do not call any tools", prompt)
+        self.assertNotIn("回答用中文", prompt)
+
+    def test_quote_and_earlier_turns_are_carried(self):
+        """引用段与此前对话都进提示词。"""
+        prompt = ai.prepare_prompt(
+            self.project,
+            [{"role": "user", "content": "第一问"},
+             {"role": "assistant", "content": "第一答"},
+             {"role": "user", "content": "第二问"}],
+            quote={"text": "被引用的那一段", "section": "结果"})["prompt"]
+        self.assertIn("被引用的那一段", prompt)
+        self.assertIn("此前对话", prompt)
+        self.assertIn("第一答", prompt)
+
+    def test_prompt_needs_no_backend_config(self):
+        """组装提示词不碰后端：没有 workbench.toml、没有 api_key 也照样出得来。"""
+        result = ai.prepare_prompt(self.project,
+                                   [{"role": "user", "content": "在？"}])
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["prompt"].strip())
+
+
+class TestPrepareEndpoint(unittest.TestCase):
+    """v3：`POST /api/chat/prepare` 端点（真 HTTP）。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        _sample_copy(self.tmp)
+        self.server, self.index = create_server(self.tmp)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       daemon=True)
+        self.thread.start()
+        self.addCleanup(self.server.shutdown)
+        self.addCleanup(self._tmp.cleanup)
+        self.project_id = self.index.projects()[0]["id"]
+        self.disk_id = self.index.projects()[0]["disks"][0]["id"]
+
+    def _post(self, path: str, payload: dict) -> dict:
+        request = urllib.request.Request(
+            "http://127.0.0.1:%d%s" % (self.port, path),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def test_prepare_returns_prompt(self):
+        """200 + ok=True + 提示词里有材料与提问。"""
+        data = self._post("/api/chat/prepare", {
+            "project": self.project_id,
+            "disk": self.disk_id,
+            "messages": [{"role": "user", "content": "这段该怎么改？"}],
+        })
+        self.assertTrue(data["ok"])
+        self.assertIn("【材料】", data["prompt"])
+        self.assertIn("这段该怎么改？", data["prompt"])
+        self.assertEqual(data["project"], self.project_id)
+
+    def test_prepare_without_messages_is_400(self):
+        """messages 要给（非空数组）→ 400。"""
+        request = urllib.request.Request(
+            "http://127.0.0.1:%d/api/chat/prepare" % self.port,
+            data=json.dumps({"project": self.project_id,
+                              "disk": self.disk_id}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        try:
+            urllib.request.urlopen(request, timeout=10)
+        except urllib.error.HTTPError as exc:
+            self.assertEqual(exc.code, 400)
+            return
+        self.fail("应当 400")
+
+    def test_prepare_unknown_disk_is_404(self):
+        """盘不存在 → 404。"""
+        request = urllib.request.Request(
+            "http://127.0.0.1:%d/api/chat/prepare" % self.port,
+            data=json.dumps({"project": self.project_id, "disk": "nope",
+                              "messages": [{"role": "user", "content": "在？"}]}
+                             ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST")
+        try:
+            urllib.request.urlopen(request, timeout=10)
+        except urllib.error.HTTPError as exc:
+            self.assertEqual(exc.code, 404)
+            return
+        self.fail("应当 404")
+
+
 if __name__ == "__main__":
     unittest.main()

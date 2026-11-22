@@ -185,7 +185,8 @@
       </section>
       <!-- 条目 34：智能助手＝嵌进侧栏的对话面板（不再是半透明浮层） -->
       <section class="np-pane" id="paneAi">
-        <div class="np-pane-h"><span data-i18n="np.ai">智能助手</span></div>
+        <!-- v5：「这一轮是谁答的」徽标住面板顶上（v3 起它挤在模型选择行前面，像个看不懂的字段） -->
+        <div class="np-pane-h"><span data-i18n="np.ai">智能助手</span><span class="ai-src" id="aiSrc" hidden></span></div>
         <div class="np-ai-face" id="aiPane">
           <div class="ai-head">
             <div class="ai-title" data-i18n="tab.ai">AI 对话</div>
@@ -198,12 +199,8 @@
           <!-- 段六：纪律角标（常驻） -->
           <div class="ai-disc"><span class="dot"></span><span data-i18n="ai.discipline">示例数不是你的结果：没有真实跑出来的数，不要写进稿。</span></div>
           <div class="ai-ctx" id="aiCtx"></div>
-          <div class="ai-msgs" id="aiMsgs">
-            <div class="msg ai">
-              <div class="who">AI</div>
-              <div class="bub" id="seg4Note" data-i18n="ai.note">AI 对话接的是真后端。</div>
-            </div>
-          </div>
+          <!-- v5：面板不再自带一段「后端说明」气泡——那是说明书，不是这一轮的反馈。 -->
+          <div class="ai-msgs" id="aiMsgs"></div>
           <div class="ai-quick">
             <button type="button" class="aq" data-q="1" data-i18n="ai.q1">① 总结这篇论文的状态</button>
             <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
@@ -211,8 +208,6 @@
           </div>
           <!-- 条目 42／v4：模型选择行（模型＋思考等级；清单由 JS 按当前盘拉取） -->
           <div class="ai-modelrow">
-            <!-- v3：这轮是谁答的（宿主 Agent＝MCode 模型／本地后端） -->
-            <span class="ai-src" id="aiSrc" data-i18n="ai.srcIdle">后端：—</span>
             <label for="aiModel" data-i18n="ai.model">模型</label>
             <select id="aiModel" autocomplete="off" aria-label="model"></select>
             <!-- v4：思考等级——只有选中的模型真支持这些档时才显出来 -->

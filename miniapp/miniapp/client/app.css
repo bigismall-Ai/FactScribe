@@ -50,10 +50,9 @@ a{color:inherit}
 p{margin:0 0 1.15em;font-size:16.5px;line-height:1.92;text-align:left;color:#23262b}
 p.lead{margin-bottom:.7em}
 p.lead b{font-weight:700;color:#1c1e22}
-/* 事实芯片 */
-.fc{display:inline-block;width:.62em;height:.62em;border-radius:50%;background:#dff0e7;border-bottom:1px dashed #4f9d78;
- color:#1c6b4c;font-size:9px;line-height:.62em;text-align:center;vertical-align:super;margin:0 1px;cursor:help;outline:none}
-.fc:hover,.fc:focus{background:#bfe3cf;box-shadow:0 0 0 3px rgba(79,157,120,.16)}
+/* 事实芯片：小圆点妆容只留给不带 prot-chip 的遗留场景（见文件后段 .fc:not(.prot-chip)）。
+   v5：这里原有的无作用域 .fc 规则已撤——它把「有据的数字」芯片（.fc.prot-chip）也压成
+   0.62em 的小圆点，芯片里的「✓ B1」撑不进盒子，渲染成一竖条碎片。 */
 /* 引用 */
 .cite{white-space:nowrap}
 .cite.miss{color:#9a5b06;background:#fdf4e6;border-bottom:1px dashed #d9a441;padding:0 2px;border-radius:3px}
@@ -168,7 +167,11 @@ table.mt code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#8
 .fc:not(.prot-chip){display:inline-block;width:.62em;height:.62em;border-radius:50%;background:#dff0e7;border-bottom:1px dashed #4f9d78;
  color:#1c6b4c;font-size:9px;line-height:.62em;text-align:center;vertical-align:super;margin:0 1px;cursor:help;outline:none}
 .fc:not(.prot-chip):hover,.fc:not(.prot-chip):focus{background:#bfe3cf;box-shadow:0 0 0 3px rgba(79,157,120,.16)}
-.fc.prot-chip{cursor:pointer}
+/* v5：有据的数字＝绿药丸＋事实号（账本色），不再是小圆点。 */
+.fc.prot-chip{cursor:pointer;white-space:nowrap;font-size:.74em;line-height:1.55;
+ background:#e7f4ec;border-color:#bfe3cf;color:#1c6b4c;padding:0 4px;border-radius:4px}
+.fc.prot-chip:hover,.fc.prot-chip:focus{background:#d5efe1;border-color:#8fcfae;
+ box-shadow:0 0 0 3px rgba(79,157,120,.16)}
 /* ---------- v2.1 受保护芯片 ---------- */
 .pchip{display:inline-flex;align-items:baseline;gap:4px;border-radius:6px;padding:0 6px;margin:0 2px;
  font-size:14.5px;line-height:1.65;white-space:nowrap;vertical-align:baseline;border:1px solid transparent;
@@ -804,7 +807,7 @@ body[data-view="form"] .toc-float{display:none}
 .editable-para:focus{outline:2px solid #dcdcd6;outline-offset:3px}
 .prot-chip{display:inline-block;padding:0 5px;margin:0 1px;border-radius:5px;
  background:#eef1f6;color:#3f5a86;border:1px solid #d8e0ec;
- font-size:.82em;font-family:ui-monospace,Menlo,monospace;
+ font-size:.82em;line-height:1.6;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;
  cursor:not-allowed;user-select:none;vertical-align:baseline}
 .prot-chip::before{content:"🔒";font-size:.85em;margin-right:3px;opacity:.75}
 /* 事实芯片自带 ✓，不再叠一把锁。 */
@@ -990,6 +993,8 @@ body.nav-collapsed .shell{padding-right:0}
 .np-pane.on{display:block}
 /* 段五返修十三（小修）：面板节标题/段头 #5f5e5b（对比 >=4.5:1），次级小字 #6f6e69 */
 .np-pane-h{display:flex;align-items:center;gap:8px;font-size:11.5px;letter-spacing:1.2px;color:#5f5e5b;margin-bottom:8px}
+/* v5：「这一轮是谁答的」徽标住面板顶上（不再挤在模型选择行前面像个字段）。 */
+.np-pane-h .ai-src{margin-left:auto;letter-spacing:0;font-size:11px;padding:2px 7px}
 .np-mini{margin-left:auto;font-family:inherit;font-size:11px;color:#2f5279;background:none;border:none;
  cursor:pointer;padding:0;text-decoration:underline}
 .np-mini:hover{color:#1c3d5c}
@@ -1338,9 +1343,16 @@ body.nav-collapsed .nav-open{display:flex}
 /* 条目 42：模型选择行（输入框上方一行：label＋select） */
 .np-ai-face .ai-modelrow{display:flex;align-items:center;gap:6px;margin-top:10px}
 .np-ai-face .ai-modelrow label{flex:0 0 auto;font-size:11px;color:#5f5e5b}
-.np-ai-face .ai-modelrow select{flex:1 1 auto;min-width:0;font-family:inherit;font-size:11.5px;color:#1c1e22;
- background:#fff;border:1px solid #ddd8c6;border-radius:7px;padding:4px 6px}
-.np-ai-face .ai-modelrow select:focus{outline:none;border-color:#b6b0a0}
+/* v5：沿用右栏既有控件语汇（白底／1px 灰边／8px 圆角／12.5px 字／自绘箭头），
+   不再是浏览器默认外观；长标签不撑破行。 */
+.np-ai-face .ai-modelrow select{flex:1 1 auto;min-width:0;max-width:100%;font-family:inherit;font-size:12.5px;color:#37352f;
+ background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%239b9585' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 8px center;
+ border:1px solid #e3e2df;border-radius:8px;padding:5px 24px 5px 8px;
+ appearance:none;-webkit-appearance:none;cursor:pointer;
+ transition:border-color .12s,box-shadow .12s}
+.np-ai-face .ai-modelrow select:hover{border-color:#b8b5ac}
+.np-ai-face .ai-modelrow select:focus{outline:none;border-color:#b8b5ac;box-shadow:0 0 0 3px rgba(15,15,15,.05)}
+.np-ai-face .ai-modelrow select optgroup{color:#8f8d86;font-size:11px}
 /* v4：思考等级下拉（窄一点，别把模型下拉挤没） */
 .np-ai-face .ai-modelrow select#aiEffort{flex:0 1 auto;max-width:104px}
 /* v4：自定义模型的入口与删除钮 */

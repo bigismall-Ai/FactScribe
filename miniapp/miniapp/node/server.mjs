@@ -1637,6 +1637,43 @@ export async function start(context) {
     };
   }
 
+  /** provider 名给人看：去掉 custom_provider: 这种协议前缀（原来直接甩 raw id 给用户看）。 */
+  function providerLabel(providerId) {
+    return String(providerId || '').replace(/^custom_provider:/, '');
+  }
+
+  /**
+   * 同一个模型在宿主目录里可能挂多条通道（官方通道＋自建通道）——
+   * 面板下拉里逐条列就成了重复内容。按 modelId 只留一条：
+   * 优先宿主当前路由（catalog.default 所在 provider）那条，其次目录里第一条；
+   * 被折叠的 provider 记进 alsoVia（API 仍如实给出，页面不重复列）。
+   * @param {any[]} models 宿主条目（原地重排）
+   * @param {any} catalogDefault 宿主目录的默认项 {providerId, modelId}
+   */
+  function dedupeHostModels(models, catalogDefault) {
+    const defaultProvider = String(catalogDefault?.providerId || '').trim();
+    const kept = [];
+    const byModel = new Map();
+    for (const item of models) {
+      if (item.kind !== 'host' || !item.modelId) { kept.push(item); continue; }
+      const key = String(item.modelId).toLowerCase();
+      const at = byModel.get(key);
+      if (at === undefined) { byModel.set(key, kept.length); kept.push(item); continue; }
+      const current = kept[at];
+      const currentIsDefault = !!defaultProvider && current.providerId === defaultProvider;
+      const candidateIsDefault = !!defaultProvider && item.providerId === defaultProvider;
+      if (candidateIsDefault && !currentIsDefault) {
+        current.alsoVia = (current.alsoVia || []).concat([current.providerId].filter(Boolean));
+        item.alsoVia = (current.alsoVia || []).concat(item.alsoVia || []);
+        kept[at] = item;
+      } else {
+        current.alsoVia = (current.alsoVia || []).concat([item.providerId].filter(Boolean));
+      }
+    }
+    models.length = 0;
+    for (const item of kept) models.push(item);
+  }
+
   /**
    * 同名的模型分不清（目录里 displayName 可能重样）→ 重名的加 provider 尾注。
    * @param {any[]} models
@@ -1650,7 +1687,7 @@ export async function start(context) {
     for (const item of models) {
       if (item.kind !== 'host') continue;
       if (counts.get(item.label) > 1 && item.providerId) {
-        item.label = item.label + ' (' + item.providerId + ')';
+        item.label = item.label + ' (' + providerLabel(item.providerId) + ')';
       }
     }
   }
@@ -2059,6 +2096,8 @@ export async function start(context) {
         // 「宿主默认」放最前：不指定模型＝用 MCode 当前这个模型（和旧行为一致）。
         models.push({ id: HOST_DEFAULT_ID, kind: 'host', label: AGENT_MODEL_LABEL, efforts: [], defaultEffort: '' });
         for (const entry of catalog.models) models.push(hostModelEntry(entry));
+        // 同一个模型挂了几条通道的，页面上只列一条（折叠掉的记在 alsoVia 里）。
+        dedupeHostModels(models, catalog.default);
         disambiguateHostLabels(models);
         source = 'mcode-agent';
       } else {

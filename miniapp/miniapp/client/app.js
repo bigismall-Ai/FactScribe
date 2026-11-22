@@ -78,7 +78,6 @@ const I18N = {
     'ai.ask': '问 AI', 'ai.askPara': '这一段有什么可改的？',
     'ai.reportQ': '用大白话解读这份检查报告',
     'ai.clear': '清空',
-    'ai.note': 'AI 对话接的是真后端：MiniApp 里走 MCode 宿主模型（可挑模型与思考等级，也能自己加自定义模型），浏览器里走 workbench.toml 配的后端；模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
     'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
     'ai.model': '模型',
     'ai.effort': '思考',
@@ -86,15 +85,15 @@ const I18N = {
     'ai.effortLevelDefault': '默认',
     'ai.effortOff': '关闭思考', 'ai.effortNone': '最低', 'ai.effortMinimal': '极低', 'ai.effortLow': '低',
     'ai.effortMedium': '中', 'ai.effortHigh': '高', 'ai.effortXhigh': '很高', 'ai.effortMax': '最高',
-    'ai.kindHost': '宿主', 'ai.kindCustom': '自定义', 'ai.kindEngine': '本地',
+    'ai.kindHost': '宿主模型', 'ai.kindCustom': '自定义模型', 'ai.kindEngine': '本地后端',
     'ai.modelHostDefault': '宿主当前模型',
     'ai.addModel': '＋ 模型', 'ai.delModel': '✕', 'ai.delModelT': '删除这个自定义模型',
     'ai.cmTitle': '添加自定义模型', 'ai.cmLabel': '名称', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': '模型名',
     'ai.cmKey': 'API Key', 'ai.cmCancel': '取消', 'ai.cmSave': '保存',
     'ai.cmHint': '密钥只存在插件自己的私有目录里，不进论文目录，也不写进稿件。',
     'ai.cmSaved': '自定义模型已加进清单。', 'ai.cmDeleted': '自定义模型已删掉。',
-    'ai.srcIdle': '后端：—', 'ai.srcAgent': '后端：MCode 宿主模型', 'ai.srcEngine': '后端：本地后端',
-    'ai.srcCustom': '后端：自定义模型',
+    'ai.srcIdle': '本轮：—', 'ai.srcAgent': '本轮：MCode 宿主模型', 'ai.srcEngine': '本轮：本地后端',
+    'ai.srcCustom': '本轮：自定义模型',
     'ai.toolsDenied': '这一轮没有授权工具调用，模型只按材料回答。',
     'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
     'ai.ctxHead': '当前段落 · {sec}', 'ai.ctxHeadNone': '当前段落',
@@ -366,7 +365,6 @@ const I18N = {
     'ai.ask': 'Ask AI', 'ai.askPara': 'What could be improved in this paragraph?',
     'ai.reportQ': 'Explain this check report in plain words',
     'ai.clear': 'Clear',
-    'ai.note': 'AI chat talks to the real backend: the MCode host model inside MiniApp (pick a model and a reasoning effort, or add your own custom model), the endpoint configured in workbench.toml in the browser. When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
     'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
     'ai.model': 'Model',
     'ai.effort': 'Effort',
@@ -374,15 +372,15 @@ const I18N = {
     'ai.effortLevelDefault': 'Default',
     'ai.effortOff': 'Thinking off', 'ai.effortNone': 'None', 'ai.effortMinimal': 'Minimal', 'ai.effortLow': 'Low',
     'ai.effortMedium': 'Medium', 'ai.effortHigh': 'High', 'ai.effortXhigh': 'Extra high', 'ai.effortMax': 'Max',
-    'ai.kindHost': 'Host', 'ai.kindCustom': 'Custom', 'ai.kindEngine': 'Local',
+    'ai.kindHost': 'Host models', 'ai.kindCustom': 'Custom models', 'ai.kindEngine': 'Local backend',
     'ai.modelHostDefault': 'Host current model',
     'ai.addModel': '+ Model', 'ai.delModel': '×', 'ai.delModelT': 'Delete this custom model',
     'ai.cmTitle': 'Add a custom model', 'ai.cmLabel': 'Name', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': 'Model',
     'ai.cmKey': 'API Key', 'ai.cmCancel': 'Cancel', 'ai.cmSave': 'Save',
     'ai.cmHint': 'The key stays in the plugin private directory — never in the paper folder or the manuscript.',
     'ai.cmSaved': 'Custom model added to the list.', 'ai.cmDeleted': 'Custom model removed.',
-    'ai.srcIdle': 'Backend: —', 'ai.srcAgent': 'Backend: MCode host model', 'ai.srcEngine': 'Backend: local backend',
-    'ai.srcCustom': 'Backend: custom model',
+    'ai.srcIdle': 'This turn: —', 'ai.srcAgent': 'This turn: MCode host model', 'ai.srcEngine': 'This turn: local backend',
+    'ai.srcCustom': 'This turn: custom model',
     'ai.toolsDenied': 'No tool call was authorised this turn; the model answered from the material only.',
     'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
     'ai.ctxHead': 'Current paragraph · {sec}', 'ai.ctxHeadNone': 'Current paragraph',
@@ -624,7 +622,7 @@ const state = {
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
   ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper',
-        model: '', models: [], modelsKey: '', sessionId: '', source: '',
+        model: '', models: [], modelsKey: '', sessionId: '', source: '', sourceLabel: '',
         effort: '', custom: false, customModels: [] },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）；v3：宿主 Agent 会话 id 与本轮后端；v4：思考等级与自定义模型
   reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
@@ -706,6 +704,8 @@ function applyI18n() {
   renderVenue();
   // v4：模型下拉里的文案（来源标注、思考等级）也要跟着语言重画。
   renderAiModelSelect();
+  // v5：「这一轮是谁答的」徽标也跟着语言重画。
+  renderAiSource();
   applyLangToggle();
   // 条目 33：applyI18n 会把钮里的文字整个重写，截稿徽标要补回来。
   updateDeadlineBadge();
@@ -898,6 +898,7 @@ function renderBlocks() {
     }
   });
   bindFactChips(host);
+  bindChipCaret(host);
   renderTocList();
 }
 
@@ -1051,9 +1052,38 @@ function renderAbstract() {
   body.setAttribute('spellcheck', 'false');
   if (model.sha) state.blockSha[ABSTRACT_BLOCK] = model.sha;
   bindFactChips(body);
+  bindChipCaret(body);
 }
 
 /* ---------------------------------------------------------------- 证据卡（段五） */
+
+/* v5：点保护面芯片不夺走编辑意图——光标落到芯片旁边的正文位置。
+   正文任何位置单击即可改字；事实芯片另外弹证据卡，二者不冲突。 */
+function caretBesideChip(chip) {
+  const block = chip.closest('[contenteditable="true"]');
+  if (!block) return;
+  try {
+    const range = document.createRange();
+    range.setStartAfter(chip);
+    range.collapse(true);
+    const sel = window.getSelection();
+    if (!sel) return;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (err) {
+    /* 落不进去就算了——不影响看证据 */
+  }
+}
+
+/* v5：所有保护面芯片（数字／标签／引用／事实）点击后都把光标放回正文，
+   免得「点了正文却没进编辑」——那是芯片把点击吃掉了。 */
+function bindChipCaret(root) {
+  $$('.prot-chip', root || document).forEach((chip) => {
+    if (chip.dataset.caretBound === '1') return;
+    chip.dataset.caretBound = '1';
+    chip.addEventListener('click', () => { caretBesideChip(chip); });
+  });
+}
 
 function bindFactChips(root) {
   $$('.fc[data-fact]', root || document).forEach((chip) => {
@@ -2191,15 +2221,26 @@ function isFallbackReply(data, reply) {
 }
 
 /* v3/v4：面板顶上标出这轮是谁答的（宿主 Agent＝MCode 模型／自定义模型／本地后端），
-   后面跟上实际用的模型与思考等级。 */
+   后面跟上实际用的模型与思考等级。
+   v5：徽标搬到面板顶上（.np-pane-h），不再挤在模型选择行前面像个看不懂的字段；
+   还没答过时它不占位（页面开着别多一根「后端：—」）。 */
 function setAiSource(kind, label) {
   state.ai.source = kind === 'agent' ? 'agent' : (kind === 'custom' ? 'custom' : 'engine');
+  state.ai.sourceLabel = label || '';
+  renderAiSource();
+}
+
+/* v5：渲染「这一轮是谁答的」徽标。切语言后要重画，所以单独成函数。 */
+function renderAiSource() {
   const el = $('#aiSrc');
   if (!el) return;
+  if (!state.ai.source) { el.hidden = true; el.textContent = ''; return; }
   const base = t(state.ai.source === 'agent' ? 'ai.srcAgent'
     : state.ai.source === 'custom' ? 'ai.srcCustom' : 'ai.srcEngine');
+  const label = state.ai.sourceLabel || '';
   el.textContent = label ? base + ' · ' + label : base;
   el.className = 'ai-src ' + state.ai.source;
+  el.hidden = false;
 }
 
 async function aiSend(question, mode, action) {
@@ -2980,6 +3021,9 @@ function normalizeModelEntry(raw) {
     kind: String(raw.kind || 'engine'),
     label: String(raw.label || raw.model || raw.modelId || id),
     model: String(raw.model || raw.modelId || ''),
+    modelId: String(raw.modelId || ''),
+    providerId: String(raw.providerId || ''),
+    alsoVia: Array.isArray(raw.alsoVia) ? raw.alsoVia.map((p) => String(p || '')).filter(Boolean) : [],
     efforts: efforts,
     defaultEffort: String(raw.defaultEffort || ''),
   };
@@ -3024,29 +3068,55 @@ function currentModelEntry() {
   return list.length ? list[0] : null;
 }
 
-/* v4：模型下拉（按来源标注：宿主／本地／自定义）。 */
+/* v5：模型下拉——按来源分组（宿主模型／自定义模型／本地后端），
+   不再在每项后面挂「· 宿主」后缀（分组标题已经说清了）；
+   同一个模型只留一条（去重规则见 dedupeModelEntries）。 */
 function renderAiModelSelect() {
   const sel = $('#aiModel');
   if (!sel) return;
   sel.innerHTML = '';
-  (state.ai.models || []).forEach((item) => {
-    const opt = document.createElement('option');
-    opt.value = item.id;
-    const kind = item.kind === 'host' ? t('ai.kindHost')
-      : item.kind === 'custom' ? t('ai.kindCustom') : t('ai.kindEngine');
-    // 「宿主默认」那一项由界面本地化（薄壳给的是中文标签，切英文时不该留中文）。
-    const label = item.id === 'host:default' ? t('ai.modelHostDefault') : item.label;
-    opt.textContent = label + ' · ' + kind;
-    sel.appendChild(opt);
+  const items = dedupeModelEntries(state.ai.models || []);
+  ['host', 'custom', 'engine'].forEach((kind) => {
+    const list = items.filter((item) => item.kind === kind);
+    if (!list.length) return;
+    const og = document.createElement('optgroup');
+    og.label = kind === 'host' ? t('ai.kindHost')
+      : (kind === 'custom' ? t('ai.kindCustom') : t('ai.kindEngine'));
+    list.forEach((item) => {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      // 「宿主默认」那一项由界面本地化（薄壳给的是中文标签，切英文时不该留中文）。
+      opt.textContent = item.id === 'host:default' ? t('ai.modelHostDefault') : item.label;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
   });
-  if (!state.ai.models.length) return;
-  if (state.ai.model && (state.ai.models || []).some((m) => m.id === state.ai.model)) {
+  if (!items.length) return;
+  if (state.ai.model && items.some((m) => m.id === state.ai.model)) {
     sel.value = state.ai.model;
   } else {
-    state.ai.model = state.ai.models[0].id;
+    state.ai.model = items[0].id;
     sel.value = state.ai.model;
   }
   renderAiEffort();
+}
+
+/* v5：同一个模型在宿主目录里可能挂多条通道（官方通道＋自建通道），
+   下拉里逐条列就成了重复内容。只留一条：宿主目录里第一条；
+   被折叠的通道记进 alsoVia（API 仍如实给出，页面不重复列）。 */
+function dedupeModelEntries(list) {
+  const out = [];
+  const seen = new Map();
+  (list || []).forEach((item) => {
+    if (!item) return;
+    const key = (item.kind === 'host' && item.modelId) ? String(item.modelId).toLowerCase() : '';
+    if (!key) { out.push(item); return; }
+    const at = seen.get(key);
+    if (at === undefined) { seen.set(key, out.length); out.push(item); return; }
+    const kept = out[at];
+    kept.alsoVia = (kept.alsoVia || []).concat([item.providerId || item.id]);
+  });
+  return out;
 }
 
 /* v4：思考等级下拉——只有选中的模型真支持这些档时才显；第一档是「模型默认」。 */

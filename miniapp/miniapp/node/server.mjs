@@ -20,6 +20,7 @@
 //     防 DNS rebinding / 跨站页面打接口）。
 
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createReadStream, promises as fs } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
 import { delimiter, join, resolve as resolvePath, sep } from 'node:path';
@@ -42,6 +43,22 @@ const AGENT_CHAT_PATH = '/api/chat';
 const AGENT_PREPARE_PATH = '/api/chat/prepare';
 const AGENT_MODELS_PATH = '/api/ai/models';
 const AGENT_MODEL_LABEL = '宿主 Agent（MCode 当前模型）';
+
+// 面板模型清单的三种来源（下拉里并列，靠 id 前缀区分）：
+//   host:   宿主的模型目录（agent.models()）——宿主自己的模型，带思考等级；
+//   engine: 引擎 workbench.toml 的 [ai].models——本地后端；
+//   custom: 用户自加的自定义模型（OpenAI 兼容端点），凭据只存插件私有 dataDir。
+const HOST_MODEL_PREFIX = 'host:';
+/** 面板上的「宿主默认」选项：不指定模型＝用 MCode 当前这个模型。 */
+const HOST_DEFAULT_ID = 'host:default';
+const ENGINE_MODEL_PREFIX = 'engine:';
+const CUSTOM_MODEL_PREFIX = 'custom:';
+const CUSTOM_MODELS_PATH = '/api/ai/custom-models';
+const CUSTOM_MODELS_FILE = 'custom-models.json';
+/** 自定义模型后端的限时（毫秒）——后端慢也不能把面板挂死。 */
+const CUSTOM_MODEL_TIMEOUT_MS = 60000;
+/** 降级回复的首行标记（与引擎口径一致：前端靠它分辨真假）。 */
+const AI_FALLBACK_MARK = '模拟回答（未接模型）';
 
 /** 插件包内的载荷位置（相对 context.pluginRoot）。 */
 const CLIENT_DIR = join('miniapp', 'client');
@@ -203,6 +220,152 @@ async function writeConfig(dataDir, root) {
   const tmp = join(dataDir, `${CONFIG_FILE}.${process.pid}.tmp`);
   await fs.writeFile(tmp, `${JSON.stringify({ root }, null, 2)}\n`, 'utf8');
   await fs.rename(tmp, final);
+}
+
+// ---------------------------------------------------------------- 自定义模型（dataDir）
+//
+// 用户自加的模型（OpenAI 兼容端点）：凭据只落插件私有 dataDir，**不进论文目录**，
+// 也不进页面——页面只看得到 id／名称／模型名／有没有配密钥。
+
+/** 自定义模型条目 → 页面可见的公开字段（**没有 apiKey**）。 */
+function publicCustomModel(entry) {
+  return {
+    id: String(entry?.id || ''),
+    label: String(entry?.label || entry?.model || ''),
+    baseUrl: String(entry?.baseUrl || ''),
+    model: String(entry?.model || ''),
+    hasKey: Boolean(entry?.apiKey),
+  };
+}
+
+/** 读自定义模型清单；文件坏掉就当没有（不因此崩掉面板）。 */
+async function readCustomModels(dataDir) {
+  let raw = '';
+  try {
+    raw = await fs.readFile(join(dataDir, CUSTOM_MODELS_FILE), 'utf8');
+  } catch {
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const list = Array.isArray(parsed?.models) ? parsed.models : [];
+  const out = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const id = String(item.id || '').trim();
+    const model = String(item.model || '').trim();
+    if (!id || !model) continue;
+    out.push({
+      id,
+      label: String(item.label || model).trim(),
+      baseUrl: String(item.baseUrl || '').trim(),
+      model,
+      apiKey: String(item.apiKey || ''),
+    });
+  }
+  return out;
+}
+
+/** 原子写自定义模型清单（0600：里面有密钥）。 */
+async function writeCustomModels(dataDir, models) {
+  await fs.mkdir(dataDir, { recursive: true });
+  const final = join(dataDir, CUSTOM_MODELS_FILE);
+  const tmp = join(dataDir, `${CUSTOM_MODELS_FILE}.${process.pid}.tmp`);
+  await fs.writeFile(tmp, `${JSON.stringify({ version: 1, models }, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await fs.rename(tmp, final);
+  await fs.chmod(final, 0o600).catch(() => {});
+}
+
+/** 校验并规整一条自定义模型；不合法就抛 HttpError（人话错误直接给页面）。 */
+function sanitizeCustomModel(input) {
+  const label = String(input?.label || '').trim();
+  const baseUrl = String(input?.baseUrl || '').trim();
+  const model = String(input?.model || '').trim();
+  const apiKey = String(input?.apiKey || '').trim();
+  if (!model) throw new HttpError(400, 'model_required', '模型名不能为空。');
+  if (!baseUrl) throw new HttpError(400, 'base_url_required', 'Base URL 不能为空。');
+  let url;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new HttpError(400, 'bad_base_url', 'Base URL 不是合法网址。');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new HttpError(400, 'bad_base_url', 'Base URL 只许 http／https。');
+  }
+  if (label.length > 100 || baseUrl.length > 500 || model.length > 200 || apiKey.length > 500) {
+    throw new HttpError(400, 'too_long', '字段太长了。');
+  }
+  const given = String(input?.id || '').trim();
+  const id = given || `cm_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+    throw new HttpError(400, 'bad_id', '模型 id 不合法。');
+  }
+  return { id, label: label || model, baseUrl: baseUrl.replace(/\/+$/, ''), model, apiKey };
+}
+
+/**
+ * 打一次 OpenAI 兼容的 chat/completions（只用标准库 fetch），回文本。
+ * 失败一律抛 Error——降级措辞归调用方管。
+ * @param {string} baseUrl @param {string} model @param {string} prompt @param {string} apiKey
+ */
+async function openAiChat(baseUrl, model, prompt, apiKey) {
+  const url = String(baseUrl || '').replace(/\/+$/, '') + '/chat/completions';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CUSTOM_MODEL_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        ...(apiKey ? { authorization: 'Bearer ' + apiKey } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+        temperature: 0.2,
+      }),
+      signal: controller.signal,
+    });
+    const raw = await res.text();
+    if (!res.ok) throw new Error('后端返回 HTTP ' + res.status);
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      throw new Error('后端返回的不是 JSON');
+    }
+    const text = extractOpenAiText(body);
+    if (!text) throw new Error('后端返回体里没有可读文本');
+    return text;
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error('后端超时（' + Math.round(CUSTOM_MODEL_TIMEOUT_MS / 1000) + ' 秒）');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 从 OpenAI 兼容返回体里挖正文（content → reasoning_content → text）。 */
+function extractOpenAiText(body) {
+  const choices = body && typeof body === 'object' ? body.choices : null;
+  if (!Array.isArray(choices) || !choices.length) return '';
+  const first = choices[0] || {};
+  const message = first.message || {};
+  const content = typeof message.content === 'string' ? message.content.trim() : '';
+  if (content) return content;
+  const reasoning = typeof message.reasoning_content === 'string' ? message.reasoning_content.trim() : '';
+  if (reasoning) return reasoning;
+  const text = typeof first.text === 'string' ? first.text.trim() : '';
+  return text;
 }
 
 /** 展开 ~ 开头的家目录写法，并解析成绝对路径。 */
@@ -608,12 +771,12 @@ function createEngine(env) {
 // ---------------------------------------------------------------- 引擎 HTTP 客户端（MCP 工具用）
 
 /**
- * 对引擎内部端口发一个 POST（JSON 体），回解析好的 JSON。
- * 建提议单要用它（GET 不够）。语义与 engineGet 一致：非 200 或 ok=false → HttpError。
+ * 对引擎内部端口发一个 POST（JSON 体），回 `{status, data}`——**不判 ok**。
+ * AI 对话要原样带回引擎的降级回复（ok=false 但仍是 200），所以传输与判定要分开。
  * @param {number} port @param {string} path @param {object} body
  */
-async function enginePost(port, path, body) {
-  const payload = await new Promise((resolve, reject) => {
+async function enginePostRaw(port, path, body) {
+  return new Promise((resolve, reject) => {
     const raw = Buffer.from(JSON.stringify(body ?? {}), 'utf8');
     const upstream = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': String(raw.length), accept: 'application/json' } }, (res) => {
       const chunks = [];
@@ -636,6 +799,15 @@ async function enginePost(port, path, body) {
     upstream.on('error', (error) => reject(new HttpError(502, 'engine_unreachable', `引擎端口够不着（${error?.code || error}）`)));
     upstream.end(raw);
   });
+}
+
+/**
+ * 对引擎内部端口发一个 POST（JSON 体），回解析好的 JSON。
+ * 建提议单要用它（GET 不够）。语义与 engineGet 一致：非 200 或 ok=false → HttpError。
+ * @param {number} port @param {string} path @param {object} body
+ */
+async function enginePost(port, path, body) {
+  const payload = await enginePostRaw(port, path, body);
   if (payload.status !== 200 || !payload.data || payload.data.ok === false) {
     const message = payload.data?.error || `引擎返回 HTTP ${payload.status}`;
     const codeName = typeof payload.data?.code === 'string' && payload.data.code
@@ -1426,15 +1598,131 @@ export async function start(context) {
   }
 
   /**
+   * 宿主的模型目录：`agent.models()`。
+   * 形状：`{models:[{providerId, modelId, displayName?, thinking?:{efforts?, default?}, variants?}],
+   * default:{providerId, modelId}}`。
+   * 宿主不支持按回合选模型（老版本没有 models()）→ 返回 null，面板退回引擎本地后端清单。
+   */
+  async function hostCatalog() {
+    const agent = agentClient();
+    if (!agent || typeof agent.models !== 'function') return null;
+    let catalog;
+    try {
+      catalog = await agent.models();
+    } catch (error) {
+      log.warn('factscribe.agent.models_failed ' + String(error?.message || error));
+      return null;
+    }
+    if (!catalog || !Array.isArray(catalog.models)) return null;
+    return catalog;
+  }
+
+  /** 宿主目录条目 → 面板条目（含这个模型支持哪些思考等级）。 */
+  function hostModelEntry(entry) {
+    const providerId = String(entry?.providerId || '').trim();
+    const modelId = String(entry?.modelId || '').trim();
+    const levels = Array.isArray(entry?.thinking?.efforts)
+      ? entry.thinking.efforts.filter((e) => typeof e === 'string' && e.trim()) : [];
+    const variants = Array.isArray(entry?.variants) ? entry.variants : [];
+    return {
+      id: HOST_MODEL_PREFIX + providerId + '/' + modelId,
+      kind: 'host',
+      label: String(entry?.displayName || modelId || providerId),
+      providerId,
+      modelId,
+      // variants 里有 '' 表示「可以关掉思考」——那也是一个可选档。
+      efforts: variants.includes('') ? [...levels, 'off'] : levels,
+      defaultEffort: String(entry?.thinking?.default || ''),
+      thinkingVariant: variants.includes('thinking'),
+    };
+  }
+
+  /**
+   * 同名的模型分不清（目录里 displayName 可能重样）→ 重名的加 provider 尾注。
+   * @param {any[]} models
+   */
+  function disambiguateHostLabels(models) {
+    const counts = new Map();
+    for (const item of models) {
+      if (item.kind !== 'host') continue;
+      counts.set(item.label, (counts.get(item.label) || 0) + 1);
+    }
+    for (const item of models) {
+      if (item.kind !== 'host') continue;
+      if (counts.get(item.label) > 1 && item.providerId) {
+        item.label = item.label + ' (' + item.providerId + ')';
+      }
+    }
+  }
+
+  /** 面板选中的（条目＋等级）→ 宿主 `run({model})` 要的形状。 */
+  function hostSelection(entry, effort) {
+    if (!entry) return undefined;
+    const base = { providerId: entry.providerId, modelId: entry.modelId };
+    const level = String(effort || '').trim();
+    if (!level) {
+      // 模型默认：thinking 变体与默认档都按目录给的来。
+      if (entry.thinkingVariant) base.variant = 'thinking';
+      if (entry.defaultEffort) base.thinking = { effort: entry.defaultEffort };
+      return base;
+    }
+    if (level === 'off') return { ...base, variant: '' };
+    if (!entry.efforts.includes(level)) return undefined;
+    const out = { ...base };
+    if (entry.thinkingVariant) out.variant = 'thinking';
+    out.thinking = { effort: level };
+    return out;
+  }
+
+  /**
+   * 面板传来的模型选择：`{id, effort}`。
+   * id 前缀决定走哪条路：host: 宿主模型／engine: 本地后端／custom: 自定义模型。
+   */
+  function readModelSelection(body) {
+    const raw = body?.modelSelection;
+    if (!raw || typeof raw !== 'object') return null;
+    const id = String(raw.id || '').trim();
+    if (!id) return null;
+    const effort = String(raw.effort || '').trim();
+    if (id.startsWith(CUSTOM_MODEL_PREFIX)) {
+      return { kind: 'custom', id, effort, key: id.slice(CUSTOM_MODEL_PREFIX.length) };
+    }
+    if (id.startsWith(HOST_MODEL_PREFIX)) {
+      return { kind: 'host', id, effort, key: id.slice(HOST_MODEL_PREFIX.length) };
+    }
+    if (id.startsWith(ENGINE_MODEL_PREFIX)) {
+      return { kind: 'engine', id, effort, key: id.slice(ENGINE_MODEL_PREFIX.length) };
+    }
+    return null;
+  }
+
+  /**
    * 用宿主 Agent 跑一轮对话。
    * 返回 true＝这个响应已经写出（不再回落引擎）；false＝该回落引擎。
    * @param {import('node:http').IncomingMessage} request
    * @param {import('node:http').ServerResponse} response
    * @param {any} body
    */
-  async function tryAgentChat(request, response, body) {
+  async function tryAgentChat(request, response, body, selection) {
     const agent = agentClient();
     if (!agent || typeof agent.run !== 'function') return false;
+    // 用户点了宿主模型 → 先对目录核一遍：模型／等级不在目录里就别跑（宿主会拒，白跑一轮）。
+    let model;
+    let modelLabel = '';
+    if (selection && selection.kind === 'host' && selection.id !== HOST_DEFAULT_ID) {
+      const catalog = await hostCatalog();
+      const entry = (catalog?.models || []).map(hostModelEntry).find((m) => m.id === selection.id);
+      model = hostSelection(entry, selection.effort);
+      if (!model) {
+        sendJson(response, 400, {
+          ok: false,
+          code: 'MODEL_UNAVAILABLE',
+          error: '宿主现在不提供这个模型／思考等级了，请重新选一个。',
+        });
+        return true;
+      }
+      modelLabel = entry.label;
+    }
     let prepared;
     try {
       await engine.ensureReady();
@@ -1515,10 +1803,30 @@ export async function start(context) {
     try {
       const input = { text: prompt };
       if (sessionId) input.sessionId = sessionId;
+      if (model) input.model = model;
       result = await agent.run(input, { onEvent });
     } catch (error) {
+      const code = String(error?.code || '');
+      if (model && code === 'INVALID_ARGUMENTS') {
+        // 宿主不认这个模型／等级（多半已经下线）：明说，不偷换成别的模型答。
+        sendJson(response, 400, {
+          ok: false,
+          code: 'MODEL_UNAVAILABLE',
+          error: '宿主不接受这个模型／思考等级了，请重新选一个。',
+        });
+        return true;
+      }
       if (!streaming) {
         log.warn('factscribe.agent.failed ' + String(error?.message || error));
+        if (model) {
+          // 用户明确点了模型：失败就明说失败，不拿别的模型顶上。
+          sendJson(response, 502, {
+            ok: false,
+            code: code || 'AGENT_ERROR',
+            error: '宿主模型这轮没跑成：' + String(error?.message || error),
+          });
+          return true;
+        }
         return false; // 还没写响应 → 回落引擎
       }
       send?.({ type: 'error', message: String(error?.message || error) });
@@ -1534,7 +1842,8 @@ export async function start(context) {
       fallback: false,
       reply,
       source: 'mcode-agent',
-      model: AGENT_MODEL_LABEL,
+      model: modelLabel,
+      effort: String(selection?.effort || ''),
       sessionId: String(result?.sessionId || sessionId || ''),
       code: '',
       error: '',
@@ -1554,6 +1863,71 @@ export async function start(context) {
     }
     sendJson(response, 200, payload);
     return true;
+  }
+
+  /**
+   * 自定义模型：引擎组材料（与宿主通道同一套 prepare_prompt）→ OpenAI 兼容 chat/completions。
+   * 凭据只在薄壳手里（dataDir），不进引擎、不进页面。
+   * @param {import('node:http').ServerResponse} response @param {any} body
+   * @param {{kind: string, id: string, key: string, effort: string}} selection
+   */
+  async function tryCustomChat(response, body, selection) {
+    const models = await readCustomModels(context.dataDir);
+    const entry = models.find((m) => m.id === selection.key);
+    if (!entry) {
+      return sendJson(response, 404, {
+        ok: false,
+        code: 'MODEL_NOT_FOUND',
+        error: '这个自定义模型不在清单里（可能已经被删了）。',
+      });
+    }
+    let prompt = '';
+    try {
+      await engine.ensureReady();
+      const prepared = await enginePost(engine.port, AGENT_PREPARE_PATH, body);
+      prompt = String(prepared?.prompt || '');
+    } catch (error) {
+      const e = /** @type {HttpError} */ (error);
+      const status = typeof e?.status === 'number' ? e.status : 502;
+      return sendJson(response, status, {
+        ok: false,
+        error: e?.userMessage || '材料没组装出来',
+        code: e?.code || status,
+      });
+    }
+    if (!prompt) {
+      return sendJson(response, 502, { ok: false, code: 'PROMPT_FAILED', error: '材料没组装出来，问不了。' });
+    }
+    let reply = '';
+    try {
+      reply = await openAiChat(entry.baseUrl, entry.model, prompt, entry.apiKey);
+    } catch (error) {
+      const reason = String(error?.message || error);
+      log.warn('factscribe.custom_model.failed ' + reason);
+      // 诚实降级：明说「没接上」，绝不假装是模型答的。
+      return sendJson(response, 200, {
+        ok: false,
+        fallback: true,
+        reply: AI_FALLBACK_MARK + '\n后端没连上，下面这段不是模型的回答，只是占位，别当结论用。\n（原因：' + reason + '）',
+        source: 'custom-model',
+        model: entry.label,
+        effort: '',
+        code: 'CUSTOM_MODEL_UNAVAILABLE',
+        error: reason,
+        notes: [],
+      });
+    }
+    return sendJson(response, 200, {
+      ok: true,
+      fallback: false,
+      reply,
+      source: 'custom-model',
+      model: entry.label,
+      effort: '',
+      code: '',
+      error: '',
+      notes: [],
+    });
   }
 
   async function handle(request, response) {
@@ -1640,9 +2014,9 @@ export async function start(context) {
       return serveStatic(response, path.slice('/static/'.length));
     }
 
-    // AI 对话：宿主 Agent 优先（用的模型就是 mcode 自己那个）。
-    // 没有 context.agent（宿主旧版／未声明 agentAccess）→ 照旧透传引擎的本地后端。
-    if (method === 'POST' && path === AGENT_CHAT_PATH && agentClient()) {
+    // AI 对话：宿主 Agent 优先（宿主模型＋思考等级）；选了自定义模型就去 OpenAI 兼容端点。
+    // 没有 context.agent（宿主旧版／未声明 agentAccess）→ 照旧走引擎的本地后端。
+    if (method === 'POST' && path === AGENT_CHAT_PATH) {
       let body;
       try {
         body = /** @type {any} */ (await readJsonBody(request));
@@ -1650,29 +2024,120 @@ export async function start(context) {
         const e = /** @type {HttpError} */ (error);
         return sendJson(response, e.status, { ok: false, error: e.userMessage, code: e.status });
       }
-      if (await tryAgentChat(request, response, body)) return;
-      // 宿主 Agent 这轮没答成 → 回落引擎的本地后端。
-      // 注意：请求体已经被读掉了，不能再走代理（代理会等一个永远不来的 body），
-      // 所以直接问引擎、直接把结果写回去。
+      const selection = readModelSelection(body);
+      // 自定义模型：宿主不认这种模型，走薄壳自己的 OpenAI 兼容通道。
+      if (selection && selection.kind === 'custom') {
+        return await tryCustomChat(response, body, selection);
+      }
+      // 选了引擎本地后端的模型（宿主没有模型目录时的老路径）→ 直接问引擎，
+      // 宿主 Agent 不接管这一路。
+      const engineBody = selection && selection.kind === 'engine'
+        ? { ...body, model: selection.key }
+        : body;
+      if (!(selection && selection.kind === 'engine')
+        && agentClient() && await tryAgentChat(request, response, body, selection)) {
+        return;
+      }
+      // 回落引擎的本地后端。注意：请求体已经被读掉了，不能再走代理（代理会等一个
+      // 永远不来的 body），所以直接问引擎、原样把结果写回去（降级回复也是 200）。
       try {
         await engine.ensureReady();
-        const data = await enginePost(engine.port, AGENT_CHAT_PATH, body);
-        return sendJson(response, 200, data);
+        const raw = await enginePostRaw(engine.port, AGENT_CHAT_PATH, engineBody);
+        return sendJson(response, raw.status || 200, raw.data || { ok: false, error: '引擎没应答', code: 502 });
       } catch (error) {
         const e = /** @type {HttpError} */ (error);
         const status = typeof e?.status === 'number' ? e.status : 502;
         return sendJson(response, status, { ok: false, error: e?.userMessage || '引擎暂不可用', code: status });
       }
     }
-    if ((method === 'GET' || method === 'HEAD') && path === AGENT_MODELS_PATH && agentClient()) {
+    // 模型清单：宿主模型（带思考等级）＋ 引擎本地后端模型 ＋ 自定义模型。
+    if ((method === 'GET' || method === 'HEAD') && path === AGENT_MODELS_PATH) {
+      const models = [];
+      let source = 'engine';
+      const catalog = await hostCatalog();
+      if (catalog) {
+        // 「宿主默认」放最前：不指定模型＝用 MCode 当前这个模型（和旧行为一致）。
+        models.push({ id: HOST_DEFAULT_ID, kind: 'host', label: AGENT_MODEL_LABEL, efforts: [], defaultEffort: '' });
+        for (const entry of catalog.models) models.push(hostModelEntry(entry));
+        disambiguateHostLabels(models);
+        source = 'mcode-agent';
+      } else {
+        // 宿主没有目录 → 问引擎要本地后端的清单（workbench.toml 的 [ai].models）。
+        try {
+          await engine.ensureReady();
+          const query = AGENT_MODELS_PATH
+            + '?project=' + encodeURIComponent(url.searchParams.get('project') || '')
+            + '&disk=' + encodeURIComponent(url.searchParams.get('disk') || '');
+          const data = await engineGet(engine.port, query);
+          for (const name of (Array.isArray(data?.models) ? data.models : [])) {
+            const label = String(name || '').trim();
+            if (!label) continue;
+            models.push({ id: ENGINE_MODEL_PREFIX + label, kind: 'engine', label, model: label, efforts: [] });
+          }
+        } catch (error) {
+          log.warn('factscribe.models.engine_failed ' + String(error?.message || error));
+        }
+      }
+      // 自定义模型（用户自加）：跟宿主模型并列，凭据不出 dataDir。
+      for (const entry of await readCustomModels(context.dataDir)) {
+        models.push({
+          id: CUSTOM_MODEL_PREFIX + entry.id,
+          kind: 'custom',
+          label: entry.label,
+          model: entry.model,
+          efforts: [],
+        });
+      }
+      let model = '';
+      if (source === 'mcode-agent') model = HOST_DEFAULT_ID;
+      else if (models.length) model = models[0].id;
       return sendJson(response, 200, {
         ok: true,
         project: url.searchParams.get('project') || '',
         disk: url.searchParams.get('disk') || '',
-        models: [AGENT_MODEL_LABEL],
-        model: AGENT_MODEL_LABEL,
-        source: 'mcode-agent',
+        models,
+        model,
+        source,
       });
+    }
+    // 自定义模型（用户自加）：凭据只落插件私有 dataDir，不进论文目录、不进页面。
+    if (path === CUSTOM_MODELS_PATH && (method === 'GET' || method === 'HEAD')) {
+      const models = await readCustomModels(context.dataDir);
+      return sendJson(response, 200, { ok: true, models: models.map(publicCustomModel) });
+    }
+    if (path === CUSTOM_MODELS_PATH && method === 'POST') {
+      let body;
+      try {
+        body = /** @type {any} */ (await readJsonBody(request));
+      } catch (error) {
+        const e = /** @type {HttpError} */ (error);
+        return sendJson(response, e.status, { ok: false, error: e.userMessage, code: e.status });
+      }
+      try {
+        const entry = sanitizeCustomModel(body);
+        const models = await readCustomModels(context.dataDir);
+        const at = models.findIndex((m) => m.id === entry.id);
+        if (at >= 0) models[at] = entry;
+        else models.push(entry);
+        await writeCustomModels(context.dataDir, models);
+        return sendJson(response, 200, { ok: true, models: models.map(publicCustomModel) });
+      } catch (error) {
+        const e = error instanceof HttpError
+          ? error
+          : new HttpError(400, 'bad_request', String(error?.message || error));
+        return sendJson(response, e.status, { ok: false, error: e.userMessage, code: e.code });
+      }
+    }
+    const customMatch = /^\/api\/ai\/custom-models\/([A-Za-z0-9_-]{1,64})$/.exec(path);
+    if (customMatch && method === 'DELETE') {
+      const id = customMatch[1];
+      const models = await readCustomModels(context.dataDir);
+      const kept = models.filter((m) => m.id !== id);
+      if (kept.length === models.length) {
+        return sendJson(response, 404, { ok: false, error: '没有这个自定义模型。', code: 404 });
+      }
+      await writeCustomModels(context.dataDir, kept);
+      return sendJson(response, 200, { ok: true, models: kept.map(publicCustomModel) });
     }
 
     // 业务请求：全部透传 Python 引擎（设置接口除外，上面已收）。

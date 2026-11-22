@@ -209,12 +209,18 @@
             <button type="button" class="aq" data-q="2" data-i18n="ai.q2">② 这一段有什么可改的？</button>
             <button type="button" class="aq" data-q="3" data-i18n="ai.q3">③ 这段为什么被标了缺作者</button>
           </div>
-          <!-- 条目 42：模型选择行（label＋select，清单由 JS 按当前盘拉取） -->
+          <!-- 条目 42／v4：模型选择行（模型＋思考等级；清单由 JS 按当前盘拉取） -->
           <div class="ai-modelrow">
             <!-- v3：这轮是谁答的（宿主 Agent＝MCode 模型／本地后端） -->
             <span class="ai-src" id="aiSrc" data-i18n="ai.srcIdle">后端：—</span>
             <label for="aiModel" data-i18n="ai.model">模型</label>
             <select id="aiModel" autocomplete="off" aria-label="model"></select>
+            <!-- v4：思考等级——只有选中的模型真支持这些档时才显出来 -->
+            <label for="aiEffort" id="aiEffortLabel" data-i18n="ai.effort" hidden>思考</label>
+            <select id="aiEffort" autocomplete="off" aria-label="effort" hidden></select>
+            <!-- v4：自定义模型（凭据只落插件私有目录） -->
+            <button type="button" class="ai-addmodel" id="aiAddModel" data-i18n="ai.addModel" hidden>＋ 模型</button>
+            <button type="button" class="ai-delmodel" id="aiDelModel" data-i18n="ai.delModel" data-i18n-title="ai.delModelT" title="删除这个自定义模型" hidden>✕</button>
           </div>
           <!-- 条目 42：发送钮内嵌输入框（.ai-box 相对定位，发送钮绝对定位在右下角） -->
           <div class="ai-input">
@@ -529,6 +535,25 @@
     </div>
     <div class="modal-acts">
       <button type="button" class="btn-ghost" id="proposalClose" data-i18n="rp.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- v4：自定义模型（OpenAI 兼容端点）表单：凭据只进插件私有目录 -->
+<div class="modal" id="modalCustomModel" hidden>
+  <div class="modal-card">
+    <div class="modal-t"><span data-i18n="ai.cmTitle">添加自定义模型</span></div>
+    <div class="modal-body">
+      <label class="cm-field"><span data-i18n="ai.cmLabel">名称</span><input type="text" id="cmLabel" autocomplete="off"></label>
+      <label class="cm-field"><span data-i18n="ai.cmBaseUrl">Base URL</span><input type="text" id="cmBaseUrl" autocomplete="off" placeholder="https://api.example.com/v1"></label>
+      <label class="cm-field"><span data-i18n="ai.cmModel">模型名</span><input type="text" id="cmModel" autocomplete="off"></label>
+      <label class="cm-field"><span data-i18n="ai.cmKey">API Key</span><input type="password" id="cmKey" autocomplete="off"></label>
+      <p class="cm-hint" data-i18n="ai.cmHint">密钥只存在插件自己的私有目录里，不进论文目录，也不写进稿件。</p>
+      <div class="cm-err" id="cmErr" hidden></div>
+    </div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="cmCancel" data-i18n="ai.cmCancel">取消</button>
+      <button type="button" class="btn-primary" id="cmSave" data-i18n="ai.cmSave">保存</button>
     </div>
   </div>
 </div>

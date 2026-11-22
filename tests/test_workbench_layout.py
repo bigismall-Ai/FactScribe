@@ -882,12 +882,15 @@ class Item42AiPanelTests(unittest.TestCase):
         face = JS[JS.index("function renderAiFace()"):]
         face = face[:face.index("function renderAiModelSelect()")]
         self.assertIn("refreshAiModels();", face)
-        body = JS[JS.index("async function refreshAiModels()"):]
+        body = JS[JS.index("async function refreshAiModels("):]
         body = body[:body.index("function renderAiModelSelect()")]
         self.assertIn("'/api/ai/models?project='", body)
         self.assertIn("state.ai.modelsKey === key", body)
         send = JS[JS.index("async function aiSend("):JS.index("/* 段六：复制回复")]
-        self.assertIn("payload.model = useModel;", send)
+        # v4：清单条目带来源与思考等级，发送时带 modelSelection；
+        # 引擎本地后端那条老路仍走 model 字段（那边认的是模型名）。
+        self.assertIn("payload.modelSelection = { id: entry.id, effort: state.ai.effort || '' }", send)
+        self.assertIn("payload.model = entry.model;", send)
         self.assertIn("$('#aiModel').addEventListener('change'", JS)
 
     def test_backend_model_override_and_models_route_exist(self):

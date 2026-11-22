@@ -78,10 +78,23 @@ const I18N = {
     'ai.ask': '问 AI', 'ai.askPara': '这一段有什么可改的？',
     'ai.reportQ': '用大白话解读这份检查报告',
     'ai.clear': '清空',
-    'ai.note': 'AI 对话接的是真后端：MiniApp 里走 MCode 宿主模型，浏览器里走 workbench.toml 配的后端；模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
+    'ai.note': 'AI 对话接的是真后端：MiniApp 里走 MCode 宿主模型（可挑模型与思考等级，也能自己加自定义模型），浏览器里走 workbench.toml 配的后端；模型没接上时，回复会明确标成「模拟」，不会假装是模型答的。',
     'ai.you': '你', 'ai.ph': '问一句…', 'ai.send': '发送', 'ai.sending': '发送中…',
     'ai.model': '模型',
+    'ai.effort': '思考',
+    'ai.effortDefault': '模型默认（{level}）', 'ai.effortDefaultPlain': '模型默认',
+    'ai.effortLevelDefault': '默认',
+    'ai.effortOff': '关闭思考', 'ai.effortNone': '最低', 'ai.effortMinimal': '极低', 'ai.effortLow': '低',
+    'ai.effortMedium': '中', 'ai.effortHigh': '高', 'ai.effortXhigh': '很高', 'ai.effortMax': '最高',
+    'ai.kindHost': '宿主', 'ai.kindCustom': '自定义', 'ai.kindEngine': '本地',
+    'ai.modelHostDefault': '宿主当前模型',
+    'ai.addModel': '＋ 模型', 'ai.delModel': '✕', 'ai.delModelT': '删除这个自定义模型',
+    'ai.cmTitle': '添加自定义模型', 'ai.cmLabel': '名称', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': '模型名',
+    'ai.cmKey': 'API Key', 'ai.cmCancel': '取消', 'ai.cmSave': '保存',
+    'ai.cmHint': '密钥只存在插件自己的私有目录里，不进论文目录，也不写进稿件。',
+    'ai.cmSaved': '自定义模型已加进清单。', 'ai.cmDeleted': '自定义模型已删掉。',
     'ai.srcIdle': '后端：—', 'ai.srcAgent': '后端：MCode 宿主模型', 'ai.srcEngine': '后端：本地后端',
+    'ai.srcCustom': '后端：自定义模型',
     'ai.toolsDenied': '这一轮没有授权工具调用，模型只按材料回答。',
     'ai.waiting': '模型正在想…', 'ai.err': '提问失败：{e}', 'ai.empty': '（没有返回内容）',
     'ai.ctxHead': '当前段落 · {sec}', 'ai.ctxHeadNone': '当前段落',
@@ -353,10 +366,23 @@ const I18N = {
     'ai.ask': 'Ask AI', 'ai.askPara': 'What could be improved in this paragraph?',
     'ai.reportQ': 'Explain this check report in plain words',
     'ai.clear': 'Clear',
-    'ai.note': 'AI chat talks to the real backend: the MCode host model inside MiniApp, the endpoint configured in workbench.toml in the browser. When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
+    'ai.note': 'AI chat talks to the real backend: the MCode host model inside MiniApp (pick a model and a reasoning effort, or add your own custom model), the endpoint configured in workbench.toml in the browser. When no model is reachable the reply is clearly marked as a mock — it is never passed off as the model.',
     'ai.you': 'You', 'ai.ph': 'Ask something…', 'ai.send': 'Send', 'ai.sending': 'Sending…',
     'ai.model': 'Model',
+    'ai.effort': 'Effort',
+    'ai.effortDefault': 'Model default ({level})', 'ai.effortDefaultPlain': 'Model default',
+    'ai.effortLevelDefault': 'Default',
+    'ai.effortOff': 'Thinking off', 'ai.effortNone': 'None', 'ai.effortMinimal': 'Minimal', 'ai.effortLow': 'Low',
+    'ai.effortMedium': 'Medium', 'ai.effortHigh': 'High', 'ai.effortXhigh': 'Extra high', 'ai.effortMax': 'Max',
+    'ai.kindHost': 'Host', 'ai.kindCustom': 'Custom', 'ai.kindEngine': 'Local',
+    'ai.modelHostDefault': 'Host current model',
+    'ai.addModel': '+ Model', 'ai.delModel': '×', 'ai.delModelT': 'Delete this custom model',
+    'ai.cmTitle': 'Add a custom model', 'ai.cmLabel': 'Name', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': 'Model',
+    'ai.cmKey': 'API Key', 'ai.cmCancel': 'Cancel', 'ai.cmSave': 'Save',
+    'ai.cmHint': 'The key stays in the plugin private directory — never in the paper folder or the manuscript.',
+    'ai.cmSaved': 'Custom model added to the list.', 'ai.cmDeleted': 'Custom model removed.',
     'ai.srcIdle': 'Backend: —', 'ai.srcAgent': 'Backend: MCode host model', 'ai.srcEngine': 'Backend: local backend',
+    'ai.srcCustom': 'Backend: custom model',
     'ai.toolsDenied': 'No tool call was authorised this turn; the model answered from the material only.',
     'ai.waiting': 'The model is thinking…', 'ai.err': 'Request failed: {e}', 'ai.empty': '(no content returned)',
     'ai.ctxHead': 'Current paragraph · {sec}', 'ai.ctxHeadNone': 'Current paragraph',
@@ -598,7 +624,8 @@ const state = {
   reportLoading: false,
   rerun: null,        // 段三：最近一次重跑检查的结果
   ai: { messages: [], quote: null, waiting: false, seq: 0, mode: 'paper',
-        model: '', models: [], modelsKey: '', sessionId: '', source: '' },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）；v3：宿主 Agent 会话 id 与本轮后端
+        model: '', models: [], modelsKey: '', sessionId: '', source: '',
+        effort: '', custom: false, customModels: [] },  // 段四：AI 对话；段六：两档模式；条目 42：模型选择（同一 project+disk 只拉一次）；v3：宿主 Agent 会话 id 与本轮后端；v4：思考等级与自定义模型
   reports: { list: [], loading: false, error: '', detail: null }, // 段四：实验报告
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
@@ -677,6 +704,8 @@ function applyI18n() {
   renderReports();
   renderKb();
   renderVenue();
+  // v4：模型下拉里的文案（来源标注、思考等级）也要跟着语言重画。
+  renderAiModelSelect();
   applyLangToggle();
   // 条目 33：applyI18n 会把钮里的文字整个重写，截稿徽标要补回来。
   updateDeadlineBadge();
@@ -2161,12 +2190,15 @@ function isFallbackReply(data, reply) {
   return text.indexOf(AI_FALLBACK_MARK) === 0;
 }
 
-/* v3：面板顶上标出这轮是谁答的（宿主 Agent＝MCode 模型；否则是本地后端）。 */
-function setAiSource(kind) {
-  state.ai.source = kind === 'agent' ? 'agent' : 'engine';
+/* v3/v4：面板顶上标出这轮是谁答的（宿主 Agent＝MCode 模型／自定义模型／本地后端），
+   后面跟上实际用的模型与思考等级。 */
+function setAiSource(kind, label) {
+  state.ai.source = kind === 'agent' ? 'agent' : (kind === 'custom' ? 'custom' : 'engine');
   const el = $('#aiSrc');
   if (!el) return;
-  el.textContent = t(state.ai.source === 'agent' ? 'ai.srcAgent' : 'ai.srcEngine');
+  const base = t(state.ai.source === 'agent' ? 'ai.srcAgent'
+    : state.ai.source === 'custom' ? 'ai.srcCustom' : 'ai.srcEngine');
+  el.textContent = label ? base + ' · ' + label : base;
   el.className = 'ai-src ' + state.ai.source;
 }
 
@@ -2195,9 +2227,13 @@ async function aiSend(question, mode, action) {
   };
   // v3：宿主 Agent 通道——接着上一轮同一个会话（模型记得上文）。
   if (state.ai.sessionId) payload.sessionId = state.ai.sessionId;
-  // 条目 42：选了模型就带上（后端给了非空串才覆盖配置缺省）。
-  const useModel = String(state.ai.model || '').trim();
-  if (useModel) payload.model = useModel;
+  // v4：模型选择——宿主模型带思考等级；自定义模型走薄壳的 OpenAI 兼容通道；
+  // 引擎本地后端仍走老的 model 字段（那边认的是模型名）。
+  const entry = currentModelEntry();
+  if (entry) {
+    payload.modelSelection = { id: entry.id, effort: state.ai.effort || '' };
+    if (entry.kind === 'engine' && entry.model) payload.model = entry.model;
+  }
   try {
     const data = await postChat(payload, (chunk) => {
       // 增量：把「模型正在想…」那个气泡换成正在写的文本。
@@ -2219,8 +2255,15 @@ async function aiSend(question, mode, action) {
     // v3：记下这轮是谁答的——宿主 Agent（MCode 模型）还是本地后端。
     const source = String((data && data.source) || '');
     const isAgent = source === 'mcode-agent';
+    const isCustom = source === 'custom-model';
     if (isAgent) state.ai.sessionId = String((data && data.sessionId) || '');
-    setAiSource(isAgent ? 'agent' : 'engine');
+    // v4：徽标带上这一轮实际用的模型与思考等级（宿主说用哪个就显示哪个）。
+    const usedModel = String((data && data.model) || '');
+    const usedEffort = String((data && data.effort) || '');
+    const usedLabel = usedModel
+      ? usedModel + (usedEffort ? ' · ' + effortLabel(usedEffort) : '')
+      : '';
+    setAiSource(isAgent ? 'agent' : (isCustom ? 'custom' : 'engine'), usedLabel);
     const notes = Array.isArray(data && data.notes) ? data.notes : [];
     const denied = notes.filter((row) => String(row).indexOf('tools_denied:') === 0);
     /* 段六：段落三动作的回复带「复制」「写进稿」两枚钮。 */
@@ -2906,12 +2949,48 @@ function renderAiFace() {
   refreshAiModels();
 }
 
-/* 条目 42：模型选择——拉 /api/ai/models 填下拉；同一 project+disk 只拉一次，
+/* v4：思考等级的中英文说法；认不出来的档位原样显示（不编）。 */
+const AI_EFFORT_KEYS = {
+  default: 'ai.effortLevelDefault',
+  off: 'ai.effortOff', none: 'ai.effortNone', minimal: 'ai.effortMinimal', low: 'ai.effortLow',
+  medium: 'ai.effortMedium', high: 'ai.effortHigh', xhigh: 'ai.effortXhigh', max: 'ai.effortMax',
+};
+
+function effortLabel(level) {
+  const text = String(level || '');
+  const key = AI_EFFORT_KEYS[text];
+  return key ? t(key) : text;
+}
+
+/* v4：清单条目归一。后端两种形状都吃：薄壳给的是对象
+   （{id,kind,label,efforts,…}），引擎本地后端给的是模型名字符串。 */
+function normalizeModelEntry(raw) {
+  if (typeof raw === 'string') {
+    const name = raw.trim();
+    if (!name) return null;
+    return { id: 'engine:' + name, kind: 'engine', label: name, model: name, efforts: [], defaultEffort: '' };
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const id = String(raw.id || '').trim();
+  if (!id) return null;
+  const efforts = Array.isArray(raw.efforts)
+    ? raw.efforts.map((e) => String(e || '').trim()).filter(Boolean) : [];
+  return {
+    id: id,
+    kind: String(raw.kind || 'engine'),
+    label: String(raw.label || raw.model || raw.modelId || id),
+    model: String(raw.model || raw.modelId || ''),
+    efforts: efforts,
+    defaultEffort: String(raw.defaultEffort || ''),
+  };
+}
+
+/* 条目 42／v4：模型选择——拉 /api/ai/models 填下拉；同一 project+disk 只拉一次，
    已选模型不在列表里就回退缺省。拉不到就保持现状，不瞎填。 */
-async function refreshAiModels() {
+async function refreshAiModels(force) {
   if (!state.project) return;
   const key = state.project.id + '/' + (state.disk || '');
-  if (state.ai.modelsKey === key && (state.ai.models || []).length) {
+  if (!force && state.ai.modelsKey === key && (state.ai.models || []).length) {
     renderAiModelSelect();
     return;
   }
@@ -2923,31 +3002,175 @@ async function refreshAiModels() {
     return;
   }
   const models = (data && Array.isArray(data.models))
-    ? data.models.map((m) => String(m || '').trim()).filter(Boolean) : [];
+    ? data.models.map(normalizeModelEntry).filter(Boolean) : [];
   if (!models.length) return;
   state.ai.models = models;
   state.ai.modelsKey = key;
-  const fallback = data && data.model ? String(data.model) : models[0];
-  if (!state.ai.model || !models.includes(state.ai.model)) state.ai.model = fallback;
+  const ids = models.map((m) => m.id);
+  const fallback = data && data.model ? String(data.model) : ids[0];
+  if (!state.ai.model || ids.indexOf(state.ai.model) < 0) {
+    state.ai.model = ids.indexOf(fallback) >= 0 ? fallback : ids[0];
+  }
   renderAiModelSelect();
+  await probeCustomModels();
 }
 
+/* 当前选中的模型条目。 */
+function currentModelEntry() {
+  const list = state.ai.models || [];
+  for (const item of list) {
+    if (item.id === state.ai.model) return item;
+  }
+  return list.length ? list[0] : null;
+}
+
+/* v4：模型下拉（按来源标注：宿主／本地／自定义）。 */
 function renderAiModelSelect() {
   const sel = $('#aiModel');
   if (!sel) return;
   sel.innerHTML = '';
-  (state.ai.models || []).forEach((name) => {
+  (state.ai.models || []).forEach((item) => {
     const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
+    opt.value = item.id;
+    const kind = item.kind === 'host' ? t('ai.kindHost')
+      : item.kind === 'custom' ? t('ai.kindCustom') : t('ai.kindEngine');
+    // 「宿主默认」那一项由界面本地化（薄壳给的是中文标签，切英文时不该留中文）。
+    const label = item.id === 'host:default' ? t('ai.modelHostDefault') : item.label;
+    opt.textContent = label + ' · ' + kind;
     sel.appendChild(opt);
   });
   if (!state.ai.models.length) return;
-  if (state.ai.model && state.ai.models.includes(state.ai.model)) {
+  if (state.ai.model && (state.ai.models || []).some((m) => m.id === state.ai.model)) {
     sel.value = state.ai.model;
   } else {
-    state.ai.model = state.ai.models[0];
+    state.ai.model = state.ai.models[0].id;
     sel.value = state.ai.model;
+  }
+  renderAiEffort();
+}
+
+/* v4：思考等级下拉——只有选中的模型真支持这些档时才显；第一档是「模型默认」。 */
+function renderAiEffort() {
+  const sel = $('#aiEffort');
+  const label = $('#aiEffortLabel');
+  if (!sel || !label) return;
+  const entry = currentModelEntry();
+  const efforts = entry && entry.kind === 'host' ? (entry.efforts || []) : [];
+  label.hidden = !efforts.length;
+  sel.hidden = !efforts.length;
+  const del = $('#aiDelModel');
+  if (del) del.hidden = !(entry && entry.kind === 'custom');
+  if (!efforts.length) {
+    sel.innerHTML = '';
+    state.ai.effort = '';
+    return;
+  }
+  sel.innerHTML = '';
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = entry.defaultEffort
+    ? t('ai.effortDefault', { level: effortLabel(entry.defaultEffort) })
+    : t('ai.effortDefaultPlain');
+  sel.appendChild(def);
+  efforts.forEach((level) => {
+    const opt = document.createElement('option');
+    opt.value = level;
+    opt.textContent = effortLabel(level);
+    sel.appendChild(opt);
+  });
+  if (state.ai.effort && efforts.indexOf(state.ai.effort) < 0) state.ai.effort = '';
+  sel.value = state.ai.effort;
+}
+
+/* v4：自定义模型只在 MiniApp 薄壳里有（凭据存插件私有目录）。
+   浏览器直连引擎时这个接口不存在——那就别显示入口。 */
+async function probeCustomModels() {
+  let data = null;
+  try {
+    data = await getJSON('/api/ai/custom-models');
+  } catch (err) {
+    state.ai.custom = false;
+    const add = $('#aiAddModel');
+    if (add) add.hidden = true;
+    return;
+  }
+  state.ai.custom = Boolean(data && Array.isArray(data.models));
+  state.ai.customModels = state.ai.custom ? data.models : [];
+  const add = $('#aiAddModel');
+  if (add) add.hidden = !state.ai.custom;
+}
+
+/* v4：添加自定义模型（OpenAI 兼容端点）。 */
+function openCustomModelForm() {
+  const modal = $('#modalCustomModel');
+  if (!modal) return;
+  ['#cmLabel', '#cmBaseUrl', '#cmModel', '#cmKey'].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.value = '';
+  });
+  const err = $('#cmErr');
+  if (err) { err.hidden = true; err.textContent = ''; }
+  modal.hidden = false;
+  const first = $('#cmLabel');
+  if (first) first.focus();
+}
+
+async function saveCustomModel() {
+  const body = {
+    label: String(($('#cmLabel') || {}).value || '').trim(),
+    baseUrl: String(($('#cmBaseUrl') || {}).value || '').trim(),
+    model: String(($('#cmModel') || {}).value || '').trim(),
+    apiKey: String(($('#cmKey') || {}).value || '').trim(),
+  };
+  const err = $('#cmErr');
+  try {
+    const res = await fetch('/api/ai/custom-models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.ok) {
+      if (err) {
+        err.hidden = false;
+        err.textContent = String((data && data.error) || ('HTTP ' + res.status));
+      }
+      return;
+    }
+    state.ai.custom = true;
+    state.ai.customModels = Array.isArray(data.models) ? data.models : [];
+    const modal = $('#modalCustomModel');
+    if (modal) modal.hidden = true;
+    await refreshAiModels(true);
+    toast(t('ai.cmSaved'));
+  } catch (e) {
+    if (err) {
+      err.hidden = false;
+      err.textContent = String((e && e.message) || e);
+    }
+  }
+}
+
+async function deleteCustomModel() {
+  const entry = currentModelEntry();
+  if (!entry || entry.kind !== 'custom') return;
+  const id = String(entry.id || '').replace(/^custom:/, '');
+  try {
+    const res = await fetch('/api/ai/custom-models/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'Accept': 'application/json' },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || !data.ok) {
+      toast(String((data && data.error) || ('HTTP ' + res.status)));
+      return;
+    }
+    state.ai.customModels = Array.isArray(data.models) ? data.models : [];
+    state.ai.model = '';
+    await refreshAiModels(true);
+    toast(t('ai.cmDeleted'));
+  } catch (e) {
+    toast(String((e && e.message) || e));
   }
 }
 
@@ -3888,6 +4111,22 @@ function bind() {
   // 条目 42：模型下拉——选中记进 state，下一轮提问带上。
   $('#aiModel').addEventListener('change', (ev) => {
     state.ai.model = String(ev.target.value || '').trim();
+    state.ai.effort = '';
+    renderAiEffort();
+  });
+  // v4：思考等级与自定义模型入口
+  $('#aiEffort').addEventListener('change', (ev) => {
+    state.ai.effort = String(ev.target.value || '').trim();
+  });
+  $('#aiAddModel').addEventListener('click', () => { openCustomModelForm(); });
+  $('#aiDelModel').addEventListener('click', () => { deleteCustomModel(); });
+  $('#cmSave').addEventListener('click', () => { saveCustomModel(); });
+  $('#cmCancel').addEventListener('click', () => {
+    const modal = $('#modalCustomModel');
+    if (modal) modal.hidden = true;
+  });
+  $('#modalCustomModel').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalCustomModel') $('#modalCustomModel').hidden = true;
   });
   $('#aiSend').addEventListener('click', () => {
     const input = $('#aiText');

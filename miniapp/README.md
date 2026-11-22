@@ -26,6 +26,10 @@ AI 助手通过 8 个 MCP 工具帮你查稿况、读正文、对事实账，以
   首启设置页也有一枚；进工作台后它顺带切盘，没有对应盘就只切界面语言。
 - **AI 助手接 mcode 的模型**：MiniApp 里的对话直接跑**宿主 Agent 回合**（模型就是 mcode 自己那个），
   边跑边出字；面板顶上标出这轮是谁答的（宿主 Agent／本地后端）。
+- **模型与思考等级可自选（v4）**：面板下拉里列**宿主自己的模型目录**（两个模型，各自带思考等级档位），
+  另有一项「宿主默认」＝用 mcode 当前这个模型；选了模型还能选思考等级（关闭思考／低／中／高……）。
+- **可以自己加自定义模型（v4）**：面板里填名称＋Base URL＋模型名＋API Key，就多一个可选项
+  （OpenAI 兼容端点）；密钥只存在插件私有目录，不进论文目录、也不回传给页面。
 
 ## 要求
 
@@ -60,8 +64,11 @@ cd <本目录>
 - 插件自身的载荷目录（页面三件套与 Python 引擎，安装时已就位，运行时只读不写）。
 
 **写**（只有两处）：
-1. **插件私有数据目录**（宿主创建并持有的 `dataDir`）：只写一个 `config.json`（论文根目录路径，
-   原子写：同目录临时文件再改名）。除此之外引擎进程被禁写字节码缓存（`-B` 启动），不产生 `__pycache__`。
+1. **插件私有数据目录**（宿主创建并持有的 `dataDir`）：
+   - `config.json`——论文根目录路径（原子写：同目录临时文件再改名）；
+   - `proposals/`——待人确认的改稿提议单（v2：状态，不是论文内容）；
+   - `custom-models.json`——**v4：自定义模型的凭据**（含 API Key，文件权限 0600）；
+   除此之外引擎进程被禁写字节码缓存（`-B` 启动），不产生 `__pycache__`。
 2. **论文根目录下你确认要写的地方**：只在页面里**你亲自点保存**时发生——
    写 `sections/*.tex` 的正文与根文件装配行。保护措施沿用 FactScribe 写回链：
    - **原子写**：同目录 `.tmp` → fsync → rename，写坏了不会留半个文件；
@@ -81,11 +88,14 @@ cd <本目录>
 并可能在你的操作下再拉起 `factscribe audit`（检查报告只读重跑）、`tectonic`（渲染 PDF）、
 macOS `open`（「打开目录」按钮）。这些进程随 MiniApp 停止而被终止。
 
-**出站网络**：只有 AI 对话会出去，两条路：
-- **MiniApp 里**：AI 面板跑**宿主 Agent 回合**（`miniapp.json` 声明 `agentAccess: ["session.run"]`，
+**出站网络**：只有 AI 对话会出去，三条路：
+- **MiniApp 里（宿主模型）**：AI 面板跑**宿主 Agent 回合**（`miniapp.json` 声明 `agentAccess: ["session.run"]`，
   宿主把 `context.agent` 交给薄壳）。用的模型就是 MiniMax Code 自己那个，走**宿主的账号与额度**；
   插件**不读你的 API key、不读宿主的配置**。回合在宿主里跑，材料（正文、知识库、检查报告摘要）
   是拼成提示词发过去的。
+- **MiniApp 里（自定义模型，v4）**：你在面板里自己填的 OpenAI 兼容端点。**这条路的出站由你决定**——
+  填什么 Base URL 就打哪里，凭据只存在插件私有目录，材料（同一套 `prepare_prompt` 组好的提示词）
+  会发到那个端点；端点连不上时回复会明确标成「模拟回答（未接模型）」，不会假装是模型答的。
 - **浏览器模式**（不开 MiniApp 的独立用法）：按项目配置（`workbench.toml` 的 `[ai]`）打一个
   OpenAI 兼容端点，缺省 `http://127.0.0.1:8220/v1`（本机 vLLM）——不出本机。
 
@@ -165,6 +175,8 @@ Agent 回合）。没有 toolAccess / deviceAccess：插件不碰宿主工具、
 插件私有 dataDir：`~/.minimax/v2/plugin-data/liveboards/factscribe/`。
 里面 `config.json` 就是 `{"root": "<论文根目录>"}`——未配置时页面给中文设置页，
 填完由薄壳原子写回并换根重启引擎。论文根是**目录**（含 `factscribe.toml` 的子目录会被扫成项目）。
+同一目录里还有两样：**`proposals/`**（v2 的待确认提议单）与 **`custom-models.json`**
+（v4 的自定义模型凭据，0600）。三样都在插件私有目录里，**都不在论文目录里**。
 
 ## v2：提议单改稿（助手提议 → 人确认才写回）
 
@@ -197,6 +209,48 @@ Agent 回合）。没有 toolAccess / deviceAccess：插件不碰宿主工具、
 - **会话连着**：宿主给的 `sessionId` 记在页面里，下一轮接着同一个会话（模型记得上文）。
 - **兜底**：宿主 Agent 不可用（宿主旧版／未授权）→ 回落引擎的本地后端
   （`workbench.toml` 的 `[ai]`），面板照旧显示是谁答的。
+
+## v4：模型选择（宿主模型＋思考等级）与自定义模型
+
+- **按宿主那套模式直接嵌**：薄壳读宿主给的模型目录（`agent.models()`），
+  把每个模型做成面板下拉里的一项，并带上**这个模型支持的思考等级档位**
+  （目录里 `variants` 含空串＝「关闭思考」也算一档）。第一项是「宿主默认」——
+  不指定模型，用 mcode 当前这个模型（与旧行为一致）。
+- **选的模型真的被用上**：面板发的（模型＋等级）会被核对目录，再按宿主的形状传给回合：
+  `{providerId, modelId, variant?, thinking:{effort}}`——`off` 走 `variant: ""`，
+  其余档走 `thinking.effort`，「模型默认」走目录给的默认档。
+- **失效不偷换**：模型或等级宿主不认了（目录里没有／宿主报 INVALID_ARGUMENTS），
+  明确回 `MODEL_UNAVAILABLE` 让页面重选——**不会**悄悄换个模型答给你。
+- **自定义模型（BYOK）**：面板「＋ 模型」填名称／Base URL／模型名／API Key；
+  凭据落插件私有 `dataDir` 的 `custom-models.json`（0600），**不进论文目录**，
+  回给页面的只有 `hasKey`（有没有配密钥），**密钥不出薄壳**。
+  选它时走 OpenAI 兼容通道：引擎组材料（同宿主通道那套 `prepare_prompt`）→ 薄壳打
+  `{base_url}/chat/completions`（带 `Authorization: Bearer …`）。
+- **写盘面没变**：插件仍然只写「私有 dataDir」与「你确认过的论文位置」两处；
+  自定义模型只是多了一个 dataDir 里的 json 文件。
+- 考题：`tests/test_miniapp_models.py`（26 例，静态契约）＋
+  `tests/test_miniapp_shell_models.py`（8 例，**真起薄壳**跑模型三条路，
+  带宿主 Agent 桩与 OpenAI 兼容桩）。
+
+### v4 宿主侧实测（2026-11-22，宿主真的给了模型目录）
+
+- **目录真读到了**：面板下拉五项——「宿主当前模型」（＝宿主默认，不指定模型就用 MCode 当前那个）、
+  `M3.1-Flash`、`M3`、`custom_provider:minimax-direct/MiniMax-M3.1-Flash`、
+  `custom_provider:mm-direct2/MiniMax-M3.1-Flash`。目录里 displayName 重样时自动加 provider 尾注
+  （不然三个都叫「MiniMax-M3.1-Flash」，分不清谁是谁）。
+- **思考等级真列出来了**：M3.1-Flash 有 7 档（default／low／medium／high／xhigh／max／off），
+  下拉里连「模型默认」一共 8 项；M3 只有 off；两个 custom_provider 没有档位。
+- **选的模型真被用上**：选 M3.1-Flash ＋ High 提问，徽标读
+  「Backend: MCode host model · M3.1-Flash · High」，答的是这篇稿子里的真问题
+  （Demo 段有个未绑定的数字 7）。
+- **自定义模型真跑通**：面板填「本地桩模型 / http://127.0.0.1:8231/v1 / qwen-32b / 密钥」
+  → 下拉多出「本地桩模型 · Custom」；选中提问，徽标读「Backend: custom model · 本地桩模型」，
+  回答来自桩后端；桩端收到 `POST /v1/chat/completions`，带
+  `Authorization: Bearer …`，模型名 `qwen-32b`，提示词里带着材料。
+- **凭据没乱跑**：`custom-models.json` 落在插件私有 dataDir，权限 `0600`；
+  论文根（`/Users/moc/workspaces/SiAgent`）下搜不到它。删模型走面板上的 ✕，删完下拉即清空。
+- 界面切到 EN 时，下拉项、思考等级与徽标一并切英文（"Model default (Default)"、
+  "Thinking off"、"Backend: custom model · …"）；切语言时下拉会重画，选中的模型不丢。
 - **不碰你的密钥**：插件不读 API key、不读宿主配置；模型走宿主账号与额度。
 
 考题：引擎侧 `tests/test_workbench_ai.py`（+8 例：提示词组装、双语角色提示、

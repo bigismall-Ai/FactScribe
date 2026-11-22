@@ -874,6 +874,99 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
             "backup": result["backup"], "warnings": warnings}
 
 
+# ---------------------------------------------------------------- 提议单
+
+
+def propose_block_edit(disk_root: Path, rel_file: str, block_id: str,
+                       client_text: str, expect_sha: str = "",
+                       source: str = "", rationale: str = "") -> dict:
+    """算一份改稿提议（**不写正文**）。
+
+    走的是与 `save_block` 同一条保护链，只是算完就停：
+    指纹闸 → 保护面重建 → 花括号配平。
+    算出来的 `after_text` 就是真正会落盘的那一份——差异卡展示它，所见即落盘。
+    """
+    block = find_block(disk_root, rel_file, block_id)
+    _check_expect_sha(block, expect_sha)
+    text = client_text if isinstance(client_text, str) else ""
+    if not text.strip():
+        raise ConfigError("提议内容是空的，没什么可改的。",
+                          code="PROPOSAL_TEXT_EMPTY")
+    segments = scan(block.raw, _bound_values(disk_root))
+    new_raw, warnings = _rebuild(segments, text)
+    if not _balanced_ok(new_raw):
+        raise ConfigError("这段的花括号不配平（写下去会编不过），没有保存。",
+                          code="EDIT_UNBALANCED")
+    return {"kind": "block_edit",
+            "file": rel_file,
+            "block": block_id,
+            "before_sha": _short_sha(block.raw),
+            "before_text": block.raw,
+            "proposed_text": text,
+            "after_text": new_raw,
+            "warnings": warnings,
+            "source": source,
+            "rationale": rationale}
+
+
+def propose_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
+                     text: str, expect_sha: str = "",
+                     source: str = "", rationale: str = "") -> dict:
+    """算一份「在锚段之后插入草稿块」的提议（**不写正文**）。
+
+    插入位置与内容由 `_draft_insertion` 算——与真写回共用同一份计算。
+    """
+    block = find_block(disk_root, rel_file, after_block_id)
+    _check_expect_sha(block, expect_sha)
+    body = _escape_draft(str(text or "")).strip()
+    if not body:
+        raise ConfigError("回复是空的，没什么可写进稿的。", code="DRAFT_EMPTY")
+    path = _safe_section_file(disk_root, rel_file)
+    try:
+        source_text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
+                          code="SECTION_MISSING")
+    marker, insertion, insert_at = _draft_insertion(source_text, block, body)
+    after_text = source_text[:insert_at] + insertion + source_text[insert_at:]
+    return {"kind": "ai_draft",
+            "file": rel_file,
+            "block": after_block_id,
+            "after_block": after_block_id,
+            "before_sha": _short_sha(block.raw),
+            "before_text": block.raw,
+            "proposed_text": body,
+            "after_text": after_text,
+            "marker": marker,
+            "warnings": [],
+            "source": source,
+            "rationale": rationale}
+
+
+def apply_proposal(disk_root: Path, proposal: dict) -> dict:
+    """把提议单落成正文（**人确认之后才走这里**）。
+
+    复用既有写回通道：`block_edit` → `save_block`；`ai_draft` → `insert_ai_draft`。
+    两条都带 `expect_sha`（提议时记下的块指纹）：正文在提议之后被别处改过，
+    这里抛 `BLOCK_STALE` 拒写，不覆盖别人的字。
+    """
+    kind = str(proposal.get("kind") or "")
+    expect = str(proposal.get("before_sha") or "")
+    if kind == "block_edit":
+        return save_block(disk_root, str(proposal.get("file") or ""),
+                          str(proposal.get("block") or ""),
+                          str(proposal.get("proposed_text") or ""),
+                          expect_sha=expect)
+    if kind == "ai_draft":
+        anchor = str(proposal.get("after_block") or proposal.get("block") or "")
+        return insert_ai_draft(disk_root, str(proposal.get("file") or ""),
+                               anchor,
+                               str(proposal.get("proposed_text") or ""),
+                               expect_sha=expect)
+    raise ConfigError("不会认的提议类型：%s" % kind,
+                      code="PROPOSAL_KIND_INVALID")
+
+
 # ---------------------------------------------------------------- AI 草稿块
 
 def _escape_draft(text: str) -> str:
@@ -912,8 +1005,26 @@ def _draft_region(marker: str, body: str) -> str:
     return "\n".join(lines)
 
 
+def _draft_insertion(source: str, block: Block, body: str) -> tuple[str, str, int]:
+    """草稿块插在哪、插什么（纯计算，不落盘）。
+
+    提议单与真写回共用这一份计算——差异卡上看到的落盘结果，
+    与人点确认后真正写进文件的那一份，是同一条路算出来的。
+    """
+    marker = _next_draft_id(source)
+    region = _draft_region(marker, body)
+    newline = source.find("\n", block.end)
+    if newline == -1:
+        insert_at = len(source)
+        insertion = "\n\n" + region + "\n"
+    else:
+        insert_at = newline + 1
+        insertion = "\n" + region + "\n"
+    return marker, insertion, insert_at
+
+
 def insert_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
-                    text: str) -> dict:
+                    text: str, expect_sha: str = "") -> dict:
     """把一段 AI 回复**写进稿**：在该段之后插一个 AI 标记块。
 
     写进去的样子（.tex）：
@@ -929,27 +1040,23 @@ def insert_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
     * 标记行与环境标记属**文件结构**，不进编辑块——作者再编辑这个块时，
       标记行不会丢；
     * 内容独立成块，**不混进正文**；
-    * 原子写，落盘前留 `.bak`（与段二同一条写回通道）。
+    * 原子写，落盘前留 `.bak`（与段二同一条写回通道）；
+    * 指纹闸：`expect_sha` 给了就比对锚段指纹，对不上抛 `BLOCK_STALE` 拒写
+      （草稿通道以前是裸写——这是 v2 补上的那道闸）。
     """
     block = find_block(disk_root, rel_file, after_block_id)
+    # 指纹闸（条目 43 的同一条闸）：锚段在别处被改过，就别插。
+    _check_expect_sha(block, expect_sha)
     path = _safe_section_file(disk_root, rel_file)
     try:
         source = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
                           code="SECTION_MISSING")
-    marker = _next_draft_id(source)
     body = _escape_draft(str(text or "")).strip()
     if not body:
         raise ConfigError("回复是空的，没什么可写进稿的。", code="DRAFT_EMPTY")
-    region = _draft_region(marker, body)
-    newline = source.find("\n", block.end)
-    if newline == -1:
-        insert_at = len(source)
-        insertion = "\n\n" + region + "\n"
-    else:
-        insert_at = newline + 1
-        insertion = "\n" + region + "\n"
+    marker, insertion, insert_at = _draft_insertion(source, block, body)
     new_text = source[:insert_at] + insertion + source[insert_at:]
     result = atomic_write(path, new_text)
     return {"ok": True, "file": rel_file, "after": after_block_id,

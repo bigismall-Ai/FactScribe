@@ -417,7 +417,7 @@ function createEngine(env) {
       lastFailure = '本机没有找到可用的 Python 3（需要 ≥3.10）。装一个 python3，或设环境变量 FS_PYTHON 指到你的 Python。';
       throw new HttpError(503, 'python_missing', lastFailure);
     }
-    const c = spawn(python, ['-B', '-m', 'factscribe', 'workbench', '--root', root, '--port', '0', '--json', '--no-browser'], {
+    const c = spawn(python, ['-B', '-m', 'factscribe', 'workbench', '--root', root, '--port', '0', '--json', '--no-browser', '--state-dir', context.dataDir], {
       stdio: ['ignore', 'pipe', 'pipe'], // stdout 管道取握手行；绝不继承宿主 stdout
       env: {
         ...process.env,
@@ -530,6 +530,48 @@ function createEngine(env) {
 }
 
 // ---------------------------------------------------------------- 引擎 HTTP 客户端（MCP 工具用）
+
+/**
+ * 对引擎内部端口发一个 POST（JSON 体），回解析好的 JSON。
+ * 建提议单要用它（GET 不够）。语义与 engineGet 一致：非 200 或 ok=false → HttpError。
+ * @param {number} port @param {string} path @param {object} body
+ */
+async function enginePost(port, path, body) {
+  const payload = await new Promise((resolve, reject) => {
+    const raw = Buffer.from(JSON.stringify(body ?? {}), 'utf8');
+    const upstream = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': String(raw.length), accept: 'application/json' } }, (res) => {
+      const chunks = [];
+      let size = 0;
+      res.on('data', (chunk) => {
+        size += chunk.length;
+        if (size <= 8 * 1024 * 1024) chunks.push(chunk);
+      });
+      res.on('end', () => {
+        let data = null;
+        try {
+          data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        } catch {
+          /* 非 JSON 按空处理 */
+        }
+        resolve({ status: res.statusCode || 0, data });
+      });
+      res.on('error', reject);
+    });
+    upstream.on('error', (error) => reject(new HttpError(502, 'engine_unreachable', `引擎端口够不着（${error?.code || error}）`)));
+    upstream.end(raw);
+  });
+  if (payload.status !== 200 || !payload.data || payload.data.ok === false) {
+    const message = payload.data?.error || `引擎返回 HTTP ${payload.status}`;
+    const codeName = typeof payload.data?.code === 'string' && payload.data.code
+      ? payload.data.code
+      : payload.status === 409 ? 'conflict'
+        : payload.status === 404 ? 'not_found'
+          : payload.status === 400 ? 'bad_request'
+            : 'engine_error';
+    throw new HttpError(payload.status === 200 ? 502 : payload.status, codeName, String(message));
+  }
+  return payload.data;
+}
 
 /**
  * 对引擎内部端口发一个 GET，回解析好的 JSON。非 200 或 ok=false → HttpError（带上人话）。
@@ -679,6 +721,41 @@ const TOOLS = [
     },
     annotations: READ_ANNOTATIONS,
   },
+  {
+    name: 'fs_propose_edit',
+    title: '提议改稿（待人确认）',
+    description:
+      '【提议，不写盘】把一段改稿提成一**张提议单**：落宿主私有目录，**不碰正文**。' +
+      '人在页面的「待确认」差异卡里看到改前/改后，由人点「采纳写回」才真正落盘；不采纳就什么都不写。' +
+      'block 传段 id（先 fs_get_outline 或 fs_read_section 拿），text 是该段的完整替换 LaTeX。' +
+      '铁律：不得凭空造 \\fact{} / \\cite{} 与账上没有的数字——写之前先 fs_query_facts 对账。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...PROJECT_DISK,
+        block: { type: 'string', maxLength: 200, description: '要改的段 id（如 01-intro-s1）' },
+        text: { type: 'string', maxLength: 8000, description: '该段的完整替换 LaTeX（不含 \\fact{} / \\cite{} 等保护面命令）' },
+        rationale: { type: 'string', maxLength: 500, description: '可选：为什么这么改（给人看的）' },
+      },
+      required: ['project', 'disk', 'block', 'text'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: 'fs_list_proposals',
+    title: '看待确认的提议单',
+    description:
+      '【只读】列当前待人确认的提议单：每条带 id、目标段、改前/改后、警告与理由。' +
+      '用 fs_propose_edit 建单后用它核对；真正的采纳由人在页面点，助手这边没有写入接口。',
+    inputSchema: {
+      type: 'object',
+      properties: { ...PROJECT_DISK },
+      required: ['project', 'disk'],
+      additionalProperties: false,
+    },
+    annotations: READ_ANNOTATIONS,
+  },
 ];
 
 const TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
@@ -687,15 +764,16 @@ const INSTRUCTIONS = [
   'FactScribe 论文工作台（本机论文写作工具）的只读检索面：查稿况 → 看目录 → 读正文 → 看检查报告 → 对事实账 → 搜知识库。',
   '典型顺序：fs_status 拿项目与稿盘 ID → fs_get_outline 看目录 → fs_read_section 读某文件/某段 → fs_get_report 看体检 → fs_query_facts 对数字与引用的账 → fs_search_kb 翻项目资料。',
   '铁律：正文里 \\fact{}、\\cite{} 与绑定数字是事实账锚点；账上没有的数字与文献不得编造；涉及数字的论述先 fs_query_facts 对账。',
-  'v1 全部工具只读；写稿与结构修改工具 v2 才有（将以「提议单→人在页面确认」的方式提供）。',
+  'v1 的六个检索工具全部只读；v2 加了写稿面，但只有「提议」：fs_propose_edit 建一张提议单（不写盘），由人在页面的「待确认」差异卡里点「采纳写回」才落盘。助手这边没有任何直接改正文的接口。',
   '工具结果设了长度上限，超限会带 truncated 标记——需要更多请让用户打开 FactScribe 工作台页面查看。',
 ].join('\n');
 
 /**
  * 组装 MCP 的 tools/call 分发服务（每个工具＝转发引擎既有 GET 端点＋整形＋截断）。
  * @param {(pathWithQuery: string) => Promise<any>} get 引擎 GET 客户端
+ * @param {(path: string, body: object) => Promise<any>} post 引擎 POST 客户端
  */
-function createToolService(get) {
+function createToolService(get, post) {
   /** @param {string} s @param {number} max */
   const cap = (s, max) => {
     const text = String(s ?? '');
@@ -913,6 +991,71 @@ function createToolService(get) {
       }
       return out;
     },
+
+    /** fs_propose_edit —— 只建单，不写盘 */
+    async proposeEdit(args) {
+      const { project, disk, block, text, rationale } = args;
+      const base = `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}`;
+      // 先读这一段的现状（拿文件路径与指纹）：提议要基于一份确定的原文。
+      const current = await get(`${base}/block/${encodeURIComponent(block)}`);
+      const data = await post(`${base}/proposal`, {
+        kind: 'block_edit',
+        file: current.file,
+        block,
+        text,
+        expect_sha: current.sha || '',
+        source: 'mcp',
+        rationale: rationale || '',
+      });
+      const proposal = data.proposal || {};
+      const before = cap(proposal.before_text, 2000);
+      const after = cap(proposal.after_text, 2000);
+      return {
+        project, disk,
+        id: proposal.id || '',
+        kind: proposal.kind || 'block_edit',
+        file: proposal.file || current.file,
+        block: proposal.block || block,
+        before_sha: proposal.before_sha || '',
+        before_text: before.text,
+        after_text: after.text,
+        warnings: proposal.warnings || [],
+        rationale: proposal.rationale || '',
+        status: proposal.status || 'pending',
+        note: '这是一张提议单，**正文还没动**。请用户在 FactScribe 工作台的「待确认」差异卡里看过再采纳——不采纳就什么都不写。',
+      };
+    },
+
+    /** fs_list_proposals —— 只读 */
+    async listProposals(args) {
+      const { project, disk } = args;
+      const data = await get(`/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/proposal`);
+      const rows = /** @type {any[]} */ (data.proposals || []);
+      const truncated = rows.length > 20;
+      const items = (truncated ? rows.slice(0, 20) : rows).map((p) => ({
+        id: p.id,
+        kind: p.kind,
+        file: p.file,
+        block: p.block,
+        rationale: p.rationale || '',
+        created_at: p.created_at || '',
+        status: p.status,
+        warnings: p.warnings || [],
+        before_text: cap(p.before_text, 1200).text,
+        after_text: cap(p.after_text, 1200).text,
+      }));
+      const out = {
+        project, disk,
+        count: data.count ?? rows.length,
+        proposals: items,
+        note: '真正的采纳由人在页面点「采纳写回」；助手这边没有写入接口。',
+      };
+      if (truncated) {
+        out.truncated = true;
+        out.note += TRUNCATE_NOTE;
+      }
+      return out;
+    },
   };
 }
 
@@ -1022,6 +1165,8 @@ function dispatch(services, name, args) {
     case 'fs_get_report': return services.report(args);
     case 'fs_query_facts': return services.facts(args);
     case 'fs_search_kb': return services.searchKb(args);
+    case 'fs_propose_edit': return services.proposeEdit(args);
+    case 'fs_list_proposals': return services.listProposals(args);
     default: throw new Error('unreachable');
   }
 }
@@ -1088,10 +1233,16 @@ export async function start(context) {
   const engine = createEngine({ context, log });
 
   // 页面与 MCP 工具共用的引擎 GET 客户端（先确保引擎在跑，再发请求）。
-  const toolService = createToolService(async (pathWithQuery) => {
-    await engine.ensureReady();
-    return engineGet(engine.port, pathWithQuery);
-  });
+  const toolService = createToolService(
+    async (pathWithQuery) => {
+      await engine.ensureReady();
+      return engineGet(engine.port, pathWithQuery);
+    },
+    async (path, body) => {
+      await engine.ensureReady();
+      return enginePost(engine.port, path, body);
+    },
+  );
   const handleMcp = createMcpHandler(toolService, (message) => log.info(message));
 
   /** @type {Map<string, string>} */

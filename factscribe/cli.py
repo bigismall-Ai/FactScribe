@@ -213,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-browser", dest="no_browser", action="store_true",
                     help="不自动打开浏览器")
     sp.add_argument("--json", action="store_true", help="启动行只出 JSON（服务仍阻塞）")
+    sp.add_argument("--state-dir", default="",
+                    help="提议单落盘目录（v2；缺省 ~/.factscribe/state，"
+                         "MiniApp 侧由宿主指定 dataDir）")
     sp_subs = sp.add_subparsers(dest="workbench_action")
 
     sp_new = sp_subs.add_parser(
@@ -847,7 +850,8 @@ def cmd_workbench(args) -> int:
     if not root.is_dir():
         raise ConfigError("根目录不是文件夹：%s" % root, code="PROJECT_INVALID")
     server, index = create_server(root, host=args.host, port=args.port,
-                                  max_depth=int(getattr(args, "max_depth", 3)))
+                                  max_depth=int(getattr(args, "max_depth", 3)),
+                                  state_dir=str(getattr(args, "state_dir", "") or ""))
     host, port = server.server_address[0], server.server_address[1]
     url = "http://%s:%d/" % (host, port)
     projects = index.projects(refresh=True)
@@ -862,6 +866,7 @@ def cmd_workbench(args) -> int:
                     "/api/disk/<project>/<disk>/block/<id>",
                     "POST /api/disk/<project>/<disk>/edit",
                     "POST /api/disk/<project>/<disk>/toc/{move,delete,create}",
+                    "POST /api/disk/<project>/<disk>/proposal[/<id>/{confirm,reject}]",
                     "POST /api/project/{new,update,opened}"],
             "write": True,
         }, ensure_ascii=False), flush=True)

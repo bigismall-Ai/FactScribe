@@ -261,6 +261,29 @@ const I18N = {
     'draft.hint': '这是 AI 写的草稿块，不是正文；直接改字，也可以删掉。',
     'draft.deleted': 'AI 草稿块已删掉',
     'draft.delFail': '删不掉：{e}',
+    /* ---- v2：提议单（差异卡）——AI 提议 → 人确认才写回 ---- */
+    'proposal.badge': '待确认',
+    'proposal.title': '待确认的改稿提议',
+    'proposal.adopt': '采纳写回',
+    'proposal.reject': '拒绝',
+    'proposal.before': '现状',
+    'proposal.after': '采纳后',
+    'proposal.stale': '这段在别处已被改动',
+    'proposal.empty': '没有待确认的提议。',
+    'proposal.adopted': '已采纳写回',
+    'proposal.rejected': '已拒绝这条提议',
+    'proposal.created': '创建于 {time}',
+    'proposal.warnings': '警告：{text}',
+    'proposal.queued': '已放进待确认',
+    'proposal.queueFail': '没能建提议单：{e}',
+    'proposal.confirmFail': '没能采纳：{e}',
+    'proposal.rejectFail': '没能拒绝：{e}',
+    'proposal.loadFail': '读提议单失败：{e}',
+    'proposal.fromMcp': '来自助手',
+    'proposal.fromPage': '来自页面',
+    'proposal.fromUnknown': '来源不明',
+    'proposal.kindEdit': '改稿',
+    'proposal.kindDraft': '插入草稿',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -524,6 +547,29 @@ const I18N = {
     'draft.hint': 'An AI-written draft block, not body text. Edit it in place, or delete it.',
     'draft.deleted': 'AI draft block deleted',
     'draft.delFail': 'Could not delete: {e}',
+    /* ---- v2: proposals (diff cards) -- AI proposes, a human confirms ---- */
+    'proposal.badge': 'Pending',
+    'proposal.title': 'Pending proposals',
+    'proposal.adopt': 'Adopt and write back',
+    'proposal.reject': 'Reject',
+    'proposal.before': 'Current',
+    'proposal.after': 'After adopting',
+    'proposal.stale': 'This paragraph was changed elsewhere',
+    'proposal.empty': 'No pending proposals.',
+    'proposal.adopted': 'Adopted and written back',
+    'proposal.rejected': 'Proposal rejected',
+    'proposal.created': 'Created at {time}',
+    'proposal.warnings': 'Warning: {text}',
+    'proposal.queued': 'Queued for confirmation',
+    'proposal.queueFail': 'Could not create the proposal: {e}',
+    'proposal.confirmFail': 'Could not apply the proposal: {e}',
+    'proposal.rejectFail': 'Could not reject the proposal: {e}',
+    'proposal.loadFail': 'Could not load proposals: {e}',
+    'proposal.fromMcp': 'From assistant',
+    'proposal.fromPage': 'From page',
+    'proposal.fromUnknown': 'Unknown source',
+    'proposal.kindEdit': 'Edit',
+    'proposal.kindDraft': 'Insert draft',
   },
 };
 
@@ -553,6 +599,8 @@ const state = {
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
   wz: { step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [], suggested: [], sha: '', busy: false, parseError: '' }, // 段四：导入向导
+  proposals: [],       // v2：待确认提议单（差异卡的数据源）
+  staleProposals: {},  // v2：本地判过期的提议单（服务端已不列 pending，留着说清原因）
 };
 
 async function postJSON(url, body) {
@@ -1093,6 +1141,8 @@ async function loadDisk() {
   }
   renderCover();
   renderBlocks();
+  // v2：待确认提议单跟着当前盘走（进哪篇管哪篇）。
+  await loadProposals();
   // 段五：封面摘要（可编辑；写回走段二同一保护通道）。
   await loadAbstract();
   // 段六：版式配置跟着当前盘走（截稿徽标立刻可显示）。
@@ -2142,7 +2192,9 @@ async function copyReply(text) {
   toast(t('ai.copyFail', { e: 'clipboard unavailable' }));
 }
 
-/* 段六：写进稿——以 AI 标记块插到那一段之后（不混进正文）。 */
+/* 段六 → v2：写进稿改道——不再直写稿，改成「建一张 ai_draft 提议单」。
+   AI 面板从此没有直接改正文的口子：回复先落成待确认单，人到左栏徽标
+   打开差异卡点「采纳写回」才写进正文（写回仍走后端那条保护链）。 */
 async function writeIntoDraft(text) {
   const quote = state.ai.quote;
   if (!quote || !quote.file || !quote.id) {
@@ -2151,27 +2203,31 @@ async function writeIntoDraft(text) {
   }
   const body = String(text || '').trim();
   if (!body) { toast(t('ai.writeNoTarget')); return; }
-  const project = state.project;
-  const disk = currentDisk();
-  if (!project || !disk) { toast(t('ai.writeNoTarget')); return; }
-  const url = `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/draft/insert`;
+  const path = proposalPath('');
+  if (!path) { toast(t('ai.writeNoTarget')); return; }
   try {
-    const res = await fetch(url, {
+    const res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ file: quote.file, block: quote.id, text: body }),
+      body: JSON.stringify({
+        kind: 'ai_draft',
+        file: quote.file,
+        block: quote.id,
+        text: body,
+        source: 'page',
+      }),
     });
-    const data = await res.json();
+    let data = null;
+    try { data = await res.json(); } catch (err) { data = null; }
     if (!res.ok || !data || data.ok === false) {
-      toast(t('ai.writeFail', { e: (data && data.error) || ('HTTP ' + res.status) }));
+      toast(t('proposal.queueFail', { e: (data && data.error) || ('HTTP ' + res.status) }));
       return;
     }
-    toast(t('ai.written'));
-    // 条目 36：草稿块原地插到那一段之后，不整篇重载；条目 43：插进来就能直接改。
-    if (data.block && data.html && insertBlockAfter(data.after, data.block, data.html, quote.file)) return;
-    await loadDisk();
+    // 只建单，不碰正文：徽标数字跟着长起来。
+    toast(t('proposal.queued'));
+    await loadProposals();
   } catch (err) {
-    toast(t('ai.writeFail', { e: (err && err.message) || String(err) }));
+    toast(t('proposal.queueFail', { e: (err && err.message) || String(err) }));
   }
 }
 
@@ -3303,6 +3359,371 @@ async function runOpenDirAction() {
     `<div class="act-kv"><span>${esc(t('act.pdfPath'))}</span><code>${esc(data.path || '')}</code></div>`);
 }
 
+/* ---------------------------------------------------------------- 提议单（v2）：差异卡
+   AI／助手的改稿提议落成一张待确认单；人点「采纳写回」才真写正文。
+   页面这一侧只做四件事：列单（徽标数）、画差异卡（左现状／右采纳后）、
+   采纳、拒绝。落盘由后端那条保护链做（指纹闸 → 重建 → 原子写），
+   页面不自己拼正文。
+
+   过期（409 BLOCK_STALE）一律拒写：后端把单子判成 stale，页面只提示
+   「这段在别处已被改动」，并把该块的新鲜内容换回正文。 */
+
+/* 提议单接口路径：/api/disk/<project>/<disk>/proposal[...]. */
+function proposalPath(suffix) {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return null;
+  return `/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/proposal${suffix || ''}`;
+}
+
+/* 徽标：待确认数 > 0 才亮（没有待确认提议时整枚按钮藏起来）。 */
+function updateProposalBadge(count) {
+  const n = Number(count || 0);
+  const badge = $('#proposalCount');
+  const btn = $('#btnProposals');
+  if (badge) {
+    badge.textContent = String(n);
+    badge.hidden = n <= 0;
+  }
+  if (btn) {
+    btn.hidden = n <= 0;
+    btn.disabled = n <= 0;
+  }
+}
+
+/* 列单：GET /proposal → 徽标数字 → 差异卡。 */
+async function loadProposals() {
+  const path = proposalPath('');
+  if (!path) { updateProposalBadge(0); return []; }
+  let data = null;
+  try {
+    data = await getJSON(path);
+  } catch (err) {
+    updateProposalBadge(0);
+    toast(t('proposal.loadFail', { e: (err && err.message) || String(err) }));
+    return [];
+  }
+  const rows = (data && data.proposals) || [];
+  state.proposals = rows;
+  const count = Number((data && data.count !== undefined && data.count !== null) ? data.count : rows.length);
+  updateProposalBadge(count);
+  renderProposals(mergeProposalRows(rows));
+  return rows;
+}
+
+/* 本地判过期的单（409 之后）仍留在列表里说清原因，只是不给采纳。 */
+function mergeProposalRows(rows) {
+  const list = (rows || []).slice();
+  const stale = state.staleProposals || {};
+  Object.keys(stale).forEach((id) => {
+    if (list.some((row) => row && row.id === id)) return;
+    list.push(stale[id]);
+  });
+  return list;
+}
+
+/* 画差异卡：每条提议一张卡（左＝现状，右＝采纳后，逐行标增删）。 */
+function renderProposals(list) {
+  const box = $('#proposalList');
+  if (!box) return;
+  const rows = (Array.isArray(list) ? list : []).filter((row) => row && row.id);
+  box.innerHTML = '';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'prop-empty';
+    empty.textContent = t('proposal.empty');
+    box.appendChild(empty);
+    return;
+  }
+  rows.forEach((row) => box.appendChild(proposalCard(row)));
+}
+
+/* 一张差异卡。 */
+function proposalCard(row) {
+  const card = document.createElement('article');
+  card.className = 'proposal-card';
+  card.dataset.id = row.id;
+  const stale = String(row.status || 'pending') !== 'pending';
+  if (stale) card.classList.add('prop-stale');
+
+  const head = document.createElement('div');
+  head.className = 'prop-head';
+  const src = document.createElement('span');
+  src.className = 'prop-src';
+  src.textContent = proposalSourceLabel(row);
+  const kind = document.createElement('span');
+  kind.className = 'prop-kind';
+  kind.textContent = (String(row.kind || '') === 'ai_draft') ? t('proposal.kindDraft') : t('proposal.kindEdit');
+  const time = document.createElement('span');
+  time.className = 'prop-time';
+  time.textContent = t('proposal.created', { time: formatTime(row.created_at) });
+  head.appendChild(src);
+  head.appendChild(kind);
+  head.appendChild(time);
+  card.appendChild(head);
+
+  const rows = diffRows(row.before_text, row.after_text);
+  const cols = document.createElement('div');
+  cols.className = 'prop-cols';
+  cols.appendChild(propColumn(t('proposal.before'), 'prop-before', rows, 'left'));
+  cols.appendChild(propColumn(t('proposal.after'), 'prop-after', rows, 'right'));
+  card.appendChild(cols);
+
+  const warns = row.warnings || [];
+  if (warns.length) {
+    const warn = document.createElement('div');
+    warn.className = 'prop-warn';
+    warn.textContent = t('proposal.warnings', { text: warns.join('; ') });
+    card.appendChild(warn);
+  }
+  if (stale) {
+    const note = document.createElement('div');
+    note.className = 'prop-stale-note';
+    note.textContent = t('proposal.stale');
+    card.appendChild(note);
+  }
+
+  const acts = document.createElement('div');
+  acts.className = 'prop-acts';
+  const adopt = document.createElement('button');
+  adopt.type = 'button';
+  adopt.className = 'btn-primary prop-adopt';
+  adopt.setAttribute('data-confirm', row.id);
+  adopt.textContent = t('proposal.adopt');
+  if (stale) adopt.disabled = true;
+  const reject = document.createElement('button');
+  reject.type = 'button';
+  reject.className = 'btn-ghost prop-reject';
+  reject.setAttribute('data-reject', row.id);
+  reject.textContent = t('proposal.reject');
+  acts.appendChild(adopt);
+  acts.appendChild(reject);
+  card.appendChild(acts);
+  return card;
+}
+
+/* 来源标签：mcp（助手）还是页面自己发的。 */
+function proposalSourceLabel(row) {
+  const source = String((row && row.source) || '').toLowerCase();
+  if (source === 'mcp') return t('proposal.fromMcp');
+  if (source === 'page') return t('proposal.fromPage');
+  return t('proposal.fromUnknown');
+}
+
+/* 左右两栏里的一栏（side: left / right）。 */
+function propColumn(title, cls, rows, side) {
+  const col = document.createElement('div');
+  col.className = 'prop-col';
+  const head = document.createElement('div');
+  head.className = 'prop-col-h';
+  head.textContent = title;
+  col.appendChild(head);
+  const body = document.createElement('div');
+  body.className = 'prop-body ' + cls;
+  rows.forEach((row) => {
+    const line = document.createElement('div');
+    const text = (side === 'left') ? row.left : row.right;
+    if (text === null || text === undefined) {
+      line.className = 'prop-line prop-gap';
+    } else {
+      const mark = (side === 'left') ? row.leftKind : row.rightKind;
+      line.className = 'prop-line' + (mark ? ' ' + mark : '');
+      line.textContent = text;
+    }
+    body.appendChild(line);
+  });
+  col.appendChild(body);
+  return col;
+}
+
+/* 行级差异：LCS 对照；行数太多就退化成「整块替换」。 */
+function diffLines(before, after) {
+  const a = String(before === null || before === undefined ? '' : before).split('\n');
+  const b = String(after === null || after === undefined ? '' : after).split('\n');
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head += 1;
+  let tailA = a.length, tailB = b.length;
+  while (tailA > head && tailB > head && a[tailA - 1] === b[tailB - 1]) { tailA -= 1; tailB -= 1; }
+  const midA = a.slice(head, tailA);
+  const midB = b.slice(head, tailB);
+  const ops = [];
+  a.slice(0, head).forEach((line) => ops.push({ type: 'same', text: line }));
+  if (midA.length && midB.length && midA.length * midB.length > 40000) {
+    midA.forEach((line) => ops.push({ type: 'del', text: line }));
+    midB.forEach((line) => ops.push({ type: 'add', text: line }));
+  } else {
+    lcsOps(midA, midB).forEach((op) => ops.push(op));
+  }
+  a.slice(tailA).forEach((line) => ops.push({ type: 'same', text: line }));
+  return ops;
+}
+
+/* 最长公共子序列 → 一串 same / del / add 操作。 */
+function lcsOps(a, b) {
+  const n = a.length, m = b.length;
+  const dp = [];
+  for (let i = 0; i <= n; i += 1) dp.push(new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      dp[i][j] = (a[i] === b[j]) ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { ops.push({ type: 'same', text: a[i] }); i += 1; j += 1; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { ops.push({ type: 'del', text: a[i] }); i += 1; }
+    else { ops.push({ type: 'add', text: b[j] }); j += 1; }
+  }
+  while (i < n) { ops.push({ type: 'del', text: a[i] }); i += 1; }
+  while (j < m) { ops.push({ type: 'add', text: b[j] }); j += 1; }
+  return ops;
+}
+
+/* 差异排成左右对齐的行：改过的行左删右增，空缺的一侧留白。 */
+function diffRows(before, after) {
+  const ops = diffLines(before, after);
+  const rows = [];
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].type === 'same') {
+      rows.push({ left: ops[i].text, right: ops[i].text, leftKind: '', rightKind: '' });
+      i += 1;
+      continue;
+    }
+    const dels = [];
+    const adds = [];
+    while (i < ops.length && ops[i].type !== 'same') {
+      if (ops[i].type === 'del') dels.push(ops[i].text); else adds.push(ops[i].text);
+      i += 1;
+    }
+    const span = Math.max(dels.length, adds.length);
+    for (let k = 0; k < span; k += 1) {
+      const hasDel = k < dels.length;
+      const hasAdd = k < adds.length;
+      rows.push({
+        left: hasDel ? dels[k] : null,
+        right: hasAdd ? adds[k] : null,
+        leftKind: hasDel ? 'prop-del' : '',
+        rightKind: hasAdd ? 'prop-add' : '',
+      });
+    }
+  }
+  return rows;
+}
+
+/* 采纳：POST /proposal/<id>/confirm —— 后端落盘（走保护链），页面刷新正文。 */
+async function confirmProposal(id) {
+  const pid = String(id || '');
+  if (!pid) return;
+  const path = proposalPath('/' + encodeURIComponent(pid) + '/confirm');
+  if (!path) return;
+  let res = null;
+  let data = null;
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({}),
+    });
+  } catch (err) {
+    toast(t('proposal.confirmFail', { e: (err && err.message) || String(err) }));
+    return;
+  }
+  try { data = await res.json(); } catch (err) { data = null; }
+  if (res.status === 409 || (data && data.code === 'BLOCK_STALE')) {
+    // 这段在别处已被改动：后端已拒写并把单子判成 stale，页面只提示＋刷新。
+    markProposalStale(pid);
+    toast(t('proposal.stale'));
+    await reloadBlocks();
+    await loadProposals();
+    return;
+  }
+  if (!res.ok || !data || data.ok === false) {
+    toast(t('proposal.confirmFail', { e: (data && data.error) || ('HTTP ' + res.status) }));
+    await loadProposals();
+    return;
+  }
+  (data.warnings || []).forEach((w) => toast(w));
+  toast(t('proposal.adopted'));
+  await applyProposalResult(data);
+  await rerunCheck();
+  await loadProposals();
+}
+
+/* 409 之后：这张单服务端已判 stale，留在列表里说清原因（不给采纳）。 */
+function markProposalStale(pid) {
+  const known = (state.proposals || []).find((row) => row && row.id === pid);
+  if (!known) return;
+  state.staleProposals[pid] = Object.assign({}, known, { status: 'stale' });
+}
+
+/* 采纳之后：把新鲜内容换回正文（这一块 ＋ 同文件其它块）；草稿块插到锚段之后。 */
+async function applyProposalResult(response) {
+  const applied = response.applied || {};
+  const proposal = response.proposal || {};
+  const kind = String(proposal.kind || '');
+  // 摊平一层：after（锚段）／block（落笔的那块）／html（这一块的新鲜渲染）。
+  const data = Object.assign({}, applied, { html: response.html, blocks: response.blocks || {} });
+  // 锚段上下文（跟 AI 面板里的 quote 同义：被引用的那一段）。
+  const quote = { id: String(proposal.block || ''), file: String(applied.file || proposal.file || '') };
+  if (applied.sha && data.block) state.blockSha[data.block] = applied.sha;
+  if (kind === 'ai_draft' && data.block) {
+    // 新草稿块：正文里还没有这一块，插到锚段之后。
+    if (quote.id && data.html && insertBlockAfter(data.after, data.block, data.html, quote.file)) {
+      applyFreshBlocks(data.blocks, data.block);
+      return;
+    }
+    await loadDisk();
+    return;
+  }
+  applyFreshBlocks(data.blocks, data.block, (data.blocks[data.block] || data.html));
+}
+
+/* 用服务端回的新鲜 html 原地换正文（与 saveBlockNode 的成功分支同一手法）。 */
+function applyFreshBlocks(blocks, skipId, html) {
+  const map = blocks || {};
+  if (html && skipId) applyBlockHtml(skipId, html);
+  Object.keys(map).forEach((id) => {
+    if (id === skipId) return;
+    const live = blockNodeById(id);
+    if (!live) return;
+    const active = document.activeElement;
+    if (active && live.contains(active)) { live.dataset.stale = '1'; return; }
+    applyBlockHtml(id, map[id]);
+  });
+}
+
+/* 拒绝：POST /proposal/<id>/reject —— 丢弃这张单，正文一个字不动。 */
+async function rejectProposal(id) {
+  const pid = String(id || '');
+  if (!pid) return;
+  // 本地判过期的单服务端已经结掉了：直接把它从列表里拿掉，不去打扰服务端。
+  if (state.staleProposals[pid]) {
+    delete state.staleProposals[pid];
+    toast(t('proposal.rejected'));
+    renderProposals(mergeProposalRows(state.proposals));
+    return;
+  }
+  const path = proposalPath('/' + encodeURIComponent(pid) + '/reject');
+  if (!path) return;
+  try {
+    await postJSON(path, {});
+    delete state.staleProposals[pid];
+    toast(t('proposal.rejected'));
+  } catch (err) {
+    toast(t('proposal.rejectFail', { e: (err && err.message) || String(err) }));
+  }
+  await loadProposals();
+}
+
+/* 打开差异卡模态：列当前盘待确认的提议。 */
+async function openProposals() {
+  const modal = $('#modalProposal');
+  if (modal) modal.hidden = false;
+  await loadProposals();
+}
+
 /* ---------------------------------------------------------------- 全检模态（段五） */
 
 function openCheckModal() {
@@ -3364,6 +3785,20 @@ function bind() {
   $('#actCheck').addEventListener('click', runFullCheck);
   $('#actBundle').addEventListener('click', runBundleAction);
   $('#actOpenDir').addEventListener('click', runOpenDirAction);
+  // v2：待确认提议单——左栏徽标打开差异卡模态，卡上的两枚钮就地处理。
+  $('#btnProposals').addEventListener('click', openProposals);
+  $('#proposalClose').addEventListener('click', () => { $('#modalProposal').hidden = true; });
+  $('#modalProposal').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalProposal') $('#modalProposal').hidden = true;
+  });
+  $('#proposalList').addEventListener('click', (ev) => {
+    const target = ev.target;
+    if (!target || !target.closest) return;
+    const adopt = target.closest('[data-confirm]');
+    if (adopt) { confirmProposal(adopt.getAttribute('data-confirm')); return; }
+    const reject = target.closest('[data-reject]');
+    if (reject) { rejectProposal(reject.getAttribute('data-reject')); return; }
+  });
   $('#actClose').addEventListener('click', () => { $('#modalAction').hidden = true; });
   $('#modalAction').addEventListener('click', (ev) => {
     if (ev.target.id === 'modalAction') $('#modalAction').hidden = true;
@@ -3603,6 +4038,8 @@ async function main() {
   applyI18n();
   switchNavPane('toc');
   await loadProjects();
+  // v2：页面初始化时刷一次待确认提议单（还没开项目时徽标是空的）。
+  await loadProposals();
   setView('projects');
   // 条目 40：固定头部宽度随左区实测（首屏布局落定后同步一次）。
   scheduleHeaderWidthSync();

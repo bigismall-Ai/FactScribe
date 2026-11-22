@@ -51,10 +51,13 @@ from urllib.parse import unquote, urlparse
 
 from ..config import ConfigError
 from .projects import MAX_DEPTH, disk_meta, disk_sections, load_projects
+from .proposal import (ProposalError, create_proposal, list_proposals,
+                        read_proposal, resolve_proposal)
 from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE, abstract_block,
-                    create_paper_project, create_section, delete_section,
-                    editable_model, find_block, move_section, save_abstract,
-                    save_block, touch_opened, update_paper_project)
+                    apply_proposal, create_paper_project, create_section,
+                    delete_section, editable_model, find_block, move_section,
+                    save_abstract, save_block, touch_opened,
+                    update_paper_project)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_TYPES = {
@@ -100,10 +103,12 @@ class ProjectIndex:
     """项目索引：短 TTL 缓存，避免每次请求都重扫磁盘。"""
 
     def __init__(self, root: str | Path, max_depth: int = MAX_DEPTH,
-                 ttl: float = 2.0) -> None:
+                 ttl: float = 2.0, state_dir: str = "") -> None:
         self.root = Path(root).expanduser()
         self.max_depth = max_depth
         self.ttl = ttl
+        # 提议单落哪儿（v2）：显式传入 → 环境变量 → 工具自己的家目录。
+        self.state_dir = state_dir
         self._lock = threading.Lock()
         self._stamp = 0.0
         self._projects: list[dict] = []
@@ -260,6 +265,10 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 data = machine_payload(disk_path)
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
+            if what == "proposal":
+                return self._proposal_get(project_id, disk_id,
+                                           parts[5] if len(parts) > 5 else "",
+                                           query)
             return self._error(404, "没有这个接口：%s" % what)
         return self._error(404, "没有这个接口：%s" % route)
 
@@ -447,7 +456,82 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return self._json(result)
         if action == "draft":
             return self._draft_post(disk, parts[5] if len(parts) > 5 else "", body)
+        if action == "proposal":
+            return self._proposal_post(project_id, disk_id, disk,
+                                       parts[5:], body)
         return self._error(404, "没有这个操作：%s" % action)
+
+    # ---- 提议单（v2）：AI 提议 → 人确认才写回 ----
+
+    def _proposal_get(self, project_id: str, disk_id: str, pid: str,
+                      query: str) -> None:
+        """列提议单 / 取一张提议单（只读）。"""
+        state = self.index.state_dir
+        if pid:
+            try:
+                data = read_proposal(state, pid)
+            except ProposalError as exc:
+                return self._error(exc.status, str(exc))
+            return self._json({"ok": True, "proposal": data})
+        status = "pending"
+        for pair in query.split("&"):
+            if pair.startswith("status="):
+                status = pair.split("=", 1)[1] or "pending"
+        rows = list_proposals(state, project=project_id, disk=disk_id,
+                              status=status)
+        return self._json({"ok": True, "count": len(rows), "proposals": rows})
+
+    def _proposal_post(self, project_id: str, disk_id: str, disk: Path,
+                       rest: list, body: dict) -> None:
+        """建单（不碰正文）／采纳（落盘）／丢弃。"""
+        state = self.index.state_dir
+        pid = rest[0] if rest else ""
+        what = rest[1] if len(rest) > 1 else ""
+        if not pid:
+            try:
+                record = create_proposal(state, project_id, disk_id, disk, body)
+            except ConfigError as exc:
+                return self._error(400, str(exc))
+            except ProposalError as exc:
+                return self._error(exc.status, str(exc))
+            return self._json({"ok": True, "proposal": record})
+        if what == "confirm":
+            try:
+                proposal = read_proposal(state, pid)
+            except ProposalError as exc:
+                return self._error(exc.status, str(exc))
+            if str(proposal.get("status") or "") != "pending":
+                return self._error(409, "这张提议单已经处理过了（%s）。"
+                                   % proposal.get("status"))
+            try:
+                applied = apply_proposal(disk, proposal)
+            except ConfigError as exc:
+                if getattr(exc, "code", "") == BLOCK_STALE_CODE:
+                    # 提议之后正文被别处改过：拒写，把新鲜块回给前端。
+                    try:
+                        resolve_proposal(state, pid, "stale")
+                    except ProposalError:
+                        pass
+                    return self._stale_response(
+                        disk, str(proposal.get("file") or ""),
+                        str(proposal.get("block") or ""))
+                return self._error(400, str(exc))
+            record = resolve_proposal(state, pid, "applied")
+            result = {"ok": True, "proposal": record, "applied": applied,
+                      "warnings": applied.get("warnings") or []}
+            rel = str(applied.get("file") or "")
+            if rel:
+                result["html"] = self._rerender_block(
+                    disk, rel, str(applied.get("block") or ""))
+                result["blocks"] = self._fresh_blocks(disk, rel)
+            return self._json(result)
+        if what == "reject":
+            try:
+                record = resolve_proposal(state, pid, "rejected")
+            except ProposalError as exc:
+                return self._error(exc.status, str(exc))
+            return self._json({"ok": True, "proposal": record})
+        return self._error(404, "没有这个提议操作：%s" % what)
 
     def _rerender_block(self, disk: Path, rel: str, block_id: str) -> str:
         """写回之后，对**这一个块**做轻渲染，返回它的新 html。
@@ -964,9 +1048,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
 
 def create_server(root: str | Path, host: str = "127.0.0.1", port: int = 0,
                   max_depth: int = MAX_DEPTH, ttl: float = 2.0,
-                  verbose: bool = False):
+                  verbose: bool = False, state_dir: str = ""):
     """起服务；返回 (server, index)。server.server_address 有真实端口。"""
-    index = ProjectIndex(root, max_depth=max_depth, ttl=ttl)
+    index = ProjectIndex(root, max_depth=max_depth, ttl=ttl, state_dir=state_dir)
 
     class Handler(WorkbenchHandler):
         pass

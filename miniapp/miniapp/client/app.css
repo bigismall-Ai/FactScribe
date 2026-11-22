@@ -1406,3 +1406,65 @@ body:not([data-view="workbench"]) .left-col{padding-top:48px}
 /* 条目 37：编辑态可见的「已保存」角标（1.5s 自动消失） */
 .save-badge{margin-left:8px;font-family:inherit;font-size:10.5px;color:#1c6b4c;background:#f2faf5;
  border:1px solid #b6d8c4;border-radius:6px;padding:1px 6px;vertical-align:middle;white-space:nowrap}
+
+
+/* ================================================================
+   v2：提议单差异卡（AI 提议 → 人确认才写回）
+   —— 左栏徽标 ＋ 模态里的卡 ＋ 左右两栏对照（删行／增行／警告）
+   ================================================================ */
+
+/* 徽标按钮：没有待确认提议时整枚藏掉。
+   .lh-tool 自带 display:inline-flex，会压过 UA 的 [hidden]{display:none}，
+   所以这里显式补一条，两边一致（藏起来，不置灰）。 */
+.lh-tool[hidden]{display:none}
+.prop-badge-btn{color:#8a5a10;background:#fdf7ea;border-color:#eddcb4}
+.prop-badge-btn:hover{background:#f8eed6;color:#6d470c;border-color:#e2c98f}
+.prop-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+ padding:0 5px;border-radius:999px;background:#b4622a;color:#fff;font-size:11px;font-weight:700;line-height:1}
+.prop-count[hidden]{display:none}
+
+/* 模态与卡 */
+#modalProposal .modal-body{padding:14px 16px}
+.proposal-card{border:1px solid #e3e2df;border-radius:10px;background:#fff;margin:0 0 14px;overflow:hidden}
+.proposal-card:last-child{margin-bottom:0}
+.proposal-card.prop-stale{opacity:.85}
+
+/* 卡头：来源 ＋ 类型 ＋ 时间 */
+.prop-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #efefee;background:#fafaf8}
+.prop-src{font-size:11.5px;font-weight:650;color:#5f5e5b}
+.prop-kind{font-size:10.5px;color:#8a8577;border:1px solid #e3e2df;border-radius:5px;padding:0 5px}
+.prop-time{margin-left:auto;font-size:11px;color:#9b9585}
+
+/* 左右两栏：左＝现状，右＝采纳后 */
+.prop-cols{display:grid;grid-template-columns:1fr 1fr}
+.prop-col{min-width:0;border-right:1px solid #efefee}
+.prop-col:last-child{border-right:none}
+.prop-col-h{padding:6px 10px;font-size:11px;letter-spacing:.4px;color:#8a8577;background:#fdfdfb;
+ border-bottom:1px solid #efefee}
+.prop-body{padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+ line-height:1.7;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+.prop-before{background:#fdfdfb}
+.prop-after{background:#fff}
+.prop-line{padding:0 4px;border-radius:3px;min-height:1.7em}
+/* 删行（现状里将被去掉）／增行（采纳后新加进来的） */
+.prop-del{background:#fdf3f0;color:#9a3b1e;box-shadow:inset 2px 0 0 #e7c4b8}
+.prop-add{background:#f2faf5;color:#1c6b4c;box-shadow:inset 2px 0 0 #b6d8c4}
+/* 两侧对不齐时的空缺格 */
+.prop-gap{background:#f7f7f5}
+
+/* 警告行：护面芯片被剥掉这类事必须让人看见 */
+.prop-warn{padding:8px 12px;font-size:12px;line-height:1.65;color:#8a5a10;background:#fdf7ea;border-top:1px solid #eddcb4}
+.prop-stale-note{padding:8px 12px;font-size:12px;line-height:1.65;color:#9a3b1e;background:#fdf3f0;border-top:1px solid #e7c4b8}
+
+/* 卡底两枚钮：采纳写回／拒绝 */
+.prop-acts{display:flex;gap:8px;justify-content:flex-end;padding:10px 12px;border-top:1px solid #efefee;background:#fafaf8}
+.prop-acts .btn-primary,.prop-acts .btn-ghost{font-size:12.5px;padding:6px 12px}
+.prop-adopt[disabled]{opacity:.45;cursor:default}
+
+/* 空态 */
+.prop-empty{padding:26px 10px;text-align:center;font-size:13px;color:#8a8577}
+
+@media (max-width:700px){
+ .prop-cols{grid-template-columns:1fr}
+ .prop-col{border-right:none;border-bottom:1px solid #efefee}
+}

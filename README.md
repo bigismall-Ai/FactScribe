@@ -262,10 +262,10 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 
 缺 `factscribe.toml`、事实账为空、正文为空、`refs.bib` 缺失，一律退出码 2 并说清原因，不静默放行。
 
-## 工作台运行须知（改完代码必须重启）
+## 工作台运行须知
 
-工作台是**常驻进程**：Python 端点与前端静态文件都是启动时加载的。改完代码
-还看着旧页面／旧行为，多半是**旧进程还在跑**，不是改动没生效。
+改完代码必须重启。工作台是**常驻进程**：Python 端点与前端静态文件都是启动时加载的。
+改完代码还看着旧页面／旧行为，多半是**旧进程还在跑**，不是改动没生效。
 
 ```bash
 # 1）看有没有残留的旧服务进程
@@ -308,7 +308,7 @@ python3 -m factscribe workbench --root /path/to/papers
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1657 例，全离线
+python3 -m unittest discover -s tests     # 1987 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

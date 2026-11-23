@@ -2007,6 +2007,89 @@ async function rerunCheck() {
 「散文＋token」POST /edit（带 expect_sha 指纹闸）。保存成功用应答的 blocks
 刷新同文件其他块（杜绝兄弟段 token 过期）；409 BLOCK_STALE 原地重载新文。 */
 
+/* 条目 44：IME 组合感知。组合期间（拼音还在候选框里）任何对编辑宿主的改动都会
+   打断组合、把光标甩进插入的节点里；而此刻 DOM 里躺着的是候选中的拼音，
+   直接收去保存会写进正文。所以组合期间只记账，不动 DOM、不收正文。 */
+const imeState = {
+  active: false,        // 组合进行中
+  blockId: '',         // 正在组合的那一块
+  pendingSave: null,   // 组合期间被拦下的保存（结束后补跑）
+  pendingBadge: null,  // 组合期间被拦下的「已保存」角标
+  pendingHtml: null,   // 组合期间被拦下的整块替换（结束后补做）
+  stuckTimer: 0,       // 组合迟迟不结束的兜底
+};
+
+/* 条目 44：段内光标偏移的取/还——整块替换 DOM 后按偏移把光标放回原处，
+   而不是让它跳回块首。 */
+function caretTextOffset(host) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  if (!range.startContainer || !host.contains(range.startContainer)) return null;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(host);
+  try { pre.setEnd(range.startContainer, range.startOffset); } catch (err) { return null; }
+  return pre.toString().length;
+}
+
+function restoreCaretOffset(host, offset) {
+  if (offset === null || offset === undefined) return false;
+  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  let left = offset;
+  while (node) {
+    const len = node.nodeValue.length;
+    if (left <= len) {
+      const range = document.createRange();
+      range.setStart(node, left);
+      range.collapse(true);
+      const sel = window.getSelection();
+      if (!sel) return false;
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    }
+    left -= len;
+    node = walker.nextNode();
+  }
+  return false;
+}
+
+/* 条目 44：组合结束后统一补做——芯片重绑、欠下的整块替换、角标、欠下的保存。 */
+function flushAfterComposition(blockId) {
+  const node = blockId ? blockNodeById(blockId) : null;
+  if (node) {
+    const host = blockContentHost(node);
+    bindFactChips(host);
+    bindChipCaret(host);
+  }
+  const pending = imeState.pendingHtml;
+  if (pending && (!blockId || pending.blockId === blockId)) {
+    imeState.pendingHtml = null;
+    applyBlockHtml(pending.blockId, pending.html);
+  }
+  if (imeState.pendingBadge) {
+    const bid = imeState.pendingBadge;
+    imeState.pendingBadge = null;
+    showSavedBadge(bid);
+  }
+  if (imeState.pendingSave && imeState.pendingSave.isConnected) {
+    const n = imeState.pendingSave;
+    imeState.pendingSave = null;
+    saveBlockNode(n);
+  }
+}
+
+/* 条目 44：组合迟迟不结束的兜底——超过 5s 就撤掉「组合中」的标记，
+   免得整页从此收不了正文；但不主动去收（那会把候选中的拼音写进 .tex）。 */
+function clearStuckComposition() {
+  imeState.stuckTimer = 0;
+  if (!imeState.active) return;
+  imeState.active = false;
+  imeState.blockId = '';
+  imeState.pendingSave = null;
+}
+
 function collectPlain(host) {
   /* 把块里的内容还原成「散文 + 占位符」的串（占位符＝保护面芯片自带 data-token）。 */
   let out = '';
@@ -2044,22 +2127,36 @@ function applyBlockHtml(blockId, html) {
   if (!html) return false;
   const node = blockNodeById(blockId);
   if (!node) return false;
+  // 条目 44：组合进行中不动这一块——换了内容，候选里的拼音就断了。
+  if (imeState.active && (!imeState.blockId || imeState.blockId === blockId)) {
+    imeState.pendingHtml = { blockId: blockId, html: html };
+    return false;
+  }
   const host = blockContentHost(node);
   const holder = document.createElement('div');
   holder.innerHTML = html;
   const fresh = holder.firstElementChild;
   if (!fresh) return false;
+  // 条目 44：整块替换前记下段内光标偏移，换完按偏移放回去（不甩回块首）。
+  const caret = caretTextOffset(host);
   host.innerHTML = fresh.innerHTML;
   host.setAttribute('contenteditable', 'true');
   host.setAttribute('spellcheck', 'false');
   delete node.dataset.stale;
   bindFactChips(host);
+  bindChipCaret(host);
+  restoreCaretOffset(host, caret);
   return true;
 }
 
 /* 条目 43：保存一个块。node＝带 data-block-id 的可编辑块。 */
 async function saveBlockNode(node) {
   if (!node || !node.isConnected) return;
+  // 条目 44：组合进行中不收正文——此刻 DOM 里是候选中的拼音，收下去会写进 .tex。
+  if (imeState.active) {
+    imeState.pendingSave = node;
+    return;
+  }
   if (node.dataset.saving === '1') {
     // 在飞期间的再失焦：记一笔，本轮落定后补一轮保存（不丢字）。
     node.dataset.resave = '1';
@@ -2199,17 +2296,51 @@ function removeBlockNode(blockId) {
   return true;
 }
 
-/* 条目 37：可见的「已保存」角标（1.5s 自动消失；不算正文，收集时跳过）。 */
+/* 条目 44：「已保存」角标改成挂在正文之外的浮层——原来插进编辑宿主内部，
+   会把正文文本流顶出 "Saved" 三个字；组合进行中还会把光标甩进角标里
+   （实测：下一次组合落到角标文本节点 offset 1）。 */
 function showSavedBadge(blockId) {
   const node = blockNodeById(blockId);
   if (!node) return;
+  // 组合进行中：先记账，组合结束后再挂（挂的动作要动编辑宿主附近的 DOM）。
+  if (imeState.active && (!imeState.blockId || imeState.blockId === blockId)) {
+    imeState.pendingBadge = blockId;
+    return;
+  }
+  const host = blockContentHost(node);
   const badge = document.createElement('span');
   badge.className = 'save-badge';
   badge.dataset.badge = '1';
   badge.setAttribute('contenteditable', 'false');
   badge.textContent = t('edit.savedBadge');
-  const host = blockContentHost(node);
-  host.appendChild(badge);
+  badge.style.visibility = 'hidden';
+  document.body.appendChild(badge);
+  let left = 0;
+  let top = 0;
+  try {
+    const rect = host.getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(host);
+    range.collapse(false);
+    const end = range.getBoundingClientRect();
+    const endRight = end && (end.width || end.height) ? end.right : rect.right;
+    const endTop = end && end.height ? end.top : rect.top;
+    const endBottom = end && end.height ? end.bottom : rect.bottom;
+    left = endRight + 6;
+    top = endTop;
+    // 末行顶到正文列右缘时，改塞进末行下方的空档——不出界、不压字。
+    if (left + badge.offsetWidth > rect.right - 4) {
+      left = Math.max(rect.left + 4, rect.right - badge.offsetWidth - 4);
+      top = endBottom + 2;
+    }
+  } catch (err) {
+    const rect = host.getBoundingClientRect();
+    left = rect.left + 8;
+    top = rect.top;
+  }
+  badge.style.left = Math.round(left + window.scrollX) + 'px';
+  badge.style.top = Math.round(top + window.scrollY) + 'px';
+  badge.style.visibility = '';
   setTimeout(() => { if (badge.parentNode) badge.remove(); }, 1500);
 }
 
@@ -5067,6 +5198,23 @@ function bind() {
     closeFactCard();
     closeParaMenu();
   });
+  // 条目 44：IME 组合感知——组合期间不保存、不改编辑宿主、不挂角标；
+  // 组合结束后统一补做（芯片重绑、欠下的整块替换、角标、欠下的保存）。
+  document.addEventListener('compositionstart', (ev) => {
+    const target = ev.target;
+    const node = target && target.closest ? target.closest('[data-block-id]') : null;
+    imeState.active = true;
+    imeState.blockId = node ? (node.dataset.blockId || '') : '';
+    if (imeState.stuckTimer) { clearTimeout(imeState.stuckTimer); imeState.stuckTimer = 0; }
+    imeState.stuckTimer = setTimeout(clearStuckComposition, 5000);
+  }, true);
+  document.addEventListener('compositionend', () => {
+    if (imeState.stuckTimer) { clearTimeout(imeState.stuckTimer); imeState.stuckTimer = 0; }
+    const blockId = imeState.blockId;
+    imeState.active = false;
+    imeState.blockId = '';
+    flushAfterComposition(blockId);
+  }, true);
   // 条目 43：失焦即保存（容器级委托，会冒泡；120ms 守卫焦点去向——
   // 点块内的芯片不算离开）。没有「进入编辑」，也就没有「取消编辑」。
   document.addEventListener('focusout', (ev) => {

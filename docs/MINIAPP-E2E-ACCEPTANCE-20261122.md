@@ -492,3 +492,125 @@ network failed/4xx/5xx：0 条
 | 不动四步链闸门语义、块形状闸、双 Profile 契约、金样例基线 | 已定口径；`tests/golden/audit_findings_baseline.json` 未重冻、未改一个字节 |
 | 不把界面 chrome 与引擎侧文案混在一处 | 界面 chrome 走 app.js 既有静态字典（步骤标题／字段标签／按钮），引擎侧文案（清单未签／产物被改／扫描范围／账本错因）走 `wb.*` 目录随端点载荷下发，两条都是既有机制 |
 | 不删上轮遗留的 `/tmp/fs-i18n-root` 副本盘 | 与本轮无关，留着不动 |
+
+## 8. 2026-11-23 第四轮：正文编辑「不跟手」——先实测定位，再按实测修
+
+### 8.1 症状与三个嫌疑（**都先当假设**）
+
+用户反馈：正文页面编辑不跟手（修完此前四项交互问题后仍存在）。开工时列了三个假设：
+
+| # | 嫌疑 | 事前判断 |
+|---|---|---|
+| 1 | 中文输入法（IME）没被处理：`app.js` 里搜不到 compositionstart／compositionend／isComposing | 方向待证 |
+| 2 | 保存后整块替换 DOM（`host.innerHTML = fresh.innerHTML`）把光标甩回块首 | 守卫生效与否待证 |
+| 3 | 保存时往编辑宿主里 append「已保存」角标，顶动光标 | 待证 |
+
+三个都用**真浏览器实测**证实或推翻，不靠代码推断。
+
+### 8.2 实测方法（真浏览器，不是代码推断）
+
+* 宿主内嵌浏览器发不出真 IME → 另起**真 Chrome headless（158）＋ CDP**：
+  `Input.dispatchKeyEvent` 发**真键盘事件**（不是页面里合成的 `dispatchEvent`），
+  `Input.imeSetComposition` 走**真 IME 组合管线**——`compositionstart` →
+  `compositionupdate` → `compositionend` 都是浏览器真实派发。
+* 页面＝引擎自己服务的 `/`（`factscribe/workbench/static/` 原件，不是拷贝），
+  论文根指向副本盘 `/tmp/fs-editoroot`。
+* 探针：document 级 `keydown`／`input`／`composition*` 监听 ＋ `MutationObserver`
+  ＋ `getSelection()` 读光标（节点名／段内偏移／屏幕坐标／上下文片段）。
+* 「保存响应」用 CDP `Fetch` 拦下再放行，把时序钉死：组合进行中 → 点别的段（触发保存）
+  → 回到原段 → 起组合 → **放行保存响应**。
+
+### 8.3 修复前实测读数
+
+| 项 | 读数 |
+|---|---|
+| 英文逐键（60 次真按键） | keydown→input：均值 **0.72ms**／峰值 **4.5ms**；input→paint（下一帧）：均值 **6.99ms**／峰值 **15.13ms** |
+| 每键 DOM 变动 | 60 次输入＝**60 条** mutation，**全是** `characterData`；非正文变动 **0 条** |
+| 打字前后 DOM 节点数 | 1865 → 1863（**不增长**） |
+| 累积卡顿（300 次真按键） | 节点数 **1887 → 1887**；document 监听数 **9 → 9**；每键延迟全程 0.4–1.3ms，**无上升趋势** |
+| 真 IME 组合（不被打扰时） | compositionstart → update('zhongwen') → update('中文') → **compositionend('中文')**；正文落地、光标紧跟其后 → **纯组合本身是好的** |
+| 组合进行中保存响应回来 | 应答把 `SPAN.save-badge` **append 进正在编辑的宿主** `P#01_intro-p1`（kids 147→148）；正文文本流被顶出角标文字（tail `…xzxSaved`） |
+| 组合之后的下一次组合 | 光标落到**角标自己的文本节点**：`node=#text, offset=1, ctx='S'` |
+| 整块替换 DOM | 宿主内 childList 变动 2 条（整块换）；但**聚焦中的块被守卫生效地跳过**（只记 `data-stale='1'`），正文与光标不受影响 |
+| 同文件连续编辑两段 | 第二段被标 stale 后再保存：**不丢字**、无 BLOCK_STALE（toast 只有 "Saved (original kept as .bak)"） |
+| 保存往返 | `POST /api/disk/paper/paper/edit` 单次 **267.5ms**（start 5234.3 → respEnd 5501.8） |
+| 响应处理开销 | 整文件兄弟块重建：**1 次调用 / 0.3ms**（01_intro.tex 只有 1 段） |
+| 落盘层 | 角标文字**没有**漏进 `.tex`（`grep -c Saved` → 0）——`collectPlain` 跳过 `data-badge` |
+
+### 8.4 三个嫌疑的裁定
+
+| 嫌疑 | 裁定 | 依据 |
+|---|---|---|
+| 1 IME 未处理 | **成立**（但表现不是「拼音提前上屏」） | App 对组合**零感知**（组合期间照样保存、照样改宿主）；组合进行中保存响应一回来就改宿主，下一次组合的光标被甩进角标 |
+| 2 整块替换甩光标 | **基本证伪** | 聚焦中的块被守卫生效跳过；同文件连续编辑不丢字、无 BLOCK_STALE。代码里确实**没有**「替换后恢复光标」这层（守卫前提一旦不成立，光标会被甩掉）→ 只补这层保险，**不动守卫语义** |
+| 3 角标顶动光标 | **成立** | 角标插进正文文本流（正文里多出角标文字）；组合进行中下一次组合的光标落进角标文本节点 |
+| 附：累积卡顿 | **证伪** | 300 键后节点数、监听数、每键延迟全无变化 |
+| 附：英文打字慢 | **证伪** | keydown→input 均值 0.72ms。「不跟手」不是打字本身慢，而是**编辑过程中光标/组合被破坏** |
+
+### 8.5 本轮改了什么（文件:行号；源在 `factscribe/workbench/static/`，载荷由 build.sh 同步）
+
+| 位置 | 改动 |
+|---|---|
+| `app.js:2011-2021` | 新增 `imeState`（active／blockId／pendingSave／pendingBadge／pendingHtml／stuckTimer）——组合期间的欠账分别记账 |
+| `app.js:2023-2057` | 新增 `caretTextOffset(host)`／`restoreCaretOffset(host, offset)`：段内光标偏移的取（Range）与还（TreeWalker） |
+| `app.js:2059-2083` | 新增 `flushAfterComposition(blockId)`：组合结束统一补做——芯片重绑 ＋ 欠下的整块替换／角标／保存 |
+| `app.js:2085-2094` | 新增 `clearStuckComposition()`：组合超过 5s 的兜底（撤掉「组合中」标记，但**不当场去收**正文） |
+| `app.js:2126-2151` | `applyBlockHtml`：组合期间不改这一块（记账 `pendingHtml`）；替换**前**记光标偏移（:2141）、替换**后**按偏移放回（:2148）；补 `bindChipCaret(host)`（:2147）——整块替换后芯片的「点一下把光标放回正文」必须重绑，否则点芯片丢光标 |
+| `app.js:2153-2159` | `saveBlockNode`：组合期间**不收正文**（:2157 记账 `pendingSave` 后 return）——此刻 DOM 里是候选中的拼音，收下去会写进 `.tex` |
+| `app.js:2302-2350` | `showSavedBadge`：角标改挂 `document.body` 浮层（:2317），**不再 append 进编辑宿主**；组合期间先记账；贴在末行末端，顶到正文列右缘时改塞进末行下方的空档（不出界、不压字） |
+| `app.js:5203-5218` | `bind()`：接入 `compositionstart`／`compositionend`（capture 阶段）——组合开始记账、结束补做 |
+| `app.css:1478-1481` | `.save-badge` 改成 `position:absolute` ＋ `pointer-events:none`（不吃点击，不会把编辑器点失焦），去掉行内 `margin-left` |
+
+### 8.6 修复后复测读数（同一套场景，真 Chrome）
+
+| 项 | 修复前 | 修复后 |
+|---|---|---|
+| 组合进行中保存响应回来后，宿主内 | kids 147→148（插进 `SPAN.save-badge`） | kids **1 → 1**，非正文变动 **0 条** |
+| 编辑宿主内有没有角标 | 有 | **无** |
+| 正文里有没有角标文字 | 有（`…xzxSaved`） | **无**（`…xzxzhongwen`） |
+| 组合继续输入后的光标 | 落到角标文本节点 offset 1／ctx 'S' | 跟住组合文本 **offset 36** |
+| 整块替换前后光标 | （没有恢复层） | offset／ctx／坐标**全同**（offset 4／ctx '-ins'／x 325.2／y 429.2） |
+| 英文逐键 60 键 | 0.72ms 均值 | **0.46ms 均值／0.9ms 峰值**；非正文变动 0；节点 1911→1911 |
+| 组合→落盘 | — | compositionend('研究') 正常；`.tex` 里**中文落地**；`grep -c Saved` → **0** |
+| 角标几何 | 插在正文流里 | body 浮层：`pointer-events:none`、**不压任何文字**（overlapsText=`[]`）、不出正文列 |
+
+### 8.7 正式稿盘
+
+| 盘 | 本轮开工时（11:19） | 收工时 | 结论 |
+|---|---|---|---|
+| `paper` | `e04b204b66fd6290` | `e04b204b66fd6290` | 一致 |
+| `paper-zh` | `8f97443f37c60102` | `8f97443f37c60102` | 一致 |
+| `paper-b` | `e5bae5a95f753846` | `e5bae5a95f753846` | 一致 |
+| `paper-b-zh` | `28d1cc977a2d5fc5` | `28d1cc977a2d5fc5` | 一致 |
+
+本轮引擎全程指向副本盘 `/tmp/fs-editoroot`；正式盘文件 mtime 停在 **11:12:13** 未再变动。
+宿主论文根目录已**还原**回 `/Users/moc/workspaces/SiAgent`（还原后停在项目列表页，**没有打开任何正式盘**）。
+
+**一条必须写清的差口**：上一轮记下的 `paper` 基线是 `df6af0599af747c3`，它在
+**2026-11-23 11:12:13** 变成了 `e04b204b66fd6290`——差的只有 `factscribe.toml` 里
+一行 `last_opened` 时间戳，外加一个 `factscribe.toml.bak` 旁文件。成因是**宿主
+「打开磁盘」这个动作本身**（引擎 `factscribe/workbench/write.py::touch_opened` 写
+`[workbench].last_opened` 并留 `.bak`），发生在本轮开工前 7 分钟，**不是本轮验收造成的**。
+那个 `.bak` 的**前一版内容已不可得**（11:12 那次写把它覆盖了），所以**没有**去改用户的
+正式盘凑指纹——如实报告，不擅自动用户盘。
+
+### 8.8 本轮明确**没做**的事
+
+| 事项 | 为什么 |
+|---|---|
+| 不改「聚焦中的块不替换」这个既有守卫 | 实测证明它是对的（同文件连续编辑不丢字）；本轮只补「替换后恢复光标」这层保险，不动守卫语义 |
+| 不把 IME 组合做成「逐键回写」 | 组合期间 DOM 里就是候选文本，回写会打断候选；本轮只在组合期间**不动 DOM、不收正文** |
+| 不动落盘层（`collectPlain` 的散文＋token 口径、`\fact`／`\cite` 保护面） | 角标本就被收集时跳过；实测 `.tex` 里没有角标文字 |
+| 不动四步链闸门语义、提议单口径、块形状闸、金样例基线 | 已定口径；`tests/golden/audit_findings_baseline.json` 未重冻、未改一个字节 |
+| 不改用户正式盘去凑上一轮基线指纹 | 差的只是一个 `last_opened` 时间戳 ＋ 一个 `.bak` 旁文件，且 `.bak` 前一版内容不可得；改用户盘凑指纹比留着一行时间戳更糟 |
+| 不把真浏览器那一跑塞进必跑测试 | 依赖 node≥22（内置 WebSocket）与 Chrome，缺任一个就 skip（不拿「跳过」冒充「验过」）；14 条静态断言永远跑 |
+| 不删上两轮遗留的副本盘（`/tmp/fs-i18n-root`、`/tmp/fs-factform-root`） | 与本轮无关，留着不动；本轮的 `/tmp/fs-editoroot` 同样留着做证据 |
+
+### 8.9 本轮测试
+
+* 新增 `tests/test_workbench_editing_ime.py`：**18 条**＝14 条静态断言（IME 事件序列／
+  组合期不收正文不换 DOM／光标取还与替换后恢复／状态 UI 不落编辑区）＋ 4 条**真浏览器**
+  行为（英文逐键延迟与 DOM 变动、组合不被保存响应打断、光标跟住组合文本、整块替换后光标不丢）。
+* 新增 `tests/editing_ime_driver.mjs`：真 Chrome ＋ CDP 驱动（真键盘事件／真 IME 组合／
+  `Fetch` 拦请求做时序钉死）。
+* 全仓 `pytest tests/ -q` ＝ ****2233 passed / 0 failed**（397 subtests，277.57s）**（上一轮 2215，本轮 +18）。

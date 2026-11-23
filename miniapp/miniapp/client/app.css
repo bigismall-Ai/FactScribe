@@ -1475,8 +1475,8 @@ body:not([data-view="workbench"]) .left-col{padding-top:48px}
 /* 条目 40：展开标签的 z 序（85）高于固定头部（80）——收起态它恒可点。 */
 
 
-/* 条目 37：编辑态可见的「已保存」角标（1.5s 自动消失） */
-.save-badge{margin-left:8px;font-family:inherit;font-size:10.5px;color:#1c6b4c;background:#f2faf5;
+/* 条目 44：「已保存」角标改成挂在正文外的浮层——不插进编辑宿主，不顶动光标 */
+.save-badge{position:absolute;z-index:6;pointer-events:none;font-family:inherit;font-size:10.5px;color:#1c6b4c;background:#f2faf5;
  border:1px solid #b6d8c4;border-radius:6px;padding:1px 6px;vertical-align:middle;white-space:nowrap}
 
 

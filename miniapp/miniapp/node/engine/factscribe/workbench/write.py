@@ -6,7 +6,8 @@
 1. **只写正文**：只写盘里 `sections/` 下的 `.tex`，以及根文件（`main.tex`）的
    装配行；`facts/`、`audit/`、`results/` 一律只读——事实账与证据链不归工作台管。
 2. **原子写**：同目录写 `.tmp` 再 `rename` 覆盖；原文件权限原样保留；
-   每次保存前把原文件复制成同目录 `.bak`（覆盖旧的，不堆叠）。
+   每次保存前把原文件复制成同目录 `.bak`；正文保存留**多份**（`.bak` 是上一版、
+   `.bak.1` 是上上版……轮转不互相覆盖），配置文件只留固定名那一份。
 3. **保护面**（硬要求）：`\\fact{}`、`\\cite{}`、`\\ref{}` 等命令与其参数，
    以及与 `\\fact` 绑定的数字令牌，写回时原样保留——用户改散文改不掉它们。
    用户把芯片删掉了也不要紧：写回时按原文的相对次序补回来（见 `_rebuild`）。
@@ -44,6 +45,14 @@ from .projects import (ABSTRACT_BLOCK_ID as _ABSTRACT_BLOCK_ID,
 
 #: 章节删除后的归档目录名（放在章节文件所在目录下）。
 ATTIC_DIR = "attic"
+
+#: 正文与主文件的备份保留份数（.bak ＋ .bak.1 … .bak.9）。
+#: 「原稿留在 .bak」仍成立（.bak ＝ 上一版）；更早的几代在 .bak.1、.bak.2……
+#: 轮转保留，**不互相覆盖**——连续存两次也不会把最初的原稿弄丢。
+BACKUP_KEEP = 10
+#: 配置文件（factscribe.toml）的备份只留固定名那一份：「打开磁盘」这个动作
+#: 本身就会写一次配置，留多份会在盘上堆垃圾——这条既有副作用保持原样。
+CONFIG_BACKUP_KEEP = 1
 
 #: 整块保留的环境（内容不是散文）。
 SOLID_ENVS = {
@@ -555,22 +564,49 @@ def _balanced_ok(text: str) -> bool:
     return depth == 0
 
 
-def atomic_write(path: Path, text: str, backup: bool = True) -> dict:
+def backup_paths(path: Path, keep: int = 1) -> list:
+    """备份文件名（沿用本盘既有命名风格）：<file>.bak、<file>.bak.1、…
+
+    第 0 个是**固定名** `.bak`（既有的那一份——「原稿留在 .bak」指它）；
+    后面的 `.bak.1`、`.bak.2`… 是更早的几代，轮转保留、**不互相覆盖**。
+    """
+    base = Path(path)
+    names = [base.with_name(base.name + ".bak")]
+    for index in range(1, max(1, int(keep or 1))):
+        names.append(base.with_name(base.name + ".bak.%d" % index))
+    return names
+
+
+def atomic_write(path: Path, text: str, backup: bool = True,
+                 keep: int = 1) -> dict:
     """原子写：同目录 `.tmp` → `rename`；保留原权限；先存 `.bak`。
 
-    `.bak` 是「上一次保存前」的原文，同目录、固定名（覆盖旧的，不堆叠）。
+    `.bak` 是「上一次保存前」的原文，同目录、固定名。
+    ``keep`` > 1 时多留几代：`.bak`（上一版）、`.bak.1`（上上版）……
+    轮转保留，**不互相覆盖**——正文保存走这条（见 :data:`BACKUP_KEEP`）。
     """
     path = Path(path)
     data = text.encode("utf-8")
     mode = None
     backup_path = ""
+    backups: list = []
     if path.exists():
         try:
             mode = path.stat().st_mode & 0o7777
         except OSError:
             mode = None
         if backup:
-            backup_path = str(path.with_name(path.name + ".bak"))
+            backups = backup_paths(path, keep)
+            # 轮转：最老的那代被上一代顶掉，其余往后挪一位（.bak 始终是上一版）。
+            for index in range(len(backups) - 1, 0, -1):
+                older = backups[index - 1]
+                newer = backups[index]
+                if older.exists():
+                    try:
+                        os.replace(str(older), str(newer))
+                    except OSError:
+                        pass
+            backup_path = str(backups[0])
             tmp_bak = path.with_name(path.name + ".bak.tmp-%d" % os.getpid())
             try:
                 shutil.copyfile(str(path), str(tmp_bak))
@@ -599,7 +635,8 @@ def atomic_write(path: Path, text: str, backup: bool = True) -> dict:
                 tmp.unlink()
             except OSError:
                 pass
-    return {"path": str(path), "backup": backup_path}
+    return {"path": str(path), "backup": backup_path,
+            "backups": [str(item) for item in backups]}
 
 
 # ---------------------------------------------------------------- 段落定位
@@ -775,7 +812,7 @@ def save_abstract(disk_root: Path, client_text: str,
                           code="ABSTRACT_MISSING")
     start, end, lead, trail = span
     new_text = text[:start + lead] + new_raw + text[end - trail:]
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "file": rel, "block": ABSTRACT_BLOCK_ID,
             "before": block.raw, "after": new_raw,
             "sha": _short_sha(new_raw),
@@ -993,7 +1030,7 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
         raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
                           code="SECTION_MISSING")
     new_text = text[:block.start] + new_raw + text[block.end:]
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "file": rel_file, "block": block_id,
             "before": block.raw, "after": new_raw,
             "sha": _short_sha(new_raw),
@@ -1207,7 +1244,7 @@ def insert_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
         raise ConfigError("回复是空的，没什么可写进稿的。", code="DRAFT_EMPTY")
     marker, insertion, insert_at = _draft_insertion(source, block, body)
     new_text = source[:insert_at] + insertion + source[insert_at:]
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "file": rel_file, "after": after_block_id,
             "marker": marker, "block": "%s-%s" % (Path(rel_file).stem, marker),
             "draft": body, "backup": result["backup"]}
@@ -1240,7 +1277,7 @@ def delete_ai_draft(disk_root: Path, rel_file: str, block_id: str) -> dict:
     while end < len(source) and source[end] == "\n":
         end += 1
     new_text = source[:start] + source[end:]
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "file": rel_file, "block": block_id,
             "deleted": block.raw, "backup": result["backup"]}
 
@@ -1338,7 +1375,7 @@ def move_section(disk_root: Path, rel: str, direction: str) -> dict:
     entries[index], entries[other] = entries[other], entries[index]
     text = path.read_text(encoding="utf-8")
     new_text = _rewrite_assembly(path, entries, text)
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "moved": True, "order": [e["rel"] for e in entries],
             "backup": result["backup"], "file": str(path)}
 
@@ -1371,7 +1408,7 @@ def delete_section(disk_root: Path, rel: str) -> dict:
     if 0 <= dropped["line"] < len(lines):
         lines.pop(dropped["line"])
     text = "\n".join(lines) + "\n"
-    result = atomic_write(path, text)
+    result = atomic_write(path, text, keep=BACKUP_KEEP)
     return {"ok": True, "removed": rel, "attic": str(attic),
             "moved": moved, "backup": result["backup"],
             "order": [e["rel"] for e in entries]}
@@ -1423,7 +1460,7 @@ def create_section(disk_root: Path, title: str, slug: str = "",
         insert_at = _before_end_document(lines)
     lines.insert(insert_at, line)
     new_text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
-    result = atomic_write(path, new_text)
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
     return {"ok": True, "file": str(target),
             "rel": target.relative_to(disk_root).as_posix(),
             "assembled": True, "backup": result["backup"]}

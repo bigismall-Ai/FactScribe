@@ -614,3 +614,129 @@ network failed/4xx/5xx：0 条
 * 新增 `tests/editing_ime_driver.mjs`：真 Chrome ＋ CDP 驱动（真键盘事件／真 IME 组合／
   `Fetch` 拦请求做时序钉死）。
 * 全仓 `pytest tests/ -q` ＝ ****2233 passed / 0 failed**（397 subtests，277.57s）**（上一轮 2215，本轮 +18）。
+
+---
+
+## 9. 2026-11-23 第五轮：四项必做收尾（value 硬闸 / 账本指纹闸 / 候选列表改版 / .bak 多份＋刷新不保存）
+
+- 分支：`feat/miniapp-host-seam`（开工 HEAD `e4bbe16`；**未推远端、未建 PR**）
+- 范围：四项必做全部落地 ＋ 三项有余力项；第 8/9 条（证据锁读数并进报告／投稿包导出前预览清单）**只记录不实现**——理由与待用户拍板的点见 §9.7
+- 验收台：宿主**内嵌浏览器**（Electron FilePanel）打开**已 publish 到本机宿主**的 `factscribe` Miniapp；宿主论文根目录指向 `/tmp/fs-batch5-root`（四盘 `cp -a` 副本），验收后**还原**回 `/Users/moc/workspaces/SiAgent`
+- 发布态逐文件比对：**源 → 载荷 → 已发布 104/104 文件逐字节一致，0 差异**（§9.6）
+- 全仓 `pytest tests/ -q`＝**2271 passed / 0 failed**（397 subtests，266.17s；上一轮基线 2233，本轮 +38）
+
+### 9.1 四项必做 · 修法（文件）
+
+| 项 | 修法 |
+|---|---|
+| value 硬校验 | 新增 `factscribe/valuecheck.py`（纯计算）：归一化＝NFKC、LaTeX 百分号、LaTeX 分数命令→`A/B`、去强调标记、千分位逗号去、窄空格当千分位、小数点逗号→小数点；**数字项按出现顺序做子序列匹配**（数值相等、百分号一致、单位不参与比较），无数字项时按归一化子串比；产物非 UTF-8 文本 → `VALUE_SOURCE_NOT_TEXT`。`factscribe/scaffold.py` 新增 `check_value_in_source()`（把既有 `_check_source` 提成公开版 `resolve_source()`，**语义一条没放松**）。`factscribe/workbench/proposals.py::propose_add_fact` **建单前**先过闸（不合格拒建单）；`apply_add_fact` **采纳时**再核一遍。 |
+| 追加事实提议单加 before_sha 指纹闸 | `propose_add_fact` 给单子带上 `before_sha`＝**目标账本文件**的 sha256（账本本来不存在时记 `before_absent`）；`apply_add_fact` 采纳前复核账本指纹，不符 → `BLOCK_STALE` 拒写；账本被别处**建出来**（`before_absent` 变有文件）同样拒。 |
+| 候选列表改版 | `index.html` 的未签组改 `<details id="afUnsignedFold">`：**默认折叠且不渲染**；summary＝「搜索未签产物」＋标签「未签（需人签后才能作数）」；已签行 title 同时给**清单 sha256** 与**现算 sha256**；全局筛选框同时管两组。 |
+| .bak 保留多份 ＋ 刷新不保存 | `factscribe/workbench/write.py`：`atomic_write(path, text, backup=True, keep=1)` 新增 `keep` 与 `backup_paths()`；正文与 main.tex 走 `BACKUP_KEEP=10`（`.bak`＝上一版，`.bak.1/.bak.2…` 轮转**不互相覆盖**）；**配置文件仍 `CONFIG_BACKUP_KEEP=1`**。前端 `app.js`：`input` 事件打脏标记 `data-dirty=1`，`saveBlockNode` 与 `focusout` **都要求脏标记**；保存成功后按文本比对清脏；另加 `beforeunload` 提醒（有未保存编辑才拦）。 |
+
+### 9.2 value 硬闸 · 宿主内嵌浏览器实测读数（副本盘）
+
+| 操作 | 实测读数 | 判定 |
+|---|---|---|
+| 选已签产物 `experiments/ctx-compiler-redblue/BATCH23-SWB16.md` → value 填 `42` → 点「Create proposal」 | toast 全文：`Could not create the proposal: The value "42" does not match the artifact experiments/ctx-compiler-redblue/BATCH23-SWB16.md: the number(s) 42 were not found (compared one by one, in order; units are not compared). You said the location is "host check locator" - rewrite the value to match the artifact text, or pick another artifact.`；待确认徽标仍 **Pending 0**（**没建出单**） | 通过 |
+| 同一产物、value 填 `10/16`（产物里确有）→ 建单 | toast：`Proposal created - open "Pending" and click "Adopt and write back".`；徽标 **Pending 1**；差异卡右栏 TOML 高亮 span：**key 8 / eq 8 / string 7 / array 1 / table 1** | 通过 |
+| 既有测试改用**真实样本**而非放宽校验 | `tests/test_workbench_proposals.py`、`tests/test_workbench_i18n_display.py`、`tests/miniapp_mcp_driver.mjs` 的 value 由 `7/8` 改为 `56.25%`（`examples/minimal/results/swb16.md` 里真实存在） | 通过 |
+
+### 9.3 账本指纹闸 · 实测读数
+
+| 操作 | 实测读数 |
+|---|---|
+| 建单（目标账本 `facts/a_swebench.toml`）后，在**盘外**往同一本账追加一条 `[[fact]] id="EXT3"` | 账本 sha 由 `f405d69d…` → `9ecb7400…` |
+| 回页面点「Adopt and write back」 | toast：`This paragraph was changed elsewhere`；卡片 class＝`proposal-card prop-stale`；「Adopt and write back」按钮 **disabled=true**；卡片上多一行 stale 说明 |
+| 落盘核对 | `grep -c 'Z90' a_swebench.toml`＝**0**（没写进去）；`EXT3` 仍在；账本 sha 仍 `9ecb7400…`（**没被动过**） |
+| 驳回该单 | toast：`Proposal rejected`；徽标回到 **Pending 0** |
+
+### 9.4 候选列表 · 实测读数
+
+| 操作 | 实测读数 |
+|---|---|
+| 打开「更多 → 事实账 → 追加事实」 | 引擎侧说明：`Artifacts not in the manifest are scanned only 2 level(s) under experiments - 8128 file(s) in total; anything deeper is not listed.` |
+| **默认状态**（不碰折叠区） | 已签组 **9 行**；未签折叠区 **closed**，未签列表**渲染 0 行** |
+| 展开折叠区 | 未签列表渲染 **120 行**；提示 `8128 in total, showing the first 120; narrow it down with the box above.`；折叠 summary＝`Search unsigned artifacts`，标签＝`Unsigned (a human must sign it before it counts)`；未签行徽标 `Unsigned` |
+| 已签行 | 同行带 `title="manifest sha256: 3c4904b1…`／`live sha256: 3c4904b1…"`（清单指纹与现算指纹并列，drift 可见） |
+| 筛选框输 `BATCH12` | 已签组 → `Nothing in this group.`；未签组 → **2 行**（`BATCH12-RESULT.md`、`BATCH12-TEST-CTX.md`）——**一个框同时管两组** |
+
+### 9.5 .bak 多份 ＋ 刷新不保存 · 实测读数
+
+| 操作 | 实测读数 |
+|---|---|
+| 编辑 `01_intro` 第一段 → 失焦保存 | toast：`Saved (original kept as .bak)`；`.tex` 落新版本；`.bak`＝**上一版**（sha `92ca27e2…`）；旧 `.bak` **轮转**成 `.bak.1`（不是被覆盖） |
+| 连做三次保存 | 链上 **6 代并存、互不覆盖**：`.tex`(探针 C=1,2=1)／`.bak`(C=0,2=1)／`.bak.1`(探针 1=1)／`.bak.2`／`.bak.3`／`.bak.4`，各代 sha 互不相同 |
+| 保存后**刷新页面** | 盘上**零写入**：`find /tmp/fs-batch5-root -newermt '<刷新时刻>' -type f` 为空；`.tex`/`.bak` 的 mtime 仍停在保存那一刻（12:31:00） |
+| **只聚焦不编辑**后刷新 | 同样**零写入**（`.tex`/`.bak`/`.bak.1` mtime 全未变）；唯一写入是 `factscribe.toml` 的 `last_opened`——那是**「打开」这个动作**的既有副作用（P2 已记录），不是编辑触发的 |
+
+### 9.6 发布态逐文件比对（源 → 载荷 → 已发布）
+
+| 项 | 读数 |
+|---|---|
+| 载荷同步 | `miniapp/build.sh` 跑通：文件数 111（上限 1024）／4.8 MiB／契约自检通过／engine import ok／build 完成 **104 个载荷文件** |
+| 文件集合 | 载荷 104／已发布 104／交集 104；**只多在载荷 0 个、只多在已发布 0 个** |
+| 逐字节 | 交集 104 个文件 **0 差异** |
+| 前端三件 | `app.js`(`d710d471…`)／`app.css`(`e0bfdbb0…`)／`index.html`(`243c9165…`)：源＝载荷两份副本＝已发布两份副本，**五处全等** |
+| 引擎 | `factscribe/**/*.py` **60 个**文件：源＝载荷＝已发布，**0 不一致**（含新增 `valuecheck.py`） |
+| 薄壳 | `node/server.mjs`：载荷＝已发布（`fec65f92…`） |
+
+### 9.7 有余力项（做了）与只记录不做的（第 8/9 条）
+
+**做了的三项**（都是只增不改）：
+
+| 项 | 实测读数 |
+|---|---|
+| 差异卡 TOML 高亮 | add_fact 卡右栏：**key 8 / eq 8 / string 7 / array 1 / table 1** 个 span（§9.2 同屏） |
+| `fs_get_brief` 按 fact id 过滤 | 新增**可选**入参 `fact`，回包加 `focus`（这条事实绑在哪几节）；其余载荷字段不变 |
+| 宿主默认模型档位显式成组 | 面板下拉读数：group `Host default`（1 项：`Host current model`，value `host:default`）＋ group `Host models`（2 项：`M3.1-Flash`／`M3`）；**id 与请求载荷不变**，只是展示层分组 |
+
+**只记录、不擅自动的两条**（要用户拍板）：
+
+| 条 | 为什么没做 | 要用户拍板的点 |
+|---|---|---|
+| 第 8 条：把 `evidence_gate` 的读数（冻结状态／差异／最后一条日志）并进检查报告 | 报告里的「出证」读数来自四步链闸门，并进去会让两个读数源耦合；**四步链闸门语义是已定口径** | 并进去以后，报告的「出证」是否要**显式标注两个来源**（闸门读数 vs `evidence_gate` 读数）？还是要合并成一个？ |
+| 第 9 条：投稿包导出前加「预览清单」 | 导出流程已有**清单门**（门不过就不出包）；预览＝再加一条人工确认链，属导出流程口径 | 「预览清单」要做成导出前的**必经闸**（强制）还是**可选**的一步？强制会改导出流程的既有口径 |
+
+### 9.8 正式盘零改动（实测）
+
+| 盘 | 开工前聚合 sha256 | 验收后聚合 sha256 | 结论 |
+|---|---|---|---|
+| `paper` | `fb03eaf1c3bc9d3c…` | 同左 | 一致 |
+| `paper-zh` | `8f16d331bda67c28…` | 同左 | 一致 |
+| `paper-b` | `4d5ccf9855f4bf84…` | 同左 | 一致 |
+| `paper-b-zh` | `9d1fe50993d38094…` | 同左 | 一致 |
+
+宿主论文根目录**已还原**回 `/Users/moc/workspaces/SiAgent`（`config.json` 写回 ＋ `miniapp restart` 重拉引擎）。
+还原后刷新宿主页面，四个正式项目在列（`paper` 18 节 **48 事实**、`paper-b` 10 节 62 事实、`minimal`、`legal-demo`），
+`paper` 的 `last_opened` 仍停在 **2026-11-23 11:12**——说明还原过程**没有打开正式盘**，指纹与开工前逐字节一致。
+
+### 9.9 本轮测试
+
+* 新增 `tests/test_workbench_value_guard.py`：**19 条**（归一化命中/不命中、拒建单错因码与 params、非文本产物、指纹闸、外部改动拒写、账本被别处建出拒写、采纳＝预览逐字一致）
+* 新增 `tests/test_workbench_save_guard.py`：**15 条**（备份轮转四代、最老淘汰、`save_block` 多代、配置只留一份、前端脏标记/失焦闸/`beforeunload`、候选折叠区静态断言与中英键齐）
+* 新增 `tests/test_workbench_brief_focus.py`：**4 条**（brief focus 有/无、未知 id、其余载荷不变）
+* 既有测试改用真实样本（不放宽校验）：`tests/test_workbench_proposals.py`、`tests/test_workbench_i18n_display.py`、`tests/miniapp_mcp_driver.mjs`
+* 全仓 `pytest tests/ -q`＝**2271 passed / 0 failed**（397 subtests，266.17s；上一轮 2233，本轮 **+38**）
+
+### 9.10 本轮明确**没动**的东西
+
+| 事项 | 怎么保证没动 |
+|---|---|
+| 四步链闸门语义 | `checkreport._chain_steps` 未改 |
+| 提议单形状校验（块形状闸） | `_block_shape_guard` 未改 |
+| 双 Profile 契约 / P-152 | 未触及任何判定面 |
+| `Issue.as_dict()` 的形状 / 金样例基线 | 未改；`tests/golden/audit_findings_baseline.json` **未重冻、未改一个字节** |
+| `scaffold._check_source` 的既有校验 | 一条没放松（`resolve_source()` 只是把既有逻辑提成公开版，`check_value_in_source()` 是**新增**的一道闸） |
+| CLI `fact add` 直写通道 | 未动——value 硬闸只加在「提议-确认」这条路上；直写通道的口径留到缺口清单 §11.4 |
+| 落盘层散文＋token 口径、绑定数字保护面 | 未动 |
+| 配置文件备份份数 | 仍 `CONFIG_BACKUP_KEEP=1`（只有正文与 main.tex 走多份） |
+| MCP 工具既有入参 schema | `fs_*` 一字未动（只给 `fs_get_brief` 加了**可选** `fact`） |
+
+### 9.11 一条**实测到但没深挖**的既有现象（如实记）
+
+在 `\fact{E5}` 芯片旁放探针 `[HOSTBAK1]`：**第一次**保存落盘是完整的（`grep -o HOSTBAK1` 命中 1）；
+**第二次**保存往返后那个尾数字 `1` 不见了（落盘成 `[HOSTBAK]`），页面 DOM 里也同样没有它。
+这落在**绑定数字保护层**的既有范围（本轮一行没动），与上一轮 §2 记的「探针里的数字被内联绑定闸抓住」同类。
+**根因本轮没查**——保护层属落盘层口径，需单独开一轮定位，本轮不猜、不改。
+

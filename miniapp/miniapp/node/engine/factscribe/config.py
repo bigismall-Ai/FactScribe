@@ -26,14 +26,19 @@ class ConfigError(Exception):
 
     `code` 供 --json 消费：SPEC-V3.0 §11.4 冻结的事实账错误码（如
     `FACT_ID_MISSING` 指向 §11.1）。
+
+    `params` 是展示层文案目录的槽位取值（key ＋ params 那套）：错误消息
+    本身逐字不变，但界面可以按 `code` 翻语言、按 `params` 填槽位。
     """
 
     code = "CONFIG_INVALID"
 
-    def __init__(self, message: str, code: str | None = None):
+    def __init__(self, message: str, code: str | None = None,
+                 params: dict | None = None):
         super().__init__(message)
         if code:
             self.code = code
+        self.params = dict(params or {})
 
 
 def _strip_toml_comment(line: str) -> str:

@@ -106,7 +106,9 @@ class AddFactProposalTests(ProposalFixture):
     """追加一条事实。"""
 
     def fact_body(self, **over):
-        body = {"id": "Z9", "claim": "新增主张", "value": "7/8",
+        # value 用**产物里真有的**那一份（results/swb16.md 的「= 56.25%」）：
+        # 追加事实现在有 value 硬校验——数字必须能在产物原文里命中。
+        body = {"id": "Z9", "claim": "新增主张", "value": "56.25%",
                 "source": "results/swb16.md", "locator": "line 3",
                 "confidence": "high"}
         body.update(over)

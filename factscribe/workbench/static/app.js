@@ -102,6 +102,7 @@ const I18N = {
     'ai.effortOff': '关闭思考', 'ai.effortNone': '最低', 'ai.effortMinimal': '极低', 'ai.effortLow': '低',
     'ai.effortMedium': '中', 'ai.effortHigh': '高', 'ai.effortXhigh': '很高', 'ai.effortMax': '最高',
     'ai.kindHost': '宿主模型', 'ai.kindCustom': '自定义模型', 'ai.kindEngine': '本地后端',
+    'ai.kindHostDefault': '宿主默认',
     'ai.modelHostDefault': '宿主当前模型',
     'ai.addModel': '＋ 模型', 'ai.delModel': '✕', 'ai.delModelT': '删除这个自定义模型',
     'ai.cmTitle': '添加自定义模型', 'ai.cmLabel': '名称', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': '模型名',
@@ -329,12 +330,16 @@ const I18N = {
     'ff.s1.ph': '按文件名筛选…',
     'ff.g.signed': '已签产物',
     'ff.g.unsigned': '未进清单的产物',
+    'ff.g.unsignedFold': '搜索未签产物',
+    'ff.tag.unsigned': '未签（需人签后才能作数）',
     'ff.g.empty': '这一组没有产物。',
     'ff.more': '共 {n} 个，只显示前 {shown} 个；用上面的框缩小范围。',
     'ff.badge.signed': '已签',
     'ff.badge.drift': '签后被改',
     'ff.badge.missing': '文件不在',
     'ff.badge.unsigned': '未签',
+    'ff.sha.manifest': '清单 sha256',
+    'ff.sha.live': '现算 sha256',
     'ff.s2.h': '说清这条数字主张什么、来自产物的哪一处；落到哪本账由你定。',
     'ff.src': 'source',
     'ff.f.id': '事实 id',
@@ -346,7 +351,9 @@ const I18N = {
     'ff.conf.med': 'med',
     'ff.conf.low': 'low',
     'ff.f.note': '备注（可选）',
-    'ff.f.valueHint': 'value 必须是产物里的原文——正文要绑的就是它。',
+    'ff.f.valueHint': 'value 必须是产物里的原文——正文要绑的就是它。比对口径：'
+      + '数字归一化后（千分位逗号去掉、小数点统一、LaTeX 的百分号与分数写法归一、'
+      + '强调标记忽略）逐个按出现顺序比，单位不参与比较；value 里没有数字时按归一化子串比。',
     'ff.ledger.h': '落哪本账',
     'ff.ledger.style': '本盘账本命名风格：{style}',
     'ff.style.letter_topic': '单字母前缀 ＋ 下划线主题（例 a_swebench.toml）',
@@ -457,6 +464,7 @@ const I18N = {
     'ai.effortOff': 'Thinking off', 'ai.effortNone': 'None', 'ai.effortMinimal': 'Minimal', 'ai.effortLow': 'Low',
     'ai.effortMedium': 'Medium', 'ai.effortHigh': 'High', 'ai.effortXhigh': 'Extra high', 'ai.effortMax': 'Max',
     'ai.kindHost': 'Host models', 'ai.kindCustom': 'Custom models', 'ai.kindEngine': 'Local backend',
+    'ai.kindHostDefault': 'Host default',
     'ai.modelHostDefault': 'Host current model',
     'ai.addModel': '+ Model', 'ai.delModel': '×', 'ai.delModelT': 'Delete this custom model',
     'ai.cmTitle': 'Add a custom model', 'ai.cmLabel': 'Name', 'ai.cmBaseUrl': 'Base URL', 'ai.cmModel': 'Model',
@@ -697,12 +705,16 @@ const I18N = {
     'ff.s1.ph': 'Filter by file name…',
     'ff.g.signed': 'Signed artifacts',
     'ff.g.unsigned': 'Artifacts not in the manifest',
+    'ff.g.unsignedFold': 'Search unsigned artifacts',
+    'ff.tag.unsigned': 'Unsigned (a human must sign it before it counts)',
     'ff.g.empty': 'Nothing in this group.',
     'ff.more': '{n} in total, showing the first {shown}; narrow it down with the box above.',
     'ff.badge.signed': 'Signed',
     'ff.badge.drift': 'Changed after signing',
     'ff.badge.missing': 'File missing',
     'ff.badge.unsigned': 'Unsigned',
+    'ff.sha.manifest': 'manifest sha256',
+    'ff.sha.live': 'live sha256',
     'ff.s2.h': 'Say what this number claims and where it comes from in the artifact; you pick the ledger it lands in.',
     'ff.src': 'source',
     'ff.f.id': 'Fact id',
@@ -714,7 +726,10 @@ const I18N = {
     'ff.conf.med': 'med',
     'ff.conf.low': 'low',
     'ff.f.note': 'Note (optional)',
-    'ff.f.valueHint': 'The value must be the verbatim text from the artifact - that is what the body will bind.',
+    'ff.f.valueHint': 'The value must be the verbatim text from the artifact - that is what the body will bind. '
+      + 'How it is compared: numbers are matched one by one, in order, after normalization '
+      + '(thousands separators dropped, decimal point unified, LaTeX percent and fraction forms normalized, '
+      + 'emphasis markers ignored; units are not compared); a value with no digits is compared as a normalized substring.',
     'ff.ledger.h': 'Which ledger',
     'ff.ledger.style': 'Ledger naming style on this disk: {style}',
     'ff.style.letter_topic': 'single-letter prefix + underscore topic (e.g. a_swebench.toml)',
@@ -2137,6 +2152,8 @@ function applyBlockHtml(blockId, html) {
   holder.innerHTML = html;
   const fresh = holder.firstElementChild;
   if (!fresh) return false;
+  // 换成了服务端的新鲜内容 → 这一块不再有「未保存的编辑」。
+  delete node.dataset.dirty;
   // 条目 44：整块替换前记下段内光标偏移，换完按偏移放回去（不甩回块首）。
   const caret = caretTextOffset(host);
   host.innerHTML = fresh.innerHTML;
@@ -2152,6 +2169,9 @@ function applyBlockHtml(blockId, html) {
 /* 条目 43：保存一个块。node＝带 data-block-id 的可编辑块。 */
 async function saveBlockNode(node) {
   if (!node || !node.isConnected) return;
+  // 只有**真编辑过**的块才保存（脏标记由 input 事件打上）。
+  // 刷新页面、打开盘、引擎自己写盘（last_opened 之类）都不是编辑——不碰盘。
+  if (node.dataset.dirty !== '1') return;
   // 条目 44：组合进行中不收正文——此刻 DOM 里是候选中的拼音，收下去会写进 .tex。
   if (imeState.active) {
     imeState.pendingSave = node;
@@ -2168,7 +2188,8 @@ async function saveBlockNode(node) {
   const blockId = (node.dataset && node.dataset.blockId) || node.id || '';
   const file = (node.dataset && node.dataset.file) || '';
   if (!blockId) return;
-  const body = { file: file, block: blockId, text: collectPlain(node) };
+  const sent = collectPlain(node);
+  const body = { file: file, block: blockId, text: sent };
   const expect = state.blockSha[blockId] || '';
   if (expect) body.expect_sha = expect;
   node.dataset.saving = '1';
@@ -2193,6 +2214,9 @@ async function saveBlockNode(node) {
     (data.warnings || []).forEach((w) => toast(w));
     toast(t('edit.saved'));
     if (data.sha) state.blockSha[blockId] = data.sha;
+    // 存的是刚才那份正文：DOM 里若还是同一份，就撤掉「脏」标记
+    //（用户在这轮保存期间又打了字 → 留着标记，下一轮失焦继续存）。
+    if (collectPlain(node) === sent) delete node.dataset.dirty;
     // 自己先换成服务端重建的新文（被删的芯片按原文补回来了，DOM 要对齐）；
     // 用户在这轮保存期间又点回来打字 → 先不动，记 stale，等下一轮失焦保存。
     const selfNode = blockNodeById(blockId);
@@ -3460,7 +3484,14 @@ function renderAfSources() {
   const signedRows = state.af.signed.filter((row) => afMatches(row.path));
   const unsignedRows = state.af.unsigned.filter((row) => afMatches(row));
   if (signedHost) signedHost.innerHTML = afRowsHtml(signedRows, afSignedRowHtml);
-  if (unsignedHost) unsignedHost.innerHTML = afRowsHtml(unsignedRows, afUnsignedRowHtml);
+  // 未签产物默认**折叠**（「搜索未签产物」区域）：没打开就不渲染那几百上千条。
+  const fold = $('#afUnsignedFold');
+  const open = fold ? fold.open : true;
+  if (unsignedHost) {
+    unsignedHost.innerHTML = open
+      ? afRowsHtml(unsignedRows, afUnsignedRowHtml)
+      : '';
+  }
 }
 
 function afRowsHtml(rows, render) {
@@ -3481,11 +3512,17 @@ function afSignedRowHtml(row) {
   let bcls = 'af-badge ok';
   if (row.missing) { badge = t('ff.badge.missing'); bcls = 'af-badge err'; }
   else if (row.drift) { badge = t('ff.badge.drift'); bcls = 'af-badge warn'; }
-  const sha = String(row.live_sha256 || row.sha256 || '').slice(0, 12);
+  const want = String(row.sha256 || '');
+  const live = String(row.live_sha256 || '');
+  const sha = (live || want).slice(0, 12);
+  // 清单里的 sha256 与现算的 sha256 都摆出来（漂了要说清是哪两个）。
+  const title = want
+    ? t('ff.sha.manifest') + ': ' + want + '\n' + t('ff.sha.live') + ': ' + (live || '—')
+    : '';
   return '<label class="af-row' + (picked ? ' on' : '') + '">'
     + '<input type="radio" name="afs" value="' + esc(path) + '"' + (picked ? ' checked' : '') + '>'
     + '<span class="af-path" title="' + esc(path) + '">' + esc(path) + '</span>'
-    + (sha ? '<code class="af-sha">' + esc(sha) + '</code>' : '')
+    + (sha ? '<code class="af-sha" title="' + esc(title) + '">' + esc(sha) + '</code>' : '')
     + '<span class="' + bcls + '">' + esc(badge) + '</span></label>';
 }
 
@@ -3615,7 +3652,8 @@ function afErrorText(data) {
     const entry = (state.af.catalog || {})['wb.form.fact.err.' + code];
     if (entry) {
       const text = entry[state.lang] || entry.zh;
-      if (text) return text;
+      // 槽位（value／产物／没找到的数字／定位）由服务端带过来，按语言填。
+      if (text) return fillParts(text, (data && data.err_params) || {});
     }
   }
   return String((data && data.error) || 'HTTP error');
@@ -3776,6 +3814,9 @@ function normalizeModelEntry(raw) {
     model: String(raw.model || raw.modelId || ''),
     modelId: String(raw.modelId || ''),
     providerId: String(raw.providerId || ''),
+    // 「宿主默认」是显式档位（薄壳用 isDefault 标出来；老引擎没这个字段
+    // 时按 id 兜底）。只影响**呈现**（下拉里单列一组），语义不变。
+    isDefault: Boolean(raw.isDefault),
     alsoVia: Array.isArray(raw.alsoVia) ? raw.alsoVia.map((p) => String(p || '')).filter(Boolean) : [],
     efforts: efforts,
     defaultEffort: String(raw.defaultEffort || ''),
@@ -3829,17 +3870,30 @@ function renderAiModelSelect() {
   if (!sel) return;
   sel.innerHTML = '';
   const items = dedupeModelEntries(state.ai.models || []);
+  // 「宿主默认」是一个**显式档位**：单列一组，不混在宿主模型里。
+  // 只是呈现——选中的 id 与请求载荷一个字没变。
+  const isDefault = (item) => item.isDefault || item.id === 'host:default';
+  const defaults = items.filter(isDefault);
+  const rest = items.filter((item) => !isDefault(item));
+  const groups = [];
+  if (defaults.length) {
+    groups.push({ label: t('ai.kindHostDefault'), list: defaults });
+  }
   ['host', 'custom', 'engine'].forEach((kind) => {
-    const list = items.filter((item) => item.kind === kind);
+    const list = rest.filter((item) => item.kind === kind);
     if (!list.length) return;
+    groups.push({ label: kind === 'host' ? t('ai.kindHost')
+      : (kind === 'custom' ? t('ai.kindCustom') : t('ai.kindEngine')),
+      list: list });
+  });
+  groups.forEach((group) => {
     const og = document.createElement('optgroup');
-    og.label = kind === 'host' ? t('ai.kindHost')
-      : (kind === 'custom' ? t('ai.kindCustom') : t('ai.kindEngine'));
-    list.forEach((item) => {
+    og.label = group.label;
+    group.list.forEach((item) => {
       const opt = document.createElement('option');
       opt.value = item.id;
       // 「宿主默认」那一项由界面本地化（薄壳给的是中文标签，切英文时不该留中文）。
-      opt.textContent = item.id === 'host:default' ? t('ai.modelHostDefault') : item.label;
+      opt.textContent = isDefault(item) ? t('ai.modelHostDefault') : item.label;
       og.appendChild(opt);
     });
     sel.appendChild(og);
@@ -4590,8 +4644,10 @@ function proposalCard(row) {
   const rows = diffRows(beforeText, afterText);
   const cols = document.createElement('div');
   cols.className = 'prop-cols';
+  // 追加事实那张卡的右栏是账本条目（TOML）——给它上语法高亮（只是呈现）。
+  const hl = String(row.kind || '') === 'add_fact' ? 'toml' : '';
   cols.appendChild(propColumn(t('proposal.before'), 'prop-before', rows, 'left'));
-  cols.appendChild(propColumn(t('proposal.after'), 'prop-after', rows, 'right'));
+  cols.appendChild(propColumn(t('proposal.after'), 'prop-after', rows, 'right', hl));
   card.appendChild(cols);
 
   const warns = proposalWarnings(row);
@@ -4665,8 +4721,36 @@ function proposalSourceLabel(row) {
   return t('proposal.fromUnknown');
 }
 
+/* TOML 语法高亮（差异卡里的账条目）：表头 / 键名 / 字符串 / 数字 / 布尔 / 注释。
+   纯展示层——高亮的是同一份文本，落盘内容一个字不变。 */
+function tomlHighlightHtml(text) {
+  const raw = String(text === null || text === undefined ? '' : text);
+  if (!raw.trim()) return esc(raw);
+  if (/^\s*#/.test(raw)) return '<span class="toml-comment">' + esc(raw) + '</span>';
+  if (/^\s*\[\[?[^\]]*\]\]?\s*$/.test(raw)) {
+    return '<span class="toml-table">' + esc(raw) + '</span>';
+  }
+  const m = /^(\s*)([A-Za-z0-9_\-]+)(\s*=\s*)(.*)$/.exec(raw);
+  if (!m) return esc(raw);
+  const value = m[4];
+  let valueHtml;
+  if (/^"(?:[^"\\]|\\.)*"$/.test(value) || /^'[^']*'$/.test(value)) {
+    valueHtml = '<span class="toml-string">' + esc(value) + '</span>';
+  } else if (/^[+-]?[0-9][0-9_]*(\.[0-9_]+)?([eE][+-]?[0-9]+)?$/.test(value)) {
+    valueHtml = '<span class="toml-number">' + esc(value) + '</span>';
+  } else if (/^(true|false)$/.test(value)) {
+    valueHtml = '<span class="toml-bool">' + esc(value) + '</span>';
+  } else if (/^\[.*\]$/.test(value)) {
+    valueHtml = '<span class="toml-array">' + esc(value) + '</span>';
+  } else {
+    valueHtml = esc(value);
+  }
+  return esc(m[1]) + '<span class="toml-key">' + esc(m[2]) + '</span>'
+    + '<span class="toml-eq">' + esc(m[3]) + '</span>' + valueHtml;
+}
+
 /* 左右两栏里的一栏（side: left / right）。 */
-function propColumn(title, cls, rows, side) {
+function propColumn(title, cls, rows, side, highlight) {
   const col = document.createElement('div');
   col.className = 'prop-col';
   const head = document.createElement('div');
@@ -4683,7 +4767,8 @@ function propColumn(title, cls, rows, side) {
     } else {
       const mark = (side === 'left') ? row.leftKind : row.rightKind;
       line.className = 'prop-line' + (mark ? ' ' + mark : '');
-      line.textContent = text;
+      if (highlight === 'toml') line.innerHTML = tomlHighlightHtml(text);
+      else line.textContent = text;
     }
     body.appendChild(line);
   });
@@ -5092,6 +5177,8 @@ function bind() {
   });
   $('#afSigned').addEventListener('change', onAfSourcePick);
   $('#afUnsigned').addEventListener('change', onAfSourcePick);
+  // 未签产物默认折叠；展开时才渲染那几百上千条。
+  $('#afUnsignedFold').addEventListener('toggle', () => { renderAfSources(); });
   $('#afSearch').addEventListener('input', (ev) => {
     if (!state.af) return;
     state.af.query = ev.target.value || '';
@@ -5215,6 +5302,16 @@ function bind() {
     imeState.blockId = '';
     flushAfterComposition(blockId);
   }, true);
+  // 「脏」标记：只有**用户真的动过**这一块才打上（input 事件）。
+  // 刷新页面、打开盘、引擎自己写盘（last_opened 之类）都不算编辑——
+  // 它们不碰正文，也就不该触发保存（这一条堵住了「刷新就存一次」）。
+  document.addEventListener('input', (ev) => {
+    const target = ev.target;
+    if (!target || !target.closest) return;
+    const node = target.closest('[data-block-id]');
+    if (!node || !node.isConnected) return;
+    node.dataset.dirty = '1';
+  }, true);
   // 条目 43：失焦即保存（容器级委托，会冒泡；120ms 守卫焦点去向——
   // 点块内的芯片不算离开）。没有「进入编辑」，也就没有「取消编辑」。
   document.addEventListener('focusout', (ev) => {
@@ -5227,8 +5324,15 @@ function bind() {
       if (!node.isConnected) return;
       const active = document.activeElement;
       if (active && node.contains(active)) return;
+      if (node.dataset.dirty !== '1') return;   // 没编辑过 → 不保存
       saveBlockNode(node);
     }, 120);
+  });
+  // 有未保存的编辑时，刷新/关页先问一句——**不代替保存**：刷新本身不写盘。
+  window.addEventListener('beforeunload', (ev) => {
+    if (!document.querySelector('[data-block-id][data-dirty="1"]')) return;
+    ev.preventDefault();
+    ev.returnValue = '';
   });
   // 条目 43：Esc＝主动失焦 → 走保存；没有「取消编辑」的概念。
   document.addEventListener('keydown', (ev) => {

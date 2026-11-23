@@ -1009,6 +1009,7 @@ const TOOLS = [
       properties: {
         ...PROJECT_DISK,
         section: { type: 'string', maxLength: 120, description: '可选：节文件名词干前缀（如 04）' },
+        fact: { type: 'string', maxLength: 80, description: '可选：事实 id——回一条「这条绑在哪几节」的定位（focus）' },
       },
       required: ['project', 'disk'],
       additionalProperties: false,
@@ -1464,8 +1465,11 @@ function createToolService(get, post, options) {
 
     /** fs_get_brief */
     async brief(args) {
-      const { project, disk, section } = args;
-      const query = section ? `?section=${encodeURIComponent(String(section))}` : '';
+      const { project, disk, section, fact } = args;
+      const params = [];
+      if (section) params.push(`section=${encodeURIComponent(String(section))}`);
+      if (fact) params.push(`fact=${encodeURIComponent(String(fact))}`);
+      const query = params.length ? `?${params.join('&')}` : '';
       const data = await get(
         `/api/disk/${encodeURIComponent(project)}/${encodeURIComponent(disk)}/brief${query}`);
       const sections = /** @type {any[]} */ (data.sections || []);
@@ -1490,7 +1494,10 @@ function createToolService(get, post, options) {
         terms: data.terms || [],
         constraints: data.constraints || [],
         notes: data.notes || [],
-        hint: 'usable＝可引用；bound＝正文里已绑；unbound＝可引用但还没绑。',
+        // fact 给定时才有的定位（这条事实绑在哪几节）。
+        focus: data.focus || null,
+        hint: 'usable＝可引用；bound＝正文里已绑；unbound＝可引用但还没绑。'
+          + '给 fact=<id> 会多回一条 focus：这条事实绑在哪几节。',
       };
     },
 
@@ -2503,7 +2510,9 @@ export async function start(context) {
       const catalog = await hostCatalog();
       if (catalog) {
         // 「宿主默认」放最前：不指定模型＝用 MCode 当前这个模型（和旧行为一致）。
-        models.push({ id: HOST_DEFAULT_ID, kind: 'host', label: AGENT_MODEL_LABEL, efforts: [], defaultEffort: '' });
+        // isDefault＝它是一个**显式档位**（页面据此单列一组；语义不变，
+        // 选中的还是同一个 id、同一份请求）。
+        models.push({ id: HOST_DEFAULT_ID, kind: 'host', label: AGENT_MODEL_LABEL, isDefault: true, efforts: [], defaultEffort: '' });
         for (const entry of catalog.models) models.push(hostModelEntry(entry));
         // 同一个模型挂了几条通道的，页面上只列一条（折叠掉的记在 alsoVia 里）。
         dedupeHostModels(models, catalog.default);

@@ -46,7 +46,9 @@ FACT_FORM_ERROR_KEYS = tuple(
     "wb.form.fact.err.%s" % name for name in (
         "LEDGER_PATH_INVALID", "LEDGER_OUTSIDE_GLOB",
         "LEDGER_NOT_IN_GLOB_DIR", "LEDGER_STYLE_MISMATCH",
-        "LEDGER_PREFIX_TAKEN"))
+        "LEDGER_PREFIX_TAKEN",
+        "VALUE_NOT_IN_SOURCE", "VALUE_TEXT_NOT_IN_SOURCE",
+        "VALUE_SOURCE_NOT_TEXT", "VALUE_SOURCE_UNREADABLE"))
 
 
 def fact_form(disk: Path) -> dict:
@@ -280,7 +282,8 @@ def evidence_gate(disk: Path) -> dict:
     }
 
 
-def brief_reading(disk: Path, section: str = "") -> dict:
+def brief_reading(disk: Path, section: str = "",
+                       fact: str = "") -> dict:
     """写作简报读数：可引用的事实、已绑的、还没绑的（只读）。
 
     口径复用 ``factscribe.brief``（CLI ``factscribe brief`` 同一条路）：
@@ -293,9 +296,16 @@ def brief_reading(disk: Path, section: str = "") -> dict:
       但还没绑）、``reconciled``（声明是否都绑上了）；
     * 每条事实：``bound_in``（绑在哪些节）、``status``（bound / unbound）；
     * 汇总：``counts``（账上总数／已绑／未绑）。
+
+    ``fact``＝按事实 id 定位：给一个 id，就在 ``focus`` 里回一条
+    「这条事实绑在哪几节」的定位（比 ``fs_query_facts`` 的 bound_in 更好用：
+    它把每一节的绑定与否都列出来，还带上 claim／value／出处）。**只增不改**：
+    不给 fact 时，载荷与从前逐字节一致。
     """
     disk = Path(disk)
     base = {"ok": True, "disk": str(disk)}
+    # 先把参数取下来——下面有个同名的循环变量（fact），会把它盖掉。
+    wanted_fact = str(fact or "").strip()
     try:
         cfg = load_config(disk)
         sections = load_sections(cfg)
@@ -340,7 +350,38 @@ def brief_reading(disk: Path, section: str = "") -> dict:
                       "status": "bound" if where else "unbound"})
 
     total = len(facts)
-    return {
+
+    # 按 fact id 定位（可选）：这条事实绑在哪几节。
+    focus = {}
+    wanted = wanted_fact
+    if wanted:
+        hit = None
+        for row in facts:
+            if str(row.get("id") or "").casefold() == wanted.casefold():
+                hit = row
+                break
+        where = []
+        for row in rows:
+            rel = str(row.get("file") or "")
+            where.append({
+                "file": rel,
+                "title": str(row.get("title") or ""),
+                "bound": wanted in [str(x) for x in (row.get("bound") or [])],
+                "usable": wanted in [str(x) for x in (row.get("usable") or [])],
+            })
+        focus = {
+            "fact": wanted,
+            "found": hit is not None,
+            "claim": str((hit or {}).get("claim") or ""),
+            "value": str((hit or {}).get("value") or ""),
+            "source": str((hit or {}).get("source") or ""),
+            "locator": str((hit or {}).get("locator") or ""),
+            "bound_in": list((hit or {}).get("bound_in") or []),
+            "status": str((hit or {}).get("status") or ""),
+            "sections": where,
+        }
+
+    payload_out = {
         **base,
         "project": data.get("project", ""),
         "root_tex": data.get("root_tex", ""),
@@ -355,3 +396,6 @@ def brief_reading(disk: Path, section: str = "") -> dict:
         "notes": list(data.get("notes") or []),
         "constraints": list(CONSTRAINTS),
     }
+    if focus:
+        payload_out["focus"] = focus
+    return payload_out

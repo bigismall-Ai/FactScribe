@@ -143,7 +143,7 @@ try {
     (await callTool(11, 'fs_propose_evidence_freeze', { ...out.target, reason: '驱动测试留底' })).payload;
   out.calls.fs_propose_add_fact =
     (await callTool(12, 'fs_propose_add_fact', {
-      ...out.target, id: 'Z9', claim: '驱动测试主张', value: '7/8',
+      ...out.target, id: 'Z9', claim: '驱动测试主张', value: '56.25%',
       source: 'results/swb16.md', confidence: 'high',
     })).payload;
   out.calls.fs_list_proposals = (await callTool(13, 'fs_list_proposals', out.target)).payload;

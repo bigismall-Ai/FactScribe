@@ -25,7 +25,9 @@ from .. import i18n
 from ..config import ConfigError, load_config
 from ..evidence import (canonical_sha256, entry_count, freeze_evidence,
                          read_lock, unfreeze_evidence)
-from ..scaffold import add_fact, prepare_fact
+from ..facts import sha256_file
+from ..scaffold import (add_fact, check_value_in_source, prepare_fact,
+                         resolve_ledger, resolve_source)
 
 KIND_EVIDENCE_FREEZE = "evidence_freeze"
 KIND_EVIDENCE_UNFREEZE = "evidence_unfreeze"
@@ -212,11 +214,21 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
     校验走 scaffold.prepare_fact——与 CLI fact add 同一套，
     算出来的 block 就是真正会追加进账本的那几行 TOML。
 
+    本批加两道闸（**只加不改**，既有字段与文案一字未动）：
+
+    1. **value 硬校验**：填的 value 必须能在所选 source 产物原文里命中
+       （口径见 scaffold.check_value_in_source／valuecheck.py）；命中不了
+       → 拒建单，消息里说清哪些数字没找到、产物是哪一件、人写的定位是啥。
+    2. **before_sha 指纹闸**：以**目标账本文件**的 sha256 为闸——提议之后
+       账本被别处改过，采纳时拒写（BLOCK_STALE），不覆盖别人的追加。
+       账本本来不存在时记「本来没有」，采纳时若被别处建出来，同样拒写。
+
     ``ledger``＝目标账本文件（相对项目根）：留空沿用默认，指定则必须是
     facts 的 glob 里的文件（详见 scaffold.resolve_ledger）。
     """
     body = body or {}
-    prepared = prepare_fact(Path(disk_root),
+    root = Path(disk_root)
+    prepared = prepare_fact(root,
                             fid=str(body.get("id") or ""),
                             claim=str(body.get("claim") or ""),
                             value=str(body.get("value") or ""),
@@ -228,6 +240,12 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
                                           or body.get("derivedFrom")),
                             note=str(body.get("note") or ""),
                             ledger=str(body.get("ledger") or ""))
+    # 闸 1：value 必须真的在那件产物里（不许编）。口径见 valuecheck.py。
+    check_value_in_source(root, load_config(root),
+                          str(prepared.get("source") or ""),
+                          Path(str(prepared.get("source_path") or "")),
+                          str(prepared.get("value") or ""),
+                          locator=str(prepared.get("locator") or ""))
     ledger = str(prepared.get("ledger") or "")
     fact_id = str(prepared.get("id") or "")
     if ledger:
@@ -248,9 +266,19 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
             ("id", "claim", "value", "source", "source_sha256", "locator",
              "confidence", "derived_from", "expr", "note", "ledger",
              "ledger_explicit", "manifest", "manifest_line")}
+    # 闸 2：指纹闸——目标账本文件的 sha256（账本还不存在时记「本来没有」）。
+    before_sha = ""
+    before_absent = False
+    if ledger:
+        ledger_path = root / ledger
+        if ledger_path.is_file():
+            before_sha = sha256_file(ledger_path)
+        else:
+            before_absent = True
     return {"kind": KIND_ADD_FACT,
             "file": "", "block": "",
-            "before_sha": "",
+            "before_sha": before_sha,
+            "before_absent": before_absent,
             "before_text": _zh(before_parts),
             "proposed_text": str(prepared.get("block") or ""),
             "after_text": _zh(after_parts),
@@ -338,12 +366,41 @@ def apply_evidence_unfreeze(disk_root: Path, proposal: dict) -> dict:
 
 
 def apply_add_fact(disk_root: Path, proposal: dict) -> dict:
-    """采纳「追加事实」：真写账本（走 CLI fact add 同一条路）。"""
+    """采纳「追加事实」：真写账本（走 CLI fact add 同一条路）。
+
+    两道闸在采纳时**再走一遍**（与其它提议单同一条纪律：状态被别处改过就
+    拒写，不覆盖别人的改动）：
+
+    * **账本指纹闸**：提议之后账本被别处追加过 → BLOCK_STALE 拒写；
+      提议时账本本来不存在、这时被别处建出来 → 同样拒写。
+    * **value 硬校验**：产物在提议之后被改过、数字对不上了 → 不落账
+      （消息说清哪些数字没找到）。
+    """
     fact = dict(proposal.get("fact") or {})
     if not fact:
         raise ConfigError("这张提议单里没有事实内容——没法落账。",
                           code="PROPOSAL_FACT_MISSING")
-    info = add_fact(Path(disk_root),
+    root = Path(disk_root)
+    cfg = load_config(root)
+    ledger_rel = (str(fact.get("ledger") or "")
+                  if fact.get("ledger_explicit") else "")
+    ledger_path, _ = resolve_ledger(root, cfg, ledger_rel)
+    if str(proposal.get("before_absent") or ""):
+        # 提议时账本本来不存在：现在若被别处建出来了，也是「状态变了」。
+        if ledger_path.is_file():
+            raise ConfigError(
+                "账本文件 %s 在提议之后被建出来了——请重新提一张单。"
+                % ledger_path.relative_to(root).as_posix(),
+                code="BLOCK_STALE")
+    else:
+        current = sha256_file(ledger_path) if ledger_path.is_file() else ""
+        _guard(str(proposal.get("before_sha") or ""), current, "账本文件")
+    # value 硬校验（采纳时再核一次：产物可能已经变了）。
+    rel, full = resolve_source(root, cfg, str(fact.get("source") or ""))
+    check_value_in_source(root, cfg, rel, full,
+                          str(fact.get("value") or ""),
+                          locator=str(fact.get("locator") or ""))
+    info = add_fact(root,
                     fid=str(fact.get("id") or ""),
                     claim=str(fact.get("claim") or ""),
                     value=str(fact.get("value") or ""),

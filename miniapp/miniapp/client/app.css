@@ -689,13 +689,31 @@ table.mt th{background:#fff}
 .wz-summary{font-size:12.5px;color:#37352f;line-height:2;background:#fbfbfa;border:1px solid #ececeb;border-radius:8px;padding:10px 13px}
 .wz-summary code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#54514a;word-break:break-all}
 /* ---- 追加事实表单（两步：挑产物 → 说清这条数字 ＋ 落哪本账） ---- */
+.toml-key{color:#7a5ea8}
+.toml-eq{color:#8f8d86}
+.toml-string{color:#1c6b4c}
+.toml-number{color:#a8541c}
+.toml-bool{color:#8a5a10}
+.toml-array{color:#3f6ea8}
+.toml-table{color:#6a6f7a;font-weight:600}
+.toml-comment{color:#9b9a96;font-style:italic}
 .af-notes{margin:0 0 10px}
 .af-note{font-size:11.5px;line-height:1.65;color:#6f6e69;background:#fbfbfa;border:1px solid #ececeb;
  border-radius:7px;padding:7px 10px;margin:0 0 6px}
 .af-search{width:100%;font-family:inherit;font-size:12px;border:1px solid #e3e2df;border-radius:7px;
  padding:5px 9px;color:#37352f;background:#fff;margin:0 0 10px}
-.af-groups{display:flex;gap:16px;align-items:flex-start}
+.af-groups{display:flex;flex-direction:column;gap:12px;align-items:stretch}
 .af-group{flex:1 1 0;min-width:0}
+.af-fold{border:1px solid #ececeb;border-radius:8px;background:#fbfbfa;padding:0}
+.af-fold-h{display:flex;align-items:center;gap:8px;cursor:pointer;padding:7px 10px;margin:0;
+ list-style:none;font-weight:600}
+.af-fold-h::-webkit-details-marker{display:none}
+.af-fold-h::before{content:"▸";color:#a49e8d;font-size:10px}
+.af-fold[open] .af-fold-h::before{content:"▾"}
+.af-fold[open] .af-fold-h{border-bottom:1px solid #ececeb}
+.af-fold .af-list{border:none;border-radius:0 0 8px 8px;max-height:220px}
+.af-tag{font-size:10px;line-height:1.6;padding:0 6px;border-radius:8px;font-weight:400;
+ border:1px solid #eddcb4;color:#8a5a10;background:#fdf6e8}
 .af-group-h{font-size:11.5px;color:#54514a;margin:0 0 5px;font-weight:600}
 .af-list{max-height:280px;overflow:auto;border:1px solid #ececeb;border-radius:8px;padding:3px 6px;background:#fff}
 .af-row{display:flex;align-items:center;gap:7px;padding:4px 4px;border-bottom:1px dashed #f0efec;

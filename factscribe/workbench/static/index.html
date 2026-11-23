@@ -531,10 +531,13 @@
             <div class="af-group-h" data-i18n="ff.g.signed">已签产物</div>
             <div class="af-list" id="afSigned"></div>
           </div>
-          <div class="af-group">
-            <div class="af-group-h" data-i18n="ff.g.unsigned">未进清单的产物</div>
+          <details class="af-group af-fold" id="afUnsignedFold">
+            <summary class="af-group-h af-fold-h">
+              <span data-i18n="ff.g.unsignedFold">搜索未签产物</span>
+              <span class="af-tag" data-i18n="ff.tag.unsigned">未签（需人签后才能作数）</span>
+            </summary>
             <div class="af-list" id="afUnsigned"></div>
-          </div>
+          </details>
         </div>
       </div>
 

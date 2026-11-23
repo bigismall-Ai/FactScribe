@@ -146,7 +146,7 @@ class ContractTextTests(Fixture):
 
     def test_add_fact_keeps_the_original_chinese_text(self):
         record = self.propose("add_fact", id="Z9", claim="新增主张",
-                              value="7/8", source="results/swb16.md",
+                              value="56.25%", source="results/swb16.md",
                               locator="line 3", confidence="high")
         ledger = str((record.get("fact") or {}).get("ledger") or "")
         old_before = ("账本 %s：当前没有 id=Z9 的事实\n（这条将追加到账本末尾）"
@@ -200,7 +200,7 @@ class DisplayLayerTests(Fixture):
             self.propose("evidence_freeze", reason="keep it"),
             self.propose("export_bundle"),
             self.propose("add_fact", id="Z9", claim="driver claim",
-                         value="7/8", source="results/swb16.md",
+                         value="56.25%", source="results/swb16.md",
                          confidence="high"),
         ]
 
@@ -327,7 +327,8 @@ class OriginTests(Fixture):
     """④ 来源不串：事实的 source 与提议单的来源是两件事。"""
 
     def fact_body(self) -> dict:
-        return {"id": "Z9", "claim": "driver claim", "value": "7/8",
+        # value 用产物里真有的那一份（value 硬校验：数字必须在产物原文里命中）。
+        return {"id": "Z9", "claim": "driver claim", "value": "56.25%",
                 "source": "results/swb16.md", "locator": "line 3",
                 "confidence": "high"}
 

@@ -239,11 +239,15 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self._send(code, body, "application/json; charset=utf-8")
 
-    def _error(self, code: int, message: str, err_code: str = "") -> None:
+    def _error(self, code: int, message: str, err_code: str = "",
+               err_params: dict | None = None) -> None:
         # err_code＝机器可读的错因（展示层据此翻语言）；code 仍是 HTTP 状态。
+        # err_params＝那些文案的槽位取值（key ＋ params 那套）。
         payload = {"ok": False, "error": message, "code": code}
         if err_code:
             payload["err_code"] = str(err_code)
+        if err_params:
+            payload["err_params"] = dict(err_params)
         self._json(payload, code=code)
 
     # ---- 路由 ----
@@ -335,7 +339,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 return self._json(data)
             if what == "brief":
                 from .readings import brief_reading
-                data = brief_reading(disk_path, _param_of(query, "section"))
+                data = brief_reading(disk_path, _param_of(query, "section"),
+                                     _param_of(query, "fact"))
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
             if what == "fact-form":
@@ -579,7 +584,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 record = create_proposal(state, project_id, disk_id, disk, body)
             except ConfigError as exc:
                 return self._error(400, str(exc),
-                                   err_code=str(getattr(exc, "code", "") or ""))
+                                   err_code=str(getattr(exc, "code", "") or ""),
+                                   err_params=getattr(exc, "params", None))
             except ProposalError as exc:
                 return self._error(exc.status, str(exc))
             return self._json({"ok": True, "proposal": record})
@@ -595,15 +601,18 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 applied = apply_proposal(disk, proposal)
             except ConfigError as exc:
                 if getattr(exc, "code", "") == BLOCK_STALE_CODE:
-                    # 提议之后正文被别处改过：拒写，把新鲜块回给前端。
+                    # 提议之后状态被别处改过：拒写，把新鲜块回给前端。
                     try:
                         resolve_proposal(state, pid, "stale")
                     except ProposalError:
                         pass
                     return self._stale_response(
                         disk, str(proposal.get("file") or ""),
-                        str(proposal.get("block") or ""))
-                return self._error(400, str(exc))
+                        str(proposal.get("block") or ""),
+                        message=str(exc))
+                return self._error(400, str(exc),
+                                   err_code=str(getattr(exc, "code", "") or ""),
+                                   err_params=getattr(exc, "params", None))
             record = resolve_proposal(state, pid, "applied")
             result = {"ok": True, "proposal": record, "applied": applied,
                       "warnings": applied.get("warnings") or []}
@@ -664,17 +673,19 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             return out
         return out
 
-    def _stale_response(self, disk: Path, rel: str, block_id: str) -> None:
+    def _stale_response(self, disk: Path, rel: str, block_id: str,
+                        message: str = "") -> None:
         """条目 43：保存闸拒写（HTTP 409 BLOCK_STALE）。
 
         附同文件全部块的新鲜渲染，前端原地重载（未保存的字会丢，提示说清）。
+        账与证据面的提议单（正文文件为空）不附块——它们不碰正文。
         """
         return self._json({
             "ok": False,
-            "error": "这段在别处已被改动，请重新编辑。",
+            "error": message or "这段在别处已被改动，请重新编辑。",
             "code": BLOCK_STALE_CODE,
             "block": block_id,
-            "blocks": self._fresh_blocks(disk, rel),
+            "blocks": self._fresh_blocks(disk, rel) if rel else {},
         }, code=409)
 
     def _draft_post(self, disk: Path, what: str, body: dict) -> None:

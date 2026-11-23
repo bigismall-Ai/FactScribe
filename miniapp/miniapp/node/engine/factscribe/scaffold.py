@@ -498,6 +498,69 @@ def _check_source(root: Path, cfg, source: str) -> tuple[str, Path]:
     return rel, full
 
 
+def resolve_source(root: Path, cfg: Config, source: str) -> tuple[str, Path]:
+    """公开版的 _check_source（**同一套校验，语义一字不变**）。
+
+    返回 (项目内相对路径, 盘上绝对路径)。提案那侧要读产物核对 value，
+    用它解析——不另写一份路径规则。
+    """
+    return _check_source(root, cfg, source)
+
+
+def check_value_in_source(root: Path, cfg: Config, source_rel: str,
+                          source_path: Path, value: str,
+                          locator: str = "") -> dict:
+    """value 硬校验：这条数字必须能在所选 source 产物原文里命中。
+
+    命中口径在 `factscribe/valuecheck.py`（纯计算，NORMALIZE_RULES 写在那儿）：
+    归一化后按数字项**逐个按出现顺序**比对（数值相等、百分号一致，单位不
+    参与比较）；value 里没有数字时按归一化子串比对。
+
+    命中不了 → 抛 ConfigError：消息是人话，带定位信息（value、产物路径、
+    没找到的数字、人写的 locator）；`code` 给机器看（界面据此翻语言），
+    `params` 是那些槽位的取值。
+
+    **只加不改**：`_check_source` 的五条校验一条没动，这里是**另一道**闸。
+    """
+    from .valuecheck import check_value_in_source as _check
+
+    text = ""
+    try:
+        text = Path(source_path).read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise ConfigError(
+            "产物 %s 不是 UTF-8 文本，没法核对 value——换一件文本产物，"
+            "或把这条事实的 value 改成产物里的原文。" % source_rel,
+            code="VALUE_SOURCE_NOT_TEXT",
+            params={"value": str(value or ""), "source": source_rel,
+                    "missing": "", "locator": str(locator or "")})
+    except OSError as exc:
+        raise ConfigError("读不到产物 %s：%s" % (source_rel, exc),
+                          code="VALUE_SOURCE_UNREADABLE",
+                          params={"value": str(value or ""),
+                                  "source": source_rel, "missing": "",
+                                  "locator": str(locator or "")})
+
+    result = _check(value, text)
+    if result.get("ok"):
+        return result
+    missing = "、".join(str(item) for item in (result.get("missing") or []))
+    params = {"value": str(value or ""), "source": source_rel,
+              "missing": missing, "locator": str(locator or "")}
+    if result.get("mode") == "text":
+        raise ConfigError(
+            "value「%s」这句原文在产物 %s 里找不到。你说的位置是「%s」——"
+            "请照产物原文写 value，或换一件产物。"
+            % (str(value or ""), source_rel, str(locator or "未填")),
+            code="VALUE_TEXT_NOT_IN_SOURCE", params=params)
+    raise ConfigError(
+        "value「%s」里的数字在产物 %s 里找不到：%s"
+        "（数字按出现顺序逐个比对，单位不参与比对）。你说的位置是「%s」——"
+        "请照产物原文写 value，或换一件产物。"
+        % (str(value or ""), source_rel, missing, str(locator or "未填")),
+        code="VALUE_NOT_IN_SOURCE", params=params)
+
+
 def _ledger_path(root: Path, cfg: Config) -> Path:
     """`fact add` 写哪本账：必须落在 ``cfg.facts_glob`` 里，否则写了也读不到。
 
@@ -720,6 +783,9 @@ def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
         "note": str(note or "").strip(),
         "ledger": ledger_path.relative_to(root).as_posix(),
         "ledger_explicit": ledger_explicit,
+        # source_path＝产物在盘上的绝对路径（提案那侧要读它核对 value）。
+        # add_fact 会把它摘掉——CLI 的输出形状一个字不变。
+        "source_path": str(full),
         "manifest": cfg.manifest,
         "manifest_line": manifest_line,
         # block＝真正会追加进账本的那几行 TOML（差异卡上展示它）。
@@ -742,6 +808,7 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
                             derived_from=derived_from, note=note,
                             ledger=ledger)
     block = prepared.pop("block")
+    prepared.pop("source_path", None)
     ledger = root / str(prepared.get("ledger") or "")
     ledger.parent.mkdir(parents=True, exist_ok=True)
     if ledger.is_file():

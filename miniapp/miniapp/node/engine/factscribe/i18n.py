@@ -1122,6 +1122,32 @@ WORKBENCH_MESSAGES: dict = {
         "zh": "这个账本文件名的前缀已被本盘现有账本文件占用。",
         "en": "The prefix of this ledger file name is already taken by an existing ledger file on this disk.",
     },
+    # ---- value 硬校验（数字必须真的在产物里） ----
+    "wb.form.fact.err.VALUE_NOT_IN_SOURCE": {
+        "zh": "value「{value}」里的数字在产物 {source} 里找不到：{missing}"
+              "（数字按出现顺序逐个比对，单位不参与比对）。"
+              "你说的位置是「{locator}」——请照产物原文写 value，或换一件产物。",
+        "en": "The value \"{value}\" does not match the artifact {source}: "
+              "the number(s) {missing} were not found (compared one by one, in order; "
+              "units are not compared). You said the location is \"{locator}\" - "
+              "rewrite the value to match the artifact text, or pick another artifact.",
+    },
+    "wb.form.fact.err.VALUE_TEXT_NOT_IN_SOURCE": {
+        "zh": "value「{value}」这句原文在产物 {source} 里找不到。"
+              "你说的位置是「{locator}」——请照产物原文写 value，或换一件产物。",
+        "en": "The value \"{value}\" was not found verbatim in the artifact {source}. "
+              "You said the location is \"{locator}\" - rewrite the value to match "
+              "the artifact text, or pick another artifact.",
+    },
+    "wb.form.fact.err.VALUE_SOURCE_NOT_TEXT": {
+        "zh": "产物 {source} 不是 UTF-8 文本，没法核对 value——换一件文本产物。",
+        "en": "The artifact {source} is not UTF-8 text, so the value cannot be checked - "
+              "pick a text artifact.",
+    },
+    "wb.form.fact.err.VALUE_SOURCE_UNREADABLE": {
+        "zh": "读不到产物 {source}，没法核对 value。",
+        "en": "The artifact {source} cannot be read, so the value cannot be checked.",
+    },
 }
 
 

@@ -187,6 +187,19 @@ class McpToolCallTests(unittest.TestCase):
         self.assertIn("evidence_freeze", kinds)
         self.assertIn("add_fact", kinds)
 
+    def test_add_fact_proposal_keeps_its_mcp_origin(self):
+        """追加事实卡的来源得是「来自助手」，不是「来源不明」。
+
+        事实的 source（results/ 下的文件）与提议单的来源（mcp）是两件事：
+        平铺会把 source 覆盖掉，卡片上就成了「来源不明」。
+        """
+        record = self.calls.get("add_fact_record") or {}
+        self.assertTrue(record, "没读到追加事实的提议单")
+        self.assertEqual(record.get("source"), "mcp",
+                         "追加事实的提议单来源被事实的 source 覆盖了")
+        self.assertEqual((record.get("fact") or {}).get("source"),
+                         "results/swb16.md", "事实自己的来源丢了")
+
     def test_the_paper_directory_is_untouched(self):
         self.assertTrue(self.data.get("paperUnchanged"),
                         "提议单碰了论文目录——它只该落状态目录")

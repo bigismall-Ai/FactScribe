@@ -10,7 +10,7 @@
 // 结果写成 JSON 文件（FS_RESULT_PATH），进程退出码 0＝全程没抛异常。
 import { pathToFileURL } from 'node:url';
 import { createServer as createNetServer } from 'node:http';
-import { mkdtempSync, cpSync, writeFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, cpSync, writeFileSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -147,6 +147,15 @@ try {
       source: 'results/swb16.md', confidence: 'high',
     })).payload;
   out.calls.fs_list_proposals = (await callTool(13, 'fs_list_proposals', out.target)).payload;
+  // 追加事实的提议单：来源得是 mcp（卡片上显示「来自助手」），
+  // 事实自己的 source 留在 fact 子对象里（原值不动）。
+  const factId = (out.calls.fs_propose_add_fact || {}).id || '';
+  try {
+    out.calls.add_fact_record = JSON.parse(
+      readFileSync(join(dataDir, 'proposals', factId + '.json'), 'utf8'));
+  } catch (e) {
+    out.errors.push('读追加事实的提议单失败：' + String(e));
+  }
   // 提议单只落状态目录：论文目录一个字节都不许动。
   out.paperUnchanged = JSON.stringify(beforeFiles) === JSON.stringify(listFiles(paperRoot));
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .. import i18n
 from ..config import ConfigError, load_config
 from ..evidence import (canonical_sha256, entry_count, freeze_evidence,
                          read_lock, unfreeze_evidence)
@@ -40,26 +41,60 @@ KIND_LABELS = {
 }
 
 
-def _declared_summary(declared: dict) -> str:
-    lines = []
+#: 工作台自己的文案目录（机器视图的命令清单、提议单正文与告警）。
+_MESSAGES = i18n.WORKBENCH_MESSAGES
+
+
+def _zh(parts) -> str:
+    """展示层文案 → 中文原话（落盘/契约层的那一份，逐字不变）。"""
+    return i18n.render_parts(parts, "zh", _MESSAGES)
+
+
+def _declared_parts(declared: dict) -> list:
+    """[evidence] 声明的清单 → 展示层文案（一节一条）。"""
+    if not declared:
+        return [i18n.part("wb.prop.freeze.summaryEmpty")]
+    parts = []
     for key in sorted(declared):
         ids = ", ".join(str(i) for i in (declared.get(key) or []))
-        lines.append("节 %s → %s" % (key, ids or "（无）"))
-    return "\n".join(lines) or "（清单为空）"
+        if ids:
+            parts.append(i18n.part("wb.prop.freeze.section",
+                                   {"section": key, "ids": ids}))
+        else:
+            parts.append(i18n.part("wb.prop.freeze.sectionNone",
+                                   {"section": key}))
+    return parts
 
 
-def _lock_summary(lock) -> str:
+def _lock_parts(lock) -> list:
+    """冻结件现状 → 展示层文案。"""
     if not lock:
-        return "无（还没冻结过）"
-    return "%s（sha256 %s…，%s 条）" % (
-        str(lock.get("path") or "audit/evidence.lock"),
-        str(lock.get("sha256") or "")[:12],
-        int(lock.get("entries") or 0))
+        return [i18n.part("wb.prop.lock.none")]
+    return [i18n.part("wb.prop.lock.some", {
+        "path": str(lock.get("path") or "audit/evidence.lock"),
+        "sha": str(lock.get("sha256") or "")[:12],
+        "entries": int(lock.get("entries") or 0)})]
 
 
 def _declared_of(disk_root: Path) -> dict:
     cfg = load_config(Path(disk_root))
     return dict(getattr(cfg, "evidence_sections", {}) or {})
+
+
+def display_catalog(records) -> dict:
+    """这些提议单用到的展示层文案目录子集（前端按界面语言翻，不抄第二份）。
+
+    目录随载荷走：页面拿到的是 key ＋ params ＋ 模板，缺哪条就回落到
+    提议单里那份中文原话（宁可显示原话，也不要半中半英）。
+    """
+    keys = set()
+    for record in records or []:
+        display = dict((record or {}).get("display") or {})
+        for field in ("before", "after"):
+            keys |= i18n.parts_keys(display.get(field))
+        for item in display.get("warnings") or []:
+            keys |= i18n.parts_keys([item])
+    return i18n.catalog_for(keys, catalog=i18n.WORKBENCH_MESSAGES)
 
 
 # ---------------------------------------------------------------- 冻结
@@ -77,27 +112,38 @@ def propose_evidence_freeze(disk_root: Path, reason: str = "",
     entries = entry_count(declared)
     lock = read_lock(Path(disk_root))
     warnings = []
+    warning_parts = []
     if not declared:
-        warnings.append("当前清单是空的（[evidence] 没声明任何节）——"
-                        "冻结下来只会留一个空件。")
+        warning_parts.append(i18n.part("wb.prop.freeze.warnEmpty"))
+        warnings.append(_zh(warning_parts[-1:]))
     if lock and str(lock.get("sha256") or "") == digest:
-        warnings.append("当前清单与冻结件一致——冻结是幂等的，不会改任何东西。")
-    before = "当前清单（[evidence] 声明）：%d 节 / %d 条\n%s\n冻结件：%s" % (
-        len(declared), entries, _declared_summary(declared),
-        _lock_summary(lock))
-    after = ("冻结件将写入 %s：\n%d 节 / %d 条\n%s\ncanonical_sha256 = %s"
-             % (str((lock or {}).get("path") or "audit/evidence.lock"),
-                len(declared), entries, _declared_summary(declared),
-                digest))
+        warning_parts.append(i18n.part("wb.prop.freeze.warnIdempotent"))
+        warnings.append(_zh(warning_parts[-1:]))
+    before_parts = [i18n.part("wb.prop.freeze.before.head",
+                              {"sections": len(declared), "entries": entries})]
+    before_parts += _declared_parts(declared)
+    before_parts += _lock_parts(lock)
+    after_parts = [
+        i18n.part("wb.prop.freeze.after.path",
+                  {"path": str((lock or {}).get("path")
+                               or "audit/evidence.lock")}),
+        i18n.part("wb.prop.counts",
+                  {"sections": len(declared), "entries": entries}),
+    ]
+    after_parts += _declared_parts(declared)
+    after_parts.append(i18n.part("wb.prop.digest", {"digest": digest}))
     if str(reason or "").strip():
-        after += "\n冻结理由：%s" % str(reason).strip()
+        after_parts.append(i18n.part("wb.prop.freeze.reason",
+                                     {"reason": str(reason).strip()}))
     return {"kind": KIND_EVIDENCE_FREEZE,
             "file": "", "block": "",
             "before_sha": digest,
-            "before_text": before,
+            "before_text": _zh(before_parts),
             "proposed_text": str(reason or ""),
-            "after_text": after,
+            "after_text": _zh(after_parts),
             "warnings": warnings,
+            "display": {"before": before_parts, "after": after_parts,
+                        "warnings": warning_parts},
             "source": source,
             "rationale": rationale,
             "reason": str(reason or "").strip(),
@@ -126,21 +172,30 @@ def propose_evidence_unfreeze(disk_root: Path, reason: str = "", at: str = "",
         raise ConfigError("尚未冻结（没有 audit/evidence.lock）：无冻可解。",
                           code="EVIDENCE_NOT_FROZEN")
     declared = _declared_of(disk_root)
-    before = "冻结件：%s\n清单：%d 节 / %d 条\n%s\n状态：已冻结" % (
-        _lock_summary(lock), len(declared), entry_count(declared),
-        _declared_summary(declared))
-    after = ("冻结件保留（%s），但清单进入「解冻」状态\n"
-             "日志将追加一条 unfreeze 记录到 audit/evidence-log.ndjson\n"
-             "解冻理由：%s") % (str(lock.get("sha256") or "")[:12], text)
+    before_parts = _lock_parts(lock)
+    before_parts.append(i18n.part("wb.prop.unfreeze.before.counts",
+                                   {"sections": len(declared),
+                                    "entries": entry_count(declared)}))
+    before_parts += _declared_parts(declared)
+    before_parts.append(i18n.part("wb.prop.unfreeze.before.state"))
+    after_parts = [
+        i18n.part("wb.prop.unfreeze.after.keep",
+                  {"sha": str(lock.get("sha256") or "")[:12]}),
+        i18n.part("wb.prop.unfreeze.after.log"),
+        i18n.part("wb.prop.unfreeze.after.reason", {"reason": text}),
+    ]
     if str(at or "").strip():
-        after += "\n日期：%s" % str(at).strip()
+        after_parts.append(i18n.part("wb.prop.unfreeze.after.date",
+                                     {"date": str(at).strip()}))
     return {"kind": KIND_EVIDENCE_UNFREEZE,
             "file": "", "block": "",
             "before_sha": str(lock.get("sha256") or ""),
-            "before_text": before,
+            "before_text": _zh(before_parts),
             "proposed_text": text,
-            "after_text": after,
+            "after_text": _zh(after_parts),
             "warnings": [],
+            "display": {"before": before_parts, "after": after_parts,
+                        "warnings": []},
             "source": source,
             "rationale": rationale,
             "reason": text,
@@ -170,10 +225,19 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
                                           or body.get("derivedFrom")),
                             note=str(body.get("note") or ""))
     ledger = str(prepared.get("ledger") or "")
-    before = "账本 %s：当前没有 id=%s 的事实\n（这条将追加到账本末尾）" % (
-        ledger or "（未定位）", str(prepared.get("id") or ""))
-    after = ("将向账本 %s 追加一条事实：\n%s"
-             % (ledger or "（未定位）", str(prepared.get("block") or "")))
+    fact_id = str(prepared.get("id") or "")
+    if ledger:
+        before_parts = [i18n.part("wb.prop.addFact.before.ledger",
+                                  {"ledger": ledger, "id": fact_id})]
+        after_parts = [i18n.part("wb.prop.addFact.after.head",
+                                 {"ledger": ledger})]
+    else:
+        before_parts = [i18n.part("wb.prop.addFact.before.ledgerUnknown",
+                                  {"id": fact_id})]
+        after_parts = [i18n.part("wb.prop.addFact.after.headUnknown")]
+    before_parts.append(i18n.part("wb.prop.addFact.before.note"))
+    # 账本片段是**契约内容**（落盘的就是它），逐字保留、不翻译。
+    after_parts.append(i18n.literal(str(prepared.get("block") or "")))
     fact = {key: prepared.get(key) for key in
             ("id", "claim", "value", "source", "source_sha256", "locator",
              "confidence", "derived_from", "expr", "note", "ledger",
@@ -181,10 +245,12 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
     return {"kind": KIND_ADD_FACT,
             "file": "", "block": "",
             "before_sha": "",
-            "before_text": before,
+            "before_text": _zh(before_parts),
             "proposed_text": str(prepared.get("block") or ""),
-            "after_text": after,
+            "after_text": _zh(after_parts),
             "warnings": [],
+            "display": {"before": before_parts, "after": after_parts,
+                        "warnings": []},
             "source": source,
             "rationale": rationale,
             "fact": fact}
@@ -200,16 +266,18 @@ def propose_export_bundle(disk_root: Path, source: str = "",
     投稿包是真收集：把正文、账、文献、PDF 收进一个目录，
     再逐条过清单门。清单门不过＝不出包。
     """
-    before = "投稿包：还没导出过（本提议会真收集一次并过清单门）"
-    after = ("将导出投稿包：正文 ＋ 事实账 ＋ 参考文献 ＋ PDF\n"
-             "清单门逐条核对；门不过就不出包（提议单留在待确认，人可重提）")
+    before_parts = [i18n.part("wb.prop.bundle.before")]
+    after_parts = [i18n.part("wb.prop.bundle.after.head"),
+                   i18n.part("wb.prop.bundle.after.gate")]
     return {"kind": KIND_EXPORT_BUNDLE,
             "file": "", "block": "",
             "before_sha": "",
-            "before_text": before,
+            "before_text": _zh(before_parts),
             "proposed_text": "",
-            "after_text": after,
+            "after_text": _zh(after_parts),
             "warnings": [],
+            "display": {"before": before_parts, "after": after_parts,
+                        "warnings": []},
             "source": source,
             "rationale": rationale}
 

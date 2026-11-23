@@ -658,6 +658,7 @@ const state = {
   abstract: null,     // 段五：封面摘要块模型（cover-abstract）
   report: null,       // 段三：检查报告数据（/report）
   machine: null,      // 段三：机器视图数据（/machine）
+  proposalCatalog: {}, // 提议单展示层文案的双语目录（随 /proposal 列表到）
   reportError: '',
   machineError: '',
   reportLoading: false,
@@ -714,6 +715,48 @@ function findingMsg(f) {
   const entry = f.message_key ? catalog[f.message_key] : null;
   if (entry && entry[state.lang]) return fill(entry[state.lang], f.params || {});
   return f.message || '';
+}
+
+/* 工作台自己生成的说明文案（机器视图的命令清单、提议单正文与告警）：
+   后端给 key ＋ params，双语目录子集随各自的载荷一起到（载荷的 i18n）。
+   目录里没有这一条、或这个语言没有，就回落到后端给的中文原话。
+   与 findingMsg() 同一条路：EN 界面因此不留中文。 */
+function catalogMsg(catalog, key, params, fallback) {
+  if (!key) return fallback || '';
+  const entry = (catalog || {})[key];
+  if (!entry) return fallback || '';
+  const text = entry[state.lang] || entry.zh;
+  if (!text) return fallback || '';
+  return fillParts(text, params || {});
+}
+
+/* 槽位替换：缺槽位就原样留着（宁可看得见 {slot}，也不要静默渲染成空串）。 */
+function fillParts(text, vars) {
+  let out = String(text || '');
+  Object.keys(vars || {}).forEach((name) => {
+    const value = vars[name];
+    if (value === undefined || value === null) return;
+    out = out.split('{' + name + '}').join(String(value));
+  });
+  return out;
+}
+
+/* 一组展示层文案（parts）：逐条按界面语言渲染，拼成一段文本。
+   任何一条渲染不出来 → 整段回落到后端原话（不半中半英）。
+   parts 里带 text 的是契约内容（落盘的那一份），逐字保留、不翻译。 */
+function renderParts(parts, catalog, fallback) {
+  if (!Array.isArray(parts) || !parts.length) return fallback || '';
+  const out = [];
+  for (const item of parts) {
+    if (!item || typeof item !== 'object') return fallback || '';
+    if (item.text !== undefined) { out.push(String(item.text)); continue; }
+    const entry = (catalog || {})[item.key];
+    if (!entry) return fallback || '';
+    const text = entry[state.lang] || entry.zh;
+    if (!text) return fallback || '';
+    out.push(fillParts(text, item.params || {}));
+  }
+  return out.join('\n');
 }
 
 function esc(s) {
@@ -1789,13 +1832,16 @@ function renderExportGroup(ex) {
     body.innerHTML = `<div class="ff-empty">${esc(machineIdleText())}</div>`;
     return;
   }
+  // 命令标签与说明是后端生成的文案：给 key ＋ params，按界面语言翻。
+  const catalog = (state.machine && state.machine.i18n) || {};
   let html = '';
   if (commands.length) {
-    html = commands.map((c) => `<div class="cmd-row"><span class="cmd-l">${esc(c.label || '')}</span><code class="cmd-c">${esc(c.cmd || '')}</code></div>`).join('');
+    html = commands.map((c) => `<div class="cmd-row"><span class="cmd-l">${esc(catalogMsg(catalog, c.label_key, c.params || {}, c.label || ''))}</span><code class="cmd-c">${esc(c.cmd || '')}</code></div>`).join('');
   } else {
     html = `<div class="ff-empty">${esc(t('mv.none'))}</div>`;
   }
-  if (ex.note) html += `<div class="acc-note">${esc(ex.note)}</div>`;
+  const note = catalogMsg(catalog, ex.note_key, ex.note_params || {}, ex.note || '');
+  if (note) html += `<div class="acc-note">${esc(note)}</div>`;
   body.innerHTML = html;
 }
 
@@ -3924,6 +3970,8 @@ async function loadProposals() {
   }
   const rows = (data && data.proposals) || [];
   state.proposals = rows;
+  // 展示层文案的双语目录随列表到（EN 界面按 lang 翻，缺模板回落到原话）。
+  state.proposalCatalog = (data && data.i18n) || {};
   const count = Number((data && data.count !== undefined && data.count !== null) ? data.count : rows.length);
   updateProposalBadge(count);
   renderProposals(mergeProposalRows(rows));
@@ -3981,14 +4029,19 @@ function proposalCard(row) {
   head.appendChild(time);
   card.appendChild(head);
 
-  const rows = diffRows(row.before_text, row.after_text);
+  // 差异对比用的是**渲染后的**文本（EN 界面比的是英文版，不是中文原话）。
+  const catalog = state.proposalCatalog || {};
+  const display = row.display || {};
+  const beforeText = renderParts(display.before, catalog, row.before_text);
+  const afterText = renderParts(display.after, catalog, row.after_text);
+  const rows = diffRows(beforeText, afterText);
   const cols = document.createElement('div');
   cols.className = 'prop-cols';
   cols.appendChild(propColumn(t('proposal.before'), 'prop-before', rows, 'left'));
   cols.appendChild(propColumn(t('proposal.after'), 'prop-after', rows, 'right'));
   card.appendChild(cols);
 
-  const warns = row.warnings || [];
+  const warns = proposalWarnings(row);
   if (warns.length) {
     const warn = document.createElement('div');
     warn.className = 'prop-warn';
@@ -4019,6 +4072,23 @@ function proposalCard(row) {
   acts.appendChild(reject);
   card.appendChild(acts);
   return card;
+}
+
+/* 告警文案：展示层（key ＋ params）优先；目录缺哪条就回落到中文原话。 */
+function proposalWarnings(row) {
+  const catalog = state.proposalCatalog || {};
+  const display = row.display || {};
+  const parts = Array.isArray(display.warnings) ? display.warnings : [];
+  if (parts.length) {
+    const out = [];
+    for (const item of parts) {
+      const text = renderParts([item], catalog, '');
+      if (!text) return (row.warnings || []).map(String);
+      out.push(text);
+    }
+    return out;
+  }
+  return (row.warnings || []).map(String);
 }
 
 /* 类型标签：改稿／插入草稿／冻结证据／解冻证据／追加事实／导出投稿包。 */

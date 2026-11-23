@@ -44,9 +44,15 @@ def has_message(key: str) -> bool:
     return key in FINDING_MESSAGES
 
 
-def template_for(key: str, lang: str = DEFAULT_LANG) -> str:
-    """取模板：先要这个语言，没有就退到中文，都没有就返回 key 本身。"""
-    entry = FINDING_MESSAGES.get(key) or {}
+def template_for(key: str, lang: str = DEFAULT_LANG,
+                 catalog: dict | None = None) -> str:
+    """取模板：先要这个语言，没有就退到中文，都没有就返回 key 本身。
+
+    catalog＝目录（默认＝发现文案目录 FINDING_MESSAGES）；工作台自己
+    生成的说明文案走 WORKBENCH_MESSAGES，同一套机制、另一份目录。
+    """
+    source = FINDING_MESSAGES if catalog is None else catalog
+    entry = source.get(key) or {}
     text = entry.get(lang) or entry.get(DEFAULT_LANG) or ""
     return text or key
 
@@ -58,10 +64,11 @@ def missing_slots(key: str, params: dict | None) -> list:
     return sorted(n for n in names if n not in params)
 
 
-def render(key: str, params: dict | None = None, lang: str = DEFAULT_LANG) -> str:
-    """渲染一条发现文案。槽位替换只走一遍（值里带 `{x}` 不会被二次替换）。"""
+def render(key: str, params: dict | None = None, lang: str = DEFAULT_LANG,
+            catalog: dict | None = None) -> str:
+    """渲染一条文案。槽位替换只走一遍（值里带 `{x}` 不会被二次替换）。"""
     params = params or {}
-    text = template_for(key, lang)
+    text = template_for(key, lang, catalog)
 
     def sub(match):
         name = match.group(1)
@@ -114,11 +121,12 @@ def style_finding_dict(finding, lang: str = DEFAULT_LANG) -> dict:
     return data
 
 
-def catalog_for(keys, langs=LANGS) -> dict:
-    """报告里出现过的 key 的模板子集（前端按它翻译，省得再抄一份目录）。"""
+def catalog_for(keys, langs=LANGS, catalog: dict | None = None) -> dict:
+    """载荷里出现过的 key 的模板子集（前端按它翻译，省得再抄一份目录）。"""
+    source = FINDING_MESSAGES if catalog is None else catalog
     out = {}
     for key in keys:
-        entry = FINDING_MESSAGES.get(key)
+        entry = source.get(key)
         if not entry:
             continue
         picked = {lang: entry[lang] for lang in langs if entry.get(lang)}
@@ -875,3 +883,240 @@ FINDING_MESSAGES: dict = {
     },
 }
 # --- END FINDING_MESSAGES ---
+
+# --------------------------------------------------------------------------
+# 工作台自己生成的说明文案（wb.*）
+# --------------------------------------------------------------------------
+#
+# 与 FINDING_MESSAGES **同一套机制**（key → {zh, en} ＋ render），但目录
+# 分开：finding.* 是真闸的话（audit.py / style.py 产出的发现），wb.* 是
+# 工作台自己说的话（机器视图的命令清单、提议单的正文与告警）。
+#
+# 口径：
+#
+# * 中文模板与工作台原来的中文原话**逐字相同**——提议单落盘的 before_text /
+#   after_text 就是拿它渲染出来的，所以「展示层」与「落盘层」在中文下
+#   长得一模一样，翻译只发生在展示层；
+# * 英文模板**不许有中文**（EN 界面无中文残留是硬指标）；
+# * 槽位里塞的是**数据**（路径、指纹、条数、账本片段）——值结构稳定，
+#   不翻译、不改语义。
+WORKBENCH_MESSAGES: dict = {
+    # ---- 机器视图：导出与命令 ----
+    "wb.mv.cmd.audit": {
+        "zh": "真闸体检（只读）",
+        "en": "Full gate check (read-only)",
+    },
+    "wb.mv.cmd.check": {
+        "zh": "账本体检（只读）",
+        "en": "Ledger check (read-only)",
+    },
+    "wb.mv.cmd.matrix": {
+        "zh": "追溯矩阵（写 audit/matrix.md）",
+        "en": "Traceability matrix (writes audit/matrix.md)",
+    },
+    "wb.mv.cmd.freeze": {
+        "zh": "证据冻结（写 audit/evidence.lock）",
+        "en": "Evidence freeze (writes audit/evidence.lock)",
+    },
+    "wb.mv.note": {
+        "zh": "本视图只读；上面前两条是只读命令，后两条会写盘，需人自己跑。",
+        "en": "This view is read-only: the first two commands are read-only, the last two write to disk and have to be run by a human.",
+    },
+
+    # ---- 提议单：冻结证据清单 ----
+    "wb.prop.freeze.before.head": {
+        "zh": "当前清单（[evidence] 声明）：{sections} 节 / {entries} 条",
+        "en": "Current list ([evidence] declarations): {sections} sections / {entries} entries",
+    },
+    "wb.prop.freeze.after.path": {
+        "zh": "冻结件将写入 {path}：",
+        "en": "The lock will be written to {path}:",
+    },
+    "wb.prop.freeze.section": {
+        "zh": "节 {section} → {ids}",
+        "en": "section {section} -> {ids}",
+    },
+    "wb.prop.freeze.sectionNone": {
+        "zh": "节 {section} → （无）",
+        "en": "section {section} -> (none)",
+    },
+    "wb.prop.freeze.summaryEmpty": {
+        "zh": "（清单为空）",
+        "en": "(the list is empty)",
+    },
+    "wb.prop.lock.none": {
+        "zh": "冻结件：无（还没冻结过）",
+        "en": "Lock: none (never frozen yet)",
+    },
+    "wb.prop.lock.some": {
+        "zh": "冻结件：{path}（sha256 {sha}…，{entries} 条）",
+        "en": "Lock: {path} (sha256 {sha}..., {entries} entries)",
+    },
+    "wb.prop.counts": {
+        "zh": "{sections} 节 / {entries} 条",
+        "en": "{sections} sections / {entries} entries",
+    },
+    "wb.prop.digest": {
+        "zh": "canonical_sha256 = {digest}",
+        "en": "canonical_sha256 = {digest}",
+    },
+    "wb.prop.freeze.reason": {
+        "zh": "冻结理由：{reason}",
+        "en": "Freeze reason: {reason}",
+    },
+    "wb.prop.freeze.warnEmpty": {
+        "zh": "当前清单是空的（[evidence] 没声明任何节）——冻结下来只会留一个空件。",
+        "en": "The current list is empty ([evidence] declares no sections) - freezing it would only leave an empty lock.",
+    },
+    "wb.prop.freeze.warnIdempotent": {
+        "zh": "当前清单与冻结件一致——冻结是幂等的，不会改任何东西。",
+        "en": "The current list matches the lock - freezing is idempotent and changes nothing.",
+    },
+
+    # ---- 提议单：解冻证据清单 ----
+    "wb.prop.unfreeze.before.counts": {
+        "zh": "清单：{sections} 节 / {entries} 条",
+        "en": "List: {sections} sections / {entries} entries",
+    },
+    "wb.prop.unfreeze.before.state": {
+        "zh": "状态：已冻结",
+        "en": "State: frozen",
+    },
+    "wb.prop.unfreeze.after.keep": {
+        "zh": "冻结件保留（{sha}），但清单进入「解冻」状态",
+        "en": "The lock is kept ({sha}), but the list enters the \"unfrozen\" state",
+    },
+    "wb.prop.unfreeze.after.log": {
+        "zh": "日志将追加一条 unfreeze 记录到 audit/evidence-log.ndjson",
+        "en": "An unfreeze entry will be appended to audit/evidence-log.ndjson",
+    },
+    "wb.prop.unfreeze.after.reason": {
+        "zh": "解冻理由：{reason}",
+        "en": "Unfreeze reason: {reason}",
+    },
+    "wb.prop.unfreeze.after.date": {
+        "zh": "日期：{date}",
+        "en": "Date: {date}",
+    },
+
+    # ---- 提议单：追加一条事实 ----
+    "wb.prop.addFact.before.ledger": {
+        "zh": "账本 {ledger}：当前没有 id={id} 的事实",
+        "en": "Ledger {ledger}: there is no fact with id={id} yet",
+    },
+    "wb.prop.addFact.before.ledgerUnknown": {
+        "zh": "账本（未定位）：当前没有 id={id} 的事实",
+        "en": "Ledger (not located): there is no fact with id={id} yet",
+    },
+    "wb.prop.addFact.before.note": {
+        "zh": "（这条将追加到账本末尾）",
+        "en": "(it will be appended at the end of the ledger)",
+    },
+    "wb.prop.addFact.after.head": {
+        "zh": "将向账本 {ledger} 追加一条事实：",
+        "en": "One fact will be appended to ledger {ledger}:",
+    },
+    "wb.prop.addFact.after.headUnknown": {
+        "zh": "将向账本（未定位）追加一条事实：",
+        "en": "One fact will be appended to the (not located) ledger:",
+    },
+
+    # ---- 提议单：导出投稿包 ----
+    "wb.prop.bundle.before": {
+        "zh": "投稿包：还没导出过（本提议会真收集一次并过清单门）",
+        "en": "Submission bundle: not exported yet (this proposal will collect it once and run it through the manifest gate)",
+    },
+    "wb.prop.bundle.after.head": {
+        "zh": "将导出投稿包：正文 ＋ 事实账 ＋ 参考文献 ＋ PDF",
+        "en": "The submission bundle will be exported: body + fact ledger + references + PDF",
+    },
+    "wb.prop.bundle.after.gate": {
+        "zh": "清单门逐条核对；门不过就不出包（提议单留在待确认，人可重提）",
+        "en": "Every item is checked against the manifest; if the gate fails nothing is exported (the proposal stays pending and can be raised again)",
+    },
+
+    # ---- 告警：保护面重建（改稿／插入草稿） ----
+    "wb.warn.protect.injected": {
+        "zh": "正文里新写的 {dropped} 已被剥掉：工作台不让人凭空造账本绑定",
+        "en": "{dropped} newly written in the body was stripped: the workbench does not let you invent ledger bindings",
+    },
+    "wb.warn.protect.duplicate": {
+        "zh": "同一个保护面被复制了一次，只保留第一处",
+        "en": "The same protected marker was duplicated; only the first occurrence was kept",
+    },
+    "wb.warn.protect.restored": {
+        "zh": "被删掉的 {label} 标记已按原文位置补回",
+        "en": "The deleted {label} marker was restored to its original position",
+    },
+    "wb.warn.protect.restoredGeneric": {
+        "zh": "被删掉的 保护 标记已按原文位置补回",
+        "en": "The deleted protected marker was restored to its original position",
+    },
+
+    # ---- 告警：块形状（改稿／插入草稿） ----
+    "wb.warn.shape.noHeading": {
+        "zh": "这一段本身是节标题，但替换文本里没有节标题命令——采纳后这个标题会消失，请确认这是你要的。",
+        "en": "This block is itself a section heading, but the replacement text carries no heading command - the heading will disappear once adopted, make sure that is what you want.",
+    },
+    "wb.warn.shape.input": {
+        "zh": "替换文本里有 \\input/\\include{{file}}——正文段里搬整个文件进来，形状不对。",
+        "en": "The replacement text contains \\input/\\include{{file}} - moving a whole file into a body paragraph breaks the block shape.",
+    },
+    "wb.warn.shape.tooLong": {
+        "zh": "替换文本比原文长很多（{old} 字 → {new} 字）——确认不是贴错了地方吗？",
+        "en": "The replacement text is much longer than the original ({old} chars -> {new} chars) - check that it was not pasted in the wrong place.",
+    },
+}
+
+
+# --------------------------------------------------------------------------
+# 展示层文案：key ＋ params
+# --------------------------------------------------------------------------
+
+
+def part(key: str, params: dict | None = None) -> dict:
+    """一条展示层文案：key（双语目录里的模板）＋ params（槽位取值）。
+
+    槽位里塞的是**数据**（路径、指纹、条数、账本片段）——值结构稳定，
+    不翻译、不改语义。翻译只发生在 key 指向的那一句模板上。
+    """
+    return {"key": str(key), "params": dict(params or {})}
+
+
+def literal(text: str) -> dict:
+    """一条**不翻译**的展示层文案（契约／落盘内容，逐字保留）。"""
+    return {"text": str(text)}
+
+
+def render_parts(parts, lang: str = DEFAULT_LANG, catalog: dict | None = None,
+                 sep: str = "\n") -> str:
+    """一组展示层文案 → 一段文本（逐条按 lang 渲染，用 sep 拼起来）。
+
+    目录里缺这一条时，渲染出来的是 key 本身——调用方拿它跟中文原话
+    对不上就该回落到原话（宁可显示中文原话，也不要半中半英）。
+    """
+    out = []
+    for item in parts or []:
+        if not isinstance(item, dict):
+            out.append(str(item))
+            continue
+        if "text" in item:
+            out.append(str(item.get("text") or ""))
+            continue
+        key = str(item.get("key") or "")
+        if not key:
+            continue
+        params = dict(item.get("params") or {})
+        out.append(render(key, params, lang, catalog))
+    return sep.join(out)
+
+
+def parts_keys(parts) -> set:
+    """这组展示层文案用到的 key 集合（挑要随载荷发出去的模板子集）。"""
+    keys = set()
+    for item in parts or []:
+        if isinstance(item, dict):
+            key = str(item.get("key") or "")
+            if key:
+                keys.add(key)
+    return keys

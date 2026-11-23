@@ -39,7 +39,7 @@
 | G7 | AI 对话后端两侧不同 | 口径不一致 | P2 | ✅ **已核实：两侧本已同源**（`/api/chat/prepare` 两侧都有） |
 | G8 | 改稿路径两侧不同（直接写 vs 提议单） | 口径不一致 | P2 | ✅ **按建议保留 Miniapp 的提议制**，并写进工具注解与 INSTRUCTIONS |
 | G9 | 版式配置（venue）与投稿包导出宿主做不了 | 核心有·Miniapp 缺 | P2 | ✅ **已实现** `fs_get_venue` ＋ `fs_propose_export_bundle` |
-| G10 | 机器视图的分组标题是后端中文 | 口径不一致 | P2 | ✅ **已对齐**（四个分组加 `title_key`） |
+| G10 | 机器视图的分组标题是后端中文 | 口径不一致 | P2 | ✅ **已对齐**（四个分组加 `title_key`；2026-11-23 补：组内的命令标签/说明也走 `label_key`/`note_key`，见 §8） |
 
 > **工具面**：Miniapp 的 MCP 工具 **10 → 17**（新增 3 个只读 ＋ 4 个提议单）。
 > **本批新增文件**：`factscribe/workbench/readings.py`（两条只读读数）、
@@ -164,6 +164,10 @@
 * 四个分组都加了 `title_key`：`ledger` → `mv.ledger`、`scan` → `mv.scan`、
   `chain` → `mv.evidence`、`export` → `mv.export`（与前端 `t('mv.*')`
   用的 key 一一对应）。后端 `title`（中文原值）**保留**，兼容只读旧的消费者。
+* 2026-11-23 补：「导出与命令」组**组内**的四条命令标签与说明原先仍是
+  后端硬编码中文（EN 界面残留）——现在带 `label_key`/`note_key`，随机器视图
+  载荷发一份 `i18n` 目录子集，前端按界面语言渲染（中文原值留在
+  `label`/`note` 上，兼容只读旧消费者）。
 
 ---
 
@@ -259,3 +263,43 @@
 |------|------|------|------|
 | `fs_get_style` | `{project, disk, lang?}` | 引擎 `GET /api/disk/<p>/<d>/style` | 文风闸读数 |
 | `fs_mirror_check` | `{project, disk}` | 引擎 `GET /api/disk/<p>/<d>/mirror` | 双语对账读数 |
+
+---
+
+## 8. 2026-11-23 补修：i18n 三处缺口（P2-1 / P2-2 / P2-3）
+
+> 分支 `feat/miniapp-host-seam`；范围**只限 i18n 三处**，其余 P2 不动。
+> 实跑复验记录见 `docs/MINIAPP-E2E-ACCEPTANCE-20261122.md` §6。
+
+### 8.1 三处缺口与收口
+
+| # | 缺口 | 收口方式 | 状态 |
+|---|------|---------|------|
+| P2-1 | 机器视图「导出与命令」组内命令标签/说明是后端硬编码中文 | 命令带 `label_key`、说明带 `note_key`；载荷带 `i18n` 子集；中文原值保留在 `label`/`note` | ✅ 已修（EN 实跑 CJK 命中 0） |
+| P2-2 | 提议单差异卡的正文（Current / After adopting）与告警是引擎拼的中文 | 四种新单 + 既有改稿单的正文/告警拆成 `display`（key ＋ params）；前端按 lang 渲染，缺模板回落到中文原话 | ✅ 已修（EN 实跑 CJK 命中 0） |
+| P2-3 | 追加事实卡来源显示「Unknown source」 | 事实的 `source` 与提议单的来源（mcp）分键（`fact` 子对象）；MCP 工具入参 schema 未动 | ✅ 已修（卡片显示 `From assistant`） |
+
+### 8.2 口径边界：这一批**没有**改任何已定口径
+
+| 事项 | 怎么保证没动 |
+|------|------------------|
+| 四步链闸门语义 | `checkreport._chain_steps` 未改 |
+| 提议单形状校验（块形状闸） | `_block_shape_guard` 的判定与硬闸未改，只把告警文案拆成 key＋params |
+| 双 Profile 契约 / P-152 | 未触及任何判定面 |
+| `Issue.as_dict()` 的形状 / 金样例基线 | 未改、未重冻（`audit --json` 默认路径逐字节不变） |
+| 既有提议单字段 | `before_text`/`after_text`/`warnings` 逐字不变，只**加** `display` 字段 |
+| MCP 工具的入参 schema | `fs_propose_*` 一字未动 |
+| P2-4（`.bak` 只有一格深）/ P2-5（账本命名分裂） | 仍记录，未擅改 |
+
+### 8.3 两侧一致性的口径（本批新增的读法）
+
+工作台自己生成的说明文案现在是**两层**：
+
+* **展示层**：`key` ＋ `params`，模板目录（`factscribe/i18n.py::WORKBENCH_MESSAGES`，
+  `wb.*`）随载荷发到页面——页面按 `state.lang` 渲染，缺哪条回落到中文原话；
+* **契约／落盘层**：`before_text`/`after_text`/`warnings`/`label`/`note`
+  一字未动，中文原话由**同一个目录**渲染（所以两层不会漂）。
+
+这与既有 finding 文案的路子同构（`finding.*` 目录随报告发出去，页面按
+`message_key` ＋ `params` 渲染），只是目录分开：真闸的话归 `finding.*`，
+工作台的话归 `wb.*`。

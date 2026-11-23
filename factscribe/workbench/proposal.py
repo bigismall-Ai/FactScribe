@@ -177,7 +177,12 @@ def _propose_non_text(disk_root: Path, kind: str, body: dict,
             disk_root, reason=str(body.get("reason") or ""),
             at=str(body.get("at") or ""), source=source, rationale=rationale)
     if kind == KIND_ADD_FACT:
-        return propose_add_fact(disk_root, body, source=source,
+        # 事实的 source（results/ 下的文件）与提议单的来源（mcp／page）
+        # 是两件事，不能共用一个键：新式把事实字段装在 fact 子对象里，
+        # 旧式（平铺）仍认——平铺时 source 会被当成来源，卡片上就成
+        # 了「来源不明」。
+        fact_body = dict(body.get("fact") or {}) or dict(body)
+        return propose_add_fact(disk_root, fact_body, source=source,
                                 rationale=rationale)
     if kind == KIND_EXPORT_BUNDLE:
         return propose_export_bundle(disk_root, source=source,

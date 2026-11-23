@@ -1533,11 +1533,15 @@ function createToolService(get, post, options) {
     /** fs_propose_add_fact —— 只建单，不写盘 */
     async proposeAddFact(args) {
       const { project, disk, id, claim, value, source, locator, confidence, expr, derived_from, note } = args;
+      // 事实的 source（results/ 下的文件）与提议单的来源（mcp）是两件事，
+      // 不能共用一个键——平铺会把 source 覆盖掉，卡片上就成了「来源不明」。
       return proposeLedger(project, disk, 'add_fact', {
-        id: String(id || ''), claim: String(claim || ''), value: String(value || ''),
-        source: String(source || ''), locator: String(locator || ''),
-        confidence: String(confidence || 'med'), expr: String(expr || ''),
-        derived_from: String(derived_from || ''), note: String(note || ''),
+        fact: {
+          id: String(id || ''), claim: String(claim || ''), value: String(value || ''),
+          source: String(source || ''), locator: String(locator || ''),
+          confidence: String(confidence || 'med'), expr: String(expr || ''),
+          derived_from: String(derived_from || ''), note: String(note || ''),
+        },
       });
     },
 

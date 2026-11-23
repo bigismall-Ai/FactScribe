@@ -54,6 +54,7 @@ from ..config import ConfigError
 from .projects import MAX_DEPTH, disk_meta, disk_sections, load_projects
 from .proposal import (ProposalError, create_proposal, list_proposals,
                         read_proposal, resolve_proposal)
+from .proposals import display_catalog
 from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE, abstract_block,
                     apply_proposal, create_paper_project, create_section,
                     delete_section, editable_model, find_block, move_section,
@@ -552,7 +553,9 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 status = pair.split("=", 1)[1] or "pending"
         rows = list_proposals(state, project=project_id, disk=disk_id,
                               status=status)
-        return self._json({"ok": True, "count": len(rows), "proposals": rows})
+        # 展示层文案目录随列表走：前端按界面语言翻（EN 不留中文）。
+        return self._json({"ok": True, "count": len(rows), "proposals": rows,
+                           "i18n": display_catalog(rows)})
 
     def _proposal_post(self, project_id: str, disk_id: str, disk: Path,
                        rest: list, body: dict) -> None:

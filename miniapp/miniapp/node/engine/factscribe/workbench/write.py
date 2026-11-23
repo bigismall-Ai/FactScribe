@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .. import i18n
 from ..config import ConfigError, load_config, load_facts
 from .projects import (ABSTRACT_BLOCK_ID as _ABSTRACT_BLOCK_ID,
                        CONFIG_NAME, TOKEN_CLOSE, TOKEN_OPEN, TOKEN_RE,
@@ -338,7 +339,30 @@ def _split_trailing_number(text: str):
 
 # ---------------------------------------------------------------- 写回
 
-def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]:
+def _warn(key: str, params: dict | None = None) -> dict:
+    """一条告警：展示层（key ＋ params）＋ 契约层（中文原话）两层一体。
+
+    中文原话由目录渲染（同一个 key），所以两层不会漂；warnings 字段
+    仍然是 list[str]（形状不动），展示层另走 display.warnings。
+    """
+    params = dict(params or {})
+    return {"text": i18n.render(key, params, "zh", i18n.WORKBENCH_MESSAGES),
+            "key": str(key), "params": params}
+
+
+def _warn_texts(warnings) -> list[str]:
+    """告警列表 → 契约层的中文原话（形状不变：list[str]）。"""
+    return [str((w or {}).get("text") or "") for w in warnings or []]
+
+
+def _warn_parts(warnings) -> list[dict]:
+    """告警列表 → 展示层文案（key ＋ params，按界面语言渲染）。"""
+    return [{"key": str((w or {}).get("key") or ""),
+             "params": dict((w or {}).get("params") or {})}
+            for w in warnings or []]
+
+
+def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[dict]]:
     """把客户端改后的文本与保护面拼回 LaTeX。
 
     返回 (新文本, 告警列表)。规则：
@@ -350,7 +374,7 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
       **剥掉**（不许凭空造账本绑定），并记一条告警；
     * 客户端把保护面挪了位置 → 保留客户端的顺序（挪引用是合法的散文编辑）。
     """
-    warnings: list[str] = []
+    warnings: list[dict] = []
     regions = [seg for seg in segments if seg.kind == "prot"]
     by_index = {seg.index: seg for seg in regions}
 
@@ -369,7 +393,7 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
                     clean, dropped = _strip_injected(value)
                     if dropped:
                         warnings.append(
-                            "正文里新写的 %s 已被剥掉：工作台不让人凭空造账本绑定" % dropped)
+                            _warn("wb.warn.protect.injected", {"dropped": dropped}))
                     if clean:
                         items.append(("text", clean))
                 else:
@@ -381,7 +405,7 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
         if seg is None:
             continue
         if index in seen:
-            warnings.append("同一个保护面被复制了一次，只保留第一处")
+            warnings.append(_warn("wb.warn.protect.duplicate"))
             continue
         seen.append(index)
         items.append(("prot", seg))
@@ -404,8 +428,11 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[str]]
             items.insert(index + 1, ("prot", seg))
             if text[cut:]:
                 items.insert(index + 2, ("text", text[cut:]))
-        warnings.append("被删掉的 %s 标记已按原文位置补回"
-                        % (seg.label or "保护"))
+        label = str(seg.label or "")
+        if label:
+            warnings.append(_warn("wb.warn.protect.restored", {"label": label}))
+        else:
+            warnings.append(_warn("wb.warn.protect.restoredGeneric"))
 
     return "".join(item[1].text if item[0] == "prot" else str(item[1])
                    for item in items), warnings
@@ -752,7 +779,7 @@ def save_abstract(disk_root: Path, client_text: str,
     return {"ok": True, "file": rel, "block": ABSTRACT_BLOCK_ID,
             "before": block.raw, "after": new_raw,
             "sha": _short_sha(new_raw),
-            "backup": result["backup"], "warnings": warnings}
+            "backup": result["backup"], "warnings": _warn_texts(warnings)}
 
 
 
@@ -871,7 +898,7 @@ SHAPE_MISMATCH_CODE = "PROPOSAL_SHAPE_MISMATCH"
 
 
 def _block_shape_guard(block: Block, text: str, disk_root: Path,
-                       code: str = SHAPE_MISMATCH_CODE) -> list[str]:
+                       code: str = SHAPE_MISMATCH_CODE) -> list[dict]:
     r"""替换文本的**块形状**校验：形状不对直接拒收，形状可疑只给告警。
 
     返回告警列表（不拦）；形状不匹配抛 ConfigError（拦）。
@@ -889,7 +916,7 @@ def _block_shape_guard(block: Block, text: str, disk_root: Path,
     4. 标题块的替换文本里没有节标题 ——写下去标题就没了；
     5. 替换文本比原文长出很多 ——多半是贴错了地方。
     """
-    warnings: list[str] = []
+    warnings: list[dict] = []
     headings = _SHAPE_HEADING_RE.findall(text)
     is_heading_block = block.kind in ("section", "subsection")
     if is_heading_block:
@@ -901,9 +928,7 @@ def _block_shape_guard(block: Block, text: str, disk_root: Path,
                 "一份替换文本只能对应一个标题。" % (len(headings), names),
                 code=code)
         if not headings:
-            warnings.append(
-                "这一段本身是节标题，但替换文本里没有节标题命令——"
-                "采纳后这个标题会消失，请确认这是你要的。")
+            warnings.append(_warn("wb.warn.shape.noHeading"))
     elif headings:
         names = "、".join("\\%s{%s}" % (cmd, title)
                           for cmd, title in headings[:3])
@@ -933,16 +958,13 @@ def _block_shape_guard(block: Block, text: str, disk_root: Path,
 
     inputs = _SHAPE_INPUT_RE.findall(text)
     if inputs and not is_heading_block:
-        warnings.append(
-            "替换文本里有 \\input/\\include{%s}——正文段里搬整个文件进来，"
-            "形状不对。" % inputs[0][1])
+        warnings.append(_warn("wb.warn.shape.input", {"file": inputs[0][1]}))
 
     old_len = len(block.raw.strip())
     new_len = len(text.strip())
     if new_len > max(3 * old_len, old_len + 2000):
-        warnings.append(
-            "替换文本比原文长很多（%d 字 → %d 字）——确认不是贴错了地方吗？"
-            % (old_len, new_len))
+        warnings.append(_warn("wb.warn.shape.tooLong",
+                              {"old": old_len, "new": new_len}))
     return warnings
 
 
@@ -975,7 +997,7 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
     return {"ok": True, "file": rel_file, "block": block_id,
             "before": block.raw, "after": new_raw,
             "sha": _short_sha(new_raw),
-            "backup": result["backup"], "warnings": warnings}
+            "backup": result["backup"], "warnings": _warn_texts(warnings)}
 
 
 # ---------------------------------------------------------------- 提议单
@@ -1011,7 +1033,9 @@ def propose_block_edit(disk_root: Path, rel_file: str, block_id: str,
             "before_text": block.raw,
             "proposed_text": text,
             "after_text": new_raw,
-            "warnings": warnings,
+            "warnings": _warn_texts(warnings),
+            # 展示层：正文是契约内容（逐字落盘），只有告警需要翻译。
+            "display": {"warnings": _warn_parts(warnings)},
             "source": source,
             "rationale": rationale}
 
@@ -1046,6 +1070,7 @@ def propose_ai_draft(disk_root: Path, rel_file: str, after_block_id: str,
             "after_text": after_text,
             "marker": marker,
             "warnings": [],
+            "display": {"warnings": []},
             "source": source,
             "rationale": rationale}
 

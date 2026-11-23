@@ -31,11 +31,27 @@ from ..constants import (EXIT_ATTACK_OPEN, EXIT_CONFIG, EXIT_INTEGRITY,
                          EXIT_INTERNAL, EXIT_MISSING, EXIT_OK, EXIT_PROOF,
                          EXIT_RED, EXIT_STALE, EXIT_YELLOW)
 from ..evidence import read_lock
-from ..i18n import FINDING_MESSAGES, finding_key, render as render_message
+from ..i18n import (FINDING_MESSAGES, WORKBENCH_MESSAGES, catalog_for,
+                     finding_key, render as render_message)
 
 # 真闸：与 CLI `factscribe audit` 同一条路（不带 --build，绝不编译落盘）。
 GATE_COMMAND = ("audit", "--json")
 RERUN_TIMEOUT = 120.0
+
+#: 机器视图「导出与命令」组的文案 key（随机器视图载荷一起发出去，
+#: 前端按界面语言翻；中文原值照旧留在 label/note 上，兼容只读旧消费者）。
+_MACHINE_MESSAGE_KEYS = ("wb.mv.cmd.audit", "wb.mv.cmd.check",
+                         "wb.mv.cmd.matrix", "wb.mv.cmd.freeze",
+                         "wb.mv.note")
+
+
+def _wb_msg(key: str, params: dict | None = None) -> str:
+    """工作台自己的文案 → 中文原话（契约层那一份）。
+
+    展示层按 key ＋ params 翻（英文模板随载荷发出去）；中文原话由
+    同一个目录渲染，所以两层不会漂。
+    """
+    return render_message(key, params or {}, "zh", WORKBENCH_MESSAGES)
 
 # 「真闸跑不起来」的退出码＝工具级失败：配置错(2)／内部错(4)／必需工具缺失(8)。
 # 这些才叫重跑失败。
@@ -556,17 +572,26 @@ def machine_payload(disk: Path) -> dict:
             "title": "导出与命令",
             "title_key": "mv.export",
             "commands": [
-                {"label": "真闸体检（只读）", "cmd": "factscribe audit --json %s" % disk},
-                {"label": "账本体检（只读）", "cmd": "factscribe check --json %s" % disk},
-                {"label": "追溯矩阵（写 audit/matrix.md）",
+                {"label": _wb_msg("wb.mv.cmd.audit"),
+                 "label_key": "wb.mv.cmd.audit",
+                 "cmd": "factscribe audit --json %s" % disk},
+                {"label": _wb_msg("wb.mv.cmd.check"),
+                 "label_key": "wb.mv.cmd.check",
+                 "cmd": "factscribe check --json %s" % disk},
+                {"label": _wb_msg("wb.mv.cmd.matrix"),
+                 "label_key": "wb.mv.cmd.matrix",
                  "cmd": "factscribe matrix %s" % disk},
-                {"label": "证据冻结（写 audit/evidence.lock）",
+                {"label": _wb_msg("wb.mv.cmd.freeze"),
+                 "label_key": "wb.mv.cmd.freeze",
                  "cmd": "factscribe evidence freeze %s" % disk},
             ],
-            "note": "本视图只读；上面前两条是只读命令，后两条会写盘，需人自己跑。",
+            "note": _wb_msg("wb.mv.note"),
+            "note_key": "wb.mv.note",
         },
     }
     return {**base, "groups": groups,
+            "i18n": catalog_for(_MACHINE_MESSAGE_KEYS,
+                                catalog=WORKBENCH_MESSAGES),
             "findings": len(red) + len(yellow)}
 
 

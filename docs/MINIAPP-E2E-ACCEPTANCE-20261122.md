@@ -156,9 +156,9 @@
 
 | 编号 | 现象 | 证据 / 定位 | 影响 | 状态 |
 |---|---|---|---|---|
-| P2-1 | EN 界面下「机器视图 › 导出与命令」四行命令说明仍是中文 | `factscribe/workbench/checkreport.py:559` 硬编码中文 label；EN 界面截图 `p5-machine-view.png` | 英文界面出现中文（文案不完整），不影响功能 | 记录 |
-| P2-2 | 提议单差异卡的内容（Current / After adopting）由引擎生成，中文硬编码 ⇒ EN 界面下卡片文字仍是中文（卡片标题已 i18n） | `factscribe/workbench/proposals.py`（`before_text/after_text` 生成处）；`p8-proposals-list.png` | 同上 | 记录 |
-| P2-3 | 「Append fact」卡的来源标注显示「Unknown source」（其余三类显示「From assistant」） | MCP `fs_propose_add_fact` 建单未带 source 字段，UI 无从标注 | 溯源信息缺失（展示层） | 记录 |
+| P2-1 | EN 界面下「机器视图 › 导出与命令」四行命令说明仍是中文 | `factscribe/workbench/checkreport.py:559` 硬编码中文 label；EN 界面截图 `p5-machine-view.png` | 英文界面出现中文（文案不完整），不影响功能 | **已修（2026-11-23）**，见 §6 |
+| P2-2 | 提议单差异卡的内容（Current / After adopting）由引擎生成，中文硬编码 ⇒ EN 界面下卡片文字仍是中文（卡片标题已 i18n） | `factscribe/workbench/proposals.py`（`before_text/after_text` 生成处）；`p8-proposals-list.png` | 同上 | **已修（2026-11-23）**，见 §6 |
+| P2-3 | 「Append fact」卡的来源标注显示「Unknown source」（其余三类显示「From assistant」） | MCP `fs_propose_add_fact` 建单未带 source 字段，UI 无从标注 | 溯源信息缺失（展示层） | **已修（2026-11-23）**，见 §6 |
 | P2-4 | `.bak` 只有一格深：第二次保存会把 `.bak` 覆盖成上一版（已编辑版），「原稿留在 .bak」的承诺在连续两次保存后不成立；且**刷新页面会触发一次自动保存** | 实测：首存后 `.bak` 为原稿；刷新页面后再看，`.bak` 已是编辑版（探针文本在 .bak 里） | 误改后无法从 .bak 回到最初原稿；刷新会多一次写盘 | 记录 |
 | P2-5 | 追加事实默认落到 `facts/01-core.toml`，而本项目既有账本命名是 `a_/b_/c_…`；采纳后会**新增一个账本文件** | `proposals.py::propose_add_fact` 预览即如此写；`facts/01-core.toml` 已生成 | 账本文件分裂（虽能被 `facts/*.toml` 通配收进来，但命名不一致） | 记录 |
 
@@ -168,6 +168,7 @@
 
 - 无。本轮没有改动任何已定口径（四步链闸门语义、提议单形状校验、双 Profile 契约），也没有重冻 `tests/golden/audit_findings_baseline.json`。
 - 若要修 P2-1/P2-2（i18n 补齐），需要动引擎侧文案表与 `?lang=` 传参口径，属「改已定口径」的边界，建议先拍板再做。
+- 2026-11-23：用户拍板「那就做 i18n」，P2-1/P2-2/P2-3 已按 §6 补齐。**未改任何已定口径**：四步链闸门语义、提议单形状校验（块形状闸）、双 Profile、P-152、金样例基线，一律未动；翻译只发生在**展示层**，落盘层与 MCP 契约字段一字未改。
 
 ---
 
@@ -198,3 +199,95 @@
 | `miniapp/miniapp/client/app.js`、`miniapp/miniapp/node/engine/factscribe/workbench/static/app.js` | `miniapp/build.sh` 同步产物 |
 | `tests/test_miniapp_client_js.py` | 新增回归闸（3 条） |
 | `docs/MINIAPP-E2E-ACCEPTANCE-20261122.md`、`docs/miniapp-e2e-shots/` | 本报告与证据 |
+
+---
+
+## 6. 2026-11-23 补修轮：i18n 三处缺口（已修 + 实跑复验）
+
+- 分支：`feat/miniapp-host-seam`（HEAD `e6c5640` → 本轮提交；**未推远端、未建 PR**）
+- 范围：**只修 i18n 三处**（P2-1 / P2-2 / P2-3）；P2-4 / P2-5 与其余 P2 不在本次范围内
+- 验收台：宿主**内置浏览器**（Electron FilePanel）打开已 publish 的 `factscribe`
+  Miniapp；宿主论文根目录指向 `/tmp/fs-i18n-root`（`cp -a` 自四个正式盘的副本），
+  验收后**还原**回 `/Users/moc/workspaces/SiAgent`
+
+### 6.1 修法：展示层与落盘层分离
+
+翻译**只作用在展示层**。系统生成的说明文案拆成两层：
+
+| 层 | 形态 | 谁生成 | 落盘吗 |
+|---|---|---|---|
+| 展示层 | `key` ＋ `params`（模板目录随载荷发出去） | 引擎给 key/params | 否 |
+| 契约／落盘层 | `before_text` / `after_text` / `warnings` / `label` / `note` | 引擎按**中文**目录渲染 | 是（字段值一字未动） |
+
+* 目录落在 `factscribe/i18n.py::WORKBENCH_MESSAGES`（`wb.*`）——与 `finding.*`
+  同一套 `render` / `catalog_for` 机制，只是目录分开（真闸的话 vs 工作台的话）；
+* 中文模板＝旧硬编码中文**逐字**（测试里抄着旧格式串逐条比对，漂一条就红）；
+* 前端按 `state.lang` 渲染（`catalogMsg()` / `renderParts()`，与 `findingMsg()`
+  同一条路）；目录缺哪条就回落到中文原话（宁可显示原话，也不半中半英）。
+
+### 6.2 三处缺口的修法
+
+| 缺口 | 根因 | 修法 |
+|---|---|---|
+| P2-1 | `checkreport.py` 把四条命令标签与说明写死中文 | 标签带 `label_key`、说明带 `note_key`，中文原值仍留在 `label`/`note`（兼容只读旧消费者）；机器视图载荷带 `i18n` 目录子集 |
+| P2-2 | `proposals.py` 直接拼中文 `before_text`/`after_text`；`write.py` 的告警也是中文 | 四种新单的正文/告警拆成 `display`（key＋params）；改稿/草稿单的告警同样拆成 key＋params，`warnings` 字段仍是 `list[str]`（形状不动） |
+| P2-3 | MCP `fs_propose_add_fact` 把事实的 `source` 平铺进建单体，**覆盖**了提议单的来源 `mcp` ⇒ 卡片显示「来源不明」 | 事实字段改装在 `fact` 子对象里（MCP 工具的**入参 schema 一字未动**）；服务端新旧两种形状都认 |
+
+### 6.3 实跑复验读数（宿主内置浏览器，副本盘）
+
+| 项 | 怎么点的 | 实测读数 | 判定 |
+|---|---|---|---|
+| EN 机器视图「导出与命令」 | 切 EN → 打开 paper → 全检一次 → 机器视图 → 展开该组 | 四条标签＝`Full gate check (read-only)` / `Ledger check (read-only)` / `Traceability matrix (writes audit/matrix.md)` / `Evidence freeze (writes audit/evidence.lock)`；说明＝`This view is read-only: …`；**CJK 命中 0** | 通过 |
+| EN 提议单（4 新 + 既有 edit） | 待确认徽标 → 逐张卡片读 DOM | 五张卡的 Current / After adopting / 告警**全英文**，**CJK 命中 0**（含 edit 卡告警 `The deleted cmd marker was restored…`） | 通过 |
+| EN 追加事实卡来源 | 同上 | `From assistant`（修前是 `Unknown source`） | 通过 |
+| ZH 机器视图 + 提议单 | 点「中」切到 paper-zh | 四条标签与说明回中文；五张卡正文/告警回中文；来源＝`来自助手` | 通过 |
+| 落盘＝预览 | 采纳「追加事实」 | `facts/01-core.toml` 里的 `[[fact]]` 段与卡片预览**逐字一致**（预览 303 字节 ＋ 文件末尾换行） | 通过 |
+| 不采纳＝零写入 | 另外三张单不采纳 | `audit/evidence.lock` `5e4e33bc8a00133c` / `audit/evidence-log.ndjson` `9b16ff9c41b260da` 前后一致；无投稿包目录 | 通过 |
+| BLOCK_STALE 拒写 | 改稿单 → 段内外部改动 → 点采纳 | toast `This paragraph was changed elsewhere`；`sections/01_intro.tex` 哈希前后一致；提议文本未落盘（`grep 'i18n probe'`＝0）；外部改动仍在 | 通过 |
+| 控制台 | 全程 | 零 warn / 零 error | 通过 |
+
+### 6.4 正式稿盘零改动（实测）
+
+四个正式盘的聚合 sha256 与本轮开工前**逐字节一致**：
+
+| 目录 | 基线 | 验收后 | 结论 |
+|---|---|---|---|
+| `paper` | `defa32b6721310f9` | 同左 | 一致 |
+| `paper-zh` | `b8f79738e113ca04` | 同左 | 一致 |
+| `paper-b` | `565563fbe515b2a0` | 同左 | 一致 |
+| `paper-b-zh` | `60e30071204e8614` | 同左 | 一致 |
+
+本轮所有写操作都在 `/tmp/fs-i18n-root` 副本上；宿主论文根目录已**还原**回
+`/Users/moc/workspaces/SiAgent`；测试用的提议单已逐张「驳回」，不留待确认单。
+
+### 6.5 本轮改动清单
+
+| 文件 | 改动 |
+|---|---|
+| `factscribe/i18n.py` | 新增 `WORKBENCH_MESSAGES`（`wb.*` 双语模板）＋ `part`/`literal`/`render_parts`/`parts_keys`；`template_for`/`render`/`catalog_for` 改为可传目录 |
+| `factscribe/workbench/proposals.py` | 四种新单的正文/告警拆成 `display`（key＋params）；中文原话由目录渲染（逐字不变）＋ `display_catalog()` |
+| `factscribe/workbench/write.py` | 保护面/块形状告警拆成 key＋params（`warnings` 仍是 `list[str]`） |
+| `factscribe/workbench/checkreport.py` | 机器视图命令标签/说明带 `label_key`/`note_key`；载荷带 `i18n` 子集 |
+| `factscribe/workbench/proposal.py` | 追加事实的 `fact` 子对象（来源不串） |
+| `factscribe/workbench/server.py` | 提议单列表响应带 `i18n` 目录子集 |
+| `factscribe/workbench/static/app.js` | `catalogMsg()`/`renderParts()`；差异对比用**渲染后**的文本；告警按 lang 渲染 |
+| `miniapp/miniapp/node/server.mjs` | `fs_propose_add_fact` 的事实字段装进 `fact` 子对象（修来源覆盖） |
+| `tests/test_workbench_i18n_display.py`（新） | 中文原话逐字不变、EN 零中文、目录齐全、展示层＝落盘层、来源不串、机器视图 key、前端接线 |
+| `tests/miniapp_mcp_driver.mjs` / `tests/test_miniapp_mcp_tools.py` | MCP 协议面读回提议单，断言追加事实单的来源＝`mcp` |
+| `miniapp/miniapp/client/app.js`、`miniapp/miniapp/node/engine/factscribe/**` | `miniapp/build.sh` 同步产物（契约自检通过：110 文件 / 4.7 MiB） |
+
+全仓 `pytest tests/ -q`＝**2193 passed / 0 failed**（397 subtests；基线 2170，本轮 +23）。
+新增测试：`tests/test_workbench_i18n_display.py`（19 条：中文原话逐字不变 ＋ EN 零中文 ＋ 目录齐全 ＋ 展示层＝落盘层 ＋ 来源不串 ＋ 机器视图 key ＋ 前端接线）＋ `tests/test_miniapp_mcp_tools.py`（+1 条：MCP 协议面读回提议单，来源＝`mcp`）。
+
+### 6.6 本轮明确**没动**的东西
+
+| 事项 | 怎么保证没动 |
+|---|---|
+| 四步链闸门语义 | `checkreport._chain_steps` 未改 |
+| 提议单形状校验（块形状闸） | `_block_shape_guard` 的判定与硬闸未改，只把告警文案拆成 key＋params |
+| 双 Profile 契约 / P-152 | 未触及任何判定面 |
+| `Issue.as_dict()` 的形状 | 未改（金样例逐字节锁） |
+| `tests/golden/audit_findings_baseline.json` | **未重冻、未改一个字节** |
+| 既有提议单字段（`before_text`/`after_text`/`warnings`/…） | 逐字不变（测试抄旧格式串比对）；只**加**了 `display` 字段 |
+| MCP 工具的入参 schema | `fs_propose_*` 的入参一字未动（`fact` 子对象只是服务端内部形状） |
+| 其余 P2（P2-4 `.bak` 深度 / P2-5 账本命名） | 仍记录，未擅改 |

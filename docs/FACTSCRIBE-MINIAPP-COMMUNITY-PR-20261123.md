@@ -273,6 +273,7 @@ cd MiniMax-Code-MiniApps
 mkdir -p plugins/bigismall-ai
 cp -R /tmp/mm-api-20261123/plugins/bigismall-ai/factscribe plugins/bigismall-ai/
 cp /tmp/mm-api-20261123/README.md /tmp/mm-api-20261123/README.zh-CN.md .
+#   (整包也能直接取：本仓 dist/factscribe-community-package.zip，解开后顶层就是 factscribe/)
 
 # ④ 跑 checker（必须 0 error）
 npm run check

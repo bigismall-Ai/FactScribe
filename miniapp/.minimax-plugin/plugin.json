@@ -2,15 +2,15 @@
   "schemaVersion": 1,
   "name": "factscribe",
   "displayName": "FactScribe 论文工作台",
-  "version": "1.0.0",
-  "description": "本地论文写作工作台：扫论文根目录聚合多语言稿盘，章节芯片渲染、检查报告、事实账与知识库一目了然；页面里的 AI 助手直接用 mcode 自己的模型（宿主 Agent 回合），MCP 工具给助手 17 个：查稿况、看目录、读正文、看检查报告、看文风闸、看双语对账、看证据锁、看写作简报、看版式、对事实账、搜知识库，以及提改稿／追加事实／冻结解冻证据／导出投稿包的提议单（提议不写盘，由人在页面差异卡里确认才落盘）。",
-  "author": "factscribe contributors",
+  "version": "1.1.0",
+  "description": "A local workbench for writing papers: open your manuscript projects, read the check report, the fact ledger and the knowledge base, and let the assistant propose edits you approve before anything reaches the file. Numbers and citations stay pinned to the ledger; the AI proposes, you decide.",
+  "author": "Bigismall AI",
   "icon": "icon.png",
   "category": "Office",
   "exampleQueries": [
-    "打开 FactScribe 工作台",
-    "打开论文工作台看看现在有几篇稿",
-    "用 FactScribe 查一下这篇论文的检查报告和事实账"
+    "Open the FactScribe paper workbench",
+    "Check this paper's report and fact ledger for numbers that do not match",
+    "Propose a tighter rewrite of this introduction and show me the diff first"
   ],
   "apps": [],
   "mcpServers": [

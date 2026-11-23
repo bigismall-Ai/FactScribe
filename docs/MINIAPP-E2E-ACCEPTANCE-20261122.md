@@ -1057,3 +1057,84 @@ bak 存在:      True True          ← 两侧 .bak 都生成了
 本轮**没有**动它：修它会大幅改变块结构与编辑粒度（一个章节文件＝一个可编辑段），属**独立的产品决策**，不是本轮能顺手带过去的——需要用户拍板是否要按空行分段（以及分段后保存/指纹/审计的粒度怎么跟着变）。
 
 ---
+
+
+---
+
+## 12. 上架准备（社区仓库路径）—— 2026-11-23
+
+这一节记录本轮**从「能跑」到「可提交社区仓库」**这一段：包形态改造、checker 判定、
+随包 MCP 声明的证据判定、以及发布态的一致性复核。
+交付与开 PR 手册见 `docs/FACTSCRIBE-MINIAPP-COMMUNITY-PR-20261123.md`。
+
+### 12.1 路径改道
+
+原计划的「官方插件市场飞书表单」作废（我们没有企业主体，个人开发者走官方社区仓库
+`MiniMax-AI/MiniMax-Code-MiniApps` 更对口）。本轮改为按社区规范准备包与 PR 描述。
+
+### 12.2 包形态改了什么
+
+| 项 | 改前 | 改后 | 为什么 |
+|---|---|---|---|
+| `plugin.json.version` | 1.0.0 | **1.1.0** | 包内容变了必须提版本 |
+| `plugin.json.description` | 罗列内部实现（芯片渲染／四步链…） | 改写为「解决什么问题」 | 指南/契约：description 不写内部实现 |
+| `plugin.json.author` | factscribe contributors | **Bigismall AI** | 与 LICENSE 署名、目录名一致 |
+| `package.json` | name+private+mcode | **只有 mcode 段** | 对齐 `examples/hello-miniapp` |
+| `miniapp.json.engines` | 无 → 曾加 `>=3.1.2` → **移除** | 无 | 写了反而让 3.1.6 之前的客户端整包拒装（不认识该字段），把真实下限从 3.1.2 悄悄抬到 3.1.6 |
+| `README.md` | 中文工程文档（20KB） | **英文社区文档**（含 `## Tested environment`、`## Data & access`） | 社区硬要求 |
+| `README.zh-CN.md` | 无 | **新增中文版** | 社区可选件；两个根 README 表格按语言分别指向 |
+| `LICENSE` | 无（仓根有） | **包内 MIT，holder Bigismall AI** | 社区硬要求 |
+| 载荷 `factscribe/web/` | 在 | **移除**（改 build.sh） | 独立 `factscribe serve` 网页形态的旧 UI，调用了本包不声明的宿主 API（见 12.4） |
+
+### 12.3 社区 checker
+
+```text
+$ node scripts/validate.mjs plugins/bigismall-ai/factscribe
+plugins/bigismall-ai/factscribe: OK        # 0 error / 0 warning
+```
+
+包体读数：**109 文件 / 5.0 MiB**（上限 1024 / 64 MiB）；最大单文件 1.8 MiB（上限 16 MiB）。
+
+### 12.4 随包 MCP 声明：判定与依据
+
+**判定：保留** `plugin.json.mcpServers: ["servers.mcp.json"]` ＋ `servers.mcp.json` 的
+`http://127.0.0.1:9/mcp/factscribe` 占位 ＋ `miniapp.json` 的 `mcpEndpoints`。
+
+依据（与本文件 11.x 里「接缝 2」的记录一致，本轮补齐了官方原文与宿主实现两处硬证据）：
+
+1. 社区仓 `docs/package-contract.md`：`mcpEndpoints.server` **必须**是 `plugin.json.mcpServers`
+   里声明过的 server，宿主安装时强校验；
+2. 宿主实现（本机 app.asar 的清单读取器）：`readMcpEndpoints()` 对未声明的 server 直接报
+   `MCP_ENDPOINTS_INVALID`；
+3. 宿主内置的 Mini App MCP 编写指南：`http://127.0.0.1:9/mcp/<server>` 是官方写明的
+   「宿主接管前的 fail-closed 占位」，采纳时由宿主改写成当前运行实例地址。
+
+→ **不能**把 `mcpServers` 置空（那会让宿主拒绝整份 manifest），也**没有**任何指向第三方远程
+MCP 的声明。
+
+### 12.5 载荷改动的副作用核查
+
+去掉 `factscribe/web/` 之前逐条查过引用：MiniApp 走 `factscribe workbench`，前端由 Node 薄壳
+伺服（`miniapp/client/`）；引擎自带的 `web/` 静态页只被 `factscribe serve` 用
+（`factscribe/serve.py` 的 `WEB_DIR`），`factscribe workbench` 与 `factscribe audit` 都不碰它。
+→ 去掉的是网页形态的 UI 资产，不是引擎能力；**没有**动任何已定口径。
+
+### 12.6 三方一致性复核（改载荷后）
+
+| 比对 | 读数 |
+|---|---|
+| 源（仓内 `factscribe/` 去 web/）vs 载荷 | 95 vs 95，**0 差异** |
+| 前端三件：源 vs 载荷 vs 已发布 | **逐字节一致** |
+| 载荷 vs 本机已发布 | 101 vs 101，**0 差异** |
+| 已发布 manifest | version 1.1.0 / author Bigismall AI / 17 工具 / 无 engines |
+
+### 12.7 本轮验证与**没有**验证的
+
+- 全仓 `pytest tests/ -q`：**2353 passed, 397 subtests passed，0 failed**；
+- 样例论文盘（`factscribe/samples/guide` 的 `/tmp` 副本）实跑：引擎起服务 → 页面渲染 →
+  章节芯片（`[sec:intro]`、事实芯片 A1/A2/A3、绑定数字 56.25%、引文芯片）→ 截图
+  `miniapp/docs/workbench.png`（**无用户稿件内容**，PR 用图）；
+- 本机宿主发布态已重新 `miniapp publish`，运行时状态 running；
+- **没有**重跑 2026-11-22 那套宿主端到端点击：那套流程会经 `touch_opened` 往用户正式稿盘
+  写 `last_opened`，本轮按约定不碰正式盘；改动只落在打包层（manifest/README/LICENSE/build.sh）
+  与载荷里一处与运行路径无关的目录删除，页面与工具面代码逐字节未动。

@@ -1,5 +1,6 @@
 {
-  "name": "factscribe-miniapp",
-  "private": true,
-  "mcode": { "schemaVersion": 2, "miniApp": "./miniapp/miniapp.json" }
+  "mcode": {
+    "schemaVersion": 2,
+    "miniApp": "./miniapp/miniapp.json"
+  }
 }

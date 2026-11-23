@@ -604,3 +604,48 @@
 | 保存把段内换行压成空格、`---` 写成 `—`（上一轮记着，用户已拍板待定） | 属「落盘层散文＋token 口径」，本轮不动 | 待用户拍板 |
 
 ---
+
+
+---
+
+## 14. 上架准备这一轮（社区仓库路径）—— 2026-11-23
+
+本节记录社区仓库提交准备这一轮改了什么、哪些是打包层的、哪些留作缺口。
+交付物与开 PR 步骤见 `docs/FACTSCRIBE-MINIAPP-COMMUNITY-PR-20261123.md`。
+
+### 14.1 本轮改的（全在打包层，未动产品语义）
+
+| 文件 | 性质 | 说明 |
+|---|---|---|
+| `miniapp/.minimax-plugin/plugin.json` | 打包层 | version 1.1.0、description 改写、author、英文示例查询 |
+| `miniapp/package.json` | 打包层 | 只留 `mcode` 段 |
+| `miniapp/miniapp/miniapp.json` | 打包层 | 移除 `engines`（写了会把真实下限抬到 3.1.6） |
+| `miniapp/README.md` / `README.zh-CN.md` / `LICENSE` | 打包层 | 社区硬要求件 |
+| `miniapp/build.sh` | 打包层 | vendor 时去掉 `factscribe/web/` |
+| `miniapp/docs/workbench.png` | 打包层 | 样例盘截图 |
+| `scripts/make_miniapp_submit_zip.py` | 打包层 | 单包快照打包＋限制自检 |
+| `docs/FACTSCRIBE-MINIAPP-COMMUNITY-PR-20261123.md` | 文档 | PR 描述草稿＋开 PR 手册 |
+
+**未动**：四步链闸门语义、提议单形状校验、双 Profile 契约、P-152、`_check_source` 校验语义、
+`Issue.as_dict()` 形状、落盘层散文＋token 口径、`\fact`/`\cite` 保护面、
+`tests/golden/audit_findings_baseline.json`（未重冻）、用户正式稿盘
+（`paper`/`paper-zh`/`paper-b`/`paper-b-zh` 本轮零读写）。
+
+### 14.2 缺口与待用户拍板的
+
+| 项 | 状态 | 为什么 |
+|---|---|---|
+| **开 PR 本身** | **待用户授权** | 对外操作。我们只做到「包已就位 + checker 通过 + PR 描述草稿写好 + 克隆/同步步骤记录」 |
+| fork 名与署名 | 待用户确认 | 当前按账号 `bigismall-ai` 落目录、`Bigismall AI` 作 author 与 LICENSE holder；要换成真名/公司名，需同步改 `plugin.json.author`、`LICENSE` 版权行、两个根 README 表格行三处 |
+| `category` 取值 | 暂定 `Office` | 契约允许 `Office`/`Studio`/`Science & Healthcare` 等；「论文写作工作台」归办公类最贴，若维护者倾向科研类可改（改动只在一行） |
+| 截图 | 已放 `plugins/bigismall-ai/factscribe/docs/workbench.png` | 用引擎自带样例论文拍的，**不含用户稿件**；仓内 `docs/miniapp-e2e-shots/` 那批是用户真实论文的页面，**不进公开 PR** |
+| Windows / Linux | 未验证 | 包内无平台专属二进制、Node 入口只用内置模块，但没有在两个平台上实跑过；PR 描述里已如实写明 |
+| `factscribe serve` 网页形态 | **不在本包内** | vendor 时去掉 `factscribe/web/`（独立网页形态的 UI，调用了本包不声明的宿主 API）；CLI 形态不受影响（仓内源码原样保留） |
+
+### 14.3 下一轮可以做但本轮没做的
+
+| 项 | 为什么没做 |
+|---|---|
+| 给包加 `skills/`（比如「四步链怎么查」） | 社区 checker 只校验形状；加 skill 会改变包的能力面与维护成本，等有明确需求再做 |
+| 把插件版本与社区发布节奏对齐 | 社区包首版用 1.1.0（相对本机 1.0.0 提过一次），若维护者要求首版 1.0.0，改一行即可，但**改了内容就要在 PR 里说明** |
+| 整仓 `npm run check`（含 checker 自身单测） | 需要完整克隆上游仓（本次本机 git 协议被拦，走 tarball 兜底）；包级 `node scripts/validate.mjs` 已 0 error / 0 warning |

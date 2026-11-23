@@ -23,6 +23,13 @@ cp -R "$REPO_ROOT/factscribe" "$ENGINE/factscribe"
 find "$ENGINE/factscribe" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 find "$ENGINE/factscribe" -name '*.pyc' -delete 2>/dev/null || true
 find "$ENGINE/factscribe" -name '.DS_Store' -delete 2>/dev/null || true
+# 独立 'factscribe serve' 的网页 UI 不进 MiniApp 载荷：
+#   1) MiniApp 走的是 'factscribe workbench'，它的前端由 Node 薄壳伺服（miniapp/client/），
+#      引擎自带的 web/ 静态页在这个形态下永远不会被打开；
+#   2) web/app.js 里调了 host.navigation.getState() 与 agent.session()——那是 MiniFactScribe
+#      独立网页形态要用的宿主 API，本 MiniApp 一个都没声明（社区 checker 判 ACCESS_UNDECLARED）。
+#   去掉的是网页形态的 UI 资产，不是引擎能力：'factscribe workbench'/'factscribe audit' 都不碰它。
+rm -rf "$ENGINE/factscribe/web"
 
 # 文风闸的规则文件也要跟着走：规则的查找顺序是「项目根 → 发行包根 → 包内」，
 # 发行包根 = <engine>/。少了它，miniapp 的文风读数会退回内置默认值，

@@ -1601,6 +1601,246 @@ def _slugify(text: str) -> str:
     return out or "section"
 
 
+# ---------------------------------------------------------------- 标题/章节名/事实绑定
+#
+# 这三条走**独立通道**，不碰 /edit 的「散文＋token」写回：
+#
+# * 标题块经那条通道回写时，客户端交上来的是标题文字本身，服务端会把
+#   \section{…} 整条写掉；
+# * 客户端在散文里新写的 \fact{…} 会被那条通道剥掉（不许凭空造账本
+#   绑定）——所以绑定标记必须由本节这几条通道落盘。
+#
+# 三条通道的共同纪律：只动**那一处**，其余字节一字不改；指纹闸
+# （expect_sha 对不上 → BLOCK_STALE）；原子写 + .bak（多代轮转）。
+
+#: 节标题命令（改名只动花括号里的那一段）。
+_HEADING_CMD_RE = re.compile(r"\\(section|subsection|subsubsection)\s*\*?\s*\{")
+
+
+def _tex_text(text: str) -> str:
+    """写进 .tex 的文本：LaTeX 特殊字符按核心既有约定转义（scaffold.tex_escape）。"""
+    from ..scaffold import tex_escape
+    return tex_escape(text)
+
+
+def _rewrite_heading_title(raw: str, title: str) -> str:
+    """把一条节标题命令里的标题换成新的；命令本身与其余部分一字不动。"""
+    match = _HEADING_CMD_RE.search(raw)
+    if not match:
+        raise ConfigError("这一段不是节标题，改不了名字。",
+                          code="SECTION_NOT_HEADING")
+    open_at = match.end() - 1
+    close_at = _match_braces(raw, open_at, len(raw))
+    if close_at <= open_at + 1 or raw[close_at - 1] != "}":
+        raise ConfigError("这一段的节标题没写完（花括号不配平），改不了名字。",
+                          code="SECTION_NOT_HEADING")
+    return raw[:open_at + 1] + _tex_text(title) + raw[close_at - 1:]
+
+
+def rename_section(disk_root: Path, rel_file: str, block_id: str, title: str,
+                   expect_sha: str = "") -> dict:
+    r"""改一节的标题（\section{…} / \subsection{…} 里那一段）。
+
+    * 只改标题命令的花括号里那一段，文件里其余字节一字不动；
+    * 指纹闸与正文同一条（expect_sha 对不上 → BLOCK_STALE 拒写）；
+    * 原子写，落盘前留 .bak（多代轮转，与正文同一条）。
+    """
+    clean = " ".join(str(title or "").split())
+    if not clean:
+        raise ConfigError("新标题不能空。", code="SECTION_TITLE_MISSING")
+    block = find_block(disk_root, rel_file, block_id)
+    if block.kind not in ("section", "subsection"):
+        raise ConfigError("这不是一节标题，改不了名字：%s" % block_id,
+                          code="SECTION_NOT_HEADING")
+    _check_expect_sha(block, expect_sha)
+    new_raw = _rewrite_heading_title(block.raw, clean)
+    if new_raw == block.raw:
+        return {"ok": True, "changed": False, "file": rel_file,
+                "block": block_id, "title": clean, "before": block.raw,
+                "after": new_raw, "sha": _short_sha(new_raw)}
+    path = _safe_section_file(disk_root, rel_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
+                          code="SECTION_MISSING")
+    new_text = source[:block.start] + new_raw + source[block.end:]
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
+    return {"ok": True, "changed": True, "file": rel_file, "block": block_id,
+            "title": clean, "before": block.raw, "after": new_raw,
+            "sha": _short_sha(new_raw), "backup": result["backup"]}
+
+
+def set_disk_title(disk_root: Path, title: str, subtitle: str = "",
+                   expect_sha: str = "") -> dict:
+    r"""改论文标题：盘自己入口 .tex 的 \title{…}。
+
+    * 标题**分盘取**——改的就是封面读的那一条命令（projects.title_command_span，
+      与读侧同源：读的是哪一条，写的就是哪一条）；
+    * 主标题与副标题分别落在 \title{…} 的两半（中间是 \\）；
+    * 指纹闸：expect_sha 对不上 → BLOCK_STALE 拒写；
+    * 原子写，落盘前留 .bak（多代轮转）。
+    """
+    from .projects import title_command_span
+    root = Path(disk_root)
+    clean_title = " ".join(str(title or "").split())
+    if not clean_title:
+        raise ConfigError("标题不能空。", code="TITLE_MISSING")
+    clean_sub = " ".join(str(subtitle or "").split())
+    span = title_command_span(root)
+    if span is None:
+        raise ConfigError("这个盘的入口 .tex 里没有 \\title{…}——"
+                          "先在 main.tex 里写上标题，再来改。",
+                          code="TITLE_MISSING")
+    target, start, end, raw = span
+    if expect_sha and _short_sha(raw) != expect_sha:
+        raise ConfigError("标题在别处被改动过（指纹对不上），没有写入——"
+                          "请刷新页面再改。", code=BLOCK_STALE_CODE)
+    body = _tex_text(clean_title)
+    if clean_sub:
+        body += " \\\\ " + _tex_text(clean_sub)
+    open_at = raw.index("{")
+    new_raw = raw[:open_at + 1] + body + raw[raw.rindex("}"):]
+    try:
+        source = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到入口文件：%s（%s）" % (target.name, exc),
+                          code="SECTION_MISSING")
+    new_text = source[:start] + new_raw + source[end:]
+    result = atomic_write(target, new_text, keep=BACKUP_KEEP)
+    return {"ok": True, "changed": new_raw != raw, "file": target.name,
+            "title": clean_title, "subtitle": clean_sub,
+            "before": raw, "after": new_raw, "sha": _short_sha(new_raw),
+            "backup": result["backup"]}
+
+
+def _number_spot(raw: str, value: str) -> tuple[int, str] | None:
+    """正文里这条事实**认得**的那处数字 → (插标记的位置, 命中的字面)。
+
+    判据与 audit 的内联绑定**同一套**（facts.fact_value_keys）：一个 fact
+    接受哪些数字由它的 value 说了算——`10/16` 认 "10" 也认 "16"（还认精确商
+    0.625），`56.25%` 认 "56.25"。所以插出来的标记一定是 audit 认的那一种，
+    不会插出一个必然判红的绑定。
+
+    落点优先取 value **字面写出的第一个数字**（分数取分子，与样例稿的写法
+    一致：`10/16` 绑在 "10" 后面），再退到其它认得的数字。
+
+    只在**散文段**里找（命令、公式、环境、注释这些保护面里的数字不算），
+    且跳过已经跟着 \\fact{…} 的那处（已绑过的不重复绑）。
+    """
+    from ..facts import _NUM_RE as _FACT_NUM_RE
+    from ..facts import fact_value_keys, literal_tokens, number_key
+    allowed = fact_value_keys(value)
+    if not allowed:
+        return None
+    # 优先级：value 里字面写出的数字（按书写顺序）→ 其它认得的数字。
+    order: list[str] = []
+    for raw_token, suffix, pct in literal_tokens(value):
+        key = number_key(raw_token, suffix, pct)
+        if key not in order:
+            order.append(key)
+    for key in sorted(allowed):
+        if key not in order:
+            order.append(key)
+    segments = scan(raw, frozenset())
+    spans = []
+    offset = 0
+    for seg in segments:
+        if seg.kind == "text":
+            spans.append((offset, offset + len(seg.text)))
+        offset += len(seg.text)
+    for want in order:
+        for start, end in spans:
+            for match in _FACT_NUM_RE.finditer(raw, start, end):
+                token = match.group(1)
+                suffix = match.group(2) or ""
+                pct = bool(match.group(3))
+                at = match.end()
+                # LaTeX 的 \\% 紧跟在数字后面——audit 那边先还原成 % 再算，
+                # 这里照着还原（键与 audit 一致），标记也插在 \\% 之后。
+                if not pct and raw[at:at + 2] == "\\%":
+                    pct = True
+                    at += 2
+                if number_key(token, suffix, pct) != want:
+                    continue
+                if raw[at:at + 6] == "\\fact{":
+                    continue
+                return at, match.group(0)
+    return None
+
+
+def insert_fact_binding(disk_root: Path, rel_file: str, block_id: str,
+                         fact_id: str, expect_sha: str = "") -> dict:
+    """把账上的一条事实绑进正文：在那个数字后面插 \\fact{id} 标记。
+
+    铁律（账上没有的数字不得编造）——三条都要过：
+
+    1. 事实必须**在账上**（facts/*.toml 里查得到）；
+    2. 它的 value 必须过既有 value 硬闸（factscribe/valuecheck.py 的
+       check_value_in_source——与「追加事实」同一道闸，不绕、不改判据）；
+    3. 数字只能来自账本里的 value 原文：正文里已经有这个数字就只补标记，
+       没有就把「数字＋标记」一起插在段末——不猜位置、不编数字。
+
+    本段里已经有同一条事实的标记 → 拒（不重复绑）。
+    """
+    root = Path(disk_root)
+    fid = str(fact_id or "").strip()
+    if not fid:
+        raise ConfigError("要绑哪一条事实？给个事实 id。",
+                          code="FACT_ID_MISSING")
+    block = find_block(disk_root, rel_file, block_id)
+    if block.kind not in ("para", "abstract", "ai_draft"):
+        raise ConfigError("只能往正文段落里绑事实（这一段是标题）。",
+                          code="FACT_BIND_NOT_PARA")
+    _check_expect_sha(block, expect_sha)
+    cfg = load_config(root)
+    fact = None
+    for item in load_facts(cfg):
+        if str(item.id) == fid:
+            fact = item
+            break
+    if fact is None:
+        raise ConfigError("账上没有这条事实：%s（先在「追加事实」里入账）" % fid,
+                          code="FACT_NOT_IN_LEDGER")
+    value = str(fact.value or "").strip()
+    if not value:
+        raise ConfigError("这条事实没有 value，绑不了：%s" % fid,
+                          code="FACT_VALUE_EMPTY")
+    # value 硬闸：数字必须真的在那件产物里（与追加事实同一道，不绕）。
+    from ..scaffold import check_value_in_source, resolve_source
+    source_rel, source_path = resolve_source(root, cfg, str(fact.source or ""))
+    check_value_in_source(root, cfg, source_rel, source_path, value,
+                          locator=str(fact.locator or ""))
+    marker = "\\fact{%s}" % fid
+    if marker in block.raw:
+        raise ConfigError("这一段里已经有这条事实的标记了（%s）。" % fid,
+                          code="FACT_ALREADY_BOUND")
+    spot = _number_spot(block.raw, value)
+    if spot is not None:
+        at, literal = spot
+        insertion = marker
+        mode = "marker"
+    else:
+        at = len(block.raw)
+        literal = ""
+        lead = "" if (not block.raw or block.raw[-1].isspace()) else " "
+        insertion = lead + _tex_text(value) + marker
+        mode = "value"
+    new_raw = block.raw[:at] + insertion + block.raw[at:]
+    path = _safe_section_file(disk_root, rel_file)
+    try:
+        source = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError("读不到章节文件：%s（%s）" % (rel_file, exc),
+                          code="SECTION_MISSING")
+    new_text = source[:block.start] + new_raw + source[block.end:]
+    result = atomic_write(path, new_text, keep=BACKUP_KEEP)
+    return {"ok": True, "file": rel_file, "block": block_id, "fact": fid,
+            "value": value, "mode": mode, "matched": literal,
+            "before": block.raw, "after": new_raw,
+            "sha": _short_sha(new_raw), "backup": result["backup"]}
+
+
 def _safe_config(disk_root: Path):
     try:
         return load_config(disk_root)

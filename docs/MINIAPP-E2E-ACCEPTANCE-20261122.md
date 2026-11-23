@@ -917,3 +917,143 @@ MCP `factscribe_add_fact` 与 serve `/api/facts` 走的是同一个 `prepare_fac
 保存一段时，落盘的是**页面上看到的那份文字**：渲染层把段内换行压成空格、把 `---` 写成 `—`（`projects._inline`／`render_prot_html` 的既有口径），所以第一次保存会把**该段内**的这几处规范化。实测（`01_intro-p1`）：段内 **45 处换行 → 空格**、**4 处 `---` → `—`**；**块外一个字节没动**（文件其余部分逐字节相同）。
 
 这是「页面即编辑器」这条既有设计带来的（`projects.py` 与 `app.js::collectPlain` 本轮一字未改，HEAD `2fdf3bf` 就是这样），**不是本轮引入**。含义：用户**看得见**的字（数字、芯片、探针）逐字保留；看不见的空白与连字符按既有口径规范化。想要连空白也逐字保留，得让落盘层按原文偏移回填未改动的散文——那是改「落盘层散文＋token 口径」，本轮明确不动。
+
+## 11. 2026-11-23 第七轮：三个用户诉求（章节名/论文标题 · 右栏可拖 · \fact 插入）
+
+- 分支：`feat/miniapp-host-seam`（开工 HEAD `71e824b`；**未推远端、未建 PR、未 sign**）
+- 三个诉求：① 标题与章节名称怎么改 ② 右栏「职能助手」太窄，要能自由拖动改左右比例 ③ `\fact{…}`／`\cite{…}` 等保护面命令手写费劲
+- 验收台：**真 Chrome（headless）＋ CDP**（真鼠标事件／真键盘事件，不是页面里合成的 `dispatchEvent`），驱动 `tests/miniapp_ui_driver.mjs`；盘＝`examples/minimal` 的 `/tmp` 副本
+- 三件事**串行**做（碰同一批前端文件），核心层另开**三条独立写盘通道**，不借道 `/edit`
+
+### 11.1 现状查证（读码核实，不是推断）
+
+| 诉求 | 核实到的现状 | 处置 |
+|---|---|---|
+| ① 标题与章节名 | 封面标题 `#coverTitle` **只读**，值＝`state.meta.name`＝该盘入口 .tex 的 `\title{…}`（`projects.py::_tex_title_parts`，按 `\` 分主/副标题）；核心**没有**写入口 .tex `\title{}` 的能力（CLI 全子命令已核对）；Miniapp「编辑项目」表单里的「论文标题」写的是 `factscribe.toml` 的 `[project].title`（`update_paper_project`）——与封面显示的**不是同一层**（既有口径错位，本轮不动） | 章节名：**核心已有**能力（`write.py::_block_shape_guard` 专为 heading 块写）但 Miniapp 没暴露 → 接进来；论文标题：核心无 writer → 按核心约定新写 `set_disk_title`，与封面读侧共用同一处定位（`title_command_span`） |
+| ② 右栏宽度 | 右栏是 **Miniapp 自己渲染**的：`index.html` 的 `<aside class="navpanel" id="navPanel">`（三面互斥：目录／智能助手／更多），CSS `position:fixed;right:0;width:320px`、`.shell{padding-right:336px}`；宿主框架**没有**「职能助手」字样（宿主 `app.asar` 与 `~/.minimax` 全搜 **0 命中**）→ 用户所指＝Miniapp 右栏的「智能助手」面板 | 宿主侧无配置入口 → **在本页实现分隔条**（拖动改左右比例、刷新后保留、上下限） |
+| ③ 保护面 | 芯片由服务端烤进 html（`<span class="fc prot-chip" data-token=… contenteditable="false">`）；客户端 `collectPlain()` 只收「散文＋token」；服务端 `write.py::_rebuild` 用 `_strip_injected`（`_INJECT_RE`）**剥掉**客户端散文里新写的 `\fact{…}`／`\cite{…}`／`\ref{…}` 等（并告警）→ **手打标签今天根本写不进去**（痛点属实） | 两条路取风险最低的一条：做「插入事实」面板（数字来自账本＋过既有 value 硬闸）；**不做**纯前端命令补全——补出来的 `\fact{}` 会被服务端剥掉，等于假功能 |
+
+### 11.2 核心层：三条**独立**写盘通道
+
+三条都不碰 `/edit` 的「散文＋token」写回（那条通道会把标题命令整条写掉，也会把客户端新写的 `\fact{}` 剥掉）。共同纪律：**只动那一处**，其余字节一字不改；指纹闸（`expect_sha` 对不上 → `BLOCK_STALE` 拒写）；原子写＋`.bak` 轮转。
+
+| 通道 | 位置 | 改什么 | 闸 |
+|---|---|---|---|
+| `rename_section()` | `factscribe/workbench/write.py:1640` | 只改 `\section{…}`／`\subsection{…}` 花括号里那一段（`_rewrite_heading_title`，`write.py:1626`），文件其余字节不动 | `_check_expect_sha`（块指纹）＋ 必须是 heading 块 |
+| `set_disk_title()` | `factscribe/workbench/write.py:1674` | 盘自己入口 .tex 的 `\title{主 \\ 副}`；定位与读侧**同源**（`projects.title_command_span`，`projects.py:165`；读侧 `_tex_title_parts` 已改为复用它，行为逐字不变） | `_short_sha(raw) != expect_sha` → 拒写；文本按既有约定 `scaffold.tex_escape` 转义 |
+| `insert_fact_binding()` | `factscribe/workbench/write.py:1772` | 在正文里那个数字后面插 `\fact{id}` 标记 | 三道铁律：① 事实**必须在账上**（否则 `FACT_NOT_IN_LEDGER`）② value **必须过既有 value 硬闸**（`scaffold.check_value_in_source` ＋ `resolve_source`，与「追加事实」同一道，未改判据）③ 数字**只能来自账本 value 原文**（正文已有这个数 → 只补标记 mode=`marker`；没有 → 连数字带标记插段末 mode=`value`）；同段已有同事实标记 → `FACT_ALREADY_BOUND` |
+
+落点判据与 audit 的内联绑定**同一套**（`facts.fact_value_keys` ＋ `number_key` ＋ `literal_tokens`），优先取 value 字面写出的第一个数字（分数取分子，与样例稿写法一致）。
+
+配套：`server.py` 新增 `POST …/toc/rename`（:573）、`POST …/title`（:585）、`POST …/fact/insert`（:594）、`GET …/facts`（:353），写接口统一走 `_write_error()`（机器码＋槽位，409/400 分流，:742）与 `_fresh_shas()`（:749）；`readings.facts_list()`（:285）只读列账，复用机器视图的账本表（`checkreport._ledger_rows`），不另算。
+
+### 11.3 前端三个入口 ＋ 分隔条
+
+| 入口 | 位置 | 说明 |
+|---|---|---|
+| 目录行 ✎（改章节名） | `app.js:2609`／:2623，`index.html:475`（`#modalRename`） | 每行一支笔（调序/删除是**按文件**的，改名是**按这一节**的）→ 走 `tocAction('toc/rename', …, expect_sha)` |
+| 封面标题旁的 ✎（改论文标题） | `app.js:1305`／:1314，`index.html:145` | 改的是**这个盘自己入口文件**里的标题命令；带 `state.meta.title_sha`（`projects.disk_meta` 新增，:1146）→ 成功后重读 meta 刷封面 |
+| 段落 ⋯ 菜单「插入事实」 | `app.js:2667`／:2691／:2717，`index.html:165`＋:504` | 读 `GET …/facts` 列账上事实 → 选中后 POST `…/fact/insert`，用回包 `blocks`＋`shas` 原地重绘（芯片重绑） |
+| 右栏分隔条 | `app.js:5793`（`initNavSplitter`）、`app.css:1021`／:1568、`index.html:173` | 宽度走 CSS 变量 `--nav-w`；pointer 事件拖动时实时变；**松手**才记进 `localStorage['factscribe.navw']`；双击回默认；`240 ≤ 宽 ≤ 640`，正文至少留 420 |
+
+> 宽度持久化用 localStorage（界面偏好，与项目数据无关；与既有「中/EN」开关同一做法）。
+> 松手时记的是**本轮生效宽度** `currentNavWidth`，不是回头读存储里的旧值——旧写法会把刚拖出来的宽度弹回 320（已实测复现并修掉）。
+
+### 11.4 真浏览器实跑读数（真 Chrome ＋ CDP，真鼠标/真键盘）
+
+盘＝`examples/minimal` 的 /tmp 副本（账上追加一条测试事实 `A4`：value=16，产物 `results/swb16.md` 里确有 16）。
+
+| 项 | 怎么做的 | 实测读数 | 判定 |
+|---|---|---|---|
+| 改章节名 | 目录行点 ✎ → 弹窗填「E2E 章节名」→ 保存 | 目录：`["Introduction","Results"]` → **`["E2E 章节名","Results"]`**；弹窗开合正常；落盘 `\section{E2E 章节名}` | 通过 |
+| 改论文标题 | 封面点 ✎ → 填主标题/副标题 → 保存 | 封面：`"factscribe 最小验收样例 / Disk: paper-demo"` → **`"E2E 论文标题 / E2E 副标题"`**；落盘 `\title{E2E 论文标题 \\ E2E 副标题}` | 通过 |
+| 拖分隔条 | 真鼠标按住分隔条左移 160px | 宽度 **320 → 481**（`--side-w` 同步为 497px）；pointer 事件计数 down=1／move=9／up=1；`localStorage['factscribe.navw'] = "481"` | 通过 |
+| 刷新后保留 | 刷新页面 → 重新打开这篇稿子 | 宽度**仍是 481**，存储仍是 "481" | 通过 |
+| 上下限 | 拖到最左／最右 | 最宽 **640**、最窄 **240**；正文左栏仍 **1184px**（没被拖没） | 通过 |
+| 插入事实 | 段落 ⋯ 菜单 → 插入事实 → 选 A4 | 芯片数 **6 → 7**；面板列出账上 4 条（`A1/A3/A2/A4`）；toast「Fact marker inserted」；落盘：`开臂…在 16\fact{A4} 道题里解决 10 道\fact{A1}。` | 通过 |
+
+### 11.5 落盘复核（副本盘上的实际字节）
+
+~~~text
+main.tex:      \title{E2E 论文标题 \\ E2E 副标题}
+01-intro.tex:  \section{E2E 章节名}
+01-intro.tex:  开臂（允许工具调用的那一臂）在 16\fact{A4} 道题里解决 10 道\fact{A1}。
+bak 存在:      True True          ← 两侧 .bak 都生成了
+~~~
+
+三处的共同点：**只动那一处**——改章节名没有碰同一节里的 `\fact{A1}`／`\fact{A3}`／`\label{sec:intro}`；改标题没有碰 `main.tex` 的其余部分（导言区、`\newcommand{\fact}`、`\input` 链一字未动）；插事实没有碰这一段的其他句子。
+
+### 11.6 发布态三方一致（源 → 载荷 → 已发布插件）
+
+| 项 | 读数 |
+|---|---|
+| 载荷同步 | `miniapp/build.sh` 跑通：文件数 **111**（上限 1024）／**4.9 MiB**（上限 64 MiB）／契约自检通过／engine import ok／**104 个载荷文件** |
+| 前端三件 | `app.js`（`3098c8a2…`）／`app.css`（`4068f1f5…`）／`index.html`（`71f8d65d…`）：源＝载荷＝已发布，**三方逐字节一致** |
+| 引擎 | `factscribe/**` **98 个文件**：源 vs 载荷 **0 差异**；载荷 vs 已发布 **0 差异**（含新增的 `readings.facts_list` 与三条写盘通道） |
+| 载荷整棵 vs 已发布整棵 | **104 / 104 文件，0 差异** |
+
+### 11.7 正式稿盘四盘零改动（实测）
+
+以第五轮（11:50）的快照 `/tmp/fs-batch5-root`（四盘 `cp -a` 副本）为对照，**逐文件**比 sha256：
+
+| 盘 | 对照结果 | 结论 |
+|---|---|---|
+| `paper-b` | 33 / 33 文件**逐字节全等** | 零改动 |
+| `paper-b-zh` | 33 / 33 文件**逐字节全等** | 零改动 |
+| `paper-zh` | 除 `factscribe.toml` ＋ `factscribe.toml.bak` 外**全等** | 正文/账本/证据/文献零改动 |
+| `paper` | 副本多 5 个 `01_intro.tex.bak*`（第五轮在副本上做保存测试留下的），且副本的 `01_intro.tex`／`a_swebench.toml` **含探针与测试事实**（`[HOSTBAKC]`／`[E2E-batch5-A]`／`id="Z10"` 等），**官方盘里没有** | 差异方向是**副本被写过**，官方盘保留原样 |
+
+官方盘今日被写过的文件只有 4 个（都在 `paper` 与 `paper-zh`）：
+
+~~~text
+15:02:31  paper/factscribe.toml
+15:02:31  paper/factscribe.toml.bak
+15:02:39  paper-zh/factscribe.toml
+15:02:39  paper-zh/factscribe.toml.bak
+~~~
+
+差异**只有一行**（引擎 `write.touch_opened` 写的打开时间戳，属**已知副作用**，非 bug）：
+
+~~~text
+< last_opened = "2026-11-23T11:12:13+08:00"     ← 上一版仍保留在 .bak 里
+> last_opened = "2026-11-23T15:02:31+08:00"
+~~~
+
+正文、事实账、证据链、文献、`main.tex`：**一个字节都没动**（逐文件 sha256 比对，见上表）。
+
+### 11.8 本轮测试
+
+* 新增 `tests/test_workbench_title_fact_binding.py`：**20 条**（改名只动标题命令／指纹闸拒写／标题改的是入口 .tex 且与读侧同源／插入事实三道铁律各一条／`render_tex` 块偏移回归锁／真起服务的端点用例）
+* 新增 `tests/test_miniapp_ui_features.py`：**35 条**＝**30 条静态断言**（三个入口的结构、指纹闸、双语文案齐不齐、客户端不许拼 `\fact{}`）＋ **5 条真浏览器行为**（改名／改标题／拖宽与刷新保留／上下限／插入事实）
+* 新增 `tests/miniapp_ui_driver.mjs`：真 Chrome ＋ CDP 驱动（真鼠标按下-移动-松开、真键盘输入、刷新复测）
+* 改 `tests/test_workbench_layout.py`：条目 40 案二的静态闸原钉着硬编码 `padding-right:336px`%；右栏宽度改由 `--nav-w` 驱动后，闸改成钉「`padding-right:calc(var(--nav-w,320px) + 16px)`」＋「`:root{--nav-w:320px}`」——**让位宽度仍与侧栏同源**，只是不再写死（这是本轮唯一被改的既有测试断言）
+* 全仓 `pytest tests/ -q`＝**2353 passed / 0 failed**（上一轮基线 2298，本轮 **+55**）
+
+### 11.9 本轮明确**没做**的事
+
+| 事项 | 为什么 |
+|---|---|
+| 不做纯前端「`\fact{…}` 命令补全」 | 补出来的标记会被服务端 `_strip_injected` 剥掉——做成是个**假功能**；要做就得动 `_rebuild`／`_strip_injected` 那条落盘层口径（已定口径） |
+| 不动 `[project].title`（项目表单的「论文标题」） | 它与封面显示的 `\title{}` 本来就不是同一层（既有口径错位）；本轮只补「改封面那一条」的入口，既有表单**一字不改** |
+| 不动 `/edit` 通道的散文＋token 写回与 `\fact`／`\cite` 保护面 | 三条新通道各自独立，绕开它而不是改它 |
+| 不动四步链闸门语义、提议单形状校验（块形状闸）、双 Profile 契约、`_check_source` 校验语义、`Issue.as_dict()` 形状 | 已定口径，一律未动；`tests/golden/audit_findings_baseline.json` **未重冻、未改一个字节** |
+| 不给「插入事实」加人工确认步 | 它不是改稿通道：插的是**账上已有**的事实标记，不改用户写的散文；指纹闸 ＋ value 硬闸两道已经在服务端把住 |
+| 不删前几轮遗留的 /tmp 副本盘 | 与本轮无关，留着不动 |
+
+### 11.10 顺带修掉的一个**既有**缺陷 ＋ 只记录不修的一个
+
+**D-1（已修）`render_tex` 块尾截断**——含环境标记（`\begin{…}`）的段落，块尾会被截在半截命令上（因为 `flush()` 拿「缓冲区长度」倒推块尾，而环境标记不进缓冲区却占文件位置）；写回偏移随之错位（实测曾把事实标记插到 `\cite{chen2023factscore}` 中间）。
+
+| 读数 | 修前（HEAD `71e824b`） | 修后（工作树） |
+|---|---|---|
+| `02-results.tex` 的 para 块 `start/end` | **18 / 296** | **18 / 348** |
+| 块原文长度 | 278（尾部停在 `\cite{che`） | **330**（尾部完整到 `\cite{ghost2024}`） |
+| 是否含完整的 `chen2023factscore}` | **否** | **是** |
+
+修法只改偏移计算（新增 `buffer_end`／`region_open` 两个跟踪量），**块结构不变**（块数、kind、id 全同），不触及任何已定口径。回归锁在 `tests/test_workbench_title_fact_binding.py::RenderSpanTest`。
+
+**D-2（只记录，本轮不修）空行分段从未生效**——`projects.py:789` 的 `if char == "\n" and source[index:index + 2] == "\n":` 拿 **2 字符**的字面量去比 **1 字符**的 `char`，恒假。实测：`01-intro.tex` 里两段散文（中间一个空行）被合并成**同一个** para 块（块数只有 [section, para]，块内 `\n\n` 有 2 处＝3 段并作一段）。
+
+本轮**没有**动它：修它会大幅改变块结构与编辑粒度（一个章节文件＝一个可编辑段），属**独立的产品决策**，不是本轮能顺手带过去的——需要用户拍板是否要按空行分段（以及分段后保存/指纹/审计的粒度怎么跟着变）。
+
+---

@@ -701,8 +701,13 @@ class Item40HeaderWidthTests(unittest.TestCase):
         工具条首钮（最左）不会被头部压住。"""
         self.assertIn(".navpanel{position:fixed;right:0;", CSS)
         self.assertIn("right:var(--side-w,336px)", CSS)
-        # 侧栏在文档流里由 .shell 的 padding-right 让位，头部宽度与之同源
-        self.assertIn(".shell{padding-right:336px;transition:padding-right .22s ease}", CSS)
+        # 侧栏在文档流里由 .shell 的 padding-right 让位，头部宽度与之同源。
+        # 让位宽度改由 --nav-w 驱动（右栏可拖分隔条）：拖到多宽，正文就让出多宽，
+        # 头部仍止于左区右缘——不叠盖侧栏。
+        self.assertIn(":root{--nav-w:320px}", CSS)
+        self.assertIn(
+            ".shell{padding-right:calc(var(--nav-w,320px) + 16px);transition:padding-right .22s ease}",
+            CSS)
 
     def test_3_expand_label_is_above_the_header(self):
         """案三：收起态的展开标签 z 序高于固定头部（恒可点，不被压在其下）。"""

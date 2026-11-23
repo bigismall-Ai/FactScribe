@@ -282,6 +282,30 @@ def evidence_gate(disk: Path) -> dict:
     }
 
 
+def facts_list(disk: Path) -> dict:
+    """事实账清单（只读）：「插入事实」面板的备料。
+
+    只列账上**已有**的事实（id／主张／value／出处）——面板里能选的每一条
+    都来自这里，所以插进正文的数字天生是账上的数字（不是现编的）。
+
+    口径复用机器视图的账本表（checkreport._ledger_rows）：同一份事实、
+    同一套字段，不另算一遍。
+    """
+    from .checkreport import _ledger_rows
+
+    disk = Path(disk)
+    try:
+        cfg = load_config(disk)
+        facts = load_facts(cfg)
+    except ConfigError as exc:
+        return {"ok": False, "code": "CONFIG_INVALID", "error": str(exc)}
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "code": "READ_FAILED",
+                "error": "读事实账失败：%s" % exc}
+    rows = _ledger_rows(facts)
+    return {"ok": True, "rows": rows, "count": len(rows)}
+
+
 def brief_reading(disk: Path, section: str = "",
                        fact: str = "") -> dict:
     """写作简报读数：可引用的事实、已绑的、还没绑的（只读）。

@@ -140,6 +140,42 @@ def _title_files(path: Path) -> list[Path]:
     return out
 
 
+def _title_command(target: Path) -> tuple[int, int, str] | None:
+    """这个文件里 `\\title{…}` 这条命令的位置：(起, 止, 原文)。
+
+    找不到、标题体是空的、或剥掉排版味之后标题是空的 → 给 None
+    （换下一个候选文件）。判定口径与读侧一字不差。
+    """
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    match = _TITLE_CMD_RE.search(text)
+    if not match:
+        return None
+    body, end = _balanced(text, match.end() - 1)
+    if not body.strip():
+        return None
+    pieces = [p for p in _TITLE_BREAK_RE.split(body)]
+    if not (_clean_title(pieces[0]) if pieces else ""):
+        return None
+    return match.start(), end, text[match.start():end]
+
+
+def title_command_span(path: Path) -> tuple[Path, int, int, str] | None:
+    """盘入口 .tex 里 `\\title{…}` 的位置：(文件, 起, 止, 原文)。
+
+    **读的是哪一条，写的就是哪一条**——读侧（封面标题）与写侧
+    （`write.set_disk_title`）共用这一处定位，两边不许各自找一遍。
+    """
+    for target in _title_files(path):
+        found = _title_command(target)
+        if found is not None:
+            start, end, raw = found
+            return target, start, end, raw
+    return None
+
+
 def _tex_title_parts(path: Path) -> tuple[str, str]:
     """盘自己的标题：读这个盘入口 .tex 的 `\\title{…}` → (主标题, 副标题)。
 
@@ -147,24 +183,15 @@ def _tex_title_parts(path: Path) -> tuple[str, str]:
     段三再进一步：把 `\\large …`、`\\[4pt]` 这类排版命令剥掉，
     副标题（`\\` 之后那半句）单独返回，不跟主标题挤在一行里。
     """
-    for target in _title_files(path):
-        try:
-            text = target.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        match = _TITLE_CMD_RE.search(text)
-        if not match:
-            continue
-        body, _end = _balanced(text, match.end() - 1)
-        if not body.strip():
-            continue
-        pieces = [p for p in _TITLE_BREAK_RE.split(body)]
-        title = _clean_title(pieces[0]) if pieces else ""
-        if not title:
-            continue
-        subtitle = _clean_title(pieces[1]) if len(pieces) > 1 else ""
-        return title, subtitle
-    return "", ""
+    found = title_command_span(path)
+    if found is None:
+        return "", ""
+    _target, _start, _end, raw = found
+    body = raw[raw.index("{") + 1:raw.rindex("}")]
+    pieces = [p for p in _TITLE_BREAK_RE.split(body)]
+    title = _clean_title(pieces[0]) if pieces else ""
+    subtitle = _clean_title(pieces[1]) if len(pieces) > 1 else ""
+    return title, subtitle
 
 
 def _tex_title(path: Path) -> str:
@@ -657,6 +684,10 @@ def render_tex(text: str, stem: str = "sec",
     blocks: list[dict] = []
     buffer: list[str] = []
     buffer_start = 0
+    #: 这一段在**文件**里的右界（缓冲区最后一个字符之后的位置）。
+    buffer_end = 0
+    #: 这一段是不是已经开着了（开了就不改左界——环境标记也算段的一部分）。
+    region_open = False
     in_abstract = False
     index = 0
     counter = 0
@@ -666,13 +697,22 @@ def render_tex(text: str, stem: str = "sec",
     region_at = 0
 
     def flush() -> None:
-        nonlocal buffer, buffer_start
+        nonlocal buffer, buffer_start, buffer_end, region_open
         raw = "".join(buffer)
         chunk = raw.strip()
-        start = buffer_start + (len(raw) - len(raw.lstrip()))
-        end = buffer_start + len(raw) - (len(raw) - len(raw.rstrip()))
+        # 起止按**文件偏移**算，不再用「缓冲区长度」倒推。
+        # 环境标记（begin/end 标记）不进缓冲区，却占着文件里的位置——
+        # 拿缓冲区长度当长度，这一段会被截断在半截命令上（渲染少半句、
+        # 写回按同样的偏移回填，尾巴错位）。
+        span_source = source[buffer_start:buffer_end]
+        lead = len(span_source) - len(span_source.lstrip())
+        trail = len(span_source) - len(span_source.rstrip())
+        start = buffer_start + lead
+        end = buffer_end - trail
         buffer = []
         buffer_start = index
+        buffer_end = index
+        region_open = False
         if not chunk:
             return
         # 条目 43：html 一律从**块原文（span）**烤出——环境标记虽不进缓冲区，
@@ -723,7 +763,11 @@ def render_tex(text: str, stem: str = "sec",
                 elif env.group(1) == "end" and name == "abstract":
                     flush()
                     in_abstract = False
+                if not region_open:
+                    buffer_start = index
+                    region_open = True
                 index = env.end()
+                buffer_end = index
                 continue
             level, title, end = _heading_title(source[index:])
             if level:
@@ -740,15 +784,18 @@ def render_tex(text: str, stem: str = "sec",
                     "sha": short_sha(text[index:index + end]),
                 })
                 index += end
+                buffer_end = index
                 continue
         if char == "\n" and source[index:index + 2] == "\n":
             flush()
             index += 2
             continue
-        if not buffer:
+        if not region_open:
             buffer_start = index
+            region_open = True
         buffer.append(char)
         index += 1
+        buffer_end = index
     flush()
     return blocks
 
@@ -1071,6 +1118,10 @@ def disk_meta(path: str | Path, lang: str = "") -> dict:
     sections, facts = _disk_counts(root)
     title = _disk_title(root)
     subtitle = _tex_subtitle(root)
+    # 标题那条命令的短指纹——改标题时上交给服务端的指纹闸用
+    # （状态行里多带一个字段：只增不改，读数形状不变）。
+    span = title_command_span(root)
+    title_sha = short_sha(span[3]) if span else ""
     built = ""
     built_file = ""
     try:
@@ -1092,6 +1143,7 @@ def disk_meta(path: str | Path, lang: str = "") -> dict:
         "path": str(root),
         "name": title,
         "subtitle": subtitle,
+        "title_sha": title_sha,
         "lang": lang or disk_language(root.name),
         "facts": facts,
         "sections": sections,

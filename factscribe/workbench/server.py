@@ -15,12 +15,16 @@
   GET  /api/disk/<project>/<disk>/report          检查报告（体检摘要 + 发现 + 四步链）
   GET  /api/disk/<project>/<disk>/machine         机器视图（账本表/正文扫描/证据链/命令）
   GET  /api/disk/<project>/<disk>/fact-form       追加事实表单的备料（已签产物/未签产物/账本文件/命名风格）
+  GET  /api/disk/<project>/<disk>/facts           事实账清单（只读）：插入事实面板的备料
   POST /api/disk/<project>/<disk>/edit            写回一段（block=cover-abstract 写摘要；条目 43：带 expect_sha 保存闸，
                                                   应答 blocks=同文件全部块的新鲜 html，指纹不符 → 409 BLOCK_STALE）
   POST /api/disk/<project>/<disk>/action          常用功能（pdf / bundle / open_dir）
   POST /api/disk/<project>/<disk>/toc/move        调序
   POST /api/disk/<project>/<disk>/toc/delete      删除（挪 attic）
   POST /api/disk/<project>/<disk>/toc/create      新建一节
+  POST /api/disk/<project>/<disk>/toc/rename      改一节的标题（只动标题命令）
+  POST /api/disk/<project>/<disk>/title           改论文标题/副标题（入口 .tex 的 \\title）
+  POST /api/disk/<project>/<disk>/fact/insert     把账上的一条事实绑进正文（插 \\fact{} 标记）
   POST /api/disk/<project>/<disk>/report/rerun    只读重跑真闸（限时 120s，零写入）
   POST /api/project/new                           新建论文项目（落盘）
   POST /api/project/update                        改项目（标题等）
@@ -61,8 +65,9 @@ from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE,
                     TOKEN_MISMATCH_CODE, TOKEN_COUNT_MISMATCH_CODE,
                     abstract_block,
                     apply_proposal, create_paper_project, create_section,
-                    delete_section, editable_model, find_block, move_section,
-                    save_abstract, save_block, touch_opened,
+                    delete_section, editable_model, find_block,
+                    insert_fact_binding, move_section, rename_section,
+                    save_abstract, save_block, set_disk_title, touch_opened,
                     update_paper_project)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -345,6 +350,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                                      _param_of(query, "fact"))
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
+            if what == "facts":
+                from .readings import facts_list
+                data = facts_list(disk_path)
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
             if what == "fact-form":
                 from .readings import fact_form
                 data = fact_form(disk_path)
@@ -560,8 +570,45 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 result = create_section(disk, str(body.get("title") or ""),
                                         slug=str(body.get("slug") or ""),
                                         after=str(body.get("after") or ""))
+            elif what == "rename":
+                rel = str(body.get("file") or "")
+                try:
+                    result = rename_section(disk, rel,
+                                            str(body.get("block") or ""),
+                                            str(body.get("title") or ""),
+                                            expect_sha=str(body.get("expect_sha") or ""))
+                except ConfigError as exc:
+                    return self._write_error(exc)
             else:
                 return self._error(404, "没有这个目录操作：%s" % what)
+            return self._json(result)
+        if action == "title":
+            # 改论文标题：写的就是封面读的那一条标题命令。
+            try:
+                result = set_disk_title(disk, str(body.get("title") or ""),
+                                        subtitle=str(body.get("subtitle") or ""),
+                                        expect_sha=str(body.get("expect_sha") or ""))
+            except ConfigError as exc:
+                return self._write_error(exc)
+            return self._json(result)
+        if action == "fact" and len(parts) > 5 and parts[5] == "insert":
+            # 把账上的一条事实绑进正文：数字来自账本，且过既有 value 硬闸。
+            rel = str(body.get("file") or "")
+            block_id = str(body.get("block") or "")
+            if not rel or not block_id:
+                return self._error(400, "file / block 都要给")
+            try:
+                result = insert_fact_binding(disk, rel, block_id,
+                                             str(body.get("fact") or ""),
+                                             expect_sha=str(body.get("expect_sha") or ""))
+            except ConfigError as exc:
+                if str(getattr(exc, "code", "")) == BLOCK_STALE_CODE:
+                    return self._stale_response(disk, rel, block_id, str(exc))
+                return self._write_error(exc)
+            # 插进去的事实标记是新的保护面：同文件的新鲜渲染给前端原地换。
+            result["blocks"] = self._fresh_blocks(disk, rel)
+            result["shas"] = self._fresh_shas(disk, rel)
+            result["html"] = self._rerender_block(disk, rel, block_id)
             return self._json(result)
         if action == "draft":
             return self._draft_post(disk, parts[5] if len(parts) > 5 else "", body)
@@ -688,6 +735,31 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 html = str(block.get("html") or "")
                 if html:
                     out[str(block.get("id"))] = html
+        except (OSError, ValueError):
+            return out
+        return out
+
+    def _write_error(self, exc: ConfigError) -> None:
+        """写接口的 ConfigError → 结构化错误（机器码 ＋ 槽位，界面据此翻语言）。"""
+        code = str(getattr(exc, "code", "") or "")
+        status = 409 if code == BLOCK_STALE_CODE else 400
+        self._error(status, str(exc), code,
+                    getattr(exc, "params", None) or None)
+
+    def _fresh_shas(self, disk: Path, rel: str) -> dict:
+        """同文件各块的**新鲜指纹**（写回之后前端要跟上，否则下一轮撞指纹闸）。
+
+        与 _fresh_blocks 同源（同一份块列表），只是取的是 sha 字段。
+        """
+        out: dict = {}
+        try:
+            from .projects import disk_sections
+
+            for block in disk_sections(disk).get("blocks", []):
+                if rel and block.get("file") != rel:
+                    continue
+                if block.get("sha"):
+                    out[str(block.get("id"))] = str(block.get("sha"))
         except (OSError, ValueError):
             return out
         return out

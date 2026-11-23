@@ -140,7 +140,10 @@
   <main class="doc" id="viewWorkbench">
     <div class="page" id="diskBody">
       <section class="cover">
+        <div class="cover-title-row">
         <h1 id="coverTitle">—</h1>
+        <button type="button" class="cover-edit" id="btnEditTitle" data-i18n-title="title.edit" title="改标题" aria-label="改标题">✎</button>
+        </div>
         <div class="sub" id="coverSub"></div>
         <div class="st-line" id="coverSt">—</div>
         <div class="meta" id="coverMeta"></div>
@@ -159,11 +162,16 @@
         <button type="button" class="mi" id="miContinue" data-i18n="para.continue">续写</button>
         <button type="button" class="mi" id="miRewrite" data-i18n="para.rewrite">改写</button>
         <button type="button" class="mi" id="miAsk" data-i18n="para.ask">提问</button>
+        <button type="button" class="mi" id="miFact" data-i18n="fact.ins">插入事实</button>
       </div>
       <div id="bodyBlocks"></div>
     </div>
   </main>
   </div><!-- /left-col -->
+
+  <!-- 右栏宽度可拖：分隔条贴在侧栏左缘，拖动改左右比例（宽度记在本机，刷新还在） -->
+  <div class="nav-splitter" id="navSplitter" role="separator" aria-orientation="vertical"
+       data-i18n-title="nav.resize" title="拖动可改左右比例"></div>
 
   <!-- ============ 右栏：图标收起钮 ＋ 三枚切换钮（横排工具条）＋ 面板 ============ -->
   <aside class="navpanel" id="navPanel">
@@ -459,6 +467,48 @@
     <div class="modal-acts">
       <button type="button" class="btn-primary" id="newSecOk" data-i18n="toc.create">创建</button>
       <button type="button" class="btn-ghost" id="newSecCancel" data-i18n="pf.cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 改章节名：只改这一节的标题命令，别的字一个不动 -->
+<div class="modal" id="modalRename" hidden>
+  <div class="modal-card">
+    <div class="modal-t" data-i18n="toc.renameT">改这一节的标题</div>
+    <label class="modal-l" data-i18n="toc.newTitle">章节标题</label>
+    <input type="text" id="rnTitle" data-i18n-ph="toc.renamePh" placeholder="例如：实验设置" autocomplete="off">
+    <div class="modal-acts">
+      <button type="button" class="btn-primary" id="rnOk" data-i18n="pf.save">保存</button>
+      <button type="button" class="btn-ghost" id="rnCancel" data-i18n="pf.cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 改论文标题：改的是这个盘自己入口文件里的标题命令（主标题 ＋ 副标题） -->
+<div class="modal" id="modalTitle" hidden>
+  <div class="modal-card">
+    <div class="modal-t" data-i18n="title.editT">改论文标题</div>
+    <label class="modal-l" data-i18n="title.main">主标题</label>
+    <input type="text" id="dtTitle" autocomplete="off">
+    <label class="modal-l" data-i18n="title.sub">副标题</label>
+    <input type="text" id="dtSub" autocomplete="off">
+    <p class="modal-hint" data-i18n="title.hint">改的是这个盘自己的入口文件里的标题命令；副标题可留空。</p>
+    <div class="modal-acts">
+      <button type="button" class="btn-primary" id="dtOk" data-i18n="pf.save">保存</button>
+      <button type="button" class="btn-ghost" id="dtCancel" data-i18n="pf.cancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 插入事实：数字只能来自事实账（账上没有的不得编造） -->
+<div class="modal" id="modalFactIns" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t" data-i18n="fact.insT">插入一条事实（数字来自事实账）</div>
+    <p class="modal-hint" data-i18n="fact.insHint">数字只能用事实账里的 value。</p>
+    <input type="search" id="fiSearch" data-i18n-ph="fact.insPh" placeholder="按 id 或主张筛选…" autocomplete="off">
+    <div class="fi-list" id="fiList"></div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="fiCancel" data-i18n="pf.cancel">取消</button>
     </div>
   </div>
 </div>

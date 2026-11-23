@@ -173,6 +173,18 @@ const I18N = {
     'toc.create': '创建', 'toc.up': '上移', 'toc.down': '下移',
     'toc.del': '删除', 'toc.delAsk': '把这一节挪到 sections/attic/（可恢复）？',
     'toc.done': '目录已更新',
+    'toc.rename': '改章节名', 'toc.renameT': '改这一节的标题',
+    'toc.renamePh': '例如：实验设置', 'toc.renameDone': '章节名已改',
+    'title.edit': '改标题', 'title.editT': '改论文标题',
+    'title.main': '主标题', 'title.sub': '副标题',
+    'title.hint': '改的是这个盘自己的入口文件里的标题命令；副标题可留空。',
+    'title.saved': '标题已改',
+    'fact.ins': '插入事实', 'fact.insT': '插入一条事实（数字来自事实账）',
+    'fact.insPh': '按 id 或主张筛选…', 'fact.insLoading': '正在读事实账…',
+    'fact.insEmpty': '这个盘的事实账是空的——先去「追加事实」入账。',
+    'fact.insHint': '数字只能用事实账里的 value；标记插在正文里那个数字后面，正文里没有这个数字就连数字带标记一起插在段末。',
+    'fact.insDone': '事实标记已插进正文', 'fact.insFail': '插不进去：{e}',
+    'nav.resize': '拖动可改左右比例',
     'edit.hint': '正文可直接编辑；失焦或 Esc 就保存。',
     'edit.savedBadge': '已保存',     'edit.saved': '已保存（原稿留在 .bak）',
     'edit.stale': '这段在别处已被改动，已换上最新内容；您刚输入的字没有保存。',
@@ -552,6 +564,18 @@ const I18N = {
     'toc.create': 'Create', 'toc.up': 'Move up', 'toc.down': 'Move down',
     'toc.del': 'Delete', 'toc.delAsk': 'Move this section to sections/attic/ (reversible)?',
     'toc.done': 'Contents updated',
+    'toc.rename': 'Rename section', 'toc.renameT': 'Rename this section',
+    'toc.renamePh': 'e.g. Experimental setup', 'toc.renameDone': 'Section renamed',
+    'title.edit': 'Edit title', 'title.editT': 'Edit paper title',
+    'title.main': 'Title', 'title.sub': 'Subtitle',
+    'title.hint': 'This edits the title command in this disk\'s own entry file; the subtitle may be left empty.',
+    'title.saved': 'Title updated',
+    'fact.ins': 'Insert fact', 'fact.insT': 'Insert a fact (numbers come from the ledger)',
+    'fact.insPh': 'Filter by id or claim…', 'fact.insLoading': 'Reading the ledger…',
+    'fact.insEmpty': 'The ledger on this disk is empty — add a fact first.',
+    'fact.insHint': 'The number can only come from the ledger value; the marker goes right after that number in the text, and if the number is not there the value and the marker are appended at the end of the paragraph.',
+    'fact.insDone': 'Fact marker inserted', 'fact.insFail': 'Could not insert: {e}',
+    'nav.resize': 'Drag to change the left/right ratio',
     'edit.hint': 'Body text is editable in place; blur or Esc saves.',
     'edit.savedBadge': 'Saved',
     'edit.saved': 'Saved (original kept as .bak)',
@@ -815,6 +839,9 @@ const state = {
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
   wz: { step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [], suggested: [], sha: '', busy: false, parseError: '' }, // 段四：导入向导
   af: null,            // 追加事实表单（两步：挑产物 → 说清这条数字 ＋ 落哪本账）
+  renameTarget: null,   // 改章节名：正在改的那一节 {file, block, sha}
+  factInsert: null,     // 插入事实：目标段落 {file, block, sha}
+  factRows: [],         // 插入事实：账上的事实清单（只读读数）
   proposals: [],       // v2：待确认提议单（差异卡的数据源）
   staleProposals: {},  // v2：本地判过期的提议单（服务端已不列 pending，留着说清原因）
 };
@@ -1199,16 +1226,21 @@ function renderTocList() {
       ? '<span class="en">' + esc(enTitle) + '</span>'
       : '<span class="cn">' + esc(block.title || block.file || '') + '</span>';
     li.appendChild(link);
+    // 目录行上的动作：调序/删除是**按文件**的（一个文件一节），改名是**按这一节**的
+    // （一个文件里可能有好几节，改的是这一节自己的标题命令）——所以改名钮每行都有。
+    const last = row.ops ? row.ops.index === assembly.length - 1 : false;
+    const ops = document.createElement('span');
+    ops.className = 'tm-ops';
+    let opsHtml = '';
     if (row.ops) {
-      const last = row.ops.index === assembly.length - 1;
-      const ops = document.createElement('span');
-      ops.className = 'tm-ops';
-      ops.innerHTML = `
+      opsHtml = `
         <button type="button" class="tm-btn" data-move="up" data-rel="${esc(block.file || '')}" title="${esc(t('toc.up'))}" ${row.ops.index === 0 ? 'disabled' : ''}>↑</button>
         <button type="button" class="tm-btn" data-move="down" data-rel="${esc(block.file || '')}" title="${esc(t('toc.down'))}" ${last ? 'disabled' : ''}>↓</button>
         <button type="button" class="tm-btn tm-del" data-del="${esc(block.file || '')}" title="${esc(t('toc.del'))}">🗑</button>`;
-      li.appendChild(ops);
     }
+    opsHtml += `<button type="button" class="tm-btn" data-rename="1" data-block="${esc(block.id || '')}" data-rel="${esc(block.file || '')}" data-sha="${esc(block.sha || '')}" title="${esc(t('toc.rename'))}">✎</button>`;
+    ops.innerHTML = opsHtml;
+    li.appendChild(ops);
     toc.appendChild(li);
   });
   // 末尾：新建章节（行内入口，不是独立长条）
@@ -1238,6 +1270,13 @@ function renderTocList() {
       deleteSection(btn.dataset.del);
     });
   });
+  $$('#tocList [data-rename]').forEach((btn) => {
+    btn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      openRenameSection(btn);
+    });
+  });
   const newBtn = $('#tocNew');
   if (newBtn) newBtn.addEventListener('click', openNewSection);
 }
@@ -1259,6 +1298,44 @@ function renderCover() {
   });
   const langLine = disk.lang === 'zh' ? t('disc.zh') : t('disc.en');
   $('#coverMeta').innerHTML = `${esc(t('card.disks'))}: <b>${esc(disk.id)}</b> · ${esc(langLine)} · ${esc(disk.path)}`;
+}
+
+/* 改论文标题：写的是这个盘自己入口文件里的标题命令（封面读的就是那一条）。
+   指纹闸：客户端报它所基于的那条标题命令的指纹，对不上就拒写。 */
+function openTitleModal() {
+  const meta = state.meta || {};
+  $('#dtTitle').value = meta.name || '';
+  $('#dtSub').value = meta.subtitle || '';
+  $('#modalTitle').hidden = false;
+  $('#dtTitle').focus();
+  $('#dtTitle').select();
+}
+
+async function saveDiskTitle() {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  const title = $('#dtTitle').value.trim();
+  if (!title) { toast(t('title.main')); return; }
+  const subtitle = $('#dtSub').value.trim();
+  $('#modalTitle').hidden = true;
+  try {
+    await postJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/title`, {
+      title: title,
+      subtitle: subtitle,
+      expect_sha: (state.meta && state.meta.title_sha) || '',
+    });
+    toast(t('title.saved'));
+    // 封面读的就是这条命令——重读一遍状态行，封面跟着走。
+    try {
+      state.meta = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/meta`);
+    } catch (err) {
+      state.meta = null;
+    }
+    renderCover();
+  } catch (err) {
+    toast(t('err.saveFailed', { e: (err && err.message) || String(err) }));
+  }
 }
 
 /* ---------------------------------------------------------------- 封面摘要（段五） */
@@ -2511,13 +2588,13 @@ async function loadAssembly() {
   renderTocList();
 }
 
-async function tocAction(path, body) {
+async function tocAction(path, body, message) {
   const project = state.project;
   const disk = currentDisk();
   if (!project || !disk) return null;
   try {
     const result = await postJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/${path}`, body);
-    toast(t('toc.done'));
+    toast(message || t('toc.done'));
     await loadAssembly();
     await loadDisk();
     return result;
@@ -2525,6 +2602,35 @@ async function tocAction(path, body) {
     toast(t('err.tocFailed', { e: err.message }));
     return null;
   }
+}
+
+/* 改章节名：只动这一节的标题命令（\\section{…} 里那一段），别的字一个不改。
+   指纹闸：客户端报它所基于的那一节的指纹，对不上就拒写（别覆盖别处的改动）。 */
+function openRenameSection(btn) {
+  state.renameTarget = {
+    file: btn.dataset.rel || '',
+    block: btn.dataset.block || '',
+    sha: btn.dataset.sha || '',
+  };
+  const title = btn.closest('.toc-item');
+  const nameEl = title ? title.querySelector('.cn, .en') : null;
+  $('#rnTitle').value = nameEl ? nameEl.textContent : '';
+  $('#modalRename').hidden = false;
+  $('#rnTitle').focus();
+  $('#rnTitle').select();
+}
+
+async function saveRenameSection() {
+  const title = $('#rnTitle').value.trim();
+  if (!title) { toast(t('toc.newTitle')); return; }
+  const target = state.renameTarget;
+  if (!target) return;
+  $('#modalRename').hidden = true;
+  state.renameTarget = null;
+  await tocAction('toc/rename', {
+    file: target.file, block: target.block, title: title,
+    expect_sha: target.sha,
+  }, t('toc.renameDone'));
 }
 
 function moveSection(rel, direction) {
@@ -2549,6 +2655,88 @@ async function createSection() {
   const slug = $('#newSecSlug').value.trim();
   $('#modalNew').hidden = true;
   await tocAction('toc/create', { title: title, slug: slug });
+}
+
+/* ---------------------------------------------------------------- 插入事实
+
+   保护面命令（\\fact{…}／\\cite{…}）手写很苦：正文里新写的这类命令会被服务端
+   剥掉（不许凭空造账本绑定）。这里给一条省事的路：**从事实账里挑一条**，
+   数字只能用账上的 value（服务端另有一道 value 硬闸把着），标记插在正文里
+   那个数字后面。挑完即落盘（这一段是正文编辑，同正文一条通道）。 */
+
+async function openFactInsert(target) {
+  state.factInsert = {
+    file: target.file || '',
+    block: target.id || '',
+    sha: state.blockSha[target.id] || '',
+  };
+  state.factRows = [];
+  const search = $('#fiSearch');
+  if (search) search.value = '';
+  const list = $('#fiList');
+  if (list) list.innerHTML = '<div class="ff-empty">' + esc(t('fact.insLoading')) + '</div>';
+  $('#modalFactIns').hidden = false;
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return;
+  try {
+    const data = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/facts`);
+    state.factRows = (data && data.rows) || [];
+    renderFactInsertList();
+  } catch (err) {
+    if (list) list.innerHTML = '<div class="ff-empty">' + esc(t('fact.insFail', { e: err.message })) + '</div>';
+  }
+}
+
+function renderFactInsertList() {
+  const box = $('#fiList');
+  if (!box) return;
+  const search = $('#fiSearch');
+  const q = ((search && search.value) || '').trim().toLowerCase();
+  const rows = state.factRows.filter((r) => {
+    if (!q) return true;
+    const hay = ((r.id || '') + ' ' + (r.claim || '') + ' ' + (r.value || '')).toLowerCase();
+    return hay.indexOf(q) >= 0;
+  });
+  if (!rows.length) {
+    box.innerHTML = '<div class="ff-empty">' + esc(t('fact.insEmpty')) + '</div>';
+    return;
+  }
+  box.innerHTML = rows.map((r) => `
+    <button type="button" class="fi-row" data-fact="${esc(r.id || '')}">
+      <span class="fi-id"><code>${esc(r.id || '')}</code></span>
+      <span class="fi-claim">${esc(r.claim || '')}</span>
+      <span class="fi-value"><code>${esc(r.value || '')}</code></span>
+      <span class="fi-src" title="${esc(r.source_path || r.source_file || '')}">${esc(r.source_file || '')}</span>
+    </button>`).join('');
+  $$('#fiList [data-fact]').forEach((btn) => {
+    btn.addEventListener('click', () => insertFactBinding(btn.dataset.fact));
+  });
+}
+
+async function insertFactBinding(factId) {
+  const target = state.factInsert;
+  const project = state.project;
+  const disk = currentDisk();
+  if (!target || !project || !disk) return;
+  try {
+    const res = await postJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/fact/insert`, {
+      file: target.file,
+      block: target.block,
+      fact: factId,
+      expect_sha: target.sha,
+    });
+    $('#modalFactIns').hidden = true;
+    toast(t('fact.insDone'));
+    // 插进去的事实标记是**新的保护面**：同文件的新鲜渲染原地换（芯片重绑）。
+    const blocks = res.blocks || {};
+    const shas = res.shas || {};
+    Object.keys(blocks).forEach((id) => {
+      applyBlockHtml(id, blocks[id], shas[id]);
+    });
+  } catch (err) {
+    toast(t('fact.insFail', { e: (err && err.message) || String(err) }));
+  }
 }
 
 /* ---------------------------------------------------------------- 项目表单 */
@@ -5312,6 +5500,32 @@ function bind() {
   $('#miContinue').addEventListener('click', () => paraAction('continue'));
   $('#miRewrite').addEventListener('click', () => paraAction('rewrite'));
   $('#miAsk').addEventListener('click', () => paraAction('ask'));
+  // 插入事实：数字只能来自事实账（不许凭空造）。
+  $('#miFact').addEventListener('click', () => {
+    const target = paraAskTarget;
+    closeParaMenu();
+    if (!target) return;
+    openFactInsert(target);
+  });
+  // 改章节名
+  $('#rnOk').addEventListener('click', saveRenameSection);
+  $('#rnCancel').addEventListener('click', () => {
+    $('#modalRename').hidden = true;
+    state.renameTarget = null;
+  });
+  $('#rnTitle').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); saveRenameSection(); }
+  });
+  // 改论文标题
+  $('#btnEditTitle').addEventListener('click', openTitleModal);
+  $('#dtOk').addEventListener('click', saveDiskTitle);
+  $('#dtCancel').addEventListener('click', () => { $('#modalTitle').hidden = true; });
+  $('#dtTitle').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); saveDiskTitle(); }
+  });
+  // 插入事实面板
+  $('#fiSearch').addEventListener('input', renderFactInsertList);
+  $('#fiCancel').addEventListener('click', () => { $('#modalFactIns').hidden = true; });
   $('#paraMenu').addEventListener('click', (ev) => ev.stopPropagation());
   $('#ptools').addEventListener('mouseenter', () => clearTimeout(paraToolsTimer));
   $('#ptools').addEventListener('mouseleave', hideParaTools);
@@ -5538,9 +5752,91 @@ function bind() {
   });
 }
 
+/* ---------------------------------------------------------------- 右栏宽度（可拖）
+
+   侧栏宽度是**这台机器的界面偏好**，跟项目数据无关——记在 localStorage，
+   刷新还在（与「中/EN」那枚开关同一套做法）。
+
+   宽度有上下限：正文不能被拖没，右栏也不能窄到没法用。拖动时左右两栏
+   实时变；松手才记进 localStorage（拖的过程不写盘）。 */
+
+const NAVW_KEY = 'factscribe.navw';
+const NAVW_DEFAULT = 320;
+const NAVW_MIN = 240;
+const NAVW_MAX = 640;
+/** 正文至少留这么宽（再窄就没法读了）——上限跟着它算。 */
+const NAVW_BODY_MIN = 420;
+
+function navWidthMax() {
+  const limit = Math.max(NAVW_MIN, Math.floor(window.innerWidth - NAVW_BODY_MIN));
+  return Math.min(NAVW_MAX, limit);
+}
+
+function navWidth() {
+  let raw = 0;
+  try { raw = parseInt(localStorage.getItem(NAVW_KEY) || '', 10) || 0; } catch (err) { raw = 0; }
+  if (!raw) return NAVW_DEFAULT;
+  return Math.min(Math.max(raw, NAVW_MIN), navWidthMax());
+}
+
+/*: 当前生效的宽度（拖动中实时变；松手时记进 localStorage 的就是这个值，
+   不是「回头去读旧值」——那会把刚拖出来的宽度又弹回去）。 */
+let currentNavWidth = NAVW_DEFAULT;
+
+function applyNavWidth(px) {
+  const w = Math.min(Math.max(Math.round(px), NAVW_MIN), navWidthMax());
+  currentNavWidth = w;
+  document.documentElement.style.setProperty('--nav-w', w + 'px');
+  return w;
+}
+
+function initNavSplitter() {
+  const bar = $('#navSplitter');
+  if (!bar) return;
+  applyNavWidth(navWidth());
+  let dragging = false;
+  bar.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    dragging = true;
+    document.body.classList.add('nav-dragging');
+    if (bar.setPointerCapture) {
+      try { bar.setPointerCapture(ev.pointerId); } catch (err) { /* 忽略 */ }
+    }
+  });
+  bar.addEventListener('pointermove', (ev) => {
+    if (!dragging) return;
+    ev.preventDefault();
+    applyNavWidth(window.innerWidth - ev.clientX);
+    syncFixedHeaderWidth();
+  });
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove('nav-dragging');
+    // 记的是**刚拖出来**的那个宽度（本轮生效值），不是存储里的旧值。
+    const w = currentNavWidth;
+    applyNavWidth(w);
+    try { localStorage.setItem(NAVW_KEY, String(w)); } catch (err) { /* 无痕模式等：存不下就算了 */ }
+    scheduleHeaderWidthSync();
+  };
+  bar.addEventListener('pointerup', stop);
+  bar.addEventListener('pointercancel', stop);
+  // 双击分隔条＝回到默认宽度。
+  bar.addEventListener('dblclick', () => {
+    applyNavWidth(NAVW_DEFAULT);
+    try { localStorage.setItem(NAVW_KEY, String(NAVW_DEFAULT)); } catch (err) { /* 忽略 */ }
+    scheduleHeaderWidthSync();
+  });
+  window.addEventListener('resize', () => {
+    applyNavWidth(navWidth());
+    scheduleHeaderWidthSync();
+  });
+}
+
 async function main() {
   bind();
   applyI18n();
+  initNavSplitter();
   switchNavPane('toc');
   await loadProjects();
   // v2：页面初始化时刷一次待确认提议单（还没开项目时徽标是空的）。

@@ -74,6 +74,9 @@ _WRITE_TOOLS = {
                 "derived_from": {"type": "string",
                                  "description": "Comma-separated parent fact ids"},
                 "note": {"type": "string"},
+                "ledger": {"type": "string",
+                           "description": "Target ledger file, project-relative "
+                                          "(must stay inside the project facts glob)"},
             },
             "required": ["id", "claim", "value", "source"],
             "additionalProperties": False,

@@ -318,6 +318,53 @@ const I18N = {
     'proposal.kindEvidenceUnfreeze': '解冻证据清单',
     'proposal.kindAddFact': '追加事实',
     'proposal.kindExportBundle': '导出投稿包',
+    /* ---- 追加事实表单（两步） ---- */
+    'np.ledger': '事实账',
+    'np.addFact': '追加事实',
+    'more.factNote': '记账走提议单：建单不写盘，采纳才落账',
+    'ff.title': '追加一条事实',
+    'ff.s1': '挑产物',
+    'ff.s2': '说清这条数字',
+    'ff.s1.h': '下面是本盘的真实产物：已签的一组、没进清单的另一组。选中即填成 source，hash 由工具现算，界面不让人手打路径。',
+    'ff.s1.ph': '按文件名筛选…',
+    'ff.g.signed': '已签产物',
+    'ff.g.unsigned': '未进清单的产物',
+    'ff.g.empty': '这一组没有产物。',
+    'ff.more': '共 {n} 个，只显示前 {shown} 个；用上面的框缩小范围。',
+    'ff.badge.signed': '已签',
+    'ff.badge.drift': '签后被改',
+    'ff.badge.missing': '文件不在',
+    'ff.badge.unsigned': '未签',
+    'ff.s2.h': '说清这条数字主张什么、来自产物的哪一处；落到哪本账由你定。',
+    'ff.src': 'source',
+    'ff.f.id': '事实 id',
+    'ff.f.claim': '一句话主张',
+    'ff.f.value': '数字原文',
+    'ff.f.locator': '在产物里的位置',
+    'ff.f.conf': '置信度',
+    'ff.conf.high': 'high',
+    'ff.conf.med': 'med',
+    'ff.conf.low': 'low',
+    'ff.f.note': '备注（可选）',
+    'ff.f.valueHint': 'value 必须是产物里的原文——正文要绑的就是它。',
+    'ff.ledger.h': '落哪本账',
+    'ff.ledger.style': '本盘账本命名风格：{style}',
+    'ff.style.letter_topic': '单字母前缀 ＋ 下划线主题（例 a_swebench.toml）',
+    'ff.style.index_topic': '两位序号 ＋ 连字符主题（例 01-core.toml）',
+    'ff.style.unknown': '认不出来（新建账本文件会被拒）',
+    'ff.ledger.new': '新建一个账本文件',
+    'ff.ledger.newPh': '例 {name}',
+    'ff.ledger.facts': '{n} 条',
+    'ff.next': '下一步',
+    'ff.create': '建提议单',
+    'ff.needSource': '先挑一个产物。',
+    'ff.needLedger': '先选一本账。',
+    'ff.needFields': 'id、主张、数字都要填。',
+    'ff.nameBad': '这个文件名不合本盘的命名风格。',
+    'ff.prefixBad': '这个前缀已被本盘现有账本文件占用。',
+    'ff.created': '已建单：去「待确认」里点「采纳写回」。',
+    'ff.fail': '没能建单：{e}',
+    'ff.loadFail': '读产物清单失败：{e}',
   },
   en: {
     'nav.projects': 'Projects', 'tb.new': 'New',
@@ -639,6 +686,53 @@ const I18N = {
     'proposal.kindEvidenceUnfreeze': 'Unfreeze evidence list',
     'proposal.kindAddFact': 'Append fact',
     'proposal.kindExportBundle': 'Export submission bundle',
+    /* ---- 追加事实表单（两步） ---- */
+    'np.ledger': 'Fact ledger',
+    'np.addFact': 'Append fact',
+    'more.factNote': 'Recording goes through a proposal: creating it writes nothing, only adoption writes the ledger',
+    'ff.title': 'Append one fact',
+    'ff.s1': 'Pick an artifact',
+    'ff.s2': 'Say what this number is',
+    'ff.s1.h': 'These are the real artifacts on this disk: the signed ones and the ones not in the manifest. Picking one fills in the source; the tool computes the hash - there is no box for typing a path.',
+    'ff.s1.ph': 'Filter by file name…',
+    'ff.g.signed': 'Signed artifacts',
+    'ff.g.unsigned': 'Artifacts not in the manifest',
+    'ff.g.empty': 'Nothing in this group.',
+    'ff.more': '{n} in total, showing the first {shown}; narrow it down with the box above.',
+    'ff.badge.signed': 'Signed',
+    'ff.badge.drift': 'Changed after signing',
+    'ff.badge.missing': 'File missing',
+    'ff.badge.unsigned': 'Unsigned',
+    'ff.s2.h': 'Say what this number claims and where it comes from in the artifact; you pick the ledger it lands in.',
+    'ff.src': 'source',
+    'ff.f.id': 'Fact id',
+    'ff.f.claim': 'Claim',
+    'ff.f.value': 'Value',
+    'ff.f.locator': 'Locator in the artifact',
+    'ff.f.conf': 'Confidence',
+    'ff.conf.high': 'high',
+    'ff.conf.med': 'med',
+    'ff.conf.low': 'low',
+    'ff.f.note': 'Note (optional)',
+    'ff.f.valueHint': 'The value must be the verbatim text from the artifact - that is what the body will bind.',
+    'ff.ledger.h': 'Which ledger',
+    'ff.ledger.style': 'Ledger naming style on this disk: {style}',
+    'ff.style.letter_topic': 'single-letter prefix + underscore topic (e.g. a_swebench.toml)',
+    'ff.style.index_topic': 'two-digit index + hyphen topic (e.g. 01-core.toml)',
+    'ff.style.unknown': 'unrecognised (creating a new ledger file will be refused)',
+    'ff.ledger.new': 'Create a new ledger file',
+    'ff.ledger.newPh': 'e.g. {name}',
+    'ff.ledger.facts': '{n} facts',
+    'ff.next': 'Next',
+    'ff.create': 'Create proposal',
+    'ff.needSource': 'Pick an artifact first.',
+    'ff.needLedger': 'Pick a ledger first.',
+    'ff.needFields': 'The id, the claim and the value are all required.',
+    'ff.nameBad': 'This file name does not follow the naming style of this disk.',
+    'ff.prefixBad': 'This prefix is already taken by an existing ledger file on this disk.',
+    'ff.created': 'Proposal created - open "Pending" and click "Adopt and write back".',
+    'ff.fail': 'Could not create the proposal: {e}',
+    'ff.loadFail': 'Could not load the artifact list: {e}',
   },
 };
 
@@ -670,6 +764,7 @@ const state = {
   kb: { files: [], loading: false, error: '', current: '', detail: null },   // 段六：知识库
   venue: { data: null, loading: false, error: '', msg: '' },                // 段六：版式
   wz: { step: 1, file: '', fileSize: 0, files: [], rows: [], failed: [], suggested: [], sha: '', busy: false, parseError: '' }, // 段四：导入向导
+  af: null,            // 追加事实表单（两步：挑产物 → 说清这条数字 ＋ 落哪本账）
   proposals: [],       // v2：待确认提议单（差异卡的数据源）
   staleProposals: {},  // v2：本地判过期的提议单（服务端已不列 pending，留着说清原因）
 };
@@ -808,6 +903,8 @@ function applyI18n() {
   // v5：「这一轮是谁答的」徽标也跟着语言重画。
   renderAiSource();
   applyLangToggle();
+  // 追加事实表单：界面语言换了，表单里的字跟着换。
+  if (state.af) renderFactForm();
   // 条目 33：applyI18n 会把钮里的文字整个重写，截稿徽标要补回来。
   updateDeadlineBadge();
 }
@@ -3131,6 +3228,331 @@ function onWzRowEdit(ev) {
   row[el.dataset.f] = el.value;
 }
 
+/* ---------------------------------------------------------------- 追加事实表单 */
+
+/* 两步表单：① 挑产物——只列本盘真实存在的文件（人签清单里的那组、没进清单
+   的另一组），没有手打 source 路径的入口，hash 由工具现算；② 说清这条数字
+   并落到哪本账。
+   走提议单通道：这里只建单，落盘由人在差异卡上点「采纳写回」。 */
+
+const AF_ROW_LIMIT = 120;
+
+function afApiPath(suffix) {
+  const project = state.project;
+  const disk = currentDisk();
+  if (!project || !disk) return null;
+  return '/api/disk/' + encodeURIComponent(project.id) + '/'
+    + encodeURIComponent(disk.id) + '/fact-form' + (suffix || '');
+}
+
+async function openFactForm() {
+  if (!state.project) { toast(t('rp.idle')); return; }
+  state.af = {
+    step: 1, data: null, catalog: {}, signed: [], unsigned: [], ledgers: [],
+    selected: '', query: '', ledger: '',
+  };
+  const modal = $('#modalFact');
+  if (modal) modal.hidden = false;
+  ['#afId', '#afClaim', '#afValue', '#afLocator', '#afNote'].forEach((sel) => {
+    const el = $(sel);
+    if (el) el.value = '';
+  });
+  const conf = $('#afConfidence');
+  if (conf) conf.value = 'med';
+  const newInput = $('#afNewLedger');
+  if (newInput) newInput.value = '';
+  renderFactForm();
+  await loadFactForm();
+}
+
+function closeFactForm() {
+  const modal = $('#modalFact');
+  if (modal) modal.hidden = true;
+}
+
+async function loadFactForm() {
+  const path = afApiPath('');
+  if (!path) return;
+  try {
+    const data = await getJSON(path);
+    state.af.data = data || {};
+    state.af.catalog = (data && data.i18n) || {};
+    state.af.signed = (data && Array.isArray(data.signed)) ? data.signed : [];
+    state.af.unsigned = (data && Array.isArray(data.unsigned)) ? data.unsigned : [];
+    state.af.ledgers = (data && Array.isArray(data.ledgers)) ? data.ledgers : [];
+  } catch (err) {
+    toast(t('ff.loadFail', { e: (err && err.message) || String(err) }));
+  }
+  renderFactForm();
+}
+
+function afMatches(path) {
+  const q = (state.af.query || '').trim().toLowerCase();
+  if (!q) return true;
+  return String(path || '').toLowerCase().indexOf(q) >= 0;
+}
+
+function renderFactForm() {
+  if (!state.af) return;
+  const step = state.af.step;
+  $$('.wstep[data-fs]').forEach((s) => {
+    const n = Number(s.getAttribute('data-fs'));
+    s.classList.toggle('on', n === step);
+    s.classList.toggle('done', n < step);
+  });
+  const p1 = $('#fpane1');
+  const p2 = $('#fpane2');
+  if (p1) p1.classList.toggle('on', step === 1);
+  if (p2) p2.classList.toggle('on', step === 2);
+  const back = $('#afBack');
+  if (back) back.disabled = step === 1;
+  const next = $('#afNext');
+  if (next) {
+    next.textContent = step === 1 ? t('ff.next') : t('ff.create');
+    next.disabled = step === 1 ? !state.af.selected : !state.af.ledger;
+  }
+  if (step === 1) renderAfSources();
+  if (step === 2) renderAfDetail();
+}
+
+function renderAfSources() {
+  const data = state.af.data || {};
+  const notes = $('#afNotes');
+  if (notes) {
+    const text = renderParts(data.notes || [], state.af.catalog, data.notes_text || '');
+    notes.innerHTML = text
+      ? '<div class="af-note">' + esc(text).split('\n').join('<br>') + '</div>'
+      : '';
+  }
+  const signedHost = $('#afSigned');
+  const unsignedHost = $('#afUnsigned');
+  const signedRows = state.af.signed.filter((row) => afMatches(row.path));
+  const unsignedRows = state.af.unsigned.filter((row) => afMatches(row));
+  if (signedHost) signedHost.innerHTML = afRowsHtml(signedRows, afSignedRowHtml);
+  if (unsignedHost) unsignedHost.innerHTML = afRowsHtml(unsignedRows, afUnsignedRowHtml);
+}
+
+function afRowsHtml(rows, render) {
+  if (!rows.length) return '<div class="ff-empty">' + esc(t('ff.g.empty')) + '</div>';
+  const shown = rows.slice(0, AF_ROW_LIMIT);
+  let html = shown.map(render).join('');
+  if (rows.length > shown.length) {
+    html += '<div class="af-more">'
+      + esc(t('ff.more', { n: rows.length, shown: shown.length })) + '</div>';
+  }
+  return html;
+}
+
+function afSignedRowHtml(row) {
+  const path = String(row.path || '');
+  const picked = path === state.af.selected;
+  let badge = t('ff.badge.signed');
+  let bcls = 'af-badge ok';
+  if (row.missing) { badge = t('ff.badge.missing'); bcls = 'af-badge err'; }
+  else if (row.drift) { badge = t('ff.badge.drift'); bcls = 'af-badge warn'; }
+  const sha = String(row.live_sha256 || row.sha256 || '').slice(0, 12);
+  return '<label class="af-row' + (picked ? ' on' : '') + '">'
+    + '<input type="radio" name="afs" value="' + esc(path) + '"' + (picked ? ' checked' : '') + '>'
+    + '<span class="af-path" title="' + esc(path) + '">' + esc(path) + '</span>'
+    + (sha ? '<code class="af-sha">' + esc(sha) + '</code>' : '')
+    + '<span class="' + bcls + '">' + esc(badge) + '</span></label>';
+}
+
+function afUnsignedRowHtml(path) {
+  const p = String(path || '');
+  const picked = p === state.af.selected;
+  return '<label class="af-row' + (picked ? ' on' : '') + '">'
+    + '<input type="radio" name="afs" value="' + esc(p) + '"' + (picked ? ' checked' : '') + '>'
+    + '<span class="af-path" title="' + esc(p) + '">' + esc(p) + '</span>'
+    + '<span class="af-badge">' + esc(t('ff.badge.unsigned')) + '</span></label>';
+}
+
+function afStyleLabel() {
+  const style = String((state.af.data || {}).ledger_style || '');
+  if (style === 'letter_topic') return t('ff.style.letter_topic');
+  if (style === 'index_topic') return t('ff.style.index_topic');
+  return t('ff.style.unknown');
+}
+
+function renderAfDetail() {
+  const data = state.af.data || {};
+  const src = $('#afSrc');
+  if (src) {
+    src.innerHTML = state.af.selected
+      ? '<span>' + esc(t('ff.src')) + '</span> <code>' + esc(state.af.selected) + '</code>'
+      : '';
+  }
+  const hint = $('#afLedgerHint');
+  if (hint) hint.textContent = t('ff.ledger.style', { style: afStyleLabel() });
+  const host = $('#afLedgers');
+  if (host) {
+    const rows = state.af.ledgers.map((row) => {
+      const path = String(row.path || '');
+      const picked = path === state.af.ledger;
+      return '<label class="af-row' + (picked ? ' on' : '') + '">'
+        + '<input type="radio" name="aflg" value="' + esc(path) + '"' + (picked ? ' checked' : '') + '>'
+        + '<span class="af-path" title="' + esc(path) + '">' + esc(path) + '</span>'
+        + '<span class="af-sha">' + esc(t('ff.ledger.facts', { n: Number(row.facts || 0) })) + '</span>'
+        + '</label>';
+    });
+    rows.push('<label class="af-row">'
+      + '<input type="radio" name="aflg" value="__new__"'
+      + (state.af.ledger === '__new__' ? ' checked' : '') + '>'
+      + '<span class="af-path">' + esc(t('ff.ledger.new')) + '</span></label>');
+    host.innerHTML = rows.join('');
+  }
+  const newInput = $('#afNewLedger');
+  if (newInput) {
+    const isNew = state.af.ledger === '__new__';
+    newInput.hidden = !isNew;
+    newInput.placeholder = t('ff.ledger.newPh', { name: String(data.ledger_style_example || '') });
+  }
+}
+
+function onAfSourcePick(ev) {
+  const input = ev.target;
+  if (!input || input.name !== 'afs') return;
+  state.af.selected = String(input.value || '');
+  $$('#afSigned .af-row, #afUnsigned .af-row').forEach((row) => {
+    const radio = row.querySelector('input[name="afs"]');
+    row.classList.toggle('on', !!radio && radio.checked);
+  });
+  const next = $('#afNext');
+  if (next) next.disabled = !state.af.selected;
+}
+
+function onAfLedgerPick(ev) {
+  const input = ev.target;
+  if (!input || input.name !== 'aflg') return;
+  state.af.ledger = String(input.value || '');
+  // 别整段重画账本列表：正在点的那个 radio 会被换掉，
+  // 界面就回读不到自己的选中态了（写操作变成「不知道落没落」）。
+  // 只切高亮与新建输入框的显隐。
+  $$('#afLedgers .af-row').forEach((row) => {
+    const radio = row.querySelector('input[name="aflg"]');
+    row.classList.toggle('on', !!radio && radio.checked);
+  });
+  const data = state.af.data || {};
+  const newInput = $('#afNewLedger');
+  if (newInput) {
+    const isNew = state.af.ledger === '__new__';
+    newInput.hidden = !isNew;
+    newInput.placeholder = t('ff.ledger.newPh', { name: String(data.ledger_style_example || '') });
+  }
+  const next = $('#afNext');
+  if (next) next.disabled = !state.af.ledger;
+}
+
+/* facts 的 glob 里第一个通配符之前的目录（"facts/*.toml" → facts）。 */
+function afGlobDir(glob) {
+  const g = String(glob || '');
+  const i = g.indexOf('*');
+  let dir = i >= 0 ? g.slice(0, i) : g;
+  while (dir.endsWith('/')) dir = dir.slice(0, dir.length - 1);
+  return dir;
+}
+
+/* 新建账本文件：名字由人给，但样式与前缀得守本盘的规矩——
+   规矩（正则、已用前缀）由服务端随表单一起下发，页面先照它校验一遍，
+   服务端仍然是唯一权威（它会再拒一次）。 */
+function afResolveNewLedger() {
+  const data = state.af.data || {};
+  const input = $('#afNewLedger');
+  const raw = String((input && input.value) || '').trim();
+  if (!raw) return { ok: false, reason: 'empty' };
+  const lower = raw.toLowerCase();
+  const hasExt = lower.endsWith('.toml');
+  const name = hasExt ? raw : (raw + '.toml');
+  const stem = hasExt ? raw.slice(0, raw.length - 5) : raw;
+  const pattern = String(data.ledger_style_pattern || '');
+  let rx = null;
+  try { if (pattern) rx = new RegExp(pattern); } catch (err) { rx = null; }
+  if (rx) {
+    const m = rx.exec(stem);
+    if (!m) return { ok: false, reason: 'style' };
+    const used = (data.ledger_used_prefixes || []).map(String);
+    if (used.indexOf(String(m[1])) >= 0) return { ok: false, reason: 'prefix' };
+  }
+  const dir = afGlobDir(data.ledger_glob);
+  return { ok: true, path: (dir ? dir + '/' : '') + name };
+}
+
+/* 服务端错因：先按目录翻语言（EN 不留中文），翻不出来才回落到原话。 */
+function afErrorText(data) {
+  const code = (data && data.err_code) ? String(data.err_code) : '';
+  if (code) {
+    const entry = (state.af.catalog || {})['wb.form.fact.err.' + code];
+    if (entry) {
+      const text = entry[state.lang] || entry.zh;
+      if (text) return text;
+    }
+  }
+  return String((data && data.error) || 'HTTP error');
+}
+
+async function submitFactProposal() {
+  const id = String(($('#afId') || {}).value || '').trim();
+  const claim = String(($('#afClaim') || {}).value || '').trim();
+  const value = String(($('#afValue') || {}).value || '').trim();
+  const locator = String(($('#afLocator') || {}).value || '').trim();
+  const note = String(($('#afNote') || {}).value || '').trim();
+  const confidence = String(($('#afConfidence') || {}).value || 'med');
+  if (!id || !claim || !value) { toast(t('ff.needFields')); return; }
+  if (!state.af.selected) { toast(t('ff.needSource')); return; }
+  if (!state.af.ledger) { toast(t('ff.needLedger')); return; }
+  let ledger = state.af.ledger;
+  if (ledger === '__new__') {
+    const resolved = afResolveNewLedger();
+    if (!resolved.ok) {
+      toast(t(resolved.reason === 'prefix' ? 'ff.prefixBad' : 'ff.nameBad'));
+      return;
+    }
+    ledger = resolved.path;
+  }
+  const path = proposalPath('');
+  if (!path) { toast(t('ff.needLedger')); return; }
+  const body = {
+    kind: 'add_fact',
+    source: 'page',
+    fact: {
+      id: id, claim: claim, value: value,
+      source: state.af.selected,
+      locator: locator, confidence: confidence, note: note,
+      ledger: ledger,
+    },
+  };
+  try {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    let data = null;
+    try { data = await res.json(); } catch (err) { data = null; }
+    if (!res.ok || !data || data.ok === false) {
+      toast(t('ff.fail', { e: afErrorText(data) }));
+      return;
+    }
+    closeFactForm();
+    toast(t('ff.created'));
+    await loadProposals();
+  } catch (err) {
+    toast(t('ff.fail', { e: (err && err.message) || String(err) }));
+  }
+}
+
+async function onFactNext() {
+  if (!state.af) return;
+  if (state.af.step === 1) {
+    if (!state.af.selected) { toast(t('ff.needSource')); return; }
+    state.af.step = 2;
+    renderFactForm();
+    return;
+  }
+  await submitFactProposal();
+}
+
+
 /* ---------------------------------------------------------------- 交互 */
 
 function setView(view) {
@@ -4527,6 +4949,24 @@ function bind() {
   $('#modalConfirm').addEventListener('click', (ev) => {
     if (ev.target.id === 'modalConfirm') closeConfirm(false);
   });
+  // 追加事实表单（两步：挑产物 → 说清这条数字 ＋ 落哪本账）
+  $('#npAddFactBtn').addEventListener('click', openFactForm);
+  $('#afCancel').addEventListener('click', closeFactForm);
+  $('#afBack').addEventListener('click', () => {
+    if (state.af && state.af.step > 1) { state.af.step -= 1; renderFactForm(); }
+  });
+  $('#afNext').addEventListener('click', onFactNext);
+  $('#modalFact').addEventListener('click', (ev) => {
+    if (ev.target.id === 'modalFact') closeFactForm();
+  });
+  $('#afSigned').addEventListener('change', onAfSourcePick);
+  $('#afUnsigned').addEventListener('change', onAfSourcePick);
+  $('#afSearch').addEventListener('input', (ev) => {
+    if (!state.af) return;
+    state.af.query = ev.target.value || '';
+    renderAfSources();
+  });
+  $('#afLedgers').addEventListener('change', onAfLedgerPick);
   // 段四：导入向导（选文件 → 字段映射 → 确认绑定）
   $('#wzFiles').addEventListener('change', (ev) => {
     const input = ev.target;
@@ -4620,6 +5060,8 @@ function bind() {
     if (action && !action.hidden) action.hidden = true;
     const wizard = $('#wizardModal');
     if (wizard && !wizard.hidden) closeWizard();
+    const afModal = $('#modalFact');
+    if (afModal && !afModal.hidden) closeFactForm();
     const guide = $('#modalGuide');
     if (guide && !guide.hidden) closeVenueGuide();
     closeFactCard();

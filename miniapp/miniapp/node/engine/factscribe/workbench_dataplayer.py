@@ -357,7 +357,8 @@ def add_fact_data(project: Path | str, body: dict,
         confidence=str(body.get("confidence") or "med"),
         expr=str(body.get("expr") or ""),
         derived_from=body.get("derived_from") or body.get("derivedFrom"),
-        note=str(body.get("note") or ""))
+        note=str(body.get("note") or ""),
+        ledger=str(body.get("ledger") or ""))
 
 
 def evidence_status_data(project: Path | str) -> dict:

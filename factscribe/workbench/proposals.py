@@ -211,6 +211,9 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
 
     校验走 scaffold.prepare_fact——与 CLI fact add 同一套，
     算出来的 block 就是真正会追加进账本的那几行 TOML。
+
+    ``ledger``＝目标账本文件（相对项目根）：留空沿用默认，指定则必须是
+    facts 的 glob 里的文件（详见 scaffold.resolve_ledger）。
     """
     body = body or {}
     prepared = prepare_fact(Path(disk_root),
@@ -223,7 +226,8 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
                             expr=str(body.get("expr") or ""),
                             derived_from=(body.get("derived_from")
                                           or body.get("derivedFrom")),
-                            note=str(body.get("note") or ""))
+                            note=str(body.get("note") or ""),
+                            ledger=str(body.get("ledger") or ""))
     ledger = str(prepared.get("ledger") or "")
     fact_id = str(prepared.get("id") or "")
     if ledger:
@@ -235,13 +239,15 @@ def propose_add_fact(disk_root: Path, body: dict, source: str = "",
         before_parts = [i18n.part("wb.prop.addFact.before.ledgerUnknown",
                                   {"id": fact_id})]
         after_parts = [i18n.part("wb.prop.addFact.after.headUnknown")]
+    if ledger and not (Path(disk_root) / ledger).is_file():
+        before_parts.append(i18n.part("wb.prop.addFact.before.newLedger"))
     before_parts.append(i18n.part("wb.prop.addFact.before.note"))
     # 账本片段是**契约内容**（落盘的就是它），逐字保留、不翻译。
     after_parts.append(i18n.literal(str(prepared.get("block") or "")))
     fact = {key: prepared.get(key) for key in
             ("id", "claim", "value", "source", "source_sha256", "locator",
              "confidence", "derived_from", "expr", "note", "ledger",
-             "manifest", "manifest_line")}
+             "ledger_explicit", "manifest", "manifest_line")}
     return {"kind": KIND_ADD_FACT,
             "file": "", "block": "",
             "before_sha": "",
@@ -346,7 +352,9 @@ def apply_add_fact(disk_root: Path, proposal: dict) -> dict:
                     confidence=str(fact.get("confidence") or "med"),
                     expr=str(fact.get("expr") or ""),
                     derived_from=fact.get("derived_from"),
-                    note=str(fact.get("note") or ""))
+                    note=str(fact.get("note") or ""),
+                    ledger=(str(fact.get("ledger") or "")
+                            if fact.get("ledger_explicit") else ""))
     return {"ok": True, "kind": KIND_ADD_FACT,
             "id": str(info.get("id") or ""),
             "claim": str(info.get("claim") or ""),

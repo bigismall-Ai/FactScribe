@@ -291,3 +291,204 @@
 | 既有提议单字段（`before_text`/`after_text`/`warnings`/…） | 逐字不变（测试抄旧格式串比对）；只**加**了 `display` 字段 |
 | MCP 工具的入参 schema | `fs_propose_*` 的入参一字未动（`fact` 子对象只是服务端内部形状） |
 | 其余 P2（P2-4 `.bak` 深度 / P2-5 账本命名） | 仍记录，未擅改 |
+
+## 7. 2026-11-23 第三轮：追加事实的两步表单（新增能力，实跑通过）
+
+### 7.1 这一轮补的是什么
+
+界面上原本**没有**追加事实的入口：MCP 侧的 `fs_propose_add_fact` 能建单，
+但页面只能 list／confirm／reject，不能自己建单。更要紧的是核心侧只能把事实
+写进**固定那本账**（`facts/01-core.toml`）——与本盘的主题账本文件
+（`facts/a_swebench.toml` … `facts/h_conflicts.toml`）对不上。
+
+这一轮补三件：
+
+1. **核心新增「指定目标账本文件」能力**（`factscribe/scaffold.py` 的
+   `resolve_ledger`）：目标文件必须仍在项目声明的 facts glob 里，且必须是
+   该 glob 目录下的**直接子文件**（与 `load_facts` 的读法一致——写到子目录里
+   就永远读不到）；新建文件要沿用**本盘既有账本文件的命名风格**（风格从盘内
+   现有账本文件推断，不跨盘借），前缀不得与现有账本文件撞；不指定时行为与
+   从前一字不变（仍是默认那本账）。同一能力贯通 CLI（`fact add --ledger`）
+   与 MCP／serve（`ledger` 字段）。
+2. **新增只读端点** `GET /api/disk/<p>/<d>/fact-form`：给表单备料——
+   **已签产物**（人签清单那组，附清单 sha256 与现算 sha256 的比对：签过
+   之后被改过的标出来）、**未进清单的产物**（清单里那些产物**所在的目录**下
+   存在但没进清单的文件）、**盘内现有账本文件** ＋ 本盘命名风格 ＋ 下一个
+   可用前缀。
+3. **两步表单**（右栏「更多」→ 事实账 → 追加事实）：① 挑产物 ② 说清这条
+   数字 ＋ 落哪本账。走既有「提议-确认」通道：表单**只建单**，落盘由人在
+   差异卡上点「采纳写回」。
+
+### 7.2 三条界面口径（都守住了）
+
+| 口径 | 怎么守住的 | 实跑读数 |
+|---|---|---|
+| 界面不让用户碰哈希 | 表单**没有**哈希输入框；`source_sha256` 由 `scaffold.prepare_fact` 现算后落进事实条目 | 卡片上 `source_sha256 = "2c367edb…"`，与清单里 BATCH23-SWB16.md 的 sha256 一致 |
+| 不提供手打 source 路径的入口 | 只能从两组候选里选，没有路径输入框 | 选中后 `#afSrc` 自动填成 `experiments/ctx-compiler-redblue/BATCH23-SWB16.md` |
+| 落哪本账不给默认 | 第二步必须从盘内现有账本文件里选（或按本盘风格新建）；未选时「建提议单」按钮 disabled | 8 本账 ＋「新建一个账本文件」；未选时按钮 disabled=true |
+
+### 7.3 实跑读数（宿主内置浏览器，副本盘 `/tmp/fs-factform-root`）
+
+**第一步（挑产物，EN 界面）**
+
+```
+已签产物组：9 条（清单里那组，全部 drift=false，附 12 位 sha 短指纹）
+未进清单组：8124 条（扫描范围＝清单产物所在目录 experiments 下 2 层，耗时 0.045s）
+引擎侧说明（EN）："Artifacts not in the manifest are scanned only 2 level(s) under
+  experiments - 8124 file(s) in total; anything deeper is not listed."
+界面提示："8124 in total, showing the first 120; narrow it down with the box above."
+```
+
+文件名筛选实测：输入 `BATCH12` → 已签组 0 条、未签组 2 条（按路径子串筛）。
+
+**第二步（说清这条数字 ＋ 落哪本账）**
+
+```
+账本命名风格（EN）："Ledger naming style on this disk: single-letter prefix +
+  underscore topic (e.g. a_swebench.toml)"
+账本清单：facts/a_swebench.toml 13 facts ｜ b_pilot 3 ｜ c_crossmodel 7 ｜ d_cost 6
+  ｜ e_gates 9 ｜ f_tau2 4 ｜ g_terminalbench 3 ｜ h_conflicts 3 ＋「新建一个账本文件」
+新建文件名占位（EN）："e.g. i_topic.toml"（本盘下一个可用前缀 i）
+```
+
+**建单（只建单，不写盘）**
+
+```
+toast（EN）：Proposal created - open "Pending" and click "Adopt and write back".
+差异卡来源：From page     类型：Append fact
+改前：Ledger facts/e_gates.toml: there is no fact with id=Z1 yet
+      (it will be appended at the end of the ledger)
+改后：One fact will be appended to ledger facts/e_gates.toml: ＋ [[fact]] 片段
+```
+
+建单后盘上核对：**8 本账里没有任何一本含 `id = "Z1"`**；`audit/evidence.lock`
+（`5e4e33bc…`）与 `audit/evidence-log.ndjson`（`9b16ff9c…`）前后一致；没有
+投稿包目录。
+
+**采纳写回（落盘＝预览，逐字一致）**
+
+```
+toast（EN）：Adopted and written back      待确认徽标：1 → 0，卡片清空
+落盘文件：/tmp/fs-factform-root/paper/facts/e_gates.toml（**所选的那本账**）
+文件末尾与卡片预览逐字一致：True（预览 313 字节）
+其余 7 本账：无 Z1；factscribe.toml：只差 last_opened（打开动作的既有副作用）
+```
+
+**四步链读数（跑全检，副本盘）**
+
+| 步骤 | 追加前 | 追加后 | 变化 |
+|---|---|---|---|
+| 声明（facts/*.toml 条目） | 48 / 48 | **49 / 49** | **＋1** |
+| 绑定（正文里 \fact{} 绑住的数） | 232 / 232 | **233 / 233** | **＋1** |
+| 回账（正文数字回对账本） | 232 / 232 | **233 / 233** | **＋1** |
+| 出证（证据冻结 ＋ PDF 门） | 106 / 106 partial | 106 / 106 partial | 不变 |
+
+体检：0 red · 0 yellow；事实数读数 48 → 49。
+
+> 绑定那一步的说明：页面**按设计**不让人凭空造账本绑定——正文里新写的
+> `\fact{…}` 会被保护面剥掉（`wb.warn.protect.injected`）。所以「正文绑定」
+> 是在**副本盘正文源文件**里直接写的（`sections/05_eval.tex`：
+> `…none in the other direction\fact{A7} (sign test p=0.031\fact{Z1}).`），
+> 不是页面操作的产物。正式稿盘一个字节都没动。
+
+**新建账本文件（沿用本盘风格）**
+
+```
+选「新建一个账本文件」＋ 填 i_e2e.toml → 建单
+改前：Ledger facts/i_e2e.toml: there is no fact with id=Z2 yet
+      (this ledger file does not exist yet; it will be created on adoption)
+驳回后：全部文件逐字节一致；facts/i_e2e.toml **没有**被创建；Z2 不在任何账里；
+        evidence.lock / evidence-log.ndjson 不变；没有投稿包目录
+同款单再走一次并采纳 → facts/i_e2e.toml 按 letter_topic 风格建成（i 前缀未占用），
+        落盘片段与卡片预览逐字一致；Z2 只落在这本新账里
+```
+
+**表单输入校验（ZH 界面）**
+
+```
+新文件名 01-core.toml（与本盘风格不符）→ toast「这个文件名不合本盘的命名风格。」
+新文件名 a_dup.toml（前缀已被 a_swebench 占用）→ toast「这个前缀已被本盘现有账本文件占用。」
+两次都没有建出单（待确认卡片数 0），表单保持打开
+```
+
+校验规则由服务端随表单下发（`ledger_style_pattern` ＋ `ledger_used_prefixes`），
+页面照它先挡一次；服务端仍是唯一权威（它会再拒一次，并带机器可读的错因码
+`LEDGER_STYLE_MISMATCH`／`LEDGER_PREFIX_TAKEN`／`LEDGER_OUTSIDE_GLOB`／
+`LEDGER_NOT_IN_GLOB_DIR`／`LEDGER_PATH_INVALID`，界面据此翻语言）。
+
+**EN 界面零中文残留（实测）**
+
+```
+工作台 chrome（顶栏 ＋ 右栏三面 ＋ 四个模态 ＋ toast ＋ 证据卡）CJK 命中：0
+唯一命中是语言钮本身的「中」（设计如此，与既有守卫测试同口径）
+追加事实表单、差异卡、toast、引擎侧说明：全 EN，无中文
+检查报告模态里的中文来自**中文盘账本的内容**（双语对账表在逐条对比 paper-zh
+的 claim 原文）＋ 一条既有的全角分隔符「A ｜ B」，不是本轮新增面
+```
+
+**ZH 界面正常（实测）**
+
+```
+切到中文盘 paper-zh → 追加事实表单：
+  引擎侧说明回中文：「未进清单的产物只扫到 experiments 下 2 层，一共 8124 个文件；更深的不在候选里。」
+  组标题：已签产物 ｜ 未进清单的产物 ｜ 落哪本账
+  命名风格：「本盘账本命名风格：单字母前缀 ＋ 下划线主题（例 a_swebench.toml）」
+  建单 toast：「已建单：去「待确认」里点「采纳写回」。」
+  差异卡：来自页面 ｜ 追加事实 ｜「账本 facts/e_gates.toml：当前没有 id=Z9 的事实」
+  驳回 toast：「已拒绝这条提议」
+驳回后：中文盘的 facts/ 与 audit/ **逐字节**与正式盘一致；Z9 不在任何账里
+```
+
+**控制台与网络**
+
+```
+console warn/error：0 条（整轮实跑后复查仍为 0）
+network failed/4xx/5xx：0 条
+```
+
+### 7.4 正式稿盘零改动（实测）
+
+| 盘 | 开工前聚合 sha256 | 验后聚合 sha256 | 结论 |
+|---|---|---|---|
+| `paper` | `df6af0599af747c3` | `df6af0599af747c3` | 一致 |
+| `paper-zh` | `8f97443f37c60102` | `8f97443f37c60102` | 一致 |
+| `paper-b` | `e5bae5a95f753846` | `e5bae5a95f753846` | 一致 |
+| `paper-b-zh` | `28d1cc977a2d5fc5` | `28d1cc977a2d5fc5` | 一致 |
+
+宿主论文根目录已**还原**回 `/Users/moc/workspaces/SiAgent`（引擎进程参数
+`--root /Users/moc/workspaces/SiAgent`），本轮所有写操作都在
+`/tmp/fs-factform-root` 副本上做。
+
+### 7.5 本轮改动清单
+
+| 文件 | 改动 |
+|---|---|
+| `factscribe/scaffold.py` | 新增 `resolve_ledger`／`ledger_naming`／`ledger_files`：指定目标账本文件（限 facts glob 内的直接子文件；新文件沿用本盘命名风格、前缀不撞）；`prepare_fact`／`add_fact` 加 `ledger` 参数（缺省行为不变），回传 `ledger_explicit` |
+| `factscribe/cli.py` | `fact add --ledger FILE`（目标账本文件） |
+| `factscribe/mcp.py` | `factscribe_add_fact` 的入参加可选 `ledger` |
+| `factscribe/workbench_dataplayer.py` | `add_fact_data` 透传 `ledger` |
+| `factscribe/workbench/readings.py` | 新增 `fact_form()` 只读读数（已签／未签产物分组、账本文件、命名风格、引擎侧说明） |
+| `factscribe/workbench/server.py` | 新增 `GET /api/disk/<p>/<d>/fact-form`；`_error` 增 `err_code`（机器可读错因，界面据此翻语言） |
+| `factscribe/workbench/proposals.py` | 追加事实提议单带上目标账本（`fact.ledger` ＋ `fact.ledger_explicit`）；新建账本文件时改前补一句「采纳时新建」 |
+| `factscribe/i18n.py` | 新增 `wb.form.fact.note.*`（清单未签／产物被改／扫描范围／无账本…）与 `wb.form.fact.err.*`（五个账本错因）双语模板；`wb.prop.addFact.before.newLedger` |
+| `factscribe/workbench/static/index.html` | 右栏「更多」新增「事实账」段；新增 `#modalFact` 两步模态（挑产物 → 说清这条数字 ＋ 落哪本账） |
+| `factscribe/workbench/static/app.js` | 追加事实表单逻辑（读数、筛选、校验、建单）；`ff.*` 双语字典；`state.af` |
+| `factscribe/workbench/static/app.css` | 表单样式（候选列表、徽标、账本选择） |
+| `tests/test_workbench_fact_form.py`（新） | 22 条：账本目标校验（风格／前缀／glob／子目录／路径）、`fact_form` 读数、真实 HTTP 端点、提议单落所选账本、错误码、CLI／MCP 入口、wb.form 文案双语且 EN 无中文 |
+| `tests/test_workbench_layout.py` | 面板节标题计数 5 → 6（新增「事实账」段沿用同一条 `.np-pane-h`，色值闸不变） |
+| `miniapp/miniapp/client/**`、`miniapp/miniapp/node/engine/factscribe/**` | `miniapp/build.sh` 同步产物（契约自检通过：110 文件 / 4.8 MiB） |
+
+全仓 `pytest tests/ -q`＝**2215 passed / 0 failed**（397 subtests；上一轮基线
+2193，本轮 +22）。
+
+### 7.6 本轮明确**没做**的事
+
+| 事项 | 为什么 |
+|---|---|
+| 不做「实验报告 → 事实」的自动桥 | 本批只补界面表单；既有的 `wizardModal` 导入向导写的是草稿块，不是事实账，两者不混同 |
+| 不新增「value 必须在产物里」的硬校验 | 会破坏既有 MCP 驱动测试（value `7/8`）。本轮只把它写成**界面提示**（`ff.f.valueHint`：value 必须是产物里的原文），不拦 |
+| 不给 add_fact 提议单加 before_sha 指纹闸 | 追加事实是**只追加**账本，改动的是新增片段而非既有内容；加闸会改变既有提议单口径，超出本批 |
+| 不动 `scaffold._check_source` 的任何一条校验 | source 必填／项目内相对路径／不收 URL／不越出 source_root／文件必须存在——一条没放松（实测：手打不存在的路径照样 400） |
+| 不动四步链闸门语义、块形状闸、双 Profile 契约、金样例基线 | 已定口径；`tests/golden/audit_findings_baseline.json` 未重冻、未改一个字节 |
+| 不把界面 chrome 与引擎侧文案混在一处 | 界面 chrome 走 app.js 既有静态字典（步骤标题／字段标签／按钮），引擎侧文案（清单未签／产物被改／扫描范围／账本错因）走 `wb.*` 目录随端点载荷下发，两条都是既有机制 |
+| 不删上轮遗留的 `/tmp/fs-i18n-root` 副本盘 | 与本轮无关，留着不动 |

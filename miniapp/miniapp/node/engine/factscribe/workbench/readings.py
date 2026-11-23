@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""工作台的另外两条只读读数：证据锁（G1）＋写作简报（G3）。
+"""工作台的另外三条只读读数：证据锁（G1）＋写作简报（G3）＋追加事实表单（G4）。
 
 口径纪律（与四步链同一条原则）：**真闸算一次，界面与 MCP 都只做读数**。
 
@@ -10,17 +10,213 @@
   只在其上**只增不改**地补三组读数：每节的「可引用／已绑／未绑」、每条事实的
   「绑在哪些节」、以及账上的「已绑／未绑」计数。
 
-两者都只读：不写盘、不改稿、不改冻结件。
+* ``fact_form`` 给追加事实表单备料：已签产物、未进清单的产物、盘内账本
+  文件与命名风格。它只列候选，不替人挑，也不写盘。
+
+三者都只读：不写盘、不改稿、不改冻结件。
 """
 from __future__ import annotations
 
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
 
+from .. import i18n
 from ..brief import CONSTRAINTS, bound_fact_ids, build_brief, payload
-from ..config import ConfigError, load_config, load_sections
+from ..config import (ConfigError, load_config, load_facts, load_sections,
+                      load_toml)
 from ..evidence import (canonical_sha256, lock_check, log_state, read_lock,
                          unfrozen_info)
+from ..scaffold import ledger_naming
 
+
+# --------------------------------------------------------------------------
+# 追加事实表单：产物候选 ＋ 账本文件（只读）
+# --------------------------------------------------------------------------
+
+#: 未进清单的产物只扫到这么多层（相对清单里那些产物所在的目录）。
+#: 深目录动辄几十万文件，全量遍历会把页面拖死——扫了多少写在 scan 里，
+#: 界面照实说，不装「全都在这儿」。
+UNSIGNED_SCAN_DEPTH = 2
+
+#: 未进清单的产物最多列多少个（超了就说超了）。
+UNSIGNED_SCAN_LIMIT = 20000
+
+#: 追加事实表单的错误码 → 目录键（界面据此翻语言；目录里缺了才回落中文原话）。
+FACT_FORM_ERROR_KEYS = tuple(
+    "wb.form.fact.err.%s" % name for name in (
+        "LEDGER_PATH_INVALID", "LEDGER_OUTSIDE_GLOB",
+        "LEDGER_NOT_IN_GLOB_DIR", "LEDGER_STYLE_MISMATCH",
+        "LEDGER_PREFIX_TAKEN"))
+
+
+def fact_form(disk: Path) -> dict:
+    """追加事实表单的只读读数：产物候选 ＋ 账本文件 ＋ 命名风格。
+
+    三组读数（都只读，不写盘）：
+
+    * **已签产物**：该盘 results/MANIFEST.toml 的 [files]——人签过的那一组。
+      每条附清单里的 sha256 与现算 sha256 的比对：签过之后被改过的标出来。
+    * **未进清单的产物**：清单里那些产物**所在的目录**下（这里是
+      experiments/）存在但没进清单的文件。只扫到有限深度——扫描范围写在
+      scan 里。
+    * **账本文件**：盘内现有 facts/*.toml ＋ 本盘的命名风格（新建账本文件
+      要沿用它，前缀不能撞）。
+
+    哈希一律现算；界面只读不改——source_sha256 由建单那一步的
+    scaffold.prepare_fact 落到事实条目上，界面不让人碰哈希，也不给手打
+    source 路径的入口。
+    """
+    from ..audit import source_base
+    from ..facts import sha256_file
+
+    disk = Path(disk)
+    base = {"ok": True, "disk": str(disk)}
+    try:
+        cfg = load_config(disk)
+    except ConfigError as exc:
+        return {**base, "ok": False, "code": "CONFIG_INVALID", "error": str(exc)}
+    except (OSError, ValueError) as exc:
+        return {**base, "ok": False, "code": "READ_FAILED",
+                "error": "读项目失败：%s" % exc}
+
+    src_base = source_base(cfg)
+    manifest_rel = str(cfg.manifest or "")
+    manifest_data = {}
+    if manifest_rel:
+        try:
+            manifest_data = load_toml(disk / manifest_rel)
+        except (ConfigError, OSError):
+            manifest_data = {}
+    head = dict(manifest_data.get("manifest") or {})
+    files = dict(manifest_data.get("files") or {})
+    signed_by = str(head.get("signed_by") or "").strip()
+
+    signed = []
+    drifted = 0
+    missing = 0
+    for path in sorted(files):
+        want = str(files.get(path) or "")
+        live = ""
+        gone = False
+        full = src_base / str(path)
+        if full.is_file():
+            try:
+                live = sha256_file(full)
+            except OSError:
+                live = ""
+        else:
+            gone = True
+            missing += 1
+        drift = bool(want and live and live != want)
+        if drift:
+            drifted += 1
+        signed.append({"path": str(path), "sha256": want,
+                       "live_sha256": live, "drift": drift,
+                       "missing": gone})
+
+    # 未进清单的产物：清单里那些产物**所在的目录**（第一段路径）。
+    roots = []
+    for path in files:
+        parts = PurePosixPath(str(path)).parts
+        if parts and parts[0] not in roots:
+            roots.append(parts[0])
+    roots.sort()
+
+    unsigned = []
+    total = 0
+    truncated = False
+    for root in roots:
+        root_dir = src_base / root
+        if not root_dir.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(root_dir):
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            rel_dir = os.path.relpath(dirpath, root_dir)
+            depth = 0 if rel_dir == "." else len(Path(rel_dir).parts)
+            if depth >= UNSIGNED_SCAN_DEPTH:
+                dirnames[:] = []
+            for name in sorted(filenames):
+                if name.startswith("."):
+                    continue
+                if depth == 0:
+                    rel = "/".join([root, name])
+                else:
+                    rel = "/".join([root, rel_dir.replace(os.sep, "/"), name])
+                if rel in files:
+                    continue
+                total += 1
+                if len(unsigned) >= UNSIGNED_SCAN_LIMIT:
+                    truncated = True
+                    continue
+                unsigned.append(rel)
+    unsigned.sort()
+
+    naming = ledger_naming(disk, cfg)
+    counts = {}
+    try:
+        for fact in load_facts(cfg):
+            key = str(fact.file)
+            counts[key] = counts.get(key, 0) + 1
+    except (ConfigError, OSError, ValueError):
+        counts = {}
+    ledgers = [{"path": row["path"], "facts": counts.get(row["path"], 0)}
+               for row in (naming.get("files") or [])]
+
+    notes = []
+    if not signed_by:
+        notes.append(i18n.part("wb.form.fact.note.manifestUnsigned"))
+    if not files:
+        notes.append(i18n.part("wb.form.fact.note.noSigned"))
+    if drifted:
+        notes.append(i18n.part("wb.form.fact.note.drifted", {"count": drifted}))
+    if missing:
+        notes.append(i18n.part("wb.form.fact.note.missing", {"count": missing}))
+    if roots:
+        notes.append(i18n.part("wb.form.fact.note.scanScope",
+                                {"roots": ", ".join(roots),
+                                 "depth": UNSIGNED_SCAN_DEPTH,
+                                 "total": total}))
+    if not ledgers:
+        notes.append(i18n.part("wb.form.fact.note.noLedger"))
+    if not (cfg.source_root or "").strip():
+        notes.append(i18n.part("wb.form.fact.note.sourceDir",
+                                {"dir": cfg.source_dir}))
+
+    try:
+        inside = src_base.resolve().is_relative_to(disk.resolve())
+    except (OSError, ValueError):
+        inside = False
+
+    style = str(naming.get("style") or "")
+    prefix = str(naming.get("next_prefix") or "")
+    sep = "_" if style == "letter_topic" else "-"
+    example = ("%s%stopic.toml" % (prefix, sep)) if prefix else ""
+
+    return {
+        **base,
+        "source_root": str(src_base),
+        "source_root_in_project": bool(inside),
+        "manifest": manifest_rel,
+        "manifest_signed": bool(signed_by),
+        "manifest_signed_by": signed_by,
+        "signed": signed,
+        "unsigned": unsigned,
+        "scan": {"roots": roots, "depth": UNSIGNED_SCAN_DEPTH,
+                 "total": total, "listed": len(unsigned),
+                 "truncated": truncated},
+        "ledgers": ledgers,
+        "ledger_glob": str(cfg.facts_glob),
+        "ledger_style": style,
+        "ledger_next_prefix": prefix,
+        "ledger_style_pattern": str(naming.get("pattern") or ""),
+        "ledger_style_example": example,
+        "ledger_used_prefixes": list(naming.get("used_prefixes") or []),
+        "notes": notes,
+        "notes_text": i18n.render_parts(notes, "zh", i18n.WORKBENCH_MESSAGES),
+        "i18n": i18n.catalog_for(set(i18n.parts_keys(notes))
+                                  | set(FACT_FORM_ERROR_KEYS),
+                                  catalog=i18n.WORKBENCH_MESSAGES),
+    }
 
 def evidence_gate(disk: Path) -> dict:
     """证据锁读数：冻结状态／差异明细／最后一条日志（只读）。

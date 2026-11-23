@@ -7,10 +7,15 @@
 
 **工具不代签**：`fact add` 只打印「该抄哪一行进人签清单」，绝不改
 `results/MANIFEST.toml` 的 `signed_by` / `[files]`。
+
+落哪本账可以指定（``--ledger``）：目标文件必须仍在项目声明的 facts glob
+里，且新建文件要沿用本盘既有账本文件的命名风格；不指定则沿用默认。
 """
 from __future__ import annotations
 
+import fnmatch
 import re
+import string
 from pathlib import Path
 
 from .config import Config, ConfigError, load_config, load_facts, load_toml
@@ -500,8 +505,6 @@ def _ledger_path(root: Path, cfg: Config) -> Path:
     ``ledger/*.toml`` 这类固定目录的 glob 时，用同目录下的 ``01-core.toml``；
     无法判定（glob 太自由）就明确报错，绝不静默写到 glob 外。
     """
-    import fnmatch
-
     candidate = root / FACTS_FILE
     rel = candidate.relative_to(root).as_posix()
     if fnmatch.fnmatchcase(rel, cfg.facts_glob):
@@ -524,14 +527,138 @@ def _ledger_path(root: Path, cfg: Config) -> Path:
         % cfg.facts_glob)
 
 
+#: 账本文件的两种既有命名风格（按**盘内现有账本文件**推断，不跨盘混用）：
+#: letter_topic＝单字母前缀 ＋ 下划线 ＋ 小写主题（例 a_swebench.toml）
+#: index_topic＝两位序号 ＋ 连字符 ＋ 小写主题（例 01-core.toml）
+_LEDGER_STYLES = (
+    ("letter_topic", re.compile(r"^([a-z])_([a-z0-9]+(?:_[a-z0-9]+)*)$")),
+    ("index_topic", re.compile(r"^([0-9]{2})-([a-z0-9]+(?:-[a-z0-9]+)*)$")),
+)
+
+
+def _glob_dir(glob: str) -> Path:
+    """glob 里第一个通配符之前的目录前缀（"facts/*.toml" → facts）。"""
+    prefix = re.split(r"[*?\[]", glob, maxsplit=1)[0]
+    directory = Path(prefix)
+    if not prefix.endswith("/"):
+        directory = directory.parent
+    return directory
+
+
+def ledger_files(root: Path, cfg: Config) -> list[Path]:
+    """盘内现有账本文件（按 facts 的 glob 读，与 load_facts 同一套口径）。"""
+    return sorted(p for p in root.glob(cfg.facts_glob) if p.is_file())
+
+
+def ledger_naming(root: Path, cfg: Config) -> dict:
+    """盘内账本文件的命名风格、已用前缀与下一个可用前缀。
+
+    风格从**盘内现有账本文件**推断（不从别的盘借）：现有文件全都不认得
+    就说「风格不明」——宁可让人挑一个现有账本文件，也不硬造一个名字。
+    """
+    files = ledger_files(root, cfg)
+    stems = [p.stem for p in files]
+    reference = stems or [Path(FACTS_FILE).stem]
+    style = ""
+    rx = None
+    for name, pattern in _LEDGER_STYLES:
+        if all(pattern.match(stem) for stem in reference):
+            style, rx = name, pattern
+            break
+    used = set()
+    for stem in stems:
+        m = rx.match(stem) if rx else None
+        if m:
+            used.add(m.group(1))
+    if not stems and rx:
+        m = rx.match(Path(FACTS_FILE).stem)
+        if m:
+            used.add(m.group(1))
+    next_prefix = ""
+    if style == "letter_topic":
+        for ch in string.ascii_lowercase:
+            if ch not in used:
+                next_prefix = ch
+                break
+    elif style == "index_topic":
+        for i in range(1, 100):
+            cand = "%02d" % i
+            if cand not in used:
+                next_prefix = cand
+                break
+    return {"style": style,
+            "pattern": rx.pattern if rx else "",
+            "next_prefix": next_prefix,
+            "used_prefixes": sorted(used),
+            "files": [{"path": p.relative_to(root).as_posix(), "stem": p.stem}
+                      for p in files]}
+
+
+def resolve_ledger(root: Path, cfg: Config, ledger: str = "") -> tuple[Path, bool]:
+    """目标账本文件：必须落在 facts 的 glob 里，否则写了也读不到。
+
+    返回 (绝对路径, 是否显式指定)。
+
+    * **留空** → 沿用默认（facts/01-core.toml），行为与从前一字不变；
+    * **指定** → 必须匹配 facts 的 glob，且必须是该 glob 目录下的**直接子
+      文件**（与 load_facts 的读法一致：写到子目录里就永远读不到）；
+      文件已存在 → 直接用；不存在 → 必须沿用本盘既有账本文件的命名风格
+      （风格由盘内现有账本文件推断），且前缀不得与现有账本文件撞。
+    """
+    raw = str(ledger or "").strip()
+    if not raw:
+        return _ledger_path(root, cfg), False
+
+    rel_path = Path(raw)
+    if rel_path.is_absolute() or ".." in rel_path.parts:
+        raise ConfigError("目标账本必须是项目内的相对路径：%s" % raw,
+                          code="LEDGER_PATH_INVALID")
+    rel = rel_path.as_posix()
+    if not fnmatch.fnmatchcase(rel, cfg.facts_glob):
+        raise ConfigError("目标账本 %s 不在项目声明的 facts（%s）里——"
+                          "写了也读不到" % (rel, cfg.facts_glob),
+                          code="LEDGER_OUTSIDE_GLOB")
+    directory = _glob_dir(cfg.facts_glob)
+    if rel_path.parent != directory:
+        raise ConfigError("目标账本 %s 必须直接放在 %s/ 下"
+                          "（与 facts 的 glob 同口径：%s）"
+                          % (rel, directory.as_posix() or ".", cfg.facts_glob),
+                          code="LEDGER_NOT_IN_GLOB_DIR")
+
+    target = root / rel
+    if target.is_file():
+        return target, True
+
+    naming = ledger_naming(root, cfg)
+    rx = dict(_LEDGER_STYLES).get(str(naming.get("style") or ""))
+    stem = rel_path.stem
+    if rx is None or not rx.match(stem):
+        existing = "、".join(p.stem for p in ledger_files(root, cfg))
+        raise ConfigError(
+            "目标账本 %s 不合本盘账本的命名风格（现有：%s）——"
+            "新建账本文件请沿用现有命名，或直接挑一个现有账本文件"
+            % (rel, existing or "无"),
+            code="LEDGER_STYLE_MISMATCH")
+    prefix = rx.match(stem).group(1)
+    if prefix in set(naming.get("used_prefixes") or []):
+        raise ConfigError("目标账本 %s 的前缀 %r 已被本盘现有账本文件占用"
+                          % (rel, prefix),
+                          code="LEDGER_PREFIX_TAKEN")
+    return target, True
+
+
 def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
                    source: str, locator: str = "", confidence: str = "med",
-                   expr: str = "", derived_from=None, note: str = "") -> dict:
+                   expr: str = "", derived_from=None, note: str = "",
+                   ledger: str = "") -> dict:
     """校验一条事实并算出要落盘的账本片段（**不写盘**）。
 
     它就是 ``add_fact`` 的前半段——同一套校验、同一个 ``render_fact_block``，
     拆出来是为了让「提议-确认」通道能先算出差异卡上那一段（所见即落盘）：
     返回的 ``block`` 就是真正会追加进账本的那几行 TOML。
+
+    ``ledger``＝目标账本文件（相对项目根）；留空沿用默认，指定则必须是
+    facts 的 glob 里的文件（详见 :func:`resolve_ledger`）。
     """
     root = Path(root)
     cfg = load_config(root)
@@ -539,9 +666,9 @@ def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
         raise ConfigError("fact add 目前只支持 v1 项目（[project] 表；"
                           "V3 的审批目标请按 SPEC-V3.0 写在 schema 声明里）")
     known = load_facts(cfg)
-    ledger = _ledger_path(root, cfg)
-    if ledger.is_file():
-        load_toml(ledger)  # 账坏了就别往上追加
+    ledger_path, ledger_explicit = resolve_ledger(root, cfg, ledger)
+    if ledger_path.is_file():
+        load_toml(ledger_path)  # 账坏了就别往上追加
 
     fid = str(fid or "").strip()
     if not fid:
@@ -591,7 +718,8 @@ def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
         "derived_from": parents,
         "expr": expr,
         "note": str(note or "").strip(),
-        "ledger": ledger.relative_to(root).as_posix(),
+        "ledger": ledger_path.relative_to(root).as_posix(),
+        "ledger_explicit": ledger_explicit,
         "manifest": cfg.manifest,
         "manifest_line": manifest_line,
         # block＝真正会追加进账本的那几行 TOML（差异卡上展示它）。
@@ -601,13 +729,18 @@ def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
 
 def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
              locator: str = "", confidence: str = "med", expr: str = "",
-             derived_from=None, note: str = "") -> dict:
-    """往项目声明的账本追加一条事实；返回落账信息（含 sha256）。"""
+             derived_from=None, note: str = "", ledger: str = "") -> dict:
+    """往项目声明的账本追加一条事实；返回落账信息（含 sha256）。
+
+    ``ledger``＝目标账本文件（相对项目根）；留空沿用默认（见
+    :func:`resolve_ledger`）。
+    """
     root = Path(root)
     prepared = prepare_fact(root, fid=fid, claim=claim, value=value,
                             source=source, locator=locator,
                             confidence=confidence, expr=expr,
-                            derived_from=derived_from, note=note)
+                            derived_from=derived_from, note=note,
+                            ledger=ledger)
     block = prepared.pop("block")
     ledger = root / str(prepared.get("ledger") or "")
     ledger.parent.mkdir(parents=True, exist_ok=True)

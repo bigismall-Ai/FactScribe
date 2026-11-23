@@ -2,7 +2,8 @@
 """工作台段二的本地 HTTP 服务（只用标准库）。
 
 段一只有 GET；段二加了写接口（正文写回、章节管理、项目新建/编辑）；
-段三加了检查报告与机器视图（只读真闸读数）。
+段三加了检查报告与机器视图（只读真闸读数）；
+段七加了追加事实表单的备料（只读）。
 
 端点：
   GET  /api/projects                              项目 + 盘 + 计数 + 进度
@@ -13,6 +14,7 @@
   GET  /api/disk/<project>/<disk>/pdf              盘里已编译好的 PDF（预览/下载）
   GET  /api/disk/<project>/<disk>/report          检查报告（体检摘要 + 发现 + 四步链）
   GET  /api/disk/<project>/<disk>/machine         机器视图（账本表/正文扫描/证据链/命令）
+  GET  /api/disk/<project>/<disk>/fact-form       追加事实表单的备料（已签产物/未签产物/账本文件/命名风格）
   POST /api/disk/<project>/<disk>/edit            写回一段（block=cover-abstract 写摘要；条目 43：带 expect_sha 保存闸，
                                                   应答 blocks=同文件全部块的新鲜 html，指纹不符 → 409 BLOCK_STALE）
   POST /api/disk/<project>/<disk>/action          常用功能（pdf / bundle / open_dir）
@@ -237,8 +239,12 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self._send(code, body, "application/json; charset=utf-8")
 
-    def _error(self, code: int, message: str) -> None:
-        self._json({"ok": False, "error": message, "code": code}, code=code)
+    def _error(self, code: int, message: str, err_code: str = "") -> None:
+        # err_code＝机器可读的错因（展示层据此翻语言）；code 仍是 HTTP 状态。
+        payload = {"ok": False, "error": message, "code": code}
+        if err_code:
+            payload["err_code"] = str(err_code)
+        self._json(payload, code=code)
 
     # ---- 路由 ----
 
@@ -330,6 +336,11 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             if what == "brief":
                 from .readings import brief_reading
                 data = brief_reading(disk_path, _param_of(query, "section"))
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
+            if what == "fact-form":
+                from .readings import fact_form
+                data = fact_form(disk_path)
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
             if what == "machine":
@@ -567,7 +578,8 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             try:
                 record = create_proposal(state, project_id, disk_id, disk, body)
             except ConfigError as exc:
-                return self._error(400, str(exc))
+                return self._error(400, str(exc),
+                                   err_code=str(getattr(exc, "code", "") or ""))
             except ProposalError as exc:
                 return self._error(exc.status, str(exc))
             return self._json({"ok": True, "proposal": record})

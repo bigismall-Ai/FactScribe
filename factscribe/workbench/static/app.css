@@ -688,6 +688,42 @@ table.mt th{background:#fff}
 .wzsel{font-family:inherit;font-size:12px;border:1px solid #e3e2df;border-radius:6px;padding:3px 6px;color:#37352f;background:#fff}
 .wz-summary{font-size:12.5px;color:#37352f;line-height:2;background:#fbfbfa;border:1px solid #ececeb;border-radius:8px;padding:10px 13px}
 .wz-summary code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#54514a;word-break:break-all}
+/* ---- 追加事实表单（两步：挑产物 → 说清这条数字 ＋ 落哪本账） ---- */
+.af-notes{margin:0 0 10px}
+.af-note{font-size:11.5px;line-height:1.65;color:#6f6e69;background:#fbfbfa;border:1px solid #ececeb;
+ border-radius:7px;padding:7px 10px;margin:0 0 6px}
+.af-search{width:100%;font-family:inherit;font-size:12px;border:1px solid #e3e2df;border-radius:7px;
+ padding:5px 9px;color:#37352f;background:#fff;margin:0 0 10px}
+.af-groups{display:flex;gap:16px;align-items:flex-start}
+.af-group{flex:1 1 0;min-width:0}
+.af-group-h{font-size:11.5px;color:#54514a;margin:0 0 5px;font-weight:600}
+.af-list{max-height:280px;overflow:auto;border:1px solid #ececeb;border-radius:8px;padding:3px 6px;background:#fff}
+.af-row{display:flex;align-items:center;gap:7px;padding:4px 4px;border-bottom:1px dashed #f0efec;
+ font-size:11.5px;color:#5f5e5b;cursor:pointer;border-radius:5px}
+.af-row:last-child{border-bottom:none}
+.af-row:hover{background:#fbfbfa}
+.af-row.on{background:#f4f6fa}
+.af-row input{accent-color:#2f2e2b;margin:0;flex:0 0 auto}
+.af-path{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.af-sha{flex:0 0 auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#a49e8d}
+.af-badge{flex:0 0 auto;font-size:10px;line-height:1.6;padding:0 6px;border-radius:8px;
+ border:1px solid #e3e2df;color:#8f8d86;background:#fbfbfa}
+.af-badge.ok{border-color:#bcd9c3;color:#1c6b4c;background:#f3f9f5}
+.af-badge.warn{border-color:#eddcb4;color:#8a5a10;background:#fdf6e8}
+.af-badge.err{border-color:#e6c4bd;color:#9a3b1e;background:#fdf1ef}
+.af-more{font-size:11px;color:#9b9a96;padding:6px 4px 2px}
+.af-src{font-size:12px;color:#37352f;background:#fbfbfa;border:1px solid #ececeb;border-radius:8px;
+ padding:7px 11px;margin:0 0 10px}
+.af-src code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#54514a;word-break:break-all}
+.af-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin:0 0 4px}
+.af-field{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:#54514a}
+.af-field input,.af-field select{font-family:inherit;font-size:12px;border:1px solid #e3e2df;
+ border-radius:6px;padding:5px 8px;color:#37352f;background:#fff;width:100%}
+.af-valuehint{margin:6px 0 0}
+.af-ledger{border-top:1px solid #ececeb;margin-top:12px;padding-top:10px}
+.af-newledger{width:100%;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+ border:1px solid #e3e2df;border-radius:6px;padding:5px 8px;color:#37352f;background:#fff;margin-top:6px}
 /* 发现列表 */
 .ff-row{display:flex;align-items:center;gap:7px;padding:5px 2px;border-bottom:1px dashed #ececeb;font-size:12px;color:#5f5e5b}
 .ff-row:last-child{border-bottom:none}

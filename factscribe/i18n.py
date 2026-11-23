@@ -1008,6 +1008,10 @@ WORKBENCH_MESSAGES: dict = {
         "zh": "账本（未定位）：当前没有 id={id} 的事实",
         "en": "Ledger (not located): there is no fact with id={id} yet",
     },
+    "wb.prop.addFact.before.newLedger": {
+        "zh": "（这个账本文件还不存在，采纳时新建）",
+        "en": "(this ledger file does not exist yet; it will be created on adoption)",
+    },
     "wb.prop.addFact.before.note": {
         "zh": "（这条将追加到账本末尾）",
         "en": "(it will be appended at the end of the ledger)",
@@ -1065,6 +1069,58 @@ WORKBENCH_MESSAGES: dict = {
     "wb.warn.shape.tooLong": {
         "zh": "替换文本比原文长很多（{old} 字 → {new} 字）——确认不是贴错了地方吗？",
         "en": "The replacement text is much longer than the original ({old} chars -> {new} chars) - check that it was not pasted in the wrong place.",
+    },
+
+    # ---- 追加事实表单（引擎侧读数说明） ----
+    "wb.form.fact.note.manifestUnsigned": {
+        "zh": "这份人签清单还没签字（signed_by 是空的）——清单里的产物现在还不算「签过」。",
+        "en": "This human-signed manifest is not signed yet (signed_by is empty) - the artifacts it lists do not count as signed yet.",
+    },
+    "wb.form.fact.note.noSigned": {
+        "zh": "人签清单里一条产物都没有——先签字，再来挑产物。",
+        "en": "The signed manifest lists no artifacts - sign it first, then pick one.",
+    },
+    "wb.form.fact.note.drifted": {
+        "zh": "有 {count} 个已签产物在签字之后被改过——挑它们之前先核对内容。",
+        "en": "{count} signed artifact(s) changed after they were signed - check them before picking one.",
+    },
+    "wb.form.fact.note.missing": {
+        "zh": "清单里的 {count} 个产物现在找不到文件了。",
+        "en": "{count} artifact(s) in the manifest can no longer be found on disk.",
+    },
+    "wb.form.fact.note.scanScope": {
+        "zh": "未进清单的产物只扫到 {roots} 下 {depth} 层，一共 {total} 个文件；更深的不在候选里。",
+        "en": "Artifacts not in the manifest are scanned only {depth} level(s) under {roots} - {total} file(s) in total; anything deeper is not listed.",
+    },
+    "wb.form.fact.note.noLedger": {
+        "zh": "这个盘还没有账本文件——挑一个现有的，或按本盘命名风格新建一个。",
+        "en": "This disk has no ledger file yet - pick an existing one, or create a new one following this disk naming style.",
+    },
+    "wb.form.fact.note.sourceDir": {
+        "zh": "这个盘没配 source_root：source 只能取 {dir}/ 下的文件。",
+        "en": "This disk has no source_root configured: source can only be a file under {dir}/.",
+    },
+
+    # ---- 追加事实表单的错误码（界面据此翻语言） ----
+    "wb.form.fact.err.LEDGER_PATH_INVALID": {
+        "zh": "目标账本必须是项目内的相对路径。",
+        "en": "The target ledger must be a project-relative path.",
+    },
+    "wb.form.fact.err.LEDGER_OUTSIDE_GLOB": {
+        "zh": "目标账本不在项目声明的 facts 里——写了也读不到。",
+        "en": "The target ledger is outside the project facts glob - anything written there would never be read back.",
+    },
+    "wb.form.fact.err.LEDGER_NOT_IN_GLOB_DIR": {
+        "zh": "目标账本必须直接放在 facts 的目录下面。",
+        "en": "The target ledger must sit directly in the facts directory.",
+    },
+    "wb.form.fact.err.LEDGER_STYLE_MISMATCH": {
+        "zh": "这个账本文件名不合本盘账本的命名风格——新建文件请沿用现有命名。",
+        "en": "This ledger file name does not follow the naming style of this disk - a new file must follow the existing names.",
+    },
+    "wb.form.fact.err.LEDGER_PREFIX_TAKEN": {
+        "zh": "这个账本文件名的前缀已被本盘现有账本文件占用。",
+        "en": "The prefix of this ledger file name is already taken by an existing ledger file on this disk.",
     },
 }
 

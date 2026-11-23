@@ -249,7 +249,13 @@
             <ul class="kb-files" id="kbFiles"></ul>
           </div>
         </div>
-        <div class="np-sec" id="secVenue">
+        <div class="np-sec" id="secLedger">
+          <div class="np-pane-h">
+            <span data-i18n="np.ledger">事实账</span>
+            <button type="button" class="np-mini" id="npAddFactBtn" data-i18n="np.addFact">追加事实</button>
+          </div>
+          <p class="np-note" data-i18n="more.factNote">记账走提议单：建单不写盘，采纳才落账</p>
+        </div>        <div class="np-sec" id="secVenue">
           <div class="np-pane-h">
             <span data-i18n="np.venue">版式</span>
             <button type="button" class="np-mini" id="npVenueGuideBtn" data-i18n="np.venueGuide">选刊指南</button>
@@ -505,6 +511,70 @@
   </div>
 </div>
 
+
+<!-- 追加事实：两步表单（挑产物 → 说清这条数字 ＋ 落哪本账） -->
+<div class="modal" id="modalFact" hidden>
+  <div class="modal-card modal-wide">
+    <div class="modal-t"><span data-i18n="ff.title">追加一条事实</span></div>
+    <div class="modal-body">
+      <div class="wsteps">
+        <span class="wstep on" data-fs="1"><i>1</i><span data-i18n="ff.s1">挑产物</span></span>
+        <span class="wstep" data-fs="2"><i>2</i><span data-i18n="ff.s2">说清这条数字</span></span>
+      </div>
+
+      <div class="wpane on" id="fpane1">
+        <p class="d-note" data-i18n="ff.s1.h">下面是本盘的真实产物：已签的一组、没进清单的另一组。选中即填成 source，hash 由工具现算。</p>
+        <div class="af-notes" id="afNotes"></div>
+        <input type="search" id="afSearch" class="af-search" data-i18n-ph="ff.s1.ph" placeholder="按文件名筛选…" autocomplete="off">
+        <div class="af-groups">
+          <div class="af-group">
+            <div class="af-group-h" data-i18n="ff.g.signed">已签产物</div>
+            <div class="af-list" id="afSigned"></div>
+          </div>
+          <div class="af-group">
+            <div class="af-group-h" data-i18n="ff.g.unsigned">未进清单的产物</div>
+            <div class="af-list" id="afUnsigned"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wpane" id="fpane2">
+        <p class="d-note" data-i18n="ff.s2.h">说清这条数字主张什么、来自产物的哪一处；落到哪本账由你定。</p>
+        <div class="af-src" id="afSrc"></div>
+        <div class="af-fields">
+          <label class="af-field"><span data-i18n="ff.f.id">事实 id</span>
+            <input type="text" id="afId" autocomplete="off"></label>
+          <label class="af-field"><span data-i18n="ff.f.claim">一句话主张</span>
+            <input type="text" id="afClaim" autocomplete="off"></label>
+          <label class="af-field"><span data-i18n="ff.f.value">数字原文</span>
+            <input type="text" id="afValue" autocomplete="off"></label>
+          <label class="af-field"><span data-i18n="ff.f.locator">在产物里的位置</span>
+            <input type="text" id="afLocator" autocomplete="off"></label>
+          <label class="af-field"><span data-i18n="ff.f.conf">置信度</span>
+            <select id="afConfidence">
+              <option value="high" data-i18n="ff.conf.high">high</option>
+              <option value="med" selected data-i18n="ff.conf.med">med</option>
+              <option value="low" data-i18n="ff.conf.low">low</option>
+            </select></label>
+          <label class="af-field"><span data-i18n="ff.f.note">备注（可选）</span>
+            <input type="text" id="afNote" autocomplete="off"></label>
+        </div>
+        <p class="d-note af-valuehint" data-i18n="ff.f.valueHint">value 必须是产物里的原文——正文要绑的就是它。</p>
+        <div class="af-ledger">
+          <div class="af-group-h" data-i18n="ff.ledger.h">落哪本账</div>
+          <p class="d-note" id="afLedgerHint"></p>
+          <div class="af-list" id="afLedgers"></div>
+          <input type="text" id="afNewLedger" class="af-newledger" data-i18n-ph="ff.ledger.newPh" placeholder="例 i_topic.toml" hidden>
+        </div>
+      </div>
+    </div>
+    <div class="modal-acts">
+      <button type="button" class="btn-ghost" id="afCancel" data-i18n="pf.cancel">取消</button>
+      <button type="button" class="btn-ghost" id="afBack" data-i18n="wz.back">上一步</button>
+      <button type="button" class="btn-primary" id="afNext" data-i18n="wz.next">下一步</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="modalGuide" hidden>
   <div class="modal-card modal-wide">
     <div class="modal-t" data-i18n="guide.title">选刊指南</div>

@@ -491,8 +491,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
         description="事实账命令组。fact add 校验 id 与 source，自动把 sha256 写进 "
-                    "source_sha256，再往 facts/01-core.toml 末尾追加一条 [[fact]]；"
-                    "它只提醒人把对应行抄进人签清单，绝不替你签。")
+                    "source_sha256，再往目标账本（--ledger，缺省 facts/01-core.toml）"
+                    "末尾追加一条 [[fact]]；它只提醒人把对应行抄进人签清单，绝不替你签。")
     fp = sp.add_subparsers(dest="fact_action", required=True)
     fa = fp.add_parser("add", help="追加一条 fact：自动算 sha256，不代签")
     fa.add_argument("project", nargs="?", default=".",
@@ -515,6 +515,9 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--derived-from", dest="derived_from", default=None,
                     metavar="IDS", help="父 fact id，逗号分隔（例 A1,A3）")
     fa.add_argument("--note", default=None, metavar="TEXT", help="备注（可选）")
+    fa.add_argument("--ledger", default=None, metavar="FILE",
+                    help="目标账本文件（相对项目根；必须仍在 facts 的 glob 里，"
+                         "新建文件要沿用本盘既有命名风格；缺省＝默认那本账）")
     fa.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
 
@@ -943,7 +946,8 @@ def cmd_fact(args) -> int:
         Path(args.project), fid=args.id, claim=args.claim, value=args.value,
         source=args.source, locator=args.locator,
         confidence=args.confidence, expr=args.expr or "",
-        derived_from=args.derived_from or "", note=args.note or "")
+        derived_from=args.derived_from or "", note=args.note or "",
+        ledger=args.ledger or "")
     if args.json:
         payload = _payload("fact", "ok", EXIT_OK, action="add", **info)
         print(json.dumps(payload, ensure_ascii=False, indent=2))

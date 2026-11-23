@@ -107,7 +107,7 @@ class ImeCompositionTests(unittest.TestCase):
         """组合期间不整块替换 DOM——换了内容，候选里的拼音就断了。"""
         apply_fn = _slice("function applyBlockHtml(", "/* 条目 43：保存一个块")
         self.assertIn("if (imeState.active && (!imeState.blockId || imeState.blockId === blockId)) {", apply_fn)
-        self.assertIn("imeState.pendingHtml = { blockId: blockId, html: html };", apply_fn)
+        self.assertIn("imeState.pendingHtml = { blockId: blockId, html: html, sha: sha || '' };", apply_fn)
         self.assertIn("return false;", apply_fn)
 
     def test_badge_deferred_during_composition(self):
@@ -121,7 +121,7 @@ class ImeCompositionTests(unittest.TestCase):
         flush = _slice("function flushAfterComposition(", "/* 条目 44：组合迟迟不结束")
         self.assertIn("bindFactChips(host);", flush)
         self.assertIn("bindChipCaret(host);", flush)
-        self.assertIn("applyBlockHtml(pending.blockId, pending.html);", flush)
+        self.assertIn("applyBlockHtml(pending.blockId, pending.html, pending.sha);", flush)
         self.assertIn("showSavedBadge(bid);", flush)
         self.assertIn("saveBlockNode(n);", flush)
 

@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -77,6 +78,10 @@ CMD_KIND = {
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)*(?:/\d+(?:[.,]\d+)*)?(?:\\?%)?")
 _CMD_RE = re.compile(r"\\([A-Za-z@]+)\*?")
 _INPUT_RE = re.compile(r"\\(input|include)\s*\{([^}]*)\}")
+
+#: 保护面序号对不上（客户端 DOM 是旧版本渲染的）→ 拒写，不静默丢保护面。
+#: 直写通道用 EDIT_…，提议通道用 PROPOSAL_…（与形状闸同一套命名口径）。
+TOKEN_MISMATCH_CODE = "EDIT_TOKEN_MISMATCH"
 
 
 # ---------------------------------------------------------------- 段模型
@@ -371,7 +376,8 @@ def _warn_parts(warnings) -> list[dict]:
             for w in warnings or []]
 
 
-def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[dict]]:
+def _rebuild(segments: list[Segment], client_text: str,
+             code: str = TOKEN_MISMATCH_CODE) -> tuple[str, list[dict]]:
     """把客户端改后的文本与保护面拼回 LaTeX。
 
     返回 (新文本, 告警列表)。规则：
@@ -392,12 +398,16 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[dict]
     # 偶数位是散文，奇数位是保护面的编号。
     items: list[tuple[str, object]] = []
     seen: list[int] = []
+    # 客户端这一轮**用占位符认领着**的保护面（它的 DOM 里还在的那些）。
+    sent = {int(parts[position]) for position in range(1, len(parts), 2)
+            if parts[position] is not None}
     for position in range(0, len(parts), 2):
         free = parts[position]
         token = parts[position + 1] if position + 1 < len(parts) else None
         if free:
             # 先认回「原样抄回」的保护面，剩下的才当散文处理。
-            for kind, value in _absorb_verbatim(free, regions, seen):
+            for kind, value in _absorb_verbatim(free, regions, seen,
+                                                         sent):
                 if kind == "text":
                     clean, dropped = _strip_injected(value)
                     if dropped:
@@ -412,7 +422,18 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[dict]
         index = int(token)
         seg = by_index.get(index)
         if seg is None:
-            continue
+            # 占位符序号在**当前**扫描里不存在——客户端那份 DOM 是旧版本
+            # 渲染的：正文里插一个字，绑定数字令牌可能整段消失，后面所有
+            # 保护面序号都往前挪一位（实测：正文 `…at 0/3\\fact{E5}` 里插
+            # 探针，`0/3` 不再是绑定令牌，`\\fact{E5}` 的序号从 1 变成 0）。
+            #
+            # 旧口径在这里是 `continue`：**静默丢掉这枚保护面**，用户没打过
+            # 的字就此被改掉（条目 43 的 BLOCK_STALE 安全网本该拦住这件事，
+            # 是客户端提前推进了块指纹才漏过去）。现在改成**拒写**：宁可这
+            # 一轮不落盘，也不改用户的内容。
+            raise ConfigError(
+                "这一段在别处被改动过（保护面序号对不上），没有保存——"
+                "请重新载入这一段再改。", code=code)
         if index in seen:
             warnings.append(_warn("wb.warn.protect.duplicate"))
             continue
@@ -445,6 +466,47 @@ def _rebuild(segments: list[Segment], client_text: str) -> tuple[str, list[dict]
 
     return "".join(item[1].text if item[0] == "prot" else str(item[1])
                    for item in items), warnings
+
+
+def _surface_of(segments: list[Segment]) -> list[str]:
+    """保护面里「命令类」的原文清单（不含派生出来的绑定数字令牌）。
+
+    绑定数字令牌（num）是**派生**的：正文里插一个字，它可能整段消失或出
+    现——那是合法编辑，不该拦。命令类（\\fact{} / \\cite{} / 公式 / 环境 /
+    注释……）是文件里既有的内容：客户端删了，服务端按原位补回，**绝不该
+    在一次保存里凭空消失**。
+    """
+    return [seg.text for seg in segments
+            if seg.kind == "prot" and seg.label != "num"]
+
+
+def _lost_surface(before: list[Segment], new_raw: str,
+                  bound_values) -> list[str]:
+    """重建之后丢了哪些命令类保护面（按出现次数比，顺序不算）。"""
+    need = Counter(_surface_of(before))
+    have = Counter(_surface_of(scan(new_raw, bound_values)))
+    lost: list[str] = []
+    for text, count in need.items():
+        gap = count - have.get(text, 0)
+        if gap > 0:
+            lost.extend([text] * gap)
+    return lost
+
+
+def _guard_surface_kept(before: list[Segment], new_raw: str,
+                         bound_values, code: str) -> None:
+    """保护面不许丢：重建后少了一枚命令类保护面 → 拒写。
+
+    这道是「保存不许改内容」的兜底：客户端那份 DOM 若是旧版本渲染的，占位
+    符序号会整体错位，重建出来的正文会把某枚 \\fact{}/\\cite{} 换成别的内容
+    （用户没打过的字被改掉）。宁可这一轮不落盘——落盘是不可逆的内容改动。
+    """
+    lost = _lost_surface(before, new_raw, bound_values)
+    if not lost:
+        return
+    raise ConfigError(
+        "这一段在别处被改动过（保护面会丢：%s），没有保存——"
+        "请重新载入这一段再改。" % "、".join(lost[:3]), code=code)
 
 
 def _anchor_spot(segments: list[Segment], seg: Segment,
@@ -491,7 +553,8 @@ def _anchor_spot(segments: list[Segment], seg: Segment,
 
 
 def _absorb_verbatim(text: str, regions: list[Segment],
-                     seen: list[int]) -> list[tuple[str, object]]:
+                     seen: list[int],
+                     sent: set[int] | None = None) -> list[tuple[str, object]]:
     """把散文里**原样抄回**的保护面认回来。
 
     客户端有时不用占位符，而是把原文的保护面（`\\fact{A1}`、`\\cite{k}`…）
@@ -501,6 +564,15 @@ def _absorb_verbatim(text: str, regions: list[Segment],
 
     返回 [("text", 片段) | ("prot", 保护面)]，按出现顺序。已被占位符认领过
     的保护面（`seen`）不再重复认领——多出来的那份照旧按「新写的」剥掉。
+
+    **绑定数字令牌（num）不按文字认领**：它是**派生**的保护面（紧邻 \fact{}
+    或与账本同值），字面在正文里本来就可能出现（正文写「还是 8 题」）。客户端
+    **还认领着**这枚令牌（占位符还在）时，正文里同名的那份数字是**另一处**出现
+    的同字面：按文字认领会把令牌搬到正文位置，芯片旁边的绑定数字整段消失——
+    用户没打过的字被改掉。派生令牌只认占位符。
+    客户端**没**用占位符认领它（把整份文件原样回传、或自己删了那枚芯片）时，
+    仍然按文字认回来——否则服务端会把这枚令牌当成「被删了」补回来，数字变成
+    两份。
     """
     out: list[tuple[str, object]] = []
     buffer: list[str] = []
@@ -510,6 +582,13 @@ def _absorb_verbatim(text: str, regions: list[Segment],
         best: Segment | None = None
         for seg in regions:
             if seg.index in seen or not seg.text:
+                continue
+            if seg.label == "num" and seg.index in (sent or set()):
+                # 绑定数字令牌是**派生**的保护面（紧邻 \fact{} 或与账本同值），
+                # 它的字面在正文里本来就可能出现（正文写「还是 8 题」）。
+                # 按文字认领会把别处那枚令牌搬到正文位置：芯片旁边的绑定数字
+                # 整段消失，用户没打过的字被改掉（实测：still gave 0/3\fact{E2}
+                # 变成 still gave \fact{E2}）。派生令牌只认占位符，不认文字。
                 continue
             if text.startswith(seg.text, index):
                 # 同一位置命中多个时取最长的（短的可能嵌在长的里面）。
@@ -774,7 +853,8 @@ def _writable_target(disk_root: Path, rel: str) -> Path:
 
 
 def save_abstract(disk_root: Path, client_text: str,
-                  expect_sha: str = "") -> dict:
+                  expect_sha: str = "",
+                  expect_tokens: str = "") -> dict:
     """把改后的摘要写回它所在的那个文件。
 
     **span 权威**：写回位置＝渲染闭包给出的那块（file/start/end），块外的东西
@@ -792,11 +872,14 @@ def save_abstract(disk_root: Path, client_text: str,
     block = abstract_block(disk_root)
     _check_expect_sha(block, expect_sha)
     prose = _abstract_prose(client_text)
-    segments = scan(block.raw, _bound_values(disk_root))
-    new_raw, warnings = _rebuild(segments, prose)
+    bound_values = _bound_values(disk_root)
+    segments = scan(block.raw, bound_values)
+    _check_token_count(segments, expect_tokens)
+    new_raw, warnings = _rebuild(segments, prose, code=TOKEN_MISMATCH_CODE)
     if not _balanced_ok(new_raw):
         raise ConfigError("摘要的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
+    _guard_surface_kept(segments, new_raw, bound_values, TOKEN_MISMATCH_CODE)
     rel = block.file
     path = _writable_target(disk_root, rel)
     try:
@@ -909,6 +992,36 @@ def _check_expect_sha(block: Block, expect_sha: str) -> None:
                           code=BLOCK_STALE_CODE)
 
 
+#: 保护面数量对不上（客户端那份 DOM 是**旧结构**渲染的）→ 拒写。
+#: 指纹闸管「哪一版内容」，这一道管「哪一版结构」。
+TOKEN_COUNT_MISMATCH_CODE = "EDIT_TOKEN_COUNT_MISMATCH"
+
+
+def _check_token_count(segments: list[Segment], expect_tokens: str,
+                       code: str = TOKEN_COUNT_MISMATCH_CODE) -> None:
+    """客户端渲染的保护面数量与服务端当前扫描对不上 → 拒写。
+
+    客户端报的是「这份 DOM 是哪一版**结构**渲染出来的」（几枚保护面芯片）。
+    账本变了（新事实的 value 出现在正文里 → 同一段原文多出绑定数字令牌），
+    同一段原文的保护面数量就变了，客户端那份 DOM 里的占位符序号**整体错位**：
+    按旧序号重建，用户没打过的字会被改掉。宁可这一轮不落盘。
+    """
+    raw = str(expect_tokens or "").strip()
+    if not raw:
+        return
+    try:
+        want = int(raw)
+    except ValueError:
+        return
+    mine = len([seg for seg in segments if seg.kind == "prot"])
+    if want == mine:
+        return
+    raise ConfigError(
+        "这一段在别处被改动过（保护面数量对不上：客户端 %d 枚、服务端 %d 枚），"
+        "没有保存——请重新载入这一段再改。" % (want, mine),
+        code=code)
+
+
 # ---------------------------------------------------------------- 块形状闸
 #
 # 挡的是一类真踩过的坑（2026-11-22 体检报告 P0-2 实测）：把**整个文件**当成
@@ -1006,7 +1119,8 @@ def _block_shape_guard(block: Block, text: str, disk_root: Path,
 
 
 def save_block(disk_root: Path, rel_file: str, block_id: str,
-               client_text: str, expect_sha: str = "") -> dict:
+               client_text: str, expect_sha: str = "",
+               expect_tokens: str = "") -> dict:
     """把改后的段落写回原文件。
 
     条目 43：`expect_sha` 是客户端所基于的该块 raw 指纹（sha256 前 16 位）；
@@ -1017,12 +1131,16 @@ def save_block(disk_root: Path, rel_file: str, block_id: str,
     _check_expect_sha(block, expect_sha)
     shape_warnings = _block_shape_guard(block, client_text, disk_root,
                                        code="EDIT_SHAPE_MISMATCH")
-    segments = scan(block.raw, _bound_values(disk_root))
-    new_raw, warnings = _rebuild(segments, client_text)
+    bound_values = _bound_values(disk_root)
+    segments = scan(block.raw, bound_values)
+    _check_token_count(segments, expect_tokens)
+    new_raw, warnings = _rebuild(segments, client_text,
+                                code=TOKEN_MISMATCH_CODE)
     warnings = list(warnings) + shape_warnings
     if not _balanced_ok(new_raw):
         raise ConfigError("这段的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
+    _guard_surface_kept(segments, new_raw, bound_values, TOKEN_MISMATCH_CODE)
     path = _safe_section_file(disk_root, rel_file)
     try:
         text = path.read_text(encoding="utf-8")
@@ -1057,12 +1175,16 @@ def propose_block_edit(disk_root: Path, rel_file: str, block_id: str,
                           code="PROPOSAL_TEXT_EMPTY")
     shape_warnings = _block_shape_guard(block, text, disk_root,
                                        code=SHAPE_MISMATCH_CODE)
-    segments = scan(block.raw, _bound_values(disk_root))
-    new_raw, warnings = _rebuild(segments, text)
+    bound_values = _bound_values(disk_root)
+    segments = scan(block.raw, bound_values)
+    new_raw, warnings = _rebuild(segments, text,
+                                code="PROPOSAL_TOKEN_MISMATCH")
     warnings = list(warnings) + shape_warnings
     if not _balanced_ok(new_raw):
         raise ConfigError("这段的花括号不配平（写下去会编不过），没有保存。",
                           code="EDIT_UNBALANCED")
+    _guard_surface_kept(segments, new_raw, bound_values,
+                         "PROPOSAL_TOKEN_MISMATCH")
     return {"kind": "block_edit",
             "file": rel_file,
             "block": block_id,

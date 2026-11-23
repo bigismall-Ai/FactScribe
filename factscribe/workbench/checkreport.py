@@ -382,6 +382,46 @@ def _chain_steps(summary: dict, lock: dict | None, facts_count: int) -> list:
     return steps
 
 
+def _evidence_lock_reading(disk: Path) -> dict:
+    """证据锁的只读读数（独立一张卡，与四步链分开）。
+
+    **单一来源**：这里调的就是 ``readings.evidence_gate``——MCP 工具
+    ``fs_get_evidence_status`` 调的也是它，两边读数不会互相矛盾。
+
+    **四步链的「出证」那一步一个字没动**：它仍是链的判定依据（闸门读数）；
+    本卡只把锁自己的读数摊开给人看（冻结与否／条目数／两个指纹／差异明细／
+    最后一条日志），是**参考读数**，不参与链的判定——两个来源不会打架。
+
+    读不动就结构化报错，绝不掀翻整页。
+    """
+    from .readings import evidence_gate
+
+    try:
+        gate = evidence_gate(Path(disk))
+    except Exception as exc:  # noqa: BLE001 - 读不动只影响这张卡
+        return {"ok": False, "code": "READ_FAILED",
+                "error": "读证据锁失败：%s" % exc}
+    if not gate.get("ok"):
+        return {key: gate.get(key) for key in
+                ("ok", "code", "error")}
+    return {
+        "ok": True,
+        "defined": bool(gate.get("defined")),
+        "declared_sections": int(gate.get("declared_sections") or 0),
+        "frozen": bool(gate.get("frozen")),
+        "entries": int(gate.get("entries") or 0),
+        "sha256": str(gate.get("sha256") or ""),
+        "sha256_short": str(gate.get("sha256_short") or ""),
+        "current_sha256": str(gate.get("current_sha256") or ""),
+        "current_sha256_short": str(gate.get("current_sha256_short") or ""),
+        # mismatch＝None 表示「冻结件与当前清单一致」；不一致时带明细。
+        "mismatch": gate.get("mismatch"),
+        "diff": gate.get("diff") or {},
+        "unfrozen": gate.get("unfrozen"),
+        "last_log": gate.get("last_log") or {},
+    }
+
+
 def report_payload(disk: Path, sibling_disk: Path | None = None,
                    lang: str = "zh") -> dict:
     """检查报告：体检摘要 ＋ 发现列表 ＋ 四步链 ＋ 附加只读闸。
@@ -446,6 +486,9 @@ def report_payload(disk: Path, sibling_disk: Path | None = None,
         "i18n": _i18n_subset(findings, gates["style"].get("findings") or []),
         "chain": _chain_steps(summary, lock, len(facts)),
         "gates": gates,
+        # 证据锁：**独立**一张只读卡（参考读数，不参与四步链判定；
+        # 四步链的「出证」读数与语义一个字没动）。
+        "evidence_lock": _evidence_lock_reading(disk),
         "evidence": {"frozen": bool(lock),
                      "entries": int((lock or {}).get("entries") or 0),
                      "sha256": (lock or {}).get("sha256", ""),

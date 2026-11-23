@@ -76,6 +76,16 @@ const I18N = {
     'rp.mirrorErr': '对账读不到：{e}', 'rp.mirrorNone': '没有对账读数。',
     'rp.mirrorDriftOne': '漂移', 'rp.mirrorA': '甲', 'rp.mirrorB': '乙',
     'rp.gateNote': '只读读数：不改稿、不改盘。',
+    /* 证据锁卡（独立只读卡；四步链「出证」的读数与语义不动） */
+    'rp.evidenceLock': '证据锁',
+    'rp.evLockFrozen': '已冻结', 'rp.evLockNotFrozen': '未冻结',
+    'rp.evLockEntries': '冻结条目', 'rp.evLockSha': '冻结件指纹',
+    'rp.evLockCurrent': '当前清单指纹', 'rp.evLockMismatch': '冻结件与当前清单不一致',
+    'rp.evLockSame': '冻结件与当前清单一致',
+    'rp.evLockLastLog': '最后一条日志',
+    'rp.evLockNone': '没有证据锁读数。',
+    'rp.evLockErr': '证据锁读不到：{e}',
+    'rp.evLockNote': '只读读数：参考用。四步链「出证」那一步的判定以闸门为准。',
     'rp.sevRed': '红', 'rp.sevYellow': '黄', 'rp.sevInfo': '提示',
     'mv.ledger': '账本表', 'mv.scan': '正文扫描',
     'mv.evidence': '文献与证据链', 'mv.export': '导出与命令',
@@ -200,6 +210,13 @@ const I18N = {
     'act.pdfPages': '{n} 页 · {b} 字节', 'act.pdfPreview': '预览',
     'act.pdfDownload': '下载 PDF', 'act.pdfPath': '产物路径',
     'act.bundleOk': '投稿包已导出', 'act.bundleFail': '清单门没过',
+    'act.bundlePreview': '导出前预览',
+    'act.bundlePreviewFiles': '将要收 {n} 件',
+    'act.bundlePreviewGo': '继续导出',
+    'act.bundlePreviewSkip': '跳过预览，直接导出',
+    'act.bundlePreviewNote': '预览只是给你看的：判定权仍在清单门，门不过照样不出包。',
+    'act.bundlePreviewGateFail': '清单门不过：这次不会出包。',
+    'act.bundlePreviewNone': '没有可预览的件。',
     'act.bundlePath': '包目录', 'act.bundleFiles': '包内 {n} 件',
     'act.bundleGate': '清单门：{p} 过 / {f} 不过 / {w} 豁免',
     'act.openOk': '已在访达里打开', 'act.openUnsupported': '本机不是 macOS：路径如下。',
@@ -437,6 +454,16 @@ const I18N = {
     'rp.mirrorErr': 'Comparison unavailable: {e}', 'rp.mirrorNone': 'No comparison reading.',
     'rp.mirrorDriftOne': 'drift', 'rp.mirrorA': 'A', 'rp.mirrorB': 'B',
     'rp.gateNote': 'Read-only readings: nothing is rewritten.',
+    /* Evidence lock card (independent read-only card; the chain step is untouched) */
+    'rp.evidenceLock': 'Evidence lock',
+    'rp.evLockFrozen': 'Frozen', 'rp.evLockNotFrozen': 'Not frozen',
+    'rp.evLockEntries': 'Frozen entries', 'rp.evLockSha': 'Lock fingerprint',
+    'rp.evLockCurrent': 'Current list fingerprint', 'rp.evLockMismatch': 'Lock and current list differ',
+    'rp.evLockSame': 'Lock and current list agree',
+    'rp.evLockLastLog': 'Last log entry',
+    'rp.evLockNone': 'No evidence lock reading.',
+    'rp.evLockErr': 'Evidence lock unavailable: {e}',
+    'rp.evLockNote': 'Read-only reference reading; the chain step "Certify" stays authoritative.',
     'rp.sevRed': 'red', 'rp.sevYellow': 'yellow', 'rp.sevInfo': 'info',
     'mv.ledger': 'Ledger', 'mv.scan': 'Body scan',
     'mv.evidence': 'Citations & evidence', 'mv.export': 'Export & commands',
@@ -567,6 +594,13 @@ const I18N = {
     'act.pdfDownload': 'Download PDF', 'act.pdfPath': 'Output path',
     'act.bundleOk': 'Submission bundle exported',
     'act.bundleFail': 'The manifest gate did not pass',
+    'act.bundlePreview': 'Preview before export',
+    'act.bundlePreviewFiles': '{n} files to be collected',
+    'act.bundlePreviewGo': 'Continue exporting',
+    'act.bundlePreviewSkip': 'Skip preview, export now',
+    'act.bundlePreviewNote': 'The preview is only for you to look at: the manifest gate decides, and nothing is exported when it does not pass.',
+    'act.bundlePreviewGateFail': 'The manifest gate does not pass: nothing will be exported.',
+    'act.bundlePreviewNone': 'Nothing to preview.',
     'act.bundlePath': 'Bundle folder', 'act.bundleFiles': '{n} files in the bundle',
     'act.bundleGate': 'Manifest gate: {p} passed / {f} failed / {w} waived',
     'act.openOk': 'Opened in Finder',
@@ -761,6 +795,7 @@ const state = {
   nav: { pane: 'toc' },   // 段五：导航面板（目录/智能助手/更多 三面互斥）
   blocksMeta: {},          // 条目 37：块身份（文件＋章节）——原地替换后重新绑定用
   blockSha: {},           // 条目 43：块原文短指纹（保存闸 expect_sha 用）
+  blockTokens: {},         // 保护面芯片数（保存闸 expect_tokens 用：这份 DOM 是哪一版**结构**渲染出来的）
   filter: '',
   assembly: [],       // main.tex 的装配清单
   form: null,         // 新建/编辑项目表单 {mode, project, disk}
@@ -1070,6 +1105,7 @@ function renderBlocks() {
         body.setAttribute('contenteditable', 'true');
         body.setAttribute('spellcheck', 'false');
         if (block.sha) state.blockSha[block.id] = block.sha;
+        state.blockTokens[block.id] = countProtTokens(block.html);
         const hint = document.createElement('div');
         hint.className = 'ai-draft-hint';
         hint.textContent = t('draft.hint');
@@ -1103,6 +1139,7 @@ function renderBlocks() {
         node.setAttribute('contenteditable', 'true');
         node.setAttribute('spellcheck', 'false');
         if (block.sha) state.blockSha[block.id] = block.sha;
+        state.blockTokens[block.id] = countProtTokens(block.html);
         // 条目 37：块身份（文件＋章节）留一份，原地替换后据此重新绑定。
         state.blocksMeta[block.id] = { file: block.file || '', section: curSec };
         bindParaTools(node, (node.textContent || '').replace(/\s+/g, ' ').trim(), curSec, block.id, block.file || '');
@@ -1264,6 +1301,7 @@ function renderAbstract() {
   body.setAttribute('contenteditable', 'true');
   body.setAttribute('spellcheck', 'false');
   if (model.sha) state.blockSha[ABSTRACT_BLOCK] = model.sha;
+  state.blockTokens[ABSTRACT_BLOCK] = countProtTokens(model.html);
   bindFactChips(body);
   bindChipCaret(body);
 }
@@ -1413,6 +1451,7 @@ async function loadDisk() {
   }
   // 条目 43：换一篇稿子，块指纹跟着换（保存闸的 expect_sha 按当前盘算）。
   state.blockSha = {};
+  state.blockTokens = {};
   try {
     state.meta = await getJSON(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/meta`);
   } catch (err) {
@@ -1718,6 +1757,8 @@ function renderReport() {
 
   /* —— 附加只读闸卡（文风闸 / 双语对账）—— */
   renderGateCards();
+  /* —— 证据锁卡（独立只读卡）—— */
+  renderEvidenceLockCard();
 }
 
 
@@ -1748,6 +1789,55 @@ function mirrorDriftHtml(d) {
     <div class="fp-msg">${esc(d.target || '')} · ${esc(d.id || '')}${field}</div>
     <div class="fp-loc">${esc(t('rp.mirrorA'))}: ${esc(aVal)} ｜ ${esc(t('rp.mirrorB'))}: ${esc(bVal)}</div>
   </div>`;
+}
+
+/* —— 证据锁卡（独立只读卡）——
+   读数随检查报告一起来（报告载荷里的 evidence_lock），页面**不多调一次**
+   端点；数据与 MCP 的 fs_get_evidence_status 同源（引擎那边同一个读数函数）。
+   四步链「出证」那一步的读数与判定一个字没动——这里是参考读数，不是判定。 */
+function reportEvidenceLock() {
+  const report = state.report;
+  if (!report || report.ok === false) return null;
+  const lock = report.evidence_lock;
+  return (lock && typeof lock === 'object') ? lock : null;
+}
+
+function renderEvidenceLockCard() {
+  const lock = reportEvidenceLock();
+  const idle = reportIdle();
+  const loading = state.reportLoading;
+  const badge = $('#badgeEvidence');
+  const body = $('#bodyEvidence');
+  if (badge) {
+    if (!lock) { badge.textContent = '—'; badge.className = 'fold-badge'; }
+    else if (lock.ok === false) { badge.textContent = '—'; badge.className = 'fold-badge warn'; }
+    else if (lock.frozen) { badge.textContent = t('rp.evLockFrozen'); badge.className = 'fold-badge ok'; }
+    else { badge.textContent = t('rp.evLockNotFrozen'); badge.className = 'fold-badge warn'; }
+  }
+  if (!body) return;
+  if (idle) { body.innerHTML = `<div class="ff-empty">${esc(t('rp.idle'))}</div>`; return; }
+  if (loading) { body.innerHTML = `<div class="ff-empty">${esc(t('rp.loading'))}</div>`; return; }
+  if (!lock) { body.innerHTML = `<div class="ff-empty">${esc(t('rp.evLockNone'))}</div>`; return; }
+  if (lock.ok === false) {
+    body.innerHTML = `<div class="ff-empty">${esc(t('rp.evLockErr', { e: lock.error || '' }))}</div>`;
+    return;
+  }
+  const rows = [];
+  rows.push(kvRow(t('rp.evLockEntries'), String(lock.entries || 0)));
+  rows.push(kvRow(t('rp.evLockSha'), fpShort(lock.sha256_short, lock.sha256),
+                 lock.sha256 || '', true));
+  rows.push(kvRow(t('rp.evLockCurrent'), fpShort(lock.current_sha256_short, lock.current_sha256),
+                 lock.current_sha256 || '', true));
+  const mismatch = lock.mismatch;
+  rows.push(kvRow(mismatch ? t('rp.evLockMismatch') : t('rp.evLockSame'),
+                 mismatch ? t('rp.evLockMismatch') : (lock.frozen ? t('rp.evLockFrozen') : t('rp.evLockNotFrozen'))));
+  const last = lock.last_log || {};
+  if (last && last.action) {
+    const at = last.at ? (' · ' + last.at) : '';
+    rows.push(kvRow(t('rp.evLockLastLog'), String(last.action) + at + (last.reason ? (' · ' + last.reason) : '')));
+  }
+  body.innerHTML = `<div class="kv">${rows.join('')}</div>`
+    + `<div class="st-sub">${esc(t('rp.evLockNote'))}</div>`;
 }
 
 function renderGateCards() {
@@ -2081,7 +2171,7 @@ function flushAfterComposition(blockId) {
   const pending = imeState.pendingHtml;
   if (pending && (!blockId || pending.blockId === blockId)) {
     imeState.pendingHtml = null;
-    applyBlockHtml(pending.blockId, pending.html);
+    applyBlockHtml(pending.blockId, pending.html, pending.sha);
   }
   if (imeState.pendingBadge) {
     const bid = imeState.pendingBadge;
@@ -2118,6 +2208,16 @@ function collectPlain(host) {
   return out;
 }
 
+/* 渲染 html 里的保护面芯片数＝这份 DOM 是哪一版**结构**渲染出来的。
+   块指纹（sha）管「哪一版内容」，芯片数管「哪一版结构」：账本变了（新事实的
+   value 出现在正文里 → 同一段原文多出绑定数字令牌），同一段原文的保护面数量
+   会变，占位符序号整体错位。客户端把它跟着一块儿报给服务端，对不上就拒写。 */
+function countProtTokens(html) {
+  if (!html) return 0;
+  const hits = String(html).match(/data-token="/g);
+  return hits ? hits.length : 0;
+}
+
 /* 块的 DOM 节点：优先按 id，再按块身份（data-block-id）。 */
 function blockNodeById(blockId) {
   if (!blockId) return null;
@@ -2138,13 +2238,13 @@ function blockContentHost(node) {
 
 /* 条目 43：把一个块的新鲜 html 原地换进内容宿主（外壳、id、身份属性不动，
    可编辑性跟内容一起恢复；芯片绑定重新挂）。 */
-function applyBlockHtml(blockId, html) {
+function applyBlockHtml(blockId, html, sha) {
   if (!html) return false;
   const node = blockNodeById(blockId);
   if (!node) return false;
   // 条目 44：组合进行中不动这一块——换了内容，候选里的拼音就断了。
   if (imeState.active && (!imeState.blockId || imeState.blockId === blockId)) {
-    imeState.pendingHtml = { blockId: blockId, html: html };
+    imeState.pendingHtml = { blockId: blockId, html: html, sha: sha || '' };
     return false;
   }
   const host = blockContentHost(node);
@@ -2163,6 +2263,10 @@ function applyBlockHtml(blockId, html) {
   bindFactChips(host);
   bindChipCaret(host);
   restoreCaretOffset(host, caret);
+  // 块指纹＝「这份 DOM 是哪一版文件渲染出来的」。内容换成了服务端的新文，
+  // 指纹这时才推进——推进了就等于告诉服务端「我这份 DOM 对得上当前文件」。
+  if (sha) state.blockSha[blockId] = sha;
+  state.blockTokens[blockId] = countProtTokens(html);
   return true;
 }
 
@@ -2192,6 +2296,11 @@ async function saveBlockNode(node) {
   const body = { file: file, block: blockId, text: sent };
   const expect = state.blockSha[blockId] || '';
   if (expect) body.expect_sha = expect;
+  // 结构闸：这份 DOM 是哪一版**结构**渲染出来的（几枚保护面芯片）。
+  // 账本变了（新事实的 value 出现在正文里）→ 同一段原文的保护面数量变、
+  // 占位符序号整体错位 → 服务端按旧序号重建就会改掉用户没打过的字。
+  const expectTokens = state.blockTokens[blockId];
+  if (expectTokens) body.expect_tokens = String(expectTokens);
   node.dataset.saving = '1';
   try {
     const res = await fetch(`/api/disk/${encodeURIComponent(project.id)}/${encodeURIComponent(disk.id)}/edit`, {
@@ -2213,18 +2322,31 @@ async function saveBlockNode(node) {
     }
     (data.warnings || []).forEach((w) => toast(w));
     toast(t('edit.saved'));
-    if (data.sha) state.blockSha[blockId] = data.sha;
     // 存的是刚才那份正文：DOM 里若还是同一份，就撤掉「脏」标记
     //（用户在这轮保存期间又打了字 → 留着标记，下一轮失焦继续存）。
-    if (collectPlain(node) === sent) delete node.dataset.dirty;
+    const currentText = collectPlain(node);
+    if (currentText === sent) delete node.dataset.dirty;
     // 自己先换成服务端重建的新文（被删的芯片按原文补回来了，DOM 要对齐）；
     // 用户在这轮保存期间又点回来打字 → 先不动，记 stale，等下一轮失焦保存。
+    //
+    // 块指纹（state.blockSha）只在**内容真的换成服务端新文**时才推进：
+    // 指纹＝「这份 DOM 是哪一版文件渲染出来的」。用户还在这一块里打字时，
+    // 整块重绘会吞掉新字，DOM 里留着的是**旧版**的保护面序号；这时若照样
+    // 推进指纹，等于告诉服务端「我这份 DOM 对得上当前文件」，下一轮保存就
+    // 会带着过期序号混过指纹闸，服务端按旧序号重建——用户没打过的字就此
+    // 被改掉（实测：正文里的 0/3 被换成 \fact{E5}，凭空多出 0/2）。
+    // 不推进 → 下一轮保存撞上指纹闸（409 BLOCK_STALE）→ 原地重载新文，
+    // 不改内容。这正是这段代码注释里写明的安全网。
     const selfNode = blockNodeById(blockId);
     const activeNow = document.activeElement;
-    if (selfNode && activeNow && selfNode.contains(activeNow)) {
+    const focused = !!(selfNode && activeNow && selfNode.contains(activeNow));
+    if (focused && currentText !== sent && !imeState.active) {
       selfNode.dataset.stale = '1';
     } else {
-      applyBlockHtml(blockId, (data.blocks && data.blocks[blockId]) || data.html);
+      // 组合进行中：重绘会打断候选框里的拼音，applyBlockHtml 会把它延后到
+      // 组合结束；指纹跟着这次延后的重绘一起推进（内容换了，指纹才换）。
+      applyBlockHtml(blockId, (data.blocks && data.blocks[blockId]) || data.html,
+                     data.sha);
     }
     // 条目 43：同文件其他块的新鲜 html 原地换；正被聚焦的块跳过，记 stale，
     // 它失焦保存若遇 BLOCK_STALE 走 reloadBlocks 对齐。
@@ -2263,11 +2385,17 @@ async function reloadBlocks() {
   const active = document.activeElement;
   (data.blocks || []).forEach((block) => {
     if (!block.id) return;
-    if (block.sha) state.blockSha[block.id] = block.sha;
-    if (!block.html) return;
     const live = blockNodeById(block.id);
-    if (live && active && live.contains(active)) return;   // 聚焦中的块不动
-    applyBlockHtml(block.id, block.html);
+    if (live && active && live.contains(active)) {
+      // 聚焦中的块不重绘 → 它那份 DOM 还是旧版本渲染的，块指纹**不能**推进
+      // （推进了就等于让过期的保护面序号混过指纹闸，服务端按旧序号重建，
+      // 用户没打过的字会被改掉）。留旧指纹：下一轮失焦保存撞指纹闸
+      // （409 BLOCK_STALE）→ 原地重载对齐。
+      live.dataset.stale = '1';
+      return;
+    }
+    if (block.html) applyBlockHtml(block.id, block.html, block.sha);
+    else if (block.sha) state.blockSha[block.id] = block.sha;
   });
   // 摘要走模型端点对齐（html＋sha 同源）；正在打字就不动它。
   const abBody = document.getElementById('coverAbstractBody');
@@ -4484,7 +4612,68 @@ async function runPdfAction() {
         { url: url, label: t('act.pdfDownload') });
 }
 
+/* 清单门读数（预览与导出结果共用同一份渲染）。 */
+function bundleGateRows(gate) {
+  return (gate || []).map((item) => {
+    const status = item.status || '';
+    return `<div class="act-kv"><span>${esc(item.code || '')} ${esc(item.name || '')}</span>` +
+      `<span class="act-gate ${esc(status)}">${esc(status)}</span></div>`;
+  }).join('');
+}
+
+/* 导出前的**可选**预览一步（只读）：将要收什么、清单门过不过。
+   返回 Promise<boolean>：true＝继续导出，false＝取消。
+   预览读不到／用户点跳过 → 都走原来的导出流程（清单门判定一字没改）。 */
+function openBundlePreview(data) {
+  return new Promise((resolve) => {
+    const files = data.files || [];
+    const shown = files.slice(0, 40);
+    const rows = shown.map((f) => `<div class="act-kv"><span>${esc(f.path || '')}</span>` +
+      `<span class="act-gate">${esc(fpShort('', f.sha256))} · ${esc(String(f.bytes || 0))} B</span></div>`).join('');
+    const gateRows = bundleGateRows(data.gate);
+    const fail = Number(data.failed || 0) > 0;
+    const html = (fail ? `<div class="act-fail">${esc(t('act.bundlePreviewGateFail'))}</div>` : '') +
+      `<div class="act-kv"><span>${esc(t('act.bundlePreviewFiles', { n: Number(data.file_count || 0) }))}</span></div>` +
+      `<div class="act-kv"><span>${esc(t('act.bundleGate', { p: Number(data.passed || 0), f: Number(data.failed || 0), w: Number(data.waived || 0) }))}</span></div>` +
+      (shown.length ? rows : `<div class="ff-empty">${esc(t('act.bundlePreviewNone'))}</div>`) +
+      gateRows +
+      `<div class="st-sub">${esc(t('act.bundlePreviewNote'))}</div>` +
+      `<div class="modal-acts">` +
+      `<button type="button" class="btn" id="bundlePreviewGo">${esc(t('act.bundlePreviewGo'))}</button>` +
+      `<button type="button" class="btn-ghost" id="bundlePreviewSkip">${esc(t('act.bundlePreviewSkip'))}</button>` +
+      `</div>`;
+    openActionModal(t('act.bundlePreview'), html);
+    const go = $('#bundlePreviewGo');
+    const skip = $('#bundlePreviewSkip');
+    const done = (answer) => {
+      const modal = $('#modalAction');
+      if (modal) modal.hidden = true;
+      if (go) go.onclick = null;
+      if (skip) skip.onclick = null;
+      resolve(answer);
+    };
+    if (go) go.onclick = () => done(true);
+    if (skip) skip.onclick = () => done(true);
+    const close = $('#actClose');
+    if (close) close.onclick = () => done(false);
+  });
+}
+
 async function runBundleAction() {
+  // ① 可选的预览一步（只读）。预览读不到就当没有这一步——原流程照走。
+  try {
+    const url = diskApiPath('bundle-preview');
+    if (url) {
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const data = await res.json();
+      if (data && data.ok && Array.isArray(data.files)) {
+        const go = await openBundlePreview(data);
+        if (!go) return;
+      }
+    }
+  } catch (err) {
+    /* 预览是可选的：读不到就直接走原流程。 */
+  }
   openActionModal(t('act.bundleTitle'), `<div class="ff-empty">${esc(t('rp.rerunning'))}</div>`);
   let data = null;
   try {
@@ -4494,11 +4683,7 @@ async function runBundleAction() {
       `<div class="rp-card-err">${esc((err && err.message) || String(err))}</div>`);
     return;
   }
-  const gateRows = (data.gate || []).map((item) => {
-    const status = item.status || '';
-    return `<div class="act-kv"><span>${esc(item.code || '')} ${esc(item.name || '')}</span>` +
-      `<span class="act-gate ${esc(status)}">${esc(status)}</span></div>`;
-  }).join('');
+  const gateRows = bundleGateRows(data.gate);
   if (!data.ok) {
     openActionModal(t('act.bundleTitle'),
       `<div class="act-fail">${esc(t('act.bundleFail'))}</div>` +
@@ -4908,6 +5093,7 @@ async function applyProposalResult(response) {
   // 锚段上下文（跟 AI 面板里的 quote 同义：被引用的那一段）。
   const quote = { id: String(proposal.block || ''), file: String(applied.file || proposal.file || '') };
   if (applied.sha && data.block) state.blockSha[data.block] = applied.sha;
+  if (data.block) state.blockTokens[data.block] = countProtTokens(data.html);
   if (kind === 'ai_draft' && data.block) {
     // 新草稿块：正文里还没有这一块，插到锚段之后。
     if (quote.id && data.html && insertBlockAfter(data.after, data.block, data.html, quote.file)) {

@@ -78,13 +78,13 @@ class LedgerTargetTests(unittest.TestCase):
 
     def test_default_behaviour_is_unchanged(self):
         """不指定 → 仍走默认那本账（与从前一字不变）。"""
-        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                                  source="results/r.md")
         self.assertEqual(prepared["ledger"], "facts/01-core.toml")
         self.assertFalse(prepared["ledger_explicit"])
 
     def test_existing_ledger_is_accepted(self):
-        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                                  source="results/r.md",
                                  ledger="facts/b_pilot.toml")
         self.assertEqual(prepared["ledger"], "facts/b_pilot.toml")
@@ -92,7 +92,7 @@ class LedgerTargetTests(unittest.TestCase):
 
     def test_new_ledger_follows_the_disk_style(self):
         """新建账本文件：沿用本盘命名风格，且前缀没被占用。"""
-        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+        prepared = prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                                  source="results/r.md",
                                  ledger="facts/c_third.toml")
         self.assertEqual(prepared["ledger"], "facts/c_third.toml")
@@ -100,21 +100,21 @@ class LedgerTargetTests(unittest.TestCase):
     def test_style_mismatch_is_refused(self):
         """01-core 这类与本盘不符的名字要被拒。"""
         with self.assertRaises(ConfigError) as ctx:
-            prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+            prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                          source="results/r.md", ledger="facts/01-core.toml")
         self.assertEqual(getattr(ctx.exception, "code", ""),
                          "LEDGER_STYLE_MISMATCH")
 
     def test_taken_prefix_is_refused(self):
         with self.assertRaises(ConfigError) as ctx:
-            prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+            prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                          source="results/r.md", ledger="facts/a_other.toml")
         self.assertEqual(getattr(ctx.exception, "code", ""),
                          "LEDGER_PREFIX_TAKEN")
 
     def test_outside_the_glob_is_refused(self):
         with self.assertRaises(ConfigError) as ctx:
-            prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+            prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                          source="results/r.md", ledger="other/x.toml")
         self.assertEqual(getattr(ctx.exception, "code", ""),
                          "LEDGER_OUTSIDE_GLOB")
@@ -122,7 +122,7 @@ class LedgerTargetTests(unittest.TestCase):
     def test_subdirectory_is_refused(self):
         """写到 glob 目录的子目录里就永远读不到——必须直接子文件。"""
         with self.assertRaises(ConfigError) as ctx:
-            prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+            prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                          source="results/r.md", ledger="facts/sub/x.toml")
         self.assertEqual(getattr(ctx.exception, "code", ""),
                          "LEDGER_NOT_IN_GLOB_DIR")
@@ -130,7 +130,7 @@ class LedgerTargetTests(unittest.TestCase):
     def test_absolute_and_parent_paths_are_refused(self):
         for ledger in ("/tmp/evil.toml", "../evil.toml"):
             with self.assertRaises(ConfigError) as ctx:
-                prepare_fact(self.disk, fid="Z1", claim="c", value="1",
+                prepare_fact(self.disk, fid="Z1", claim="c", value="10/16",
                              source="results/r.md", ledger=ledger)
             self.assertEqual(getattr(ctx.exception, "code", ""),
                              "LEDGER_PATH_INVALID")

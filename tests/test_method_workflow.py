@@ -23,7 +23,8 @@ class DraftFactsTest(unittest.TestCase):
         r = run(["-m", "factscribe", "init", str(self.tmp)])
         self.assertEqual(r.returncode, 0, r.stderr)
         (self.tmp / "results" / "swb16.md").write_text(
-            "| arm | resolved | total |\n| open | 10 | 16 |\n", encoding="utf-8")
+            "| arm | resolved | total |\n| open | 10 | 16 |\n"
+            "| closed | 8 | 16 |\n", encoding="utf-8")
         self.tsv = self.tmp / "claims.tsv"
 
     def write_tsv(self, rows: str):

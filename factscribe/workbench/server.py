@@ -57,7 +57,9 @@ from .projects import MAX_DEPTH, disk_meta, disk_sections, load_projects
 from .proposal import (ProposalError, create_proposal, list_proposals,
                         read_proposal, resolve_proposal)
 from .proposals import display_catalog
-from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE, abstract_block,
+from .write import (ABSTRACT_BLOCK_ID, BLOCK_STALE_CODE,
+                    TOKEN_MISMATCH_CODE, TOKEN_COUNT_MISMATCH_CODE,
+                    abstract_block,
                     apply_proposal, create_paper_project, create_section,
                     delete_section, editable_model, find_block, move_section,
                     save_abstract, save_block, touch_opened,
@@ -348,6 +350,13 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
                 data = fact_form(disk_path)
                 data.update({"project": project_id, "disk": disk_id})
                 return self._json(data)
+            if what == "bundle-preview":
+                # 投稿包导出前的**可选预览**（只读）：将要收什么、清单门过不过。
+                # 判定权仍在清单门；预览一个字节都不写。
+                from .actions import preview_bundle
+                data = preview_bundle(disk_path)
+                data.update({"project": project_id, "disk": disk_id})
+                return self._json(data)
             if what == "machine":
                 from .checkreport import machine_payload
                 data = machine_payload(disk_path)
@@ -489,20 +498,26 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             text = body.get("text")
             # 条目 43：保存闸——客户端上报它所基于的块原文指纹，对不上拒写。
             expect = str(body.get("expect_sha") or "")
+            # 结构闸：客户端那份 DOM 是哪一版**结构**渲染出来的（几枚保护面）。
+            expect_tokens = str(body.get("expect_tokens") or "")
             if not block_id or not isinstance(text, str):
                 return self._error(400, "block / text 都要给")
             if block_id == ABSTRACT_BLOCK_ID:
                 # 封面摘要：根文件 abstract 环境（id 固定，不带 file）。
                 try:
-                    result = save_abstract(disk, text, expect_sha=expect)
+                    result = save_abstract(disk, text, expect_sha=expect,
+                                        expect_tokens=expect_tokens)
                 except ConfigError as exc:
-                    if getattr(exc, "code", "") == BLOCK_STALE_CODE:
+                    code = getattr(exc, "code", "")
+                    if code in (BLOCK_STALE_CODE, TOKEN_MISMATCH_CODE,
+                                TOKEN_COUNT_MISMATCH_CODE):
                         stale_file = ""
                         try:
                             stale_file = abstract_block(disk).file
                         except ConfigError:
                             stale_file = ""
-                        return self._stale_response(disk, stale_file, block_id)
+                        return self._stale_response(disk, stale_file, block_id,
+                                                   code=code)
                     raise
                 # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
                 result["block"] = block_id
@@ -514,10 +529,14 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
             if not rel:
                 return self._error(400, "file / block / text 都要给")
             try:
-                result = save_block(disk, rel, block_id, text, expect_sha=expect)
+                result = save_block(disk, rel, block_id, text,
+                                     expect_sha=expect,
+                                     expect_tokens=expect_tokens)
             except ConfigError as exc:
-                if getattr(exc, "code", "") == BLOCK_STALE_CODE:
-                    return self._stale_response(disk, rel, block_id)
+                code = getattr(exc, "code", "")
+                if code in (BLOCK_STALE_CODE, TOKEN_MISMATCH_CODE,
+                            TOKEN_COUNT_MISMATCH_CODE):
+                    return self._stale_response(disk, rel, block_id, code=code)
                 raise
             # 条目 36：写回之后对这一块做轻渲染，前端据此原地更新。
             result["block"] = block_id
@@ -674,16 +693,20 @@ class WorkbenchHandler(BaseHTTPRequestHandler):
         return out
 
     def _stale_response(self, disk: Path, rel: str, block_id: str,
-                        message: str = "") -> None:
+                        message: str = "",
+                        code: str = BLOCK_STALE_CODE) -> None:
         """条目 43：保存闸拒写（HTTP 409 BLOCK_STALE）。
 
         附同文件全部块的新鲜渲染，前端原地重载（未保存的字会丢，提示说清）。
         账与证据面的提议单（正文文件为空）不附块——它们不碰正文。
+
+        保护面序号对不上（EDIT_TOKEN_MISMATCH）也走这条：客户端那份 DOM 是
+        旧版本渲染的，重建出来会改掉用户没打过的字——宁可拒写并让前端重载。
         """
         return self._json({
             "ok": False,
             "error": message or "这段在别处已被改动，请重新编辑。",
-            "code": BLOCK_STALE_CODE,
+            "code": code,
             "block": block_id,
             "blocks": self._fresh_blocks(disk, rel) if rel else {},
         }, code=409)

@@ -762,6 +762,11 @@ def prepare_fact(root: Path, *, fid: str, claim: str, value: str,
             "--derived-from 给了就必须同时给 --expr：推算式是机器复核推算值的唯一依据")
 
     rel, full = _check_source(root, cfg, source)
+    # value 硬闸（直写通道也走）：这条数字必须能在它所指的产物原文里命中——
+    # 与「提议-确认」通道**同一套**口径（factscribe/valuecheck.py，同一个
+    # check_value_in_source、同一条错误文案与错因码）。闸门不许有后门：
+    # 直写通道以前能绕过它把没出处的数字写进账，现在堵上。
+    check_value_in_source(root, cfg, rel, full, value, locator=locator)
     sha = sha256_file(full)
 
     block = render_fact_block(

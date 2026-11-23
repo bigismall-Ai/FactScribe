@@ -140,7 +140,7 @@ class McpWritableTest(unittest.TestCase):
             encoding="utf-8"), text)
 
         result = call(self.proc, "factscribe_add_fact", {
-            "id": "A9", "claim": "测试事实", "value": "42",
+            "id": "A9", "claim": "测试事实", "value": "10",
             "source": "results/swb16.md", "locator": "§二"})
         self.assertFalse(result["result"]["isError"])
         body = json.loads(result["result"]["content"][0]["text"])

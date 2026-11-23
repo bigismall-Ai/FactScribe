@@ -83,6 +83,53 @@ def render_pdf(disk: str | Path, engine: str = "tectonic") -> dict:
     return result
 
 
+def preview_bundle(disk: str | Path) -> dict:
+    """投稿包的**导出前预览**（只读，可选的一步）。
+
+    口径：与真导出**同一条路**（``run_bundle(preview=True)``）——闭包、清单门、
+    将要收的每一件（路径/指纹/大小）都照真导出口径算，**一个字节都不写**。
+
+    清单门不过就说不过（``would_export=False``）——预览只是给人看，判定权
+    仍在清单门手上，导出口径一个字没改。
+    """
+    from ..bundle import run_bundle
+
+    disk = Path(disk)
+    cfg = _cfg(disk)
+    started = time.time()
+    try:
+        result = run_bundle(cfg, preview=True)
+    except ConfigError as exc:
+        return {"ok": False, "action": "bundle_preview", "disk": str(disk),
+                "code": "BUNDLE_PREVIEW_FAILED", "error": str(exc),
+                "duration_ms": int((time.time() - started) * 1000)}
+    gate = result.get("gate") or []
+    failed = int(result.get("failed") or 0)
+    payload = {
+        "ok": True,
+        "action": "bundle_preview",
+        "preview": True,
+        "disk": str(disk),
+        # 门过不过：与真导出同一套判定（failed>0 就是不过）。
+        "would_export": bool(result.get("would_export")),
+        "bundle_dir": result.get("bundle_dir"),
+        "files": result.get("files") or [],
+        "file_count": len(result.get("files") or []),
+        "listed_only": result.get("listed_only") or [],
+        "excluded": result.get("excluded") or [],
+        "manifest_lines": int(result.get("manifest_lines") or 0),
+        "gate": gate,
+        "failed": failed,
+        "passed": int(result.get("passed") or 0),
+        "waived": int(result.get("waived") or 0),
+        "audit_exit": result.get("audit_exit"),
+        "exit_code": int(result.get("exit_code") or 0),
+        "failure_reason": result.get("failure_reason", ""),
+        "duration_ms": int((time.time() - started) * 1000),
+    }
+    return payload
+
+
 def export_bundle(disk: str | Path) -> dict:
     """导出投稿包（真收集＋真清单门）。返回包目录与清单门结论。"""
     from ..bundle import run_bundle

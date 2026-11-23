@@ -33,6 +33,15 @@ from factscribe.config import load_config, load_facts, load_toml  # noqa: E402
 
 MANIFEST_REL = "results/MANIFEST.toml"
 
+#: 真实产物样本（**真样本**，不是编出来的数字）：value 硬闸要在这件产物里
+#: 命中——直写通道现在也走那道闸（闸门不许有后门）。
+ARTIFACT_REL = "results/swb16.md"
+ARTIFACT_TEXT = ("open 10/16\n"
+                 "closed 8/16\n"
+                 "subset 3/4\n"
+                 "share 56.25%\n"
+                 "count 1 items and 2 batches\n")
+
 
 def run(*args, cwd=None):
     return subprocess.run(
@@ -45,7 +54,17 @@ def new_project(tmp: str, lang: str = "zh") -> Path:
     target = Path(tmp) / "proj"
     proc = run("init", str(target), "--title", "Demo", "--lang", lang)
     assert proc.returncode == 0, proc.stderr
+    # 每个项目都放一件**真实产物**：value 硬闸（直写通道也走）要拿它当依据。
+    with_artifact(target)
     return target
+
+
+def with_artifact(root: Path, text: str = ARTIFACT_TEXT) -> Path:
+    """在项目里放一件**真实产物**（value 硬闸要拿它当依据）。"""
+    raw = root / ARTIFACT_REL
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    raw.write_text(text, encoding="utf-8")
+    return raw
 
 
 def add(root: Path, *args):
@@ -63,7 +82,7 @@ class TestFactAddHappyPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "A1", "--claim", "示例",
-                       "--value", "3/4", "--source", MANIFEST_REL,
+                       "--value", "3/4", "--source", ARTIFACT_REL,
                        "--locator", "§一", "--confidence", "high")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             facts = load_facts(load_config(root))
@@ -72,7 +91,7 @@ class TestFactAddHappyPath(unittest.TestCase):
             self.assertEqual(f.id, "A1")
             self.assertEqual(f.claim, "示例")
             self.assertEqual(f.value, "3/4")
-            self.assertEqual(f.source, MANIFEST_REL)
+            self.assertEqual(f.source, ARTIFACT_REL)
             self.assertEqual(f.locator, "§一")
             self.assertEqual(f.confidence, "high")
             self.assertEqual(f.derived_from, [])
@@ -87,7 +106,7 @@ class TestFactAddHappyPath(unittest.TestCase):
                     'facts = "facts/*.toml"', 'facts = "ledger/*.toml"'),
                 encoding="utf-8")
             proc = add(root, "--id", "A1", "--claim", "示例",
-                       "--value", "3/4", "--source", MANIFEST_REL)
+                       "--value", "3/4", "--source", ARTIFACT_REL)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertTrue((root / "ledger" / "01-core.toml").is_file())
             self.assertEqual(len(load_facts(load_config(root))), 1)
@@ -103,7 +122,7 @@ class TestFactAddHappyPath(unittest.TestCase):
                     'sections = "sections/01-intro.tex"'),
                 encoding="utf-8")
             proc = add(root, "--id", "A1", "--claim", "示例",
-                       "--value", "3/4", "--source", MANIFEST_REL)
+                       "--value", "3/4", "--source", ARTIFACT_REL)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             cfg = load_config(root)
             self.assertFalse(cfg.is_v3)
@@ -127,7 +146,7 @@ class TestFactAddHappyPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "A1", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL)
+                       "--source", ARTIFACT_REL)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertEqual(load_facts(load_config(root))[0].locator, "")
 
@@ -135,7 +154,7 @@ class TestFactAddHappyPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             self.assertEqual(add(root, "--id", "A1", "--claim", "c",
-                                 "--value", "1", "--source", MANIFEST_REL,
+                                 "--value", "1", "--source", ARTIFACT_REL,
                                  "--locator", "x").returncode, 0)
             self.assertEqual(load_facts(load_config(root))[0].confidence, "med")
 
@@ -144,7 +163,7 @@ class TestFactAddHappyPath(unittest.TestCase):
             root = new_project(tmp)
             before = (root / MANIFEST_REL).read_bytes()
             proc = add(root, "--id", "A1", "--claim", "示例",
-                       "--value", "3/4", "--source", MANIFEST_REL,
+                       "--value", "3/4", "--source", ARTIFACT_REL,
                        "--locator", "§一")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
@@ -154,7 +173,7 @@ class TestFactAddHappyPath(unittest.TestCase):
             self.assertIn("3/4", lines[0])
             self.assertIn("别忘了", lines[1])
             self.assertIn(MANIFEST_REL, lines[1])
-            self.assertIn(sha(root / MANIFEST_REL), lines[1])
+            self.assertIn(sha(root / ARTIFACT_REL), lines[1])
             # 「不代签」：清单逐字节未动，[files] 里没被偷偷塞进一行
             self.assertEqual((root / MANIFEST_REL).read_bytes(), before)
             self.assertEqual(load_toml(root / MANIFEST_REL)["files"], {})
@@ -164,7 +183,7 @@ class TestFactAddHappyPath(unittest.TestCase):
             root = new_project(tmp)
             (root / "facts" / "01-core.toml").unlink()
             proc = add(root, "--id", "A1", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL, "--locator", "x")
+                       "--source", ARTIFACT_REL, "--locator", "x")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertTrue((root / "facts" / "01-core.toml").is_file())
             self.assertEqual(len(load_facts(load_config(root))), 1)
@@ -173,13 +192,13 @@ class TestFactAddHappyPath(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "A1", "--claim", "示例", "--value", "3/4",
-                       "--source", MANIFEST_REL, "--locator", "§一", "--json")
+                       "--source", ARTIFACT_REL, "--locator", "§一", "--json")
             self.assertEqual(proc.returncode, 0, proc.stderr)
             data = json.loads(proc.stdout)
             self.assertEqual(data["command"], "fact")
             self.assertEqual(data["action"], "add")
             self.assertEqual(data["id"], "A1")
-            self.assertEqual(data["source"], MANIFEST_REL)
+            self.assertEqual(data["source"], ARTIFACT_REL)
             self.assertIn("manifest_line", data)
 
 
@@ -190,10 +209,10 @@ class TestFactAddAppendOnly(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             add(root, "--id", "A1", "--claim", "第一条", "--value", "10/16",
-                "--source", MANIFEST_REL, "--locator", "§二")
+                "--source", ARTIFACT_REL, "--locator", "§二")
             first_text = (root / "facts" / "01-core.toml").read_text(encoding="utf-8")
             add(root, "--id", "A3", "--claim", "第二条", "--value", "8/16",
-                "--source", MANIFEST_REL, "--locator", "§二")
+                "--source", ARTIFACT_REL, "--locator", "§二")
             second_text = (root / "facts" / "01-core.toml").read_text(encoding="utf-8")
             self.assertTrue(second_text.startswith(first_text), second_text)
             facts = load_facts(load_config(root))
@@ -204,11 +223,11 @@ class TestFactAddAppendOnly(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             add(root, "--id", "A1", "--claim", "a", "--value", "10/16",
-                "--source", MANIFEST_REL, "--locator", "x")
+                "--source", ARTIFACT_REL, "--locator", "x")
             add(root, "--id", "A3", "--claim", "b", "--value", "8/16",
-                "--source", MANIFEST_REL, "--locator", "x")
+                "--source", ARTIFACT_REL, "--locator", "x")
             proc = add(root, "--id", "A2", "--claim", "合计", "--value", "56.25%",
-                       "--source", MANIFEST_REL, "--locator", "§三",
+                       "--source", ARTIFACT_REL, "--locator", "§三",
                        "--derived-from", "A1,A3",
                        "--expr", "(A1.num + A3.num) / (A1.den + A3.den) * 100")
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -221,7 +240,7 @@ class TestFactAddAppendOnly(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             add(root, "--id", "A1", "--claim", "c", "--value", "1",
-                "--source", MANIFEST_REL, "--locator", "x", "--note", "备注一句")
+                "--source", ARTIFACT_REL, "--locator", "x", "--note", "备注一句")
             self.assertEqual(load_facts(load_config(root))[0].note, "备注一句")
 
 
@@ -231,12 +250,12 @@ class TestFactAddRefusals(unittest.TestCase):
     def test_duplicate_id_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
-            base = ("--claim", "c", "--value", "1", "--source", MANIFEST_REL,
+            base = ("--claim", "c", "--value", "1", "--source", ARTIFACT_REL,
                     "--locator", "x")
             self.assertEqual(add(root, "--id", "A1", *base).returncode, 0)
             before = (root / "facts" / "01-core.toml").read_bytes()
             proc = add(root, "--id", "A1", "--claim", "dup", "--value", "2",
-                       "--source", MANIFEST_REL, "--locator", "y")
+                       "--source", ARTIFACT_REL, "--locator", "y")
             self.assertEqual(proc.returncode, 2)
             self.assertIn("已存在", proc.stderr)
             self.assertEqual((root / "facts" / "01-core.toml").read_bytes(), before)
@@ -245,10 +264,27 @@ class TestFactAddRefusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             add(root, "--id", "a1", "--claim", "c", "--value", "1",
-                "--source", MANIFEST_REL, "--locator", "x")
+                "--source", ARTIFACT_REL, "--locator", "x")
             proc = add(root, "--id", "A1", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL, "--locator", "x")
+                       "--source", ARTIFACT_REL, "--locator", "x")
             self.assertEqual(proc.returncode, 2)
+
+    def test_value_not_in_source_is_refused(self):
+        """value 硬闸：直写通道不许把**没出处**的数字写进账（闸门不许有后门）。
+
+        口径与「提议-确认」通道完全一致（factscribe/valuecheck.py）：
+        逐个数字按出现顺序在那件产物里找，找不到就拒——账本一个字节都不动。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = new_project(tmp)
+            before = (root / "facts" / "01-core.toml").read_bytes()
+            proc = add(root, "--id", "A1", "--claim", "c", "--value", "42",
+                       "--source", ARTIFACT_REL, "--locator", "x")
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("42", proc.stderr)
+            self.assertIn("找不到", proc.stderr)
+            self.assertEqual((root / "facts" / "01-core.toml").read_bytes(), before)
+            self.assertEqual(load_facts(load_config(root)), [])
 
     def test_missing_source_file_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -281,7 +317,7 @@ class TestFactAddRefusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "A2", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL, "--locator", "x",
+                       "--source", ARTIFACT_REL, "--locator", "x",
                        "--derived-from", "A1,A3")
             self.assertEqual(proc.returncode, 2)
             self.assertIn("--expr", proc.stderr)
@@ -291,7 +327,7 @@ class TestFactAddRefusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "1A", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL, "--locator", "x")
+                       "--source", ARTIFACT_REL, "--locator", "x")
             self.assertEqual(proc.returncode, 2)
             self.assertIn("不合法", proc.stderr)
 
@@ -299,7 +335,7 @@ class TestFactAddRefusals(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             proc = add(root, "--id", "A1", "--claim", "c", "--value", "1",
-                       "--source", MANIFEST_REL, "--locator", "x",
+                       "--source", ARTIFACT_REL, "--locator", "x",
                        "--confidence", "certain")
             self.assertEqual(proc.returncode, 2)
 
@@ -311,7 +347,7 @@ class TestInitAddCheckEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             added = add(root, "--id", "A1", "--claim", "示例", "--value", "3/4",
-                        "--source", MANIFEST_REL, "--locator", "§一")
+                        "--source", ARTIFACT_REL, "--locator", "§一")
             self.assertEqual(added.returncode, 0, added.stderr)
             proc = run("check", str(root))
             # check 是判据命令：0 绿 / 1 红 / 3 黄；这里只要求它「真的跑完」，
@@ -320,10 +356,29 @@ class TestInitAddCheckEndToEnd(unittest.TestCase):
             self.assertIn("== factscribe check ==", proc.stdout)
             self.assertIn("结论：", proc.stdout)
             self.assertIn("facts   : 1 条", proc.stdout)
-            # 现在应报的正是「清单没人签」与「value 不在 source 里」：
+            # 现在应报的正是「清单没人签」与「source 不在人签清单里」——
+            # value 那道闸现在在**写入口**就拦（见下面两条用例），
+            # 工具写出来的账不会再有「value 不在 source 里」。
             self.assertIn("MANIFEST_UNSIGNED", proc.stdout)
-            self.assertIn("VALUE_NOT_IN_SOURCE", proc.stdout)
+            self.assertIn("SOURCE_NOT_SIGNED", proc.stdout)
+            self.assertNotIn("VALUE_NOT_IN_SOURCE", proc.stdout)
             self.assertIn("退出码 %d" % proc.returncode, proc.stdout)
+
+    def test_audit_still_flags_hand_written_value_not_in_source(self):
+        """人手手写进账的 value 不在 source 里——**审计**照样报。
+
+        写入口的闸只管工具自己写的那条路；账是人手改的，这条读数还得在。
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = new_project(tmp)
+            ledger = root / "facts" / "01-core.toml"
+            ledger.write_text(
+                '[[fact]]\nid = "H1"\nclaim = "手写的一条"\nvalue = "42"\n'
+                'source = "%s"\nsource_sha256 = "%s"\nlocator = "§一"\n'
+                'confidence = "med"\n' % (ARTIFACT_REL, sha(root / ARTIFACT_REL)),
+                encoding="utf-8")
+            proc = run("check", str(root))
+            self.assertIn("VALUE_NOT_IN_SOURCE", proc.stdout)
 
 
 if __name__ == "__main__":

@@ -740,3 +740,180 @@ network failed/4xx/5xx：0 条
 这落在**绑定数字保护层**的既有范围（本轮一行没动），与上一轮 §2 记的「探针里的数字被内联绑定闸抓住」同类。
 **根因本轮没查**——保护层属落盘层口径，需单独开一轮定位，本轮不猜、不改。
 
+## 10. 2026-11-23 第六轮：四项必做（A 保存逐字保留 / B 直写通道 value 硬闸 / C 证据锁独立卡 / D 导出前可选预览）
+
+> 本轮开工 HEAD `2fdf3bf`（分支 `feat/miniapp-host-seam`）。正式稿盘**一个字节都没动**
+> （见 §10.8）；一切实测都在 `/tmp` 副本盘上做。
+
+### 10.1 四项必做 · 修法（文件）
+
+| 项 | 修法 | 文件 |
+|---|---|---|
+| **A** 保存会改内容 | 客户端：块指纹（`state.blockSha`）**只在 DOM 真被换成服务端新文时**才推进（`applyBlockHtml` 接管指纹；`saveBlockNode`／`reloadBlocks` 在「块仍被聚焦、用户又打了字」时不推进）。服务端：占位符序号在当前扫描里不存在 → **拒写**（`EDIT_TOKEN_MISMATCH`，HTTP 409）而不是静默丢弃；另加一道「保护面不许丢」的兜底 | `factscribe/workbench/static/app.js`、`factscribe/workbench/write.py`、`factscribe/workbench/server.py` |
+| **B** 直写通道 value 硬闸 | `scaffold.prepare_fact()` 在 `_check_source` 之后加 `check_value_in_source()`——CLI `fact add`、MCP `factscribe_add_fact`、serve `/api/facts`、采纳写回**共用同一道闸与同一句文案**（同一个 `factscribe/valuecheck.py`） | `factscribe/scaffold.py` |
+| **C** 证据锁独立卡 | 报告载荷新增顶层 `evidence_lock`（冻结与否／条目数／两个指纹／差异明细／最后一条日志），来源与 MCP `fs_get_evidence_status` 同源（`readings.evidence_gate`）；四步链 `_chain_steps` **一字未动** | `factscribe/workbench/checkreport.py`、`factscribe/workbench/static/index.html`、`factscribe/workbench/static/app.js` |
+| **D** 导出前可选预览 | `bundle.run_bundle(preview=True)`：**只算不写**，与真导出共用同一个 `_artifact_bytes`（路径/指纹/大小同一口径）；清单门判定一字不改（门不过照样不出包） | `factscribe/bundle.py`、`factscribe/workbench/actions.py`、`factscribe/workbench/server.py`、`factscribe/workbench/static/app.js` |
+
+### 10.2 A「保存会改内容」· 真浏览器复现与修复前后读数
+
+**现象（上一轮 §9.11 如实记的，本轮查清了）**：在 `\fact{E5}` 芯片旁放探针 `[HOSTBAK1]`，第一次保存落盘完整，第二次保存往返后内容被改。
+
+**机制（两层，缺一不可）**
+
+1. **客户端把块指纹推进早了**（`app.js::saveBlockNode`）：块指纹＝「这份 DOM 是哪一版文件渲染出来的」。保存应答回来时若那一块**仍被聚焦**（保存途中用户又点了回来），DOM 不重绘——里面那份保护面序号还是**旧版**的；旧口径却照样推进指纹，等于告诉服务端「我这份 DOM 对得上当前文件」。下一轮保存就带着**过期序号**混过指纹闸。
+2. **服务端对「序号对不上」是静默丢弃**（`write.py::_rebuild`）：占位符序号在当前扫描里不存在时，旧口径是 `continue`——那枚保护面被**静默丢掉**，用户没打过的字就此被改掉。
+
+**为什么序号会整体错位**：绑定数字令牌是**派生**的。正文 `…left the resolve count at 0/3\fact{E5}…` 里，`0/3` **紧邻** `\fact{}` 才算绑定令牌；插进探针后 `0/3` 不再紧邻，这枚令牌整段消失，后面所有保护面序号**整体前移一位**（实测：`0/3` 的令牌没了，`\fact{E5}` 的序号从 1 变成 0）。
+
+**真浏览器实测**（副本盘 `/tmp/fs-a-root/paper`，真 Chrome ＋ CDP；驱动 `tests/save_probe_driver.mjs` 的 `stale` 模式：拦下 `/edit` 的请求、飞行途中把光标放回块里再放行，模拟「保存完又点了回来」）：
+
+| 读数 | 修复前（旧前端 ＋ 旧服务端） | 修复后 |
+|---|---|---|
+| 第一次保存落盘 | `…left the resolve count at 0/3[HOSTBAK1]\fact{E5}, and per-round output…` | 同左 |
+| 第二次保存落盘 | `…pt left the resolve count at \fact{E5}Z[HOSTBAK1]0/2, and per-round output grew…` | **同左（两次落盘逐字节相同）** |
+| 两次请求的 `expect_sha` | `055edf89…` → `240fc2f7…`（指纹被提前推进） | `055edf89…` → `055edf89…`（**不推进**） |
+| 落盘被改？ | **是**：`0/3` 被换成 `\fact{E5}`，凭空多出 `0/2` | **否** |
+
+修复后第二轮保存被**指纹闸拒写**（客户端发的是旧指纹）→ 页面提示「这段在别处已被改动」并原地重载新文：**内容一个字节都没被改**。
+（代价要说清：那一轮飞行途中新打的字会丢——这是 BLOCK_STALE 的**既有语义**「未保存的字会丢」，不是内容被改。）
+
+**修法分两层，各自都必要**：
+
+* 客户端（第一道）：指纹只在 DOM 真被换成服务端新文时推进（`applyBlockHtml(blockId, html, sha)` 接管；组合进行中的延后重绘也带着指纹一起延后）。
+* 服务端（第二道，兜底）：`write.py::_rebuild` 遇到「序号在当前扫描里不存在」→ 抛 `EDIT_TOKEN_MISMATCH`（HTTP 409，附新鲜块让前端重载），**不再静默丢保护面**；另加 `_guard_surface_kept()`：重建后若少了命令类保护面（`\fact{}`／`\cite{}`／公式／环境……），同样拒写。
+  * 绑定数字令牌（num）是**派生**的，插字就可能整段消失——那是合法编辑，**不在**这道兜底里（否则会拦下正常保存）。
+
+（本轮后来又追加了两处同族修复：**派生令牌被按文字误认领**（§10.12）与**账本变了导致保护面序号整体错位**（§10.13，结构闸）。）
+
+### 10.3 A · 全插入点扫描（精确口径）
+
+按「**重建结果必须逐字节等于「原文＋探针」**」这条口径，把探针放进 `01_intro-p1` 的**每一个字符位置**各跑两轮（**5303** 个可插位置；本轮**最终代码**跑的读数）：
+
+| 轮次 | 读数 |
+|---|---|
+| 正常路径（客户端 DOM 已重绘） | 重建结果 **逐字节等于**「原文＋探针」——**0 处内容不一致**；另有 **2 处被拒写**（`EDIT_TOKEN_MISMATCH`）：探针插进 `\$` 转义中间（`\` 与 `$` 之间），LaTeX 结构自此改变，保护面兜底不落盘 |
+| stale 路径（客户端 DOM 没重绘、仍发旧序号，**故意绕过指纹闸**） | **0 处拒写、4 处不一致**：按旧序号重建时，芯片与它的绑定数字换了位置（`…$\times$\fact{D1} (\$0.0486\fact{D1}…` → `…$\times$ ($\fact{D1}0.0486…`） |
+
+**stale 那 4 处为什么真流程里不会落盘**：这轮扫描是**绕过指纹闸**直接调重建层的（故意模拟「客户端那份 DOM 是旧版渲染的」）。真流程里客户端每次保存都带着 `expect_sha`（＝它那份 DOM 对应的块指纹）：指纹闸先过不去 → 409 `BLOCK_STALE` → 页面原地重载新文，**内容一个字节都不会被改**（真浏览器实测见 §10.2）。另外 §10.13 的「结构闸」又把「账本变了 → 保护面数量变 → 序号整体错位」这一路也拒写了。
+
+口径说明（避免自欺）：早先一版扫描拿「重扫后的可见文字」比对，口径本身有洞——把探针插进 `\$` 转义中间，LaTeX 结构就变了（`\$` 变成「反斜杠 ＋ 真美元符」），那是**用户自己的编辑**，不是保存改的。改成逐字节比对「原文＋探针」后，这两处假阳性消失。
+
+### 10.4 B · 直写通道的 value 硬闸（副本盘实跑）
+
+`factscribe fact add`（直写通道）现在与「提议-确认」**同一道闸、同一句文案**：
+
+| 操作 | 读数 |
+|---|---|
+| `fact add --id ZB1 --value 42 --source results/swb16.md` | 拒：`value「42」里的数字在产物 results/swb16.md 里找不到：42（数字按出现顺序逐个比对，单位不参与比对）……`；**账本零改动** |
+| `fact add --id ZB2 --value 10/16 --source results/swb16.md` | 写入：`已写入 fact ZB2：真实值 = 10/16`；账本 4 条（A1/A3/A2/ZB2，**没有 ZB1**） |
+
+MCP `factscribe_add_fact` 与 serve `/api/facts` 走的是同一个 `prepare_fact()`——既有测试（`tests/test_mcp.py`、`tests/test_serve.py`）改用**真实样本**（`42` → `10`，产物 `results/swb16.md` 里真有这个数）后转绿，**没有放宽校验**。
+
+### 10.5 C · 证据锁独立卡（真界面读数）
+
+| 读数 | 值 |
+|---|---|
+| 报告载荷顶层键 | `chain`、`evidence`（旧的两个键**逐字不变**）＋ **新增** `evidence_lock` |
+| `evidence_lock` 读数（副本盘 paper） | `frozen=true`／`entries=106`／`sha256=03bd1dae…`／`current_sha256=03bd1dae…`（一致）／`mismatch=null`／`diff{added:[],removed:[],moved:[]}`／`last_log{action:freeze,…}` |
+| 四步链 | `Declare 48/48`、`Bind 232/232`、`Reconcile 232/232`、`Certify 106/106`——**与加卡之前逐字一致**（`chain` 与 `evidence` 两个键的载荷 diff 为空） |
+| 页面 | 第六张折叠卡「证据锁」：徽标 `frozen`，正文给出「Evidence freeze／entries 106／fingerprint 03bd1dae／log action=freeze」 |
+| 页面调用次数 | **不多一次**——卡片随报告载荷一起来（`reportEvidenceLock()` 只读 `state.report.evidence_lock`，不发请求） |
+| MCP 既有工具 | `fs_get_report` 的实现是**自行整形载荷**（不透传未知键）→ 引擎报告里多一个键，**MCP 工具的输出形状一个字没变** |
+
+### 10.6 D · 投稿包导出前的可选预览（真界面读数）
+
+| 读数 | 值 |
+|---|---|
+| 预览端点 | `GET /api/disk/<project>/<disk>/bundle-preview`（只读）→ `would_export=true`、`failed=0`、`file_count=36`、清单门 5 过 0 不过 0 豁免 |
+| 预览模态 | 「36 files to be collected」＋清单门读数＋逐件（路径 · 指纹 · 字节数）；两个钮：**「继续导出」**／**「跳过预览，直接导出」**（**可选**，可跳过） |
+| 预览写不写盘 | **一个字节都不写**（预览后包目录压根不出现） |
+| 导出口径 | **一字未改**：清单门判定照旧；门不过 → `would_export=false`、`exit_code=1`、**不出包**（实测：删掉一张随图 `.csv` → 预览说不过，真导出同样不过，包目录前后都不存在） |
+| 预览 vs 真导出 | 副本盘 paper 上预览列的 36 件，与真导出写进包里的**逐件 sha256 一致** |
+
+### 10.7 发布态逐文件比对（源 → 载荷 → 已发布）
+
+| 项 | 读数 |
+|---|---|
+| `miniapp/build.sh` | 跑通：文件数 111（上限 1024）／4.8 MiB／契约自检通过／engine import ok／**104 个载荷文件** |
+| 前端三件 | `app.js`(`60c615fb…`)／`app.css`(`e0bfdbb0…`)／`index.html`(`7dd179f5…`)：源＝载荷两份副本＝已发布两份副本，**五处全等** |
+| 引擎 | `diff -r factscribe <已发布>/miniapp/node/engine/factscribe`（排除 `__pycache__`）：**0 差异**（含 `write.py` 改动、`checkreport.py`、`bundle.py`、`scaffold.py`） |
+
+### 10.8 正式盘零改动（实测）
+
+| 盘 | 开工前聚合 sha256 | 验收后聚合 sha256 | 结论 |
+|---|---|---|---|
+| `paper` | `fb03eaf1c3bc9d3…` | `fb03eaf1c3bc9d3…` | 一致 |
+| `paper-zh` | `8f16d331bda67c28…` | `8f16d331bda67c28…` | 一致 |
+| `paper-b` | `4d5ccf9855f4bf84…` | `4d5ccf9855f4bf84…` | 一致 |
+| `paper-b-zh` | `9d1fe50993d38094…` | `9d1fe50993d38094…` | 一致 |
+
+（聚合口径与上一轮同一条：逐文件「相对路径 ＋ 文件 sha256」串起来再 sha256。）
+另外：四盘 `find -newermt '2026-11-23 11:50' -type f` **为空**；`paper` 的 `last_opened` 仍停在 **2026-11-23 11:12:13**（没打开过正式盘）。
+宿主论文根目录仍是 `/Users/moc/workspaces/SiAgent`（`config.json` 未改），publish 后已 `miniapp restart` 重拉引擎。
+
+### 10.9 本轮测试
+
+| 项 | 读数 |
+|---|---|
+| 新增 `tests/test_workbench_save_fidelity.py` | **14 条**（连续两次保存逐字稳定；stale DOM 拒写且文件逐字节不变；序号不存在 → 拒写不静默丢；保护面不许丢；**正文同名数字不许被认成别处的绑定令牌**（§10.12）；**结构闸**：保护面数量对不上 → 拒写、对得上 → 放行（§10.13）；前端指纹与 `expect_tokens` 口径的静态断言） |
+| 新增 `tests/test_workbench_evidence_lock_card.py` | **7 条**（独立卡；与 `evidence_gate` 同源；冻结读数；清单变了报差异；四步链形状不变；MCP 输出形状不变；页面不多一次调用） |
+| 新增 `tests/test_workbench_bundle_preview.py` | **4 条**（门不过：预览与真导出同一结论、都不出包；门过：预览与包内文件逐件 sha256 一致；预览不写盘；两次预览结论一致） |
+| 补强 `tests/test_fact_add.py` | **+2 条**（value 不在产物里被拒且账本零改动；人手手写的坏 value 仍被审计报 `VALUE_NOT_IN_SOURCE`） |
+| 新增 `tests/save_probe_driver.mjs` | 真浏览器驱动（`normal`／`stale` 两种模式） |
+| 既有测试改用真实样本（**不放宽校验**） | `tests/test_workbench_fact_form.py`（value `"1"` → `"10/16"`）、`tests/test_mcp.py` 与 `tests/test_serve.py`（`"42"` → `"10"`）、`tests/test_doctor.py`（产物补上 `16`）、`tests/test_method_workflow.py`（产物补上 closed 臂 `8`） |
+| 用例总数 | 基线（HEAD `2fdf3bf`）**2271** → 本轮 **2298**（**+27**：A 14 ＋ B 2 ＋ C 7 ＋ D 4），**0 减少** |
+| 全仓 `pytest tests/ -q` | **2298 passed / 0 failed**（397 subtests，301.00s） |
+
+### 10.10 本轮明确**没动**的东西
+
+| 事项 | 怎么保证没动 |
+|---|---|
+| 四步链闸门语义 | `checkreport._chain_steps` 未改；`chain` 与 `evidence` 两个键的载荷逐字不变（实测 diff 为空） |
+| 提议单形状校验（块形状闸） | `_block_shape_guard` 未改 |
+| 双 Profile 契约 / P-152 | 未触及任何判定面 |
+| `Issue.as_dict()` 的形状 / 金样例基线 | 未改、未重冻（`tests/golden/audit_findings_baseline.json` 一个字节没动） |
+| `scaffold._check_source` 的既有校验 | 一条没放松（`check_value_in_source()` 是**新增**的一道闸） |
+| 落盘层散文＋token 口径 | token 格式、占位符口径、保护面三条口径一字未改；只把「序号对不上」从静默丢弃改成拒写 |
+| 绑定数字保护面 | 口径未动（`num` 仍是派生令牌）；新增兜底只管命令类保护面 |
+| MCP 工具既有入参 schema | `fs_*` 一字未动；`fs_get_report` 的输出形状也没变（它自行整形载荷） |
+| 导出口径（清单门） | 一字未改；预览只是可选的一步 |
+| 配置文件备份份数 | 仍 `CONFIG_BACKUP_KEEP=1` |
+| 正式稿盘 | 四个盘聚合 sha256 与开工基线**逐位一致**；`last_opened` 未动；宿主论文根目录未改 |
+
+### 10.11 记着、没擅自动的
+
+* **stale 场景下飞行途中新打的字会丢**：客户端在块仍被聚焦时不能整块重绘（会吞掉新字）；要保住它得做客户端↔服务端的合并重写（rebase），风险大于收益。沿用既有 BLOCK_STALE 语义「未保存的字会丢」——本轮优先保证「**内容不被改**」。
+* **探针尾数字单独消失**（`[HOSTBAK1]` → `[HOSTBAK]`）这一形态：修掉的是同一机制族（保护面序号整体错位 → 保存改内容），真浏览器复现出来的是 `0/3` 被换成 `\fact{E5}`、凭空多出 `0/2`。那一形态要求探针里那个数字**本身**是一枚绑定令牌（账本里有这个值，或它紧邻 `\fact{}` 且其后只跟空白）——四个盘的账本里**没有裸值 `1`**，所以在本工作树**未能单独复现**：如实记，不把没复现的说成复现了。
+
+### 10.12 A 追加修 · 派生数字令牌被误认领（保存把芯片旁的数删掉）
+
+前两层修完（§10.2）之后，正常路径仍有一处会改内容：**派生**出来的绑定数字令牌（`num`）会被按**文字**认领。
+
+**机制**（`write.py::_absorb_verbatim`）：服务端重建时会把正文里「原样抄回」的保护面认回来（判据＝逐字相同）。它把**命令类**保护面（`\fact{}`／`\cite{}`…）与**派生**的绑定数字令牌（`num`）一视同仁。绑定数字令牌是**派生**的（紧邻 `\fact{}` 或与账本同值），它的字面在正文里本来就可能出现——正文写「还是 8 题」，那个 `8` 就被认成别处那枚 `num` 令牌：令牌被搬到正文位置，**芯片旁边的绑定数字整段消失**，用户没打过的字被改掉。
+
+**实测**（副本盘 `paper` 的 `01_intro-p1`）：第一次保存后正文是 `…left the resolve count at 0/3[HOSTBAK1]\fact{E5}…`；第二次保存（客户端 DOM 已按新文重绘）后变成 `…left the resolve count at \fact{E2}…`——`E2` 那枚 `num` 令牌前的 `0/3` 没了。
+
+**修法**：`_absorb_verbatim` **不再按文字认领 `num` 令牌**——派生令牌只认占位符。命令类保护面的认领口径、token 格式、散文＋token 口径一字未动。
+
+**回归测试**（`tests/test_workbench_save_fidelity.py`，先红后绿）：正文里的同名数字不许被认成别处的令牌（一次保存都不许挪）；探针打散令牌后连续两次保存逐字稳定。
+
+### 10.13 A 追加修 · 结构闸（客户端报「这份 DOM 是哪一版**结构**渲染出来的」）
+
+指纹闸管的是「哪一版**内容**」；还有一路是「哪一版**结构**」：账本变了（新事实的 value 出现在正文里 → 同一段原文多出绑定数字令牌），同一段原文的**保护面数量**就变了 → 客户端那份 DOM 里的占位符序号**整体错位** → 按旧序号重建，用户没打过的字被改掉。指纹闸抓不到它（块原文一个字没变，指纹照样对得上）。
+
+**修法**：客户端把「这份 DOM 里有几枚保护面芯片」跟着一块儿报上来（`state.blockTokens` → 请求里的 `expect_tokens`），服务端拿当前扫描的保护面数一对，对不上就**拒写**（`EDIT_TOKEN_COUNT_MISMATCH`，HTTP 409，附新鲜块让前端重载）。不传这个字段就不做这道检查（老客户端／脚本调用不受影响）。
+
+**实测**：
+
+| 项 | 读数 |
+|---|---|
+| 四个盘（副本）逐块比对「渲染 html 芯片数」vs「服务端扫描保护面数」 | 可编辑块 **112 段正文 ＋ 4 段摘要全等**；114 个标题块（`section`／`subsection`）html 为空（页面上没有可编辑 DOM，客户端不会保存它们）→ 不参与这道闸 |
+| HTTP 实测 | 故意报 `expect_tokens=999` → **409 `EDIT_TOKEN_COUNT_MISMATCH`**；报正确数量 → **200 落盘** |
+| 真浏览器 `normal` 路 | 两次保存照旧通过（`expect_sha` 正常推进 `055edf89…` → `240fc2f7…`），探针区逐字保留 |
+| 真浏览器 `stale` 路 | 第二轮撞指纹闸被拒写（`expect_sha` 两次都是 `055edf89…`），**落盘文件两次逐字节相同** |
+
+### 10.14 一个**既有**现象（如实记：不是本轮引入）
+
+保存一段时，落盘的是**页面上看到的那份文字**：渲染层把段内换行压成空格、把 `---` 写成 `—`（`projects._inline`／`render_prot_html` 的既有口径），所以第一次保存会把**该段内**的这几处规范化。实测（`01_intro-p1`）：段内 **45 处换行 → 空格**、**4 处 `---` → `—`**；**块外一个字节没动**（文件其余部分逐字节相同）。
+
+这是「页面即编辑器」这条既有设计带来的（`projects.py` 与 `app.js::collectPlain` 本轮一字未改，HEAD `2fdf3bf` 就是这样），**不是本轮引入**。含义：用户**看得见**的字（数字、芯片、探针）逐字保留；看不见的空白与连字符按既有口径规范化。想要连空白也逐字保留，得让落盘层按原文偏移回填未改动的散文——那是改「落盘层散文＋token 口径」，本轮明确不动。

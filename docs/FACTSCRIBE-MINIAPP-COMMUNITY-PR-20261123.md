@@ -43,28 +43,35 @@ plugins/bigismall-ai/factscribe/
 
 ## 2. npm run check：0 error
 
-社区 checker 源码（`scripts/`）逐条对照我们的包，**0 error、0 warning**：
+社区 checker 源码（`scripts/`）逐条对照我们的包，**0 error、0 warning**；
+整仓 `npm run check`（validate 全仓 + checker 自测）**退出码 0**：
 
 ```text
-$ node scripts/validate.mjs plugins/bigismall-ai/factscribe
+$ npm run check
+...
 plugins/bigismall-ai/factscribe: OK
+examples/hello-miniapp: OK
+repository: OK
+
+ℹ tests 92
+ℹ pass 92
+ℹ fail 0
 $ echo $?
 0
 ```
 
 **剩余 warning 清单：无。**（下面第 5 节列了逐条规则的核对结果，含为什么没有 warning。）
 
-### 本机复现命令（包级）
+### 本机复现命令
 
 ```sh
-cd <社区仓库克隆>
-node scripts/validate.mjs plugins/bigismall-ai/factscribe
-# 整仓：
-npm run check      # = npm run validate && npm test
+cd <社区仓库工作副本>
+node scripts/validate.mjs plugins/bigismall-ai/factscribe   # 包级
+npm run check                                                # 整仓（validate + checker 自测）
 ```
 
 > `npm run check` 的 `npm test` 是 checker 自身的单测（`node --test "test/**/*.test.mjs"`），
-> 与我们的包无关；整仓跑需要完整克隆（见第 8 节）。
+> 与我们的包无关，但必须一起跑：它证明本地这份 `scripts/` 就是上游那份 checker。
 
 ## 3. 随包 MCP 声明：判定结论与依据
 
@@ -209,19 +216,40 @@ Agent 回合（只声明 `session.run`）、**读取的对话：无**、**调用
 
 ### 8.1 已完成的准备工作（可复核）
 
-1. 取社区仓库（Git 协议在本机被拦，走 tarball 兜底）：
+1. **取上游仓库的方式（网络实测结论）**：到 github.com 的链路只有 ~27–48 KB/s，社区仓库含案例 GIF 等大文件，
+`git clone` 与 codeload tarball 都会在大包传输中途被掐断（`fetch-pack unexpected disconnect`、
+`curl 18`、tarball 尾部 gzip 截断），且 codeload 不支持 byte range，续传无效。
+所以**走 GitHub API 通道**逐文件取（这条通道实测正常且快）——只需要 checker 必需的那几份：
 
-   ```sh
-   curl -sSL -o /tmp/mm-miniapps.tar.gz \
-     https://codeload.github.com/MiniMax-AI/MiniMax-Code-MiniApps/tar.gz/refs/heads/main
-   mkdir -p /tmp/mm-miniapps && tar xzf /tmp/mm-miniapps.tar.gz -C /tmp/mm-miniapps --strip-components=1
-   ```
+```sh
+# 目录清单：https://api.github.com/repos/MiniMax-AI/MiniMax-Code-MiniApps/contents/{dir}
+# 单文件原文：https://raw.githubusercontent.com/MiniMax-AI/MiniMax-Code-MiniApps/main/{path}
+# 全树（唯一性校验用）：…/git/trees/main?recursive=1  → 3287 条路径
+```
 
-2. 把我们的包放进社区形态（**源在自家仓**，别在别人的克隆上改）：
+落地的社区仓库工作副本：**`/tmp/mm-api-20261123`**（5.9 MiB）
+
+```text
+/tmp/mm-api-20261123/
+├── README.md            # 含我们那一行表格
+├── README.zh-CN.md      # 含我们那一行表格
+├── package.json         # npm run check = validate + test
+├── package-lock.json
+├── scripts/             # checker 本体（raw 取回，16 个文件）
+├── test/                # checker 自测（raw 取回，14 个文件）
+├── docs/                # 规范原文
+├── examples/hello-miniapp/
+└── plugins/bigismall-ai/factscribe/   # 我们的包
+```
+
+> 上游另外 25 个别人的包**没有下载**（只需存在性做唯一性校验，tree API 已够：3287 条路径里
+> **没有任何一条含 `factscribe`**，作者目录 `plugins/bigismall-ai/` 也未被占用）。
+
+2. 把我们的包放进社区形态（**源在自家仓**，别在别人的仓库上改）：
 
    ```sh
    REPO=/Users/moc/workspaces/SiAgent/factscribe-dev/.worktrees/miniapp-host
-   DEST=/tmp/mm-miniapps/plugins/bigismall-ai/factscribe
+   DEST=/tmp/mm-api-20261123/plugins/bigismall-ai/factscribe
    mkdir -p "$DEST"
    rsync -a --exclude 'build.sh' --exclude 'install.sh' \
          --exclude '__pycache__' --exclude '*.pyc' --exclude '.DS_Store' \
@@ -230,7 +258,7 @@ Agent 回合（只声明 `session.run`）、**读取的对话：无**、**调用
 
 3. 两个根 README 各加一行（第 8.3 节），checker 跑通。
 
-> 克隆副本 **/tmp/mm-miniapps** 现在已经装好了包、也改了两个根 README，
+> 工作副本 **/tmp/mm-api-20261123** 现在已经装好了包、也改了两个根 README，
 > 但**没有 git 初始化、没有 add、没有 commit、没有 push**——按约定不在别人的仓库上提交。
 
 ### 8.2 开 PR 的步骤（需要你自己的 GitHub 账号）
@@ -241,10 +269,10 @@ Agent 回合（只声明 `session.run`）、**读取的对话：无**、**调用
 git clone https://github.com/bigismall-ai/MiniMax-Code-MiniApps.git
 cd MiniMax-Code-MiniApps
 
-# ③ 把已经准备好的文件搬进来
+# ③ 把已经准备好的文件搬进来（工作副本已备好这两个文件）
 mkdir -p plugins/bigismall-ai
-cp -R /tmp/mm-miniapps/plugins/bigismall-ai/factscribe plugins/bigismall-ai/
-cp /tmp/mm-miniapps/README.md /tmp/mm-miniapps/README.zh-CN.md .
+cp -R /tmp/mm-api-20261123/plugins/bigismall-ai/factscribe plugins/bigismall-ai/
+cp /tmp/mm-api-20261123/README.md /tmp/mm-api-20261123/README.zh-CN.md .
 
 # ④ 跑 checker（必须 0 error）
 npm run check
@@ -345,6 +373,7 @@ server; the Host rewrites it to the running instance when it adopts the package.
 |---|---|
 | 全仓 pytest | `2353 passed, 397 subtests passed`（0 failed） |
 | 社区 checker（包级） | `plugins/bigismall-ai/factscribe: OK`，exit 0，0 error / 0 warning |
+| 整仓 `npm run check` | validate 全仓 `OK`（含 `repository: OK`）＋ checker 自测 92 passed / 0 failed，**总退出码 0** |
 | 源→载荷→已发布 | 逐文件 0 差异（载荷 101 文件；前端三件逐字节一致） |
 | 包体积 | 109 文件 / 5.0 MiB（上限 1024 / 64 MiB） |
 | 用户正式稿盘 | `paper`/`paper-zh`/`paper-b`/`paper-b-zh` **未触碰**（本轮只写插件目录与 `/tmp` 副本） |

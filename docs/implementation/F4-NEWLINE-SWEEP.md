@@ -102,6 +102,31 @@ workbench_dataplayer 后，eol 的真引擎端到端用例红了（断言接口�
 | factscribe/workbench/write.py:1561 | 新建节固定 "\n\n" | 用盘里占多数的行尾 | CRLF 的盘不补出 LF 行 |
 | factscribe/workbench/{knowledge,importer,projects,server,venue}.py | 默认文本模式 | read_text_exact / write_text_exact | 知识库文件、导入草稿、项目与版式配置 |
 
+### 4.1 第二轮：共享模块的换行保真补齐（只取 F4，不动 F7 口径）
+
+首轮带进本线的那个 F4 提交里，F4（换行保真）与 F7（citeedit/citeview
+统一项目根口径）混在同一批文件里。为了不踩本线自己的 refs/citations
+口径，那批改动整体撤掉了——连带把几个**纯换行**的改动也一起撤了。本轮
+按「只取 F4、绝不碰 F7 口径」重做，逐点如下：
+
+| file:line | 原来 | 改成 | 为什么算用户内容 |
+|---|---|---|---|
+| factscribe/citeedit.py:76-83 | 原子写用 open(tmp,"w") | write_text_exact(tmp, text) | bib 是用户手编的参考文献；Windows 上默认文本模式会把已有的 '\r\n' 写成 '\r\r\n' |
+| factscribe/citeedit.py:157/213 | target.read_text／path.read_text | read_text_exact | 加条目、删条目前后读原字节，不做通用换行翻译 |
+| factscribe/citations.py:68 | path.read_text | read_text_exact | bib 解析读原样 |
+| factscribe/citeview.py:53-60 | path.read_text | read_text_exact | 参考文献页读正文 |
+| factscribe/reportapi.py:310-317 | open(tmp,"w") | write_text_exact | 报告模板里用户填的数字与注释逐字落盘 |
+| factscribe/buildpdf.py:215/222/236/243 | read_text／write_text | read_text_exact／write_text_exact | PDF 临时副本与源 .tex 逐字节对应 |
+| factscribe/serve.py:604 | tex.read_text | read_text_exact | 章节标题（PDF 页码定位） |
+| factscribe/projects.py:198-270/366-395 | read_text().splitlines() ＋ write_text("\n".join) | split_keepends ＋ dominant_newline ＋ write_text_exact | factscribe.toml 改写：只改那一个键，别的行与行尾都不动 |
+
+另有一条**镜像不同步**的发现：vendored 引擎镜像
+（miniapp/miniapp/node/engine/factscribe/）是 build.sh 从仓根 factscribe/
+整目录拷过去的直拷本。上一轮撤销 F7 部分时只改了源、没重跑 build.sh，
+于是镜像里留着已撤销的 F7 版本——citations／citeedit／citeview／
+reportapi／projects／buildpdf／serve 共 7 个文件与源不一致。本轮重跑
+miniapp/build.sh，镜像与源逐字节一致（契约自检＋引擎自检通过）。
+
 ## 五、测试与读数
 
 ### 新增用例
@@ -110,20 +135,26 @@ workbench_dataplayer 后，eol 的真引擎端到端用例红了（断言接口�
   CRLF 版与 LF 版同一项目的审计发现逐条相同、退出码相同；factscribe.toml／
   事实账／潮汐账本写回逐字节；读调用点确实以 newline="" 打开；POSIX 上 LF
   读法与默认文本模式逐字符相同；F4 首轮的 15 例一条未改松。
-* tests/test_newline_fidelity_miniapp.py（5 例，miniapp 线）：块编辑链 CRLF／
+* tests/test_newline_fidelity_miniapp.py（5 例 → 12 例，miniapp 线）：块编辑链 CRLF／
   混合行尾保存后逐字节一致；下发给客户端的块原文 CRLF 原样在；读写调用点
   不翻译换行；dataplayer 存节逐字节一致。**修复前这 5 例有 3 例红**
-  （CRLF 被写成 LF），修复后全绿。
+  （CRLF 被写成 LF），修复后全绿。第二轮又加 7 例（共享模块）：bib 原子写
+  保持原有字节、bib 写盘调用点以 newline="" 打开、CRLF 的 bib 照样解析出
+  条目、citeview 读正文保留 CRLF、factscribe.toml 改写保留 CRLF 且其它行
+  一个字节不动、报告写盘逐字节、PDF 临时副本调用点用 write_text_exact。
 
 ### 读数
 
-* 集成分支：Python 3.10 全量 1702 例 OK；3.11–3.14 全量各 1716 例 OK；
+* 集成分支：Python 3.10 全量 1716 例 OK（skipped=2）；3.11–3.14 全量各 1716 例 OK；
   legal 集成套件 166 例 OK；node 158 例全过；
   金样例基线 tests/golden/audit_findings_baseline.json **逐字节未动**
   （golden_check 26 盘逐字节相同）；
   27 盘逐盘对读（基点 2e6d46c vs 本分支，audit --json 全量 payload＋退出码）
   **判定 0 变化**。
-* miniapp 线：node 176 例全过（含 eol 真引擎端到端 18 例）；python 全量见分支提交说明。
+* miniapp 线（共享模块补齐后）：python 3.11 全量 2396 例 OK；3.10 全量
+  2396 例 4 条红，与基点 e6cf221 同集（本线未带 3.10 TOML 严格档那条修复），
+  非本轮引入；node 176 例全过（含 eol 真引擎端到端 18 例）；
+  miniapp/build.sh 契约自检＋引擎自检通过。
 
 ## 六、未验证的边界（诚实记着）
 
@@ -135,3 +166,14 @@ workbench_dataplayer 后，eol 的真引擎端到端用例红了（断言接口�
 另有一条结构性事实值得记着：仓库**没有 .gitattributes**，Windows 上
 Git-for-Windows 默认 core.autocrlf=true 会把 .tex/.bib/facts/*.toml 检出成
 CRLF——这正是「用户内容载体在 Windows 上是 CRLF」的来源。
+
+再记两条 miniapp 线上实测到、但**本轮没有动**的：
+
+* **本线既有的项目根缺陷（早于本轮，基点同样复现）**：项目根有两种拼法时
+  （macOS 的 /var → /private/var、Windows 的映射盘），citation_add_data 会抛
+  ValueError——parse_bib 的 path.relative_to(root) 对不上（基点 e6cf221 与
+  本分支同一处、同一报错，非本轮引入）。上游用 F7 的 _rel_under_root 修掉了，
+  但那条口径与本线的 refs/citations 契约冲突，本轮不在这条线上动它，
+  留给本线属主定夺。
+* **bib 追加条目的行尾**：新增条目内部用 "\n"（与上游同口径），所以 CRLF 的
+  bib 追加后会多出 LF 行；**原有字节一个都没动**（有用例断言），本轮不改。

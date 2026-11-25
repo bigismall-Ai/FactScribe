@@ -258,7 +258,10 @@ This layer adds no criteria and produces no score. It leaves every decision and 
 | 2 | Configuration or usage error, the tool did not start |
 | 3 | Yellow: finished, but unverified or unbound items remain; not fatal, not green |
 | 4 | Internal tool error |
+| 5 | Red: coverage gap or trust-chain failure — a closure input that is missing, points outside the project, or cannot be resolved statically, and PDF/signature trust-chain failures. Not an ordinary violation: it means content never entered the audit |
 | 8 | A required tool is missing (PDF toolchain or build engine), never a silent pass |
+
+The exit-code set is closed over 0–9; the authoritative table is §2.5 of [`docs/design/SPEC-V3.0.md`](docs/design/SPEC-V3.0.md). The table above lists the codes this repository can actually exit with; the remaining ones (6 proof not met, 7 stale/replay, 9 attack surface open) are not produced by any command yet.
 
 A missing `factscribe.toml`, an empty ledger, empty prose, or a missing `refs.bib` exits 2 with a reason. Nothing passes silently.
 

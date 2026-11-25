@@ -20,9 +20,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from factscribe.checks import EXIT_CODE_CLOSED_SET  # noqa: E402
 from factscribe.report import (  # noqa: E402
     ReportError, check_report, digest_of, evidence_digest, load_report,
-    lock_report, report_card, semantic_digest, sign_report, verify_signoff)
+    lock_report, report_card, semantic_digest, sign_report, verify_signoff,
+    _status_word)
 
 REPORT_TOML = """\
 schema = "factscribe/report@1"
@@ -550,6 +552,30 @@ class TestMiniTomlFallback(unittest.TestCase):
             with self.assertRaises(ReportError) as ctx:
                 _load_report_toml(path)
             self.assertEqual("BAD_TOML", ctx.exception.code)
+
+
+class TestExitCodeWording(unittest.TestCase):
+    """人读结论行不许把退出码渲染成 "?"。
+
+    原先 _status_word 只映射 0–4，闭集里其余的 5/6/7/8/9 一律落进默认的
+    "?"，于是「1 红 / 0 黄 → ?（退出码 5）」这种红闸结论行会印一个问号。
+    """
+
+    def test_every_closed_set_code_has_a_word(self):
+        for code in sorted(EXIT_CODE_CLOSED_SET):
+            self.assertNotEqual(_status_word(code), "?",
+                                "退出码 %d 渲染成了 ?" % code)
+
+    def test_integrity_code_reads_as_red(self):
+        self.assertEqual(_status_word(5), "红（覆盖/信任链缺口）")
+        self.assertEqual(_status_word(8), "工具缺失")
+
+    def test_readme_exit_code_table_lists_code_5(self):
+        """README 退出码表不许缺 5——那是 audit 真实会退出的码。"""
+        for name in ("README.md", "README.en.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertRegex(text, r"(?m)^\| 5 \|",
+                             "%s 的退出码表里没有 5" % name)
 
 
 if __name__ == "__main__":  # pragma: no cover

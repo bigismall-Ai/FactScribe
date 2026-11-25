@@ -692,6 +692,10 @@ class Config:
     # R-05（v1.3）：无法静态解析的闭包目标（宏、#、嵌套花括号、空目标），
     # 元素同上。审计覆盖不了 ⇒ fail-closed 判红（INPUT_DYNAMIC）。
     dynamic_inputs: list = field(default_factory=list)
+    # R-05：目标存在、但解析后越出项目根的闭包目标（\input{../shared/x.tex}
+    # 或绝对路径），元素同上。闭包不收它 ⇒ 这一段没进审计 ⇒ 覆盖缺口，
+    # 判红（INPUT_OUTSIDE_PROJECT，exit 5）。此前此处静默丢弃＝fail-open。
+    outside_inputs: list = field(default_factory=list)
     # 批 128：篇幅预算（`[budget]`，可选）。budget_defined=False 时判据不跑，
     # 行为与批 127 完全一致。键＝节文件名去扩展名（sections/04_x.tex → 04_x）。
     budget_defined: bool = False
@@ -1737,9 +1741,13 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     由 audit 判 ``INPUT_TARGET_MISSING``（R-05）：不存在的目标不会静默放行。
     目标含宏/`#`/嵌套花括号/为空时记进 ``cfg.dynamic_inputs``，由 audit 判
     ``INPUT_DYNAMIC``：静态审计覆盖不了的目标一律 fail-closed，不许静默跳过。
+    目标存在但解析后越出项目根时记进 ``cfg.outside_inputs``，由 audit 判
+    ``INPUT_OUTSIDE_PROJECT``：越界的目标闭包不收，它那一段同样没进审计，
+    静默丢弃就是 fail-open，不许。
     """
     cfg.missing_inputs = []
     cfg.dynamic_inputs = []
+    cfg.outside_inputs = []
     if cfg.section_files:
         # V3 形态 C：显式章节清单（不是 glob）。闭包仍从这些文件各自的
         # `\input` 展开，但不会把目录里同名的无关 main.tex 也卷进来。
@@ -1775,6 +1783,14 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
                 try:
                     rel = candidate.resolve().relative_to(cfg.root.resolve()).as_posix()
                 except ValueError:
+                    # 目标存在，但解析后越出项目根（\input{../shared/x.tex} 或
+                    # 绝对路径）。闭包不收它 ⇒ 这一段没进审计。此前在此静默
+                    # 丢弃（return False 且不记账），audit 仍判绿——fail-open。
+                    # 现在记进 cfg.outside_inputs，由 audit 判红
+                    # INPUT_OUTSIDE_PROJECT（exit 5），与 missing_inputs 同级可见。
+                    entry = (src_rel, ref, line)
+                    if entry not in cfg.outside_inputs:
+                        cfg.outside_inputs.append(entry)
                     return False
                 if rel in seen:
                     return False

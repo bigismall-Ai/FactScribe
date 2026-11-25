@@ -18,9 +18,10 @@ from pathlib import Path, PurePosixPath
 
 from .audit import Issue
 from .config import Config, ConfigError, load_toml
-from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
-                        EXIT_YELLOW, SCHEMA_VERSION, SEV_RED, SEV_YELLOW,
-                        VERSION)
+from .constants import (EXIT_ATTACK_OPEN, EXIT_CONFIG, EXIT_INTEGRITY,
+                        EXIT_INTERNAL, EXIT_MISSING, EXIT_OK, EXIT_PROOF,
+                        EXIT_RED, EXIT_STALE, EXIT_YELLOW, SCHEMA_VERSION,
+                        SEV_RED, SEV_YELLOW, VERSION)
 from .facts import Fact
 from .texscan import scan_tex
 
@@ -110,8 +111,17 @@ def _print_issue(i: Issue, idx: int) -> str:
 
 
 def _status_word(code: int) -> str:
+    """退出码 → 人读结论词。
+
+    闭集里每个码都要有说法：原先只映射 0–4，5/6/7/8/9 一律落进默认的
+    "?"，于是「1 红 / 0 黄 → ?（退出码 5）」这种红闸结论行会印一个问号。
+    说法与 checks.EXIT_CODE_CLOSED_SET 的语义对齐。
+    """
     return {EXIT_OK: "绿", EXIT_RED: "红（有违例）", EXIT_YELLOW: "黄（未核验，不判死）",
-            EXIT_CONFIG: "配置/用法错", EXIT_INTERNAL: "工具内部错误"}.get(code, "?")
+            EXIT_CONFIG: "配置/用法错", EXIT_INTERNAL: "工具内部错误",
+            EXIT_INTEGRITY: "红（覆盖/信任链缺口）", EXIT_PROOF: "红（未达证明要求）",
+            EXIT_STALE: "红（过期/重放）", EXIT_MISSING: "工具缺失",
+            EXIT_ATTACK_OPEN: "红（攻击面未闭合）"}.get(code, "?")
 
 
 def _human_check(cfg, facts, issues, warnings, conflicts, summary, code) -> str:

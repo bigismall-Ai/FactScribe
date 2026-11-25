@@ -508,8 +508,13 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             continue
         bad = _source_rel_ok(src)
         if bad:
-            red.append(Issue(bad, "fact %r 的 source 必须是相对路径（不许 URL/绝对路径/%s）：%s"
-                             % (f.id, ".. 越界" if ".." in Path(src).parts else "绝对路径", src),
+            # 规则表里「不许 URL/绝对路径」已经说全了；只有 .. 越界这一种
+            # 另外要点名，别把「绝对路径」说两遍。
+            rules = "不许 URL/绝对路径"
+            if ".." in Path(src).parts:
+                rules += "/.. 越界"
+            red.append(Issue(bad, "fact %r 的 source 必须是相对路径（%s）：%s"
+                             % (f.id, rules, src),
                              location=loc, token=f.id))
             continue
         full = base / src
@@ -1085,6 +1090,16 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         red.append(Issue(
             "INPUT_TARGET_MISSING",
             "\\input 目标 %r 不存在（%s:%s）——闭包展开失败，"
+            "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
+            location="%s:%s" % (src_rel, line), token=ref,
+            exit_code=EXIT_INTEGRITY))
+    # R-05：目标存在但解析后越出项目根（\input{../shared/x.tex} 或绝对路径）
+    # ——闭包不收它，这一段同样没进审计。此前静默丢弃＝fail-open（audit 判绿），
+    # 现在按 SPEC-V3.0 码表判红 INPUT_OUTSIDE_PROJECT（exit 5）。
+    for src_rel, ref, line in getattr(cfg, "outside_inputs", []):
+        red.append(Issue(
+            "INPUT_OUTSIDE_PROJECT",
+            "\\input 目标 %r 越出项目根（%s:%s）——闭包不收它，"
             "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
             location="%s:%s" % (src_rel, line), token=ref,
             exit_code=EXIT_INTEGRITY))

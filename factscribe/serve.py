@@ -356,6 +356,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:  # noqa: N802 - stdlib signature
         path = urlparse(self.path).path
+        # 同源闸：四个 HTTP 方法里 do_PUT 原先独缺这一道（GET/POST/DELETE
+        # 都有）。PUT /api/sections 是唯一覆盖论文正文 .tex 的写接口，
+        # 缺这道闸＝任意页面可跨源改写正文。语义与其它三处一致：
+        # 没有 Origin 头放行；带了 Origin 但不是本监听地址就拒。
+        if not self._origin_ok():
+            self._error(403, "CROSS_ORIGIN",
+                        "跨源请求不接：只允许本监听地址（同源）")
+            return
         if not self._authorized():
             self._error(401, "UNAUTHORIZED",
                         "需要 Bearer token（Authorization 或 X-FactScribe-Token）")

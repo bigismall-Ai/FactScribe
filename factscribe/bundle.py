@@ -260,13 +260,15 @@ class Closure:
     files: list = field(default_factory=list)     # 闭包内源文件（项目内相对路径）
     missing: list = field(default_factory=list)   # 悬空 \input/\include
     dynamic: list = field(default_factory=list)   # 无法静态解析的目标
+    outside: list = field(default_factory=list)   # 存在但越出项目根的目标（闭包不收）
     root_tex: str = ""
     cfg: Config = None                            # 闭包口径下的 cfg 副本
 
     def as_dict(self) -> dict:
         return {"root_tex": self.root_tex, "files": list(self.files),
                 "missing": [list(x) for x in self.missing],
-                "dynamic": [list(x) for x in self.dynamic]}
+                "dynamic": [list(x) for x in self.dynamic],
+                "outside": [list(x) for x in self.outside]}
 
 
 def collect_closure(cfg: Config) -> Closure:
@@ -288,6 +290,7 @@ def collect_closure(cfg: Config) -> Closure:
         files=sorted(rel for rel, _ in sections),
         missing=[tuple(x) for x in getattr(scoped, "missing_inputs", [])],
         dynamic=[tuple(x) for x in getattr(scoped, "dynamic_inputs", [])],
+        outside=[tuple(x) for x in getattr(scoped, "outside_inputs", [])],
         root_tex=root_tex,
         cfg=scoped,
     )
@@ -331,6 +334,12 @@ def _closure_item(closure: Closure) -> GateItem:
         detail = "；".join(
             "无法静态解析的目标：%s:%s → %s（fail-closed）"
             % (src, line, ref) for src, ref, line in closure.dynamic)
+        return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
+                        STATUS_FAIL, detail)
+    if closure.outside:
+        detail = "；".join(
+            "越出项目根的目标：%s:%s → %s（目标存在但闭包不收，覆盖缺口）"
+            % (src, line, ref) for src, ref, line in closure.outside)
         return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
                         STATUS_FAIL, detail)
     if not closure.files:

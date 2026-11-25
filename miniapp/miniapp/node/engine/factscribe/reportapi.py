@@ -26,10 +26,10 @@ import re
 from pathlib import Path
 
 from .config import ConfigError, load_config
-from .textio import write_text_exact
 from .report import (ReportError, _artifact_path, _rel_posix, _resolve_in_ws,
                      _ws_root, check_report, load_report, lock_report,
                      report_card, sign_report, verify_signoff)
+from .textio import write_text_exact
 
 # 报告扫描面：两个 glob，顺序即展示顺序。
 REPORT_PATTERNS = ("experiments/*/reports/*.report.toml",

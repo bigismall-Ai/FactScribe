@@ -169,6 +169,18 @@ class SymlinkedProjectRootTest(unittest.TestCase):
         self.assertEqual(result["key"], "new2024")
         self.assertNotIn(b"new2024", (self.project / "refs.bib").read_bytes())
 
+    def test_refs_dedupe_through_symlinked_root(self):
+        """refs.py 也走同一套 bib 口径：软链根下相对路径要算得出来。
+
+        这条是回归锁：refs.py 把 `_bib_paths()` 给的路径与 `cfg.root`
+        配对解析，两者若不是同一种拼法（解析前/解析后），相对路径就算不
+        出来——口径必须统一到同一处。
+        """
+        from factscribe import refs
+        result = refs.dedupe(self.linked)
+        self.assertEqual(result.total, 1)
+        self.assertEqual(result.exit_code, 0)
+
     def test_no_valueerror_escapes(self):
         """两侧都不许把 ValueError 抛给调用方。"""
         try:

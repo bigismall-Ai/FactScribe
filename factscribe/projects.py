@@ -17,9 +17,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .textio import (dominant_newline, read_text_exact, split_keepends,
-                     write_text_exact)
-
 REGISTRY_VERSION = 1
 MAX_PROJECTS = 30
 CONFIG_NAME = "factscribe.toml"
@@ -198,49 +195,17 @@ def _toml_value(text: str) -> str:
     return '"%s"' % out
 
 
-def _write_parts(path: Path, parts: list[tuple[str, str]],
-                  fallback: str = "\n") -> None:
-    """把 `[(行内容, 行尾), ...]` 写回文件。
-
-    与原来的 `"\n".join(lines).rstrip("\n") + "\n"` 意图一致（末尾不留
-    空行、末尾恰好一个换行），但**行尾用文件自己的那一种**：CRLF 的声明
-    文件不会被顺手改成 LF，Windows 上也不会被翻译成 CRLF。
-    """
-    rows = list(parts)
-    had_rows = bool(rows)
-    while rows and rows[-1][0] == "":
-        rows.pop()          # 末尾的空行不留
-    out: list[str] = []
-    last = len(rows) - 1
-    for index, (content, term) in enumerate(rows):
-        if index < last:
-            out.append(content + (term or fallback))
-        else:
-            out.append(content)
-    text = "".join(out)
-    if text:
-        text += fallback
-    elif had_rows:
-        text = fallback
-    write_text_exact(path, text)
-
-
 def _rewrite_project_table(path: Path, values: dict) -> None:
     """改写项目声明（`factscribe.toml`）的 `[project]` 表：只替换/追加给定的键，别的原样保留。
 
     骨架模板里已经有的键就地替换；没有的追加到 `[project]` 段末尾。
     其它段（`[budget]`/`[evidence]` 之类）一个字都不动。
     `values` 的值是**已经排版好的 TOML 字面量**（字符串带引号、数组带方括号）。
-
-    行尾按原样保留：改一个键不牵动整份文件的换行。
     """
-    raw = read_text_exact(path)
-    parts = split_keepends(raw)
-    contents = [content for content, _ in parts]
-    nl = dominant_newline(raw)
+    lines = path.read_text(encoding="utf-8").splitlines()
     start = None
-    end = len(contents)
-    for index, line in enumerate(contents):
+    end = len(lines)
+    for index, line in enumerate(lines):
         stripped = line.strip()
         if not stripped.startswith("["):
             continue
@@ -251,25 +216,24 @@ def _rewrite_project_table(path: Path, values: dict) -> None:
         end = index
         break
     if start is None:
-        section: list[tuple[str, str]] = [("", nl), ("[project]", nl)]
+        lines.append("")
+        lines.append("[project]")
         for key, value in values.items():
-            section.append(("%s = %s" % (key, value), nl))
-        new_parts = parts + section
+            lines.append("%s = %s" % (key, value))
     else:
         pending = dict(values)
         section = []
-        for index in range(start, end):
-            content, term = parts[index]
-            match = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", content)
+        for line in lines[start:end]:
+            match = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", line)
             key = match.group(1) if match else ""
             if key in pending:
-                section.append(("%s = %s" % (key, pending.pop(key)), term))
+                section.append("%s = %s" % (key, pending.pop(key)))
             else:
-                section.append((content, term))
+                section.append(line)
         for key, value in pending.items():
-            section.append(("%s = %s" % (key, value), nl))
-        new_parts = parts[:start] + section + parts[end:]
-    _write_parts(path, new_parts, nl)
+            section.append("%s = %s" % (key, value))
+        lines[start:end] = section
+    path.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
 
 
 def create_project(*, title: str, parent: str, slug: str,
@@ -366,32 +330,29 @@ def _has_project_table(text: str) -> bool:
 def _rewrite_flat_keys(path: Path, values: dict) -> None:
     """改写扁平 schema（v3 形态 A）的顶层键：只替换/追加给定的键。
 
-    只动第一张表之前的那些行；表里的内容一个字都不改。行尾按原样保留。
+    只动第一张表之前的那些行；表里的内容一个字都不改。
     """
     if not values:
         return
-    raw = read_text_exact(path)
-    parts = split_keepends(raw)
-    contents = [content for content, _ in parts]
-    nl = dominant_newline(raw)
-    end = len(contents)
-    for index, line in enumerate(contents):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    end = len(lines)
+    for index, line in enumerate(lines):
         if line.strip().startswith("["):
             end = index
             break
     pending = dict(values)
-    head: list[tuple[str, str]] = []
-    for index in range(end):
-        content, term = parts[index]
-        match = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", content)
+    head = []
+    for line in lines[:end]:
+        match = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=", line)
         key = match.group(1) if match else ""
         if key in pending:
-            head.append(("%s = %s" % (key, pending.pop(key)), term))
+            head.append("%s = %s" % (key, pending.pop(key)))
         else:
-            head.append((content, term))
+            head.append(line)
     for key, value in pending.items():
-        head.append(("%s = %s" % (key, value), nl))
-    _write_parts(path, head + parts[end:], nl)
+        head.append("%s = %s" % (key, value))
+    path.write_text("\n".join(head + lines[end:]).rstrip("\n") + "\n",
+                    encoding="utf-8")
 
 
 def update_project(registry: dict, path: str, name: str = "",

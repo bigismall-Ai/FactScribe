@@ -20,10 +20,9 @@ import os
 import re
 from pathlib import Path, PurePosixPath
 
-from .citeview import _bib_paths, _tex_sources, inside_root, project_root
+from .citeview import _bib_paths, _tex_sources
 from .citations import parse_bib
 from .config import ConfigError, load_config
-from .textio import read_text_exact, write_text_exact
 
 # BibTeX 的 key：字母数字，外加冒号、点、下划线、连字符。
 KEY_RE = re.compile(r"^[A-Za-z0-9:._-]+$")
@@ -73,16 +72,12 @@ def _bib_value(raw: str) -> str:
 
 
 def _write_atomic(path: Path, text: str) -> None:
-    """原子写：同目录临时文件 + rename。
-
-    `newline=""`：不翻译换行。bib 里原有的 '\r\n' 不会被写成
-    '\r\r\n'，新增的行也不会在 Windows 上被塞进 '\r\n'——
-    「保存必须逐字保留正文内容」对参考文献同样成立。
-    """
+    """原子写：同目录临时文件 + rename。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name("%s.tmp-%d" % (path.name, os.getpid()))
     try:
-        write_text_exact(tmp, text)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
         os.replace(str(tmp), str(path))
     finally:
         if tmp.exists():
@@ -93,20 +88,14 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 def _project_bib(cfg) -> Path:
-    """项目自己的 bib 文件（配置里的 `bib`）。越出项目根一律拒。
-
-    口径与读侧 `citeview.inside_root()` 共用一份：写侧拒、读侧丢，
-    但「在不在项目内」的判定规则只有一份，两侧不会各说各话。
-    """
+    """项目自己的 bib 文件（配置里的 `bib`）。越出项目根一律拒。"""
     rel = str(getattr(cfg, "bib", "") or "refs.bib").strip()
     pure = PurePosixPath(rel.replace("\\", "/"))
     if pure.is_absolute() or any(part == ".." for part in pure.parts):
         raise ConfigError("配置里的 bib 必须是项目内的相对路径：%s" % rel,
                           code="BIB_PATH_ESCAPE")
-    root = project_root(cfg)
-    target = inside_root(root, rel)
-    if target is None:
-        raise ConfigError("bib 越出项目根：%s" % rel, code="BIB_PATH_ESCAPE")
+    root = cfg.root.resolve()
+    target = root.joinpath(*[p for p in pure.parts if p not in ("", ".")])
     try:
         target.resolve().relative_to(root)
     except ValueError:
@@ -154,7 +143,7 @@ def citation_add_data(project: Path | str, body: dict,
         raise ConfigError("请求体必须是 JSON 对象", code="CITATION_INVALID")
     key = _clean_key(body.get("key"))
     cfg = load_config(Path(project))
-    root = project_root(cfg)
+    root = cfg.root.resolve()
 
     # key 已存在 → 409。查的是整个 bib 集合：加到 refs.bib 里撞上 extra.bib
     # 的同名 key，一样是重复。
@@ -165,7 +154,7 @@ def citation_add_data(project: Path | str, body: dict,
 
     target = _project_bib(cfg)
     try:
-        old = read_text_exact(target)
+        old = target.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         old = ""
     fields = {
@@ -198,7 +187,7 @@ def citation_delete_data(project: Path | str, body: dict,
         raise ConfigError("请求体必须是 JSON 对象", code="CITATION_INVALID")
     key = _clean_key(body.get("key"))
     cfg = load_config(Path(project))
-    root = project_root(cfg)
+    root = cfg.root.resolve()
 
     # 定位：parse_bib 给出每条的行范围（line..end）。
     hits = []
@@ -221,7 +210,7 @@ def citation_delete_data(project: Path | str, body: dict,
     for hit in hits:
         path = hit["path"]
         try:
-            text = read_text_exact(path)
+            text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             raise ConfigError("bib 读不了：%s" % hit["file"], code="CITATION_INVALID")
         lines = text.splitlines(keepends=True)

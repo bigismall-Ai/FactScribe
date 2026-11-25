@@ -46,9 +46,9 @@
     not_applicable    该域不适用时效
 """
 
-__all__ = ["STATES", "STATE_LABELS", "SOURCES", "FIELDS", "from_interval",
-           "from_status_flag", "from_version_stamp", "from_decision_date",
-           "from_none"]
+__all__ = ["STATES", "STATE_LABELS", "SOURCES", "FIELDS", "HINT",
+           "strip_hint", "from_interval", "from_status_flag",
+           "from_version_stamp", "from_decision_date", "from_none"]
 
 FIELDS = ("domain", "kind", "item_id", "reference_date", "state",
           "state_label", "effective_from", "effective_to", "source",
@@ -86,18 +86,36 @@ CN_SXX_STATE = {
 }
 
 
+HINT = "参考日未定（时效判据不跑）"
+
+
+def strip_hint(note):
+    """把「参考日未定」这句提示从口径说明里摘掉。
+
+    参考日回填时用：件先按「参考日未定」造一遍（状态 unknown），
+    之后拿到真实参考日要重算状态——那句提示是**当时**的口径；
+    参考日定了以后还留着，note 就会和同一条里的 reference_date 字段
+    自相矛盾（说「参考日未定」，字段却有值）。
+    """
+    text = str(note or "").strip()
+    if HINT not in text:
+        return text
+    text = text.replace("；" + HINT, "")
+    text = text.replace(HINT, "")
+    return text.strip().rstrip("；").strip()
+
+
 def _with_hint(note):
     """参考日未定时的口径说明：**保留域注释**，补一句「参考日未定」。
 
     （域注释是这条素材的口径说明，不许被参考日的状态覆盖掉。）
     """
-    hint = "参考日未定（时效判据不跑）"
     text = str(note or "").strip()
     if not text:
-        return hint
-    if hint in text:
+        return HINT
+    if HINT in text:
         return text
-    return text + "；" + hint
+    return text + "；" + HINT
 
 
 def _shape(domain, kind, item_id, reference_date, state, source, note,

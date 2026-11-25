@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from factscribe_legal import code_table                      # noqa: E402
 from factscribe_legal import receipts                         # noqa: E402
+from factscribe_legal import timeliness as tl                  # noqa: E402
 from factscribe_legal.api import (API_VERSION, CHANNELS,       # noqa: E402
                                   build_contract, context_from_project)
 
@@ -616,6 +617,40 @@ class TestCliApiExit(unittest.TestCase):
                      "verify-es", "verify-fr-case", "verify-it-case",
                      "cn-lead-search", "cn-lead-verify", "cn-lead-get", "api"):
             self.assertIn(name, proc.stdout)
+
+
+# ---------------------------------------------------------------------------
+# 8. 时效口径说明：参考日定了，就别再写「参考日未定」
+# ---------------------------------------------------------------------------
+
+class TestTimelinessNote(unittest.TestCase):
+    """note 里的口径说明必须与 reference_date 字段一致（不许自相矛盾）。
+
+    件是按「参考日未定」先造一遍（状态 unknown），之后回填真实参考日重算；
+    那句「参考日未定」的提示是**当时**的口径，参考日定了以后必须抹掉。
+    """
+
+    def test_hint_present_when_reference_date_missing(self):
+        obj = tl.from_interval("fr", "法条", "L1", "2012-01-07", "2999-01-01", "",
+                               "法国法条：版本区间完整。")
+        self.assertEqual(obj["state"], "unknown")
+        self.assertIn(tl.HINT, obj["note"])
+
+    def test_strip_hint_removes_only_the_hint(self):
+        self.assertEqual(tl.strip_hint("法国法条：版本区间完整。；" + tl.HINT),
+                         "法国法条：版本区间完整。")
+        self.assertEqual(tl.strip_hint("普通说明"), "普通说明")
+        self.assertEqual(tl.strip_hint(tl.HINT), "")
+
+    def test_contract_notes_have_no_stale_hint(self):
+        ctx = context_from_project("fixtures/legal-demo")
+        self.assertTrue(ctx.date, "夹具应带参考日")
+        contract = build_contract(ctx, channels=["corpus", "timeliness"])
+        for item in contract["corpus"]["items"]:
+            self.assertNotIn(tl.HINT, item["timeliness"]["note"])
+        for item in contract["timeliness"]["items"]:
+            self.assertNotIn(tl.HINT, item["note"])
+            self.assertEqual(item["reference_date"], ctx.date)
 
 
 if __name__ == "__main__":

@@ -155,7 +155,7 @@ def dominant_newline(text: str, default: str = "\n") -> str:
 
 
 def restore_newlines(original: str, new_text: str) -> str:
-    """把 `new_text` 的行尾还原成 `original` 里各行**原有**的行尾。
+    r"""把 `new_text` 的行尾还原成 `original` 里各行**原有**的行尾。
 
     为什么需要它：网页工作台的编辑器是 `<textarea>`，而 **HTML 规范规定
     textarea 的 API value 把换行一律归一为 LF**（实测：Chrome 里

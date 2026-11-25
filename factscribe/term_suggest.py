@@ -23,6 +23,7 @@ from .config import ConfigError, load_config, load_sections
 from .style import _source_view
 from .terms import (load_glossary, key_of, normalize_surface,
                     parse_glossary)
+from .textio import dominant_newline, read_text_exact, to_lf, write_text_exact
 
 # --------------------------------------------------------------------------
 # 语料收集
@@ -59,7 +60,7 @@ def _walk_sources(root: Path) -> list[tuple[str, str]]:
                for part in rel.parts[:-1]):
             continue
         out.append((rel.as_posix(),
-                    path.read_text(encoding="utf-8", errors="replace")))
+                    to_lf(read_text_exact(path, errors="replace"))))
     return out
 
 
@@ -72,7 +73,7 @@ def _project_sources(root: Path) -> list[tuple[str, str]] | None:
         return None
     if not sections:
         return None
-    return [(str(name), str(text)) for name, text in sections]
+    return [(str(name), to_lf(str(text))) for name, text in sections]
 
 
 def collect_sources(root: Path) -> list[tuple[str, str]]:
@@ -484,7 +485,7 @@ _CANDIDATE_COLUMNS = ("surface", "lang", "count", "sections",
 def _read_candidates(path: Path) -> list[dict]:
     if not path.is_file():
         raise ConfigError("候选文件不存在：%s" % path)
-    lines = [line for line in path.read_text(encoding="utf-8").splitlines()
+    lines = [line for line in read_text_exact(path).splitlines()
              if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         raise ConfigError("候选文件为空：%s" % path)
@@ -546,16 +547,19 @@ def add_from_tsv(from_path, picks, glossary_path=None,
             "--pick 不在候选文件里：%s" % "、".join(repr(x) for x in missing))
 
     if added:
-        text = targets.read_text(encoding="utf-8")
-        if text and not text.endswith("\n"):
-            text += "\n"
+        # 按原样读：词表是用户维护的，追加不能顺手把行尾换掉。
+        text = read_text_exact(targets)
+        nl = dominant_newline(text)
+        if text and not text.endswith(("\n", "\r")):
+            text += nl
         stamp = today or date.today().isoformat()
         comment = "# terms add %s：来源 %s" % (stamp, source)
         body = [comment]
         body += ["%s\t\t\t待分类" % surface for surface in added]
-        targets.write_text(text + "\n".join(body) + "\n", encoding="utf-8")
+        # newline=""：新增行用词表自己的行尾，不掺进混合行尾。
+        write_text_exact(targets, text + nl.join(body) + nl)
         # 写完立刻重解析：词表坏了必须当场报错，不能留给 style 才发现。
-        parsed = parse_glossary(targets.read_text(encoding="utf-8"))
+        parsed = parse_glossary(read_text_exact(targets))
         for surface in added:
             if parsed.canonical_of(surface) is None:
                 raise ConfigError("写入后词表无法解析新术语：%s" % surface)

@@ -207,6 +207,9 @@ integrations/minifactscribe/
 - macOS，MiniMax Code 3.1.14（Mini App 3.1.14）
 - Node 24.19
 - 零第三方依赖；`node --test integrations/minifactscribe/tests/*.test.mjs` 全离线
+- **Windows 未在真机上验证**：正文保存链路的换行保真（读不翻译、写不翻译，
+  `newline=""`）已在本机用 CRLF/混合行尾做过逐字节往返测试，但 Windows 真机
+  端到端仍**未验证**（手边没有 Windows 机器）；上游 CI 矩阵也只有 ubuntu。
 
 ## Data & access
 

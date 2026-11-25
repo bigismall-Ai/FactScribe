@@ -86,7 +86,8 @@ def load_citations(project_dir):
                 continue
             path = os.path.join(root, fn)
             rel = os.path.relpath(path, project_dir)
-            with open(path, encoding="utf-8") as fh:
+            # newline=""：按原样读（CRLF 不翻译）；\cite{} 的正则与行尾无关。
+            with open(path, encoding="utf-8", newline="") as fh:
                 for i, line in enumerate(fh, 1):
                     for m in CITE_RE.finditer(line):
                         for key in m.group(1).split(","):

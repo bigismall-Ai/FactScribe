@@ -839,6 +839,8 @@ python3 tools/spec_lint.py --no-construction
 | FACT_SCHEMA_INVALID | facts 文件 schema 不认识 | `schema` 不是 `factscribe-fact/3.x` 或 `factscribe-fact/3.x`；大小写敏感 | red | 2 | §11.1 |
 | FACT_CONTAINER_INVALID | facts 容器形态错 | `fact` 不是 `[[fact]]` 表数组，或条目不是表 | red | 2 | §11.1 |
 | FACT_ID_MISSING | fact 缺 id | 条目录入时没有非空 `id` | red | 2 | §11.1 |
+| FACT_FILE_OUTSIDE_PROJECT | 事实账文件越出项目根 | `facts/*.toml` 的真实目标越出项目根（软链指向项目外，或经软链目录绕出去） | red | 5 | §11.1／R-04 |
+| FACT_FILE_UNRESOLVED | 事实账软链不可解 | `facts/*.toml` 的软链成环或断链——真实目标不可解，内容不可知 | red | 5 | §11.1／R-04 |
 | BAD_ID_FORMAT | fact id 格式不合法 | `id` 不匹配 `^[A-Za-z0-9._-]+$`（v3） | red | 1 | §11.1 |
 | DUPLICATE_ID | fact id 重复 | 跨文件按 `casefold()` 后重复 | red | 1 | §11.1 |
 | SOURCE_SHA256_MISMATCH | 源文件哈希不符 | `source_sha256` 去 `sha256:` 前缀后 ≠ 磁盘现算 | red | 1 | §11.1／§11.6 |
@@ -1095,6 +1097,8 @@ python3 tools/spec_lint.py --no-construction
 | **新增** | `COMPUTED_VALUE_UNREGISTERED` | `\frac/\numexpr` 等现场计算生成且未登记的数字。替代 V3.0 §8.1 的 `MATH_FRAC_UNVERIFIABLE`（后者不再单独发射）。 |
 | **新增** | `NUMBER_AS_CROSSREF` | 手写 `Table 3`/`Figure 2` 这类结构编号当数据；不再落到 `UNBOUND_NUMBER`。 |
 | **新增** | `EVIDENCE_CHAIN_BROKEN` | 证据链三节任一断开；替代 §11.4 的 `FACT_EVIDENCE_MISSING`（后者不再单独发射）。 |
+| **新增** | `FACT_FILE_OUTSIDE_PROJECT` | 事实账文件（`facts/*.toml`）的真实目标越出项目根——账本不收它，那些事实没进审计，信任根被突破。**不复用** `INPUT_OUTSIDE_PROJECT`：后者是「闭包输入越界」（R-05），与本码不是同一现象（§8「一个码一个现象」）。 |
+| **新增** | `FACT_FILE_UNRESOLVED` | 事实账文件的软链成环或断链——真实目标不可解，账本不收它，那些事实没进审计（覆盖缺口）。 |
 | **改名/合并** | `MATH_FRAC_UNVERIFIABLE` → `COMPUTED_VALUE_UNREGISTERED` | 一个现象一个码；`\frac` 未登记与 `\numexpr` 未登记统一口径。 |
 | **改名/合并** | `FACT_EVIDENCE_MISSING` → `EVIDENCE_CHAIN_BROKEN` | 证据缺失从黄升红：链断即红（§11.6）。 |
 | **合并** | `UNBOUND_QUANT` → `UNBOUND_NUMBER` | 同一现象（数字回得到账但未内联绑定）只保留 `UNBOUND_NUMBER`。 |
@@ -1109,6 +1113,8 @@ python3 tools/spec_lint.py --no-construction
 | 现象 | 唯一 code | severity/exit |
 |---|---|---|
 | 未知 facts `schema`（含 `2.9` 降级） | `FACT_SCHEMA_INVALID` | red / 2 |
+| 事实账文件越出项目根（软链指向项目外） | `FACT_FILE_OUTSIDE_PROJECT` | red / 5 |
+| 事实账软链不可解（成环／断链） | `FACT_FILE_UNRESOLVED` | red / 5 |
 | `\frac`/`\numexpr` 现场计算且未登记 | `COMPUTED_VALUE_UNREGISTERED` | red / 1 |
 | 手写 `Table 3`/`Figure 2` 当数据 | `NUMBER_AS_CROSSREF` | yellow / 3 |
 | `\fact{A9}` 指向账上不存在的 id | `UNKNOWN_FACT_MARKER` | red / 1 |
@@ -1272,6 +1278,11 @@ number_locale = "dot"
 ### 11.1 facts 文件形态（写死）
 
 - 文件名/位置：`project.facts` 指定（缺省 `facts`＝`facts/*.toml`）。
+- **信任根**：账文件必须在项目根内。`facts/*.toml` 若是软链（或经软链目录绕出去），
+  真实目标越出项目根 → `FACT_FILE_OUTSIDE_PROJECT`（INTEGRITY，exit 5）；软链成环或断链
+  （真实目标不可解）→ `FACT_FILE_UNRESOLVED`（INTEGRITY，exit 5）。两条都不进账本——
+  那些事实没进审计，属信任根/覆盖缺口，不许静默读入，也不许当成「空账」（exit 2）
+  盖住。指向项目内的软链照旧入账，行为不变。
 - `schema` 头可选，允许 `factscribe-fact/3.x` 与 `factscribe-fact/3.x`；
   其它 `schema` → `FACT_SCHEMA_INVALID`（CONFIG，exit 2）。
 - 账体是 **`[[fact]]` 表数组**（一个文件可以有多条）。没有 `fact` 键时，
@@ -1373,6 +1384,8 @@ note = ""
 | `id` 重复（大小写不敏感） | `DUPLICATE_ID` | FACT | **1** | `audit.py::run_check` 与 `run_audit` 各判一次 |
 | `id` 格式不合法（v3） | `BAD_ID_FORMAT` | FACT | **1** | `audit.py`（v3 用 §11.1 字符集；v1 规则不变） |
 | 未知 fact `schema` | `FACT_SCHEMA_INVALID` | CONFIG | **2** | `config.py::load_facts` |
+| 事实账文件越出项目根（软链指向项目外） | `FACT_FILE_OUTSIDE_PROJECT` | INTEGRITY | **5** | `config.py::load_facts`（记账）＋`audit.py::run_audit`／`run_check`（判红） |
+| 事实账软链不可解（成环／断链） | `FACT_FILE_UNRESOLVED` | INTEGRITY | **5** | `config.py::load_facts`（记账）＋`audit.py::run_audit`／`run_check`（判红） |
 | `fact` 不是表数组 | `FACT_CONTAINER_INVALID` | CONFIG | **2** | `config.py::load_facts` |
 | `source_sha256` 与现算不符 | `SOURCE_SHA256_MISMATCH` | FACT | **1** | `audit.py::verify_sources`（v3 另记 `APPROVAL_STALE`） |
 | `source_sha256` 缺失（v1） | `MISSING_SOURCE_SHA256` | FACT | **1** | `audit.py::verify_sources`；v3 源层由 §11.6 证据链强制 |

@@ -174,6 +174,86 @@ class TestNumberNormalization(unittest.TestCase):
         self.assertIn("10", keys)
         self.assertIn("16", keys)
 
+    def test_fullwidth_decimal_point_is_one_number(self):
+        """全角小数点 U+FF0E：全角写法＝半角写法。"""
+        self.assertEqual(factscribe.number_key("５６．２５"),
+                         factscribe.number_key("56.25"))
+        self.assertEqual(factscribe.number_key("50．5"),
+                         factscribe.number_key("50.5"))
+
+    def test_fullwidth_decimal_point_does_not_merge_numbers(self):
+        """50．5 是 50.5，不是 505——不许把两个不同的数并成一个。"""
+        self.assertEqual(factscribe.number_key("50．5"), "50.5")
+        self.assertNotEqual(factscribe.number_key("50．5"),
+                            factscribe.number_key("505"))
+        self.assertNotEqual(factscribe.number_key("50．5"),
+                            factscribe.number_key("50"))
+
+
+class TestFullwidthDecimalPoint(unittest.TestCase):
+    """全角小数点 U+FF0E：一个数不许被切成两个。
+
+    既有口径：全角数字就是数字（正则的 \\d 在 Unicode 模式下已匹配 ０-９，
+    Decimal 也能解析它们），唯独小数点此前只认 ASCII 的 "."。于是 ５６．２５
+    被抽成 ５６ 和 ２５ 两个 token → BOUND_MISMATCH 误判红，报错文案还指向
+    错的数；若账上恰有值为 56 或 25 的 fact，全角写法还会被误绑到不相干的
+    fact 上。
+    """
+
+    def test_fullwidth_dot_is_one_token(self):
+        text = "准确率为 ５６．２５"
+        s = factscribe.scan_tex(text)
+        nums = factscribe._extract_numbers(s.masked, text)
+        self.assertEqual(len(nums), 1)
+        self.assertEqual(nums[0]["key"], "56.25")
+
+    def test_fullwidth_body_matches_halfwidth_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(
+                tmp, facts=FACTS, bib=BIB_OK,
+                sections={"a.tex": "两臂合计的准确率为 ５６．２５％\\fact{A2}\n"
+                                   "\\cite{chen2023}\n"})
+            code, data = run_json(["audit", str(root), "--json"])
+            self.assertEqual(code, 0, data)
+            self.assertEqual([i["code"] for i in data["issues"]], [])
+            self.assertEqual([w["code"] for w in data.get("warnings", [])], [])
+
+
+class TestBadSourcePathWording(unittest.TestCase):
+    """BAD_SOURCE_PATH 的文案不许把「绝对路径」说两遍。
+
+    原模板是「（不许 URL/绝对路径/%s）」，而三元表达式在绝对路径分支又补了
+    一遍「绝对路径」——印出来是「不许 URL/绝对路径/绝对路径」。
+    """
+
+    def _audit_with_source(self, src):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, facts=FACTS, bib=BIB_OK,
+                                sections={"a.tex": "正文没有任何数字\n"})
+            f = root / "facts" / "f.toml"
+            f.write_text(f.read_text(encoding="utf-8").replace(
+                'source = "results/raw.md"', 'source = "%s"' % src),
+                encoding="utf-8")
+            return run_json(["audit", str(root), "--json"])
+
+    def _message(self, data):
+        msgs = [i["message"] for i in data["issues"]
+                if i["code"] == "BAD_SOURCE_PATH"]
+        self.assertTrue(msgs, data)
+        return msgs[0]
+
+    def test_absolute_path_message_has_no_duplicate(self):
+        code, data = self._audit_with_source("/etc/hosts")
+        msg = self._message(data)
+        self.assertEqual(msg.count("绝对路径"), 1, msg)
+        self.assertNotIn("绝对路径/绝对路径", msg)
+
+    def test_dotdot_message_names_the_escape_once(self):
+        code, data = self._audit_with_source("../outside.md")
+        msg = self._message(data)
+        self.assertEqual(msg.count("绝对路径"), 1, msg)
+        self.assertIn(".. 越界", msg)
+
 
 class TestTexMasking(unittest.TestCase):
     def nums(self, tex):

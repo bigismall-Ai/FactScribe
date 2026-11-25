@@ -36,6 +36,7 @@ from .projects import (ProjectCreateError, create_project, factscribe_dir,
 from .constants import EXIT_OK, VERSION
 from .report import ReportError, _payload, _severity_of
 from .reportapi import report_action_data, reports_data, report_template_data
+from .textio import read_text_exact
 from .samples import SampleError, install_guide_sample, is_guide_path
 from .workbench import (SectionError, add_fact_data, audit_data, brief_data,
                         create_section_data, delete_section_data,
@@ -356,6 +357,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:  # noqa: N802 - stdlib signature
         path = urlparse(self.path).path
+        # 同源闸：四个 HTTP 方法里 do_PUT 原先独缺这一道（GET/POST/DELETE
+        # 都有）。PUT /api/sections 是唯一覆盖论文正文 .tex 的写接口，
+        # 缺这道闸＝任意页面可跨源改写正文。语义与其它三处一致：
+        # 没有 Origin 头放行；带了 Origin 但不是本监听地址就拒。
+        if not self._origin_ok():
+            self._error(403, "CROSS_ORIGIN",
+                        "跨源请求不接：只允许本监听地址（同源）")
+            return
         if not self._authorized():
             self._error(401, "UNAUTHORIZED",
                         "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
@@ -602,7 +611,7 @@ class _Handler(BaseHTTPRequestHandler):
         if not pdf.is_file():
             raise ConfigError("还没有编译产物 %s，先编译一次" % out,
                               code="PDF_MISSING")
-        title = section_title(tex.read_text(encoding="utf-8", errors="replace"))
+        title = section_title(read_text_exact(tex, errors="replace"))
         try:
             data = locate(pdf, title)
         except FileNotFoundError:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime as _dt
+import errno
 import hashlib
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +13,7 @@ from pathlib import Path
 from .facts import Fact, canon_text, fact_value_keys, latex_display
 from .constants import SEV_INFO
 from .texrules import strip_comments_and_verbatim
+from .textio import read_text_exact, to_lf
 
 # --------------------------------------------------------------------------
 # TOML 读写（3.11+ 用 tomllib；3.10 用内置极简解析器兜底）
@@ -692,6 +695,21 @@ class Config:
     # R-05（v1.3）：无法静态解析的闭包目标（宏、#、嵌套花括号、空目标），
     # 元素同上。审计覆盖不了 ⇒ fail-closed 判红（INPUT_DYNAMIC）。
     dynamic_inputs: list = field(default_factory=list)
+    # R-05：目标存在、但解析后越出项目根的闭包目标（\input{../shared/x.tex}
+    # 或绝对路径），元素同上。闭包不收它 ⇒ 这一段没进审计 ⇒ 覆盖缺口，
+    # 判红（INPUT_OUTSIDE_PROJECT，exit 5）。此前此处静默丢弃＝fail-open。
+    outside_inputs: list = field(default_factory=list)
+    # R-04：事实账文件（facts/*.toml）越出项目根——软链的真实目标在项目外，
+    # 或经软链目录绕出去。账本不收它 ⇒ 那些事实没进审计 ⇒ 信任根被突破，
+    # 判红（FACT_FILE_OUTSIDE_PROJECT，exit 5）。此前 `p.is_file()` 跟随软链
+    # 直接读入＝fail-open：审计拿信任根外的数字当账，且无任何码。
+    # 元素为 (相对路径, 真实目标)。由 load_facts 填充，audit 判红。
+    outside_facts: list = field(default_factory=list)
+    # R-04：事实账文件的软链不可解（成环或断链）——真实目标不可解，内容不可知，
+    # 账本同样不收它 ⇒ 那些事实没进审计，判红（FACT_FILE_UNRESOLVED，exit 5）。
+    # 此前成环软链被 `is_file()` 静默跳过（既无码也无位置）。
+    # 元素为 (相对路径, 原因)。由 load_facts 填充，audit 判红。
+    unresolved_facts: list = field(default_factory=list)
     # 批 128：篇幅预算（`[budget]`，可选）。budget_defined=False 时判据不跑，
     # 行为与批 127 完全一致。键＝节文件名去扩展名（sections/04_x.tex → 04_x）。
     budget_defined: bool = False
@@ -1425,7 +1443,7 @@ def _normalise_display(raw, latex: bool = False) -> list[dict]:
 def _locate_id_line(path: Path, fid: str) -> int:
     pat = re.compile(r"""^\s*id\s*=\s*["']%s["']""" % re.escape(fid))
     try:
-        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for i, line in enumerate(read_text_exact(path).splitlines(), 1):
             if pat.match(line):
                 return i
     except OSError:
@@ -1522,8 +1540,95 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
     return f
 
 
+def _facts_link_kind(cfg: Config, path: Path) -> tuple[str, str]:
+    """给一个事实账候选文件定类：能不能进账本。
+
+    返回 (kind, detail)：
+    - ("ok", "")：普通文件，或软链的真实目标在项目根内 → 正常入账（行为不变）。
+    - ("outside", 真实目标)：真实目标越出项目根 → 不进账本（信任根被突破）。
+    - ("unresolved", 原因)：软链成环或断链，内容不可知 → 不进账本。
+
+    为什么不用 `Path.resolve()`：软链成环时各版本行为不一致（3.10–3.12 抛
+    RuntimeError，3.13+ 不抛），跨版本读数会漂。`os.path.realpath(strict=True)`
+    在 3.10–3.14 行为一致：成环抛 ELOOP、断链抛 ENOENT、正常目标返回真实路径。
+    项目根也先 resolve 再比较——macOS 的 /private 前缀会让词法比较误判越界。
+    """
+    try:
+        resolved = os.path.realpath(str(path), strict=True)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            return "unresolved", "软链成环（ELOOP）"
+        if exc.errno == errno.ENOENT:
+            return "unresolved", "软链断链（目标不存在）"
+        return "unresolved", "软链不可解（%s）" % (exc.strerror or exc)
+    try:
+        Path(resolved).relative_to(cfg.root.resolve())
+    except ValueError:
+        return "outside", resolved
+    return "ok", ""
+
+
+def _facts_rel(cfg: Config, path: Path) -> str:
+    """事实账候选文件的人读位置（相对项目根的 posix 路径）。
+
+    取**链接本身**的词法相对路径，不取 resolve 后的目标——断链的 resolve 会
+    落到那个并不存在的目标名上，位置会指错文件。算不出就退回原样：这里只
+    负责给人定位，绝不因算不出相对路径就把整个审计打成 traceback（exit 4）。
+    """
+    try:
+        return path.relative_to(cfg.root).as_posix()
+    except ValueError:
+        pass
+    try:
+        return path.resolve().relative_to(cfg.root.resolve()).as_posix()
+    except (ValueError, OSError, RuntimeError):
+        return path.as_posix()
+
+
+def outside_facts_note(cfg: Config) -> str:
+    """事实账为空的原因说明（区分「没账」与「有账但越界／不可解没进审计」）。
+
+    越界或不可解的事实账文件不进账本——那些事实没进审计，是信任根被突破
+    （红，exit 5），不是「这个项目没有事实账」（配置错，exit 2）。两者混成
+    一个码就把缺口盖住了，所以空账时要说清是哪一种。
+    """
+    outside = getattr(cfg, "outside_facts", []) or []
+    unresolved = getattr(cfg, "unresolved_facts", []) or []
+    if outside:
+        return ("事实账没有可用事实（%s 没匹配到任何 fact）——%s 是指向项目外的"
+                "软链（真实目标 %s），账本不收它，这些事实没进审计"
+                % (cfg.facts_glob, outside[0][0], outside[0][1]))
+    if unresolved:
+        return ("事实账没有可用事实（%s 没匹配到任何 fact）——%s 的软链不可解"
+                "（%s），账本不收它，这些事实没进审计"
+                % (cfg.facts_glob, unresolved[0][0], unresolved[0][1]))
+    return ""
+
+
 def load_facts(cfg: Config) -> list[Fact]:
-    files = sorted(p for p in cfg.root.glob(cfg.facts_glob) if p.is_file())
+    # 事实账的信任根＝项目根。facts/*.toml 若是软链（或经软链目录绕出去），
+    # 真实目标必须在项目根内，否则这些事实就是从信任根外取数——此前
+    # `p.is_file()` 跟随软链直接读入，静默无码（fail-open）。现在越界与不可解
+    # （成环／断链）一律记账不读入，由 audit 判红（FACT_FILE_OUTSIDE_PROJECT /
+    # FACT_FILE_UNRESOLVED，exit 5）。指向项目内的软链照旧入账，行为一字不变。
+    cfg.outside_facts = []
+    cfg.unresolved_facts = []
+    files: list[Path] = []
+    for path in sorted(cfg.root.glob(cfg.facts_glob)):
+        kind, detail = _facts_link_kind(cfg, path)
+        if kind == "outside":
+            entry = (_facts_rel(cfg, path), detail)
+            if entry not in cfg.outside_facts:
+                cfg.outside_facts.append(entry)
+            continue
+        if kind == "unresolved":
+            entry = (_facts_rel(cfg, path), detail)
+            if entry not in cfg.unresolved_facts:
+                cfg.unresolved_facts.append(entry)
+            continue
+        if not path.is_file():
+            continue
+        files.append(path)
     facts: list[Fact] = []
     for path in files:
         data = load_toml(path)
@@ -1592,6 +1697,106 @@ def _glob_paths(root: Path, pattern: str) -> dict[str, Path]:
                     % pat)
             found[rel] = p
     return found
+
+
+# --------------------------------------------------------------------------
+# 软链（symlink）解析
+# --------------------------------------------------------------------------
+#
+# 为什么要自己走一遍链：`Path.resolve()` 遇到软链成环时各版本行为不一致
+# （3.10 的 realpath 把成环那一段原样留在结果里——不抛异常，但结果没意义；
+# 别的版本直接抛 OSError/ELOOP）。这里逐跳走：同一跳被走第二次就是成环，
+# 跳数超限也算不可解。两种都归「内容不可知」——一律不许当成「文件不存在」
+# 静默跳过。
+_SYMLINK_MAX_HOPS = 64
+
+
+def _symlink_chain_end(path: Path) -> tuple[Path | None, bool]:
+    """逐跳解软链。返回 (最终路径, 是否不可解)。
+
+    - (最终路径, False)：链走完了（最终路径也可能不存在＝断链）。
+    - (None, True)：成环或跳数超限——内容不可知。
+    """
+    current = path
+    seen: set[str] = set()
+    for _ in range(_SYMLINK_MAX_HOPS):
+        try:
+            if not current.is_symlink():
+                return current, False
+        except OSError:
+            return None, True
+        key = os.path.normpath(str(current))
+        if key in seen:
+            return None, True          # 同一跳第二次走到＝成环
+        seen.add(key)
+        try:
+            target = os.readlink(str(current))
+        except OSError:
+            return None, True
+        current = Path(target) if os.path.isabs(target) else current.parent / target
+    return None, True                  # 跳数超限：链太深，当成不可解
+
+
+def _rel_to_root(path: Path, root: Path) -> str:
+    """path 相对 root 的 posix 路径；算不出来退回词法相对路径（绝不抛异常）。
+
+    越界的软链已在闭包入口记账判红，这里只负责给「出处」一个能显示的路径——
+    不能因为算不出相对路径就把整个审计打成 traceback（exit 4）。
+    """
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except (ValueError, OSError, RuntimeError):
+        try:
+            return path.relative_to(root).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+
+def outside_closure_note(cfg: Config) -> str:
+    """闭包空的原因说明（区分「没正文」与「有正文但越界没进审计」）。
+
+    越界的闭包目标（章节软链指向项目外）不进闭包——那一段没进审计，是覆盖缺口
+    （INPUT_OUTSIDE_PROJECT，exit 5），不是「这个项目没有正文」（exit 2）。两者
+    混成一个码就把缺口盖住了，所以空闭包时要说清是哪一种。
+    """
+    outside = getattr(cfg, "outside_inputs", []) or []
+    if not outside:
+        return ""
+    return ("闭包没有正文——%s 是指向项目外的软链，那一段没进审计"
+            "（越界目标不进闭包）；把它挪进项目内或改指向。" % outside[0][0])
+
+
+def _filter_outside_symlinks(cfg: Config, found: dict[str, Path]) -> dict[str, Path]:
+    """闭包起点里的软链：指向项目外的记账判红，不进闭包。
+
+    口径与 F1 已定的越界语义同一条：目标不在信任根内 ⇒ 闭包不收它 ⇒ 那一段
+    没进审计 ⇒ 覆盖缺口 ⇒ 判红 INPUT_OUTSIDE_PROJECT（exit 5）。此前这里直接
+    `p.resolve().relative_to(...)` 抛裸 ValueError（exit 4、traceback）——
+    既不是红也不是绿。
+
+    指向项目内的软链照旧收进闭包（内容照审）；解析不出内容的（成环）也不收，
+    但 `all_tex_files` 会把它算进 glob 命中集 ⇒ 覆盖报告报 UNSCANNED_TEX，
+    不许静默跳过。
+    """
+    root = cfg.root.resolve()
+    kept: dict[str, Path] = {}
+    for rel, p in found.items():
+        target, unresolved = _symlink_chain_end(p)
+        if unresolved or target is None:
+            continue
+        try:
+            resolved = target.resolve()
+        except (OSError, RuntimeError):
+            continue
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            entry = (rel, str(resolved), 0)
+            if entry not in cfg.outside_inputs:
+                cfg.outside_inputs.append(entry)
+            continue
+        kept[rel] = p
+    return kept
 
 
 _INPUT_CMD_RE = re.compile(r"\\(?:input|include|subfile|import)\b")
@@ -1737,9 +1942,13 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
     由 audit 判 ``INPUT_TARGET_MISSING``（R-05）：不存在的目标不会静默放行。
     目标含宏/`#`/嵌套花括号/为空时记进 ``cfg.dynamic_inputs``，由 audit 判
     ``INPUT_DYNAMIC``：静态审计覆盖不了的目标一律 fail-closed，不许静默跳过。
+    目标存在但解析后越出项目根时记进 ``cfg.outside_inputs``，由 audit 判
+    ``INPUT_OUTSIDE_PROJECT``：越界的目标闭包不收，它那一段同样没进审计，
+    静默丢弃就是 fail-open，不许。
     """
     cfg.missing_inputs = []
     cfg.dynamic_inputs = []
+    cfg.outside_inputs = []
     if cfg.section_files:
         # V3 形态 C：显式章节清单（不是 glob）。闭包仍从这些文件各自的
         # `\input` 展开，但不会把目录里同名的无关 main.tex 也卷进来。
@@ -1761,6 +1970,9 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         found = {cfg.root_tex: root_file}
     else:
         found = _glob_paths(cfg.root, cfg.sections_glob)
+    # 软链越界：闭包起点若是指向项目外的软链 ⇒ 记账判红
+    # （INPUT_OUTSIDE_PROJECT），且不进闭包——那一段不在信任根内。
+    found = _filter_outside_symlinks(cfg, found)
     seen: dict[str, Path] = dict(found)
     queue: list[Path] = list(found.values())
 
@@ -1775,7 +1987,26 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
                 try:
                     rel = candidate.resolve().relative_to(cfg.root.resolve()).as_posix()
                 except ValueError:
+                    # 目标存在，但解析后越出项目根（\input{../shared/x.tex} 或
+                    # 绝对路径）。闭包不收它 ⇒ 这一段没进审计。此前在此静默
+                    # 丢弃（return False 且不记账），audit 仍判绿——fail-open。
+                    # 现在记进 cfg.outside_inputs，由 audit 判红
+                    # INPUT_OUTSIDE_PROJECT（exit 5），与 missing_inputs 同级可见。
+                    entry = (src_rel, ref, line)
+                    if entry not in cfg.outside_inputs:
+                        cfg.outside_inputs.append(entry)
                     return False
+                except (OSError, RuntimeError):
+                    # 解析不出来（软链成环等 OSError/ELOOP）：绝不裸崩。
+                    # 按词法相对路径再判一次越界；判不出越界就照旧收进闭包
+                    # （内容读得到才审得到）。
+                    try:
+                        rel = candidate.relative_to(cfg.root).as_posix()
+                    except ValueError:
+                        entry = (src_rel, ref, line)
+                        if entry not in cfg.outside_inputs:
+                            cfg.outside_inputs.append(entry)
+                        return False
                 if rel in seen:
                     return False
                 seen[rel] = candidate
@@ -1801,22 +2032,22 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         # 普通 \input 闭包（注释/verbatim 里的 \input 不算引用，避免误判）
         while queue:
             p = queue.pop(0)
-            text = _read_text(p, cfg.root)
+            text = to_lf(_read_text(p, cfg.root))
             body = _mask_macro_defs(strip_comments_and_verbatim(text))
-            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            src_rel = _rel_to_root(p, cfg.root)
             for ref, line, closed in _input_refs(body):
                 add_raw_ref(ref, [p.parent, cfg.root], src_rel, line,
                             closed=closed)
         # 包装宏：定义可能出现在后加载的文件里，故反复扫到稳定为止
         wrappers: dict[str, tuple[str, str]] = {}
         for p in list(seen.values()):
-            wrappers.update(_input_wrappers(_read_text(p, cfg.root)))
+            wrappers.update(_input_wrappers(to_lf(_read_text(p, cfg.root))))
         if not wrappers:
             break
         grew = False
         for p in list(seen.values()):
-            text = strip_comments_and_verbatim(_read_text(p, cfg.root))
-            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            text = strip_comments_and_verbatim(to_lf(_read_text(p, cfg.root)))
+            src_rel = _rel_to_root(p, cfg.root)
             for ref, line in _wrapper_calls(text, wrappers):
                 if add_raw_ref(ref, [p.parent, cfg.root], src_rel, line):
                     grew = True
@@ -1830,8 +2061,17 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
 
 
 def _read_text(path: Path, root: Path) -> str:
+    """按原样读项目里的文本文件（不做通用换行翻译）。
+
+    读侧不翻译是「逐字保留」的第一环：通用换行翻译（universal newlines）
+    把 CRLF 读成 LF，正文的行尾就此丢失——后面再写回磁盘，改掉的就是
+    用户自己的字节。
+
+    **分析层要按行看文本的**（正则里用 `$` 锚行尾），调用方自己用
+    `textio.to_lf` 归一；归一的是内存里的副本，磁盘上的字节一个不动。
+    """
     try:
-        return path.read_text(encoding="utf-8")
+        return read_text_exact(path)
     except UnicodeDecodeError as exc:
         raise ConfigError("%s 不是合法 UTF-8：%s" % (path, exc))
     except OSError as exc:
@@ -1842,7 +2082,10 @@ def all_tex_files(cfg: Config) -> list[str]:
     """项目内全部 .tex（用于「闭包外文件是否从未被审计」的覆盖报告）。"""
     out = []
     for p in cfg.root.glob("**/*.tex"):
-        if not p.is_file():
+        # is_file() 跟随软链：断链/成环的软链是 False。它仍在 glob 命中集里
+        # （文件名匹配上了），但内容读不出来 ⇒ 覆盖不了 ⇒ 照旧报 UNSCANNED_TEX
+        # （fail-closed）。此前这里直接 continue，那个文件就静默消失了。
+        if not p.is_file() and not p.is_symlink():
             continue
         parts = set(p.relative_to(cfg.root).parts)
         if parts & _SKIP_DIRS:
@@ -1852,9 +2095,16 @@ def all_tex_files(cfg: Config) -> list[str]:
 
 
 def facts_digest(cfg: Config) -> str:
-    """账本输入指纹：所有 facts 文件按路径排序后串哈希（红队 D7）。"""
+    """账本输入指纹：所有 facts 文件按路径排序后串哈希（红队 D7）。
+
+    口径与 load_facts 对齐：被账本拒收的文件（越界软链／不可解软链）不进
+    指纹——指纹只覆盖真正进了账本的输入。既有项目没有软链，指纹逐字节不变。
+    """
     h = hashlib.sha256()
     for name, path in sorted(_glob_paths(cfg.root, cfg.facts_glob).items()):
+        kind, _detail = _facts_link_kind(cfg, path)
+        if kind != "ok":
+            continue
         h.update(name.encode("utf-8"))
         h.update(path.read_bytes())
     return h.hexdigest()

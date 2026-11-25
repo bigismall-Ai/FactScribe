@@ -12,7 +12,9 @@
 import os
 import re
 
-FACT_BLOCK = re.compile(r"\[\[fact\]\]\n(.*?)(?=\n\[\[fact\]\]|\Z)", re.S)
+# 认两种行尾：账本是用户手编的内容，Windows 上 Git 检出就是 CRLF——
+# 正则若只认 '\n'，CRLF 账本会被判成「没有事实块」（静默漏检）。
+FACT_BLOCK = re.compile(r"\[\[fact\]\]\r?\n(.*?)(?=\r?\n\[\[fact\]\]|\Z)", re.S)
 
 
 def _fields(block):
@@ -33,7 +35,8 @@ def scan_dupes(project_dir):
         if not fn.endswith(".toml"):
             continue
         path = os.path.join(facts_dir, fn)
-        with open(path, encoding="utf-8") as f:
+        # newline=""：读按原样（CRLF 不被翻译掉），改账时原样写回。
+        with open(path, encoding="utf-8", newline="") as f:
             text = f.read()
         for m in FACT_BLOCK.finditer(text):
             fl = _fields(m.group(1))

@@ -23,10 +23,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import (Config, ConfigError, load_config, load_facts,
-                     load_sections, section_budget, section_evidence)
+                     load_sections, outside_closure_note, outside_facts_note,
+                     section_budget, section_evidence)
 from .evidence import suggest_evidence
 from .style import _headings                     # 复用既有标题抽取，不另写一套
 from .terms import Term, load_glossary
+from .textio import read_text_exact, to_lf
 from .texrules import strip_comments_and_verbatim
 from .texscan import scan_tex
 
@@ -122,7 +124,7 @@ def _input_order(cfg: Config, known: set[str]) -> list[str]:
     if root_file is None or not root_file.is_file():
         return []
     try:
-        text = root_file.read_text(encoding="utf-8")
+        text = to_lf(read_text_exact(root_file))
     except (OSError, UnicodeDecodeError):
         return []
     body = strip_comments_and_verbatim(text)
@@ -229,13 +231,21 @@ def build_brief(project: Path | str, section: str | None = None) -> Brief:
 
     facts = load_facts(cfg)
     if not facts:
+        # 空账有两种：真没账（配置错，exit 2）；或账文件是越界／不可解的软链、
+        # 被账本拒收（信任根缺口，exit 5）。后者要说清是哪一种，不许混。
+        note = outside_facts_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError(
             "facts 为空（%s 没匹配到任何 fact）——没有可用主张与数字，"
             "简报无从生成；请先补账。" % cfg.facts_glob)
 
-    sections = load_sections(cfg)
+    sections = [(rel, to_lf(text)) for rel, text in load_sections(cfg)]
     rows = build_sections(cfg, sections)
     if not rows:
+        note = outside_closure_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError(
             "sections 为空（%s 没匹配到任何节文件）——没有可写的节，简报无从生成。"
             % cfg.sections_glob)

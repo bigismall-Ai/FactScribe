@@ -210,6 +210,73 @@ class TestInputDynamic(unittest.TestCase):
         self.assertEqual(data["issues"], [])
 
 
+class TestInputOutsideProject(unittest.TestCase):
+    """缺口四：\\input 指向项目外【已存在】的文件——不许静默丢弃。
+
+    目标越出项目根 ⇒ 闭包不收它 ⇒ 那一段没进审计 ⇒ 覆盖缺口，判红
+    INPUT_OUTSIDE_PROJECT（exit 5，SPEC-V3.0 码表）。此前 config.add_ref
+    在 relative_to 抛 ValueError 时直接 return False：既不进闭包也不进任何
+    记账列表，audit 判绿（0 红 0 黄），被引文件里的数字一个都没审。
+    """
+
+    def _project(self, tmp, body, files=None):
+        root = Path(tmp) / "proj"
+        make_project(root, sections={"a.tex": body}, files=files)
+        return root
+
+    def test_relative_outside_target_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "outside.tex").write_text(
+                "\\section{外部节}\n这里有一个没进账的数字 987654321。\n",
+                encoding="utf-8")
+            root = self._project(tmp, "\\input{../../outside.tex}\n")
+            code, data = audit(root)
+            self.assertEqual(code, 5, data)
+            self.assertEqual(codes(data), ["INPUT_OUTSIDE_PROJECT"])
+            issue = data["issues"][0]
+            self.assertEqual(issue["severity"], "red")
+            self.assertEqual(issue["token"], "../../outside.tex")
+            self.assertRegex(issue["location"], r"^sections/a\.tex:\d+$")
+            self.assertIn("越出项目根", issue["message"])
+
+    def test_absolute_path_target_is_red(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside_abs.tex"
+            outside.write_text("外部内容\n", encoding="utf-8")
+            ref = str(outside.resolve()).replace("\\", "/")
+            root = self._project(tmp, "\\input{%s}\n" % ref)
+            code, data = audit(root)
+            self.assertEqual(code, 5, data)
+            self.assertEqual(codes(data), ["INPUT_OUTSIDE_PROJECT"])
+            self.assertEqual(data["issues"][0]["token"], ref)
+
+    def test_outside_target_is_not_reported_as_missing(self):
+        """越界但存在 ≠ 目标不存在：两个码不许混。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "outside.tex").write_text("外部内容\n", encoding="utf-8")
+            root = self._project(tmp, "\\input{../../outside.tex}\n")
+            code, data = audit(root)
+            self.assertNotIn("INPUT_TARGET_MISSING", codes(data))
+            self.assertNotIn("INPUT_DYNAMIC", codes(data))
+
+    def test_target_inside_project_stays_green(self):
+        """对照组：项目内的目标照旧进闭包，不许误判红。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._project(tmp, "\\input{extra}\n\\cite{chen2023}\n",
+                                 files={"sections/extra.tex": "no numbers here\n"})
+            code, data = audit(root)
+            self.assertEqual(code, 0, data)
+            self.assertEqual(data["issues"], [])
+
+    def test_missing_target_keeps_missing_code(self):
+        """对照组：目标不存在仍是 INPUT_TARGET_MISSING。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._project(tmp, "\\input{nothere}\n")
+            code, data = audit(root)
+            self.assertEqual(code, 5)
+            self.assertEqual(codes(data), ["INPUT_TARGET_MISSING"])
+
+
 class TestExprMismatchInAudit(unittest.TestCase):
     """缺口二：`audit` 也要判 expr 与 value 不符（此前只有 check 判）。"""
 
@@ -366,6 +433,16 @@ class TestStableReportFields(unittest.TestCase):
             proc = run(["audit", str(root)])
         self.assertEqual(proc.returncode, 5, proc.stdout)
         self.assertIn("INPUT_DYNAMIC", proc.stdout)
+
+    def test_human_report_never_renders_exit_code_as_question_mark(self):
+        """退出码 5 在人读结论行要有说法，不许落成 "?"。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(tmp, sections={"a.tex": "\\include{\\jobname}\n"})
+            proc = run(["audit", str(root)])
+        self.assertEqual(proc.returncode, 5, proc.stdout)
+        self.assertIn("退出码 5", proc.stdout)
+        self.assertNotIn("?（退出码 5）", proc.stdout)
+        self.assertIn("红（覆盖/信任链缺口）", proc.stdout)
 
 
 if __name__ == "__main__":

@@ -135,7 +135,8 @@ def verify_cn(project_dir, catalog_path, reference_date):
 def _line_text(project_dir, rel, line):
     path = os.path.join(project_dir, rel)
     try:
-        with open(path, encoding="utf-8") as f:
+        # newline=""：按原样读（CRLF 不翻译）；「第X条」的正则与行尾无关。
+        with open(path, encoding="utf-8", newline="") as f:
             for i, text in enumerate(f, 1):
                 if i == line:
                     return text

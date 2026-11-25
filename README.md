@@ -42,7 +42,7 @@ FactScribe 是一道机械闸门，专门拦 AI 写论文时最危险的两类�
 | 外部件 | 谁要它 | 缺了怎么办 |
 |---|---|---|
 | poppler（`pdftotext`/`pdfinfo`/`pdfimages`） | `verify-pdf` 的 PDF 回检层 | 报 `PDF_TOOL_MISSING` 并退出码 8，不静默放行；其余命令照跑 |
-| tectonic | `build`、`audit --build` | 报缺引擎并退出码 8；不带 `--build` 的 `audit` 不编译，不需要它 |
+| tectonic | `build`、`audit --build` | 走 `project.build` 的 shell 命令时，缺引擎＝shell 报「command not found」（127）⇒ 构建失败、**退出码 1**；`project.build` 为空（自动用 tectonic 编译）时报 `PDF_TOOL_MISSING`、**退出码 8**；不带 `--build` 的 `audit` 不编译，不需要它 |
 
 中文字体走同一条路：`fonts --fetch` 把 Fandol 字体下到本地缓存，`build` 缺字体时有兜底。`doctor` 会把这几样连同项目状态逐项查一遍，每项给一条修复命令。
 
@@ -256,9 +256,12 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 | 2 | 配置或用法错，工具没跑起来 |
 | 3 | 黄，跑完了但有未核验或未绑定的项，不判死但不算绿 |
 | 4 | 工具内部错误 |
+| 5 | 红，覆盖缺口或信任链失败：`audit` 的闭包输入缺失／越出项目根／无法静态解析，事实账文件越出项目根或软链不可解，以及 PDF 与签名信任链失败。这不是普通违例，是「有内容没进审计」 |
 | 8 | 必需工具缺失（PDF 工具链或编译引擎），不静默放行 |
 
-缺 `factscribe.toml`、事实账为空、正文为空、`refs.bib` 缺失，一律退出码 2 并说清原因，不静默放行。
+退出码闭集是 0–9 全闭集，权威表见 [`docs/design/SPEC-V3.0.md`](docs/design/SPEC-V3.0.md) §2.5。上表列的是本仓当前会实际退出的码；闭集里其余的 6（未达证明要求）、7（过期/重放）、9（攻击面未闭合）目前还没有命令会退出到。
+
+缺 `factscribe.toml`、事实账为空、正文为空、`refs.bib` 缺失，一律退出码 2 并说清原因，不静默放行。事实账文件本身越出项目根（软链指向项目外）或软链不可解（成环／断链）的，账本拒收并判红（退出码 5），不按空账处理。
 
 ## 已知缺口
 
@@ -269,7 +272,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1645 例，全离线
+python3 -m unittest discover -s tests     # 1764 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

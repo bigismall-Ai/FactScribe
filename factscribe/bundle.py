@@ -36,6 +36,7 @@ from .checks import aggregate_exit as checks_aggregate_exit
 from .checks import run_packages
 from .config import (Config, ConfigError, load_facts, load_sections)
 from .evidence import lock_check, read_lock, unfrozen_info
+from .textio import read_text_exact, to_lf
 from .texscan import scan_tex
 
 BUNDLE_VERSION = "1"
@@ -260,13 +261,15 @@ class Closure:
     files: list = field(default_factory=list)     # 闭包内源文件（项目内相对路径）
     missing: list = field(default_factory=list)   # 悬空 \input/\include
     dynamic: list = field(default_factory=list)   # 无法静态解析的目标
+    outside: list = field(default_factory=list)   # 存在但越出项目根的目标（闭包不收）
     root_tex: str = ""
     cfg: Config = None                            # 闭包口径下的 cfg 副本
 
     def as_dict(self) -> dict:
         return {"root_tex": self.root_tex, "files": list(self.files),
                 "missing": [list(x) for x in self.missing],
-                "dynamic": [list(x) for x in self.dynamic]}
+                "dynamic": [list(x) for x in self.dynamic],
+                "outside": [list(x) for x in self.outside]}
 
 
 def collect_closure(cfg: Config) -> Closure:
@@ -288,6 +291,7 @@ def collect_closure(cfg: Config) -> Closure:
         files=sorted(rel for rel, _ in sections),
         missing=[tuple(x) for x in getattr(scoped, "missing_inputs", [])],
         dynamic=[tuple(x) for x in getattr(scoped, "dynamic_inputs", [])],
+        outside=[tuple(x) for x in getattr(scoped, "outside_inputs", [])],
         root_tex=root_tex,
         cfg=scoped,
     )
@@ -300,7 +304,7 @@ def collect_closure(cfg: Config) -> Closure:
 def _run_gate_audit(cfg: Config, closure: Closure) -> dict:
     """现跑一遍审计（闭包口径），返回退出码与全部判定条目。"""
     facts = load_facts(cfg)
-    sections = [(rel, (cfg.root / rel).read_text(encoding="utf-8"))
+    sections = [(rel, to_lf(read_text_exact(cfg.root / rel)))
                 if (cfg.root / rel).is_file() else (rel, "")
                 for rel in closure.files]
     if not sections:
@@ -333,6 +337,17 @@ def _closure_item(closure: Closure) -> GateItem:
             % (src, line, ref) for src, ref, line in closure.dynamic)
         return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
                         STATUS_FAIL, detail)
+    if closure.outside:
+        def _outside_detail(src: str, ref: str, line) -> str:
+            # line=0：不是 \input 声明越界，而是闭包起点（章节软链）越界。
+            if line:
+                return ("越出项目根的目标：%s:%s → %s（目标存在但闭包不收，覆盖缺口）"
+                        % (src, line, ref))
+            return ("闭包起点是软链，越出项目根：%s → %s（目标存在但闭包不收，覆盖缺口）"
+                    % (src, ref))
+        detail = "；".join(_outside_detail(*x) for x in closure.outside)
+        return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
+                        STATUS_FAIL, detail)
     if not closure.files:
         return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
                         STATUS_FAIL, "闭包为空：项目里没有 .tex 源文件")
@@ -349,7 +364,7 @@ def _figure_item(cfg: Config, closure: Closure, audit: dict) -> GateItem:
         if not p.is_file():
             continue
         try:
-            scan = scan_tex(p.read_text(encoding="utf-8"))
+            scan = scan_tex(to_lf(read_text_exact(p)))
         except (OSError, UnicodeDecodeError):
             continue
         figures.update(scan.figures)
@@ -459,7 +474,7 @@ def _extra_item(index: int, check: ExtraCheck, root: Path) -> GateItem:
         return GateItem(code, check.name, STATUS_FAIL,
                         "%s 不存在（正则无处可查）" % check.file, origin="config")
     try:
-        text = target.read_text(encoding="utf-8")
+        text = to_lf(read_text_exact(target))
     except (OSError, UnicodeDecodeError) as exc:
         return GateItem(code, check.name, STATUS_FAIL,
                         "%s 读不了：%s" % (check.file, exc), origin="config")
@@ -675,7 +690,8 @@ def _write_artifact(out_dir: Path, root: Path, rel: str, source: Path,
     target.parent.mkdir(parents=True, exist_ok=True)
     transformed = False
     try:
-        text = source.read_text(encoding="utf-8")
+        # 按原样读：工件是用户文件的副本，行尾不该在打包时被换掉。
+        text = read_text_exact(source)
     except (OSError, UnicodeDecodeError):
         shutil.copyfile(source, target)
         data = target.read_bytes()

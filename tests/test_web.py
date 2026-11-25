@@ -759,5 +759,84 @@ class NoTokenAndOriginTest(unittest.TestCase):
             thread.join(timeout=5)
 
 
+class CrossOriginPutTest(unittest.TestCase):
+    """跨源写闸：PUT /api/sections 是唯一覆盖论文正文 .tex 的写接口。
+
+    do_PUT 原先是四个 HTTP 方法里唯一没做同源校验的（GET/POST/DELETE 都有
+    _origin_ok）——浏览器里任意一个恶意页面能整节覆盖论文正文；--no-token
+    模式下连 token 都不需要。语义与其它三处一致：没有 Origin 头放行（命令行
+    与 Node 代理走这条），带了 Origin 但不是本监听地址就拒。
+    """
+
+    REL = "sections/01-intro.tex"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="fs-web-put-")
+        cls.root = Path(cls.tmp) / "proj"
+        shutil.copytree(ROOT / "examples" / "minimal", cls.root)
+        cls.server, cls.token = create_server(
+            cls.root, port=0, token=TOKEN, require_token=False,
+            allow_write=True)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def _put(self, origin=None, text="跨源注入的正文\n", token=TOKEN):
+        body = json.dumps({"file": self.REL, "text": text}).encode("utf-8")
+        req = urllib.request.Request(self.base + "/api/sections",
+                                     method="PUT", data=body)
+        req.add_header("Content-Type", "application/json")
+        if token:
+            req.add_header("Authorization", "Bearer " + token)
+        if origin:
+            req.add_header("Origin", origin)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            raw = exc.read()
+            exc.close()
+            return exc.code, json.loads(raw) if raw else {}
+
+    def _disk(self):
+        return (self.root / self.REL).read_text(encoding="utf-8")
+
+    def test_cross_origin_put_is_rejected_and_does_not_write(self):
+        """--no-token 模式（个人机器常用组合）：跨源 PUT 必须 403 且不写盘。"""
+        before = self._disk()
+        status, data = self._put(origin="http://evil.example")
+        self.assertEqual(status, 403, data)
+        self.assertEqual(data["error"]["code"], "CROSS_ORIGIN")
+        self.assertEqual(self._disk(), before)
+
+    def test_cross_origin_put_with_other_loopback_port_is_rejected(self):
+        before = self._disk()
+        status, data = self._put(origin="http://127.0.0.1:1")
+        self.assertEqual(status, 403, data)
+        self.assertEqual(data["error"]["code"], "CROSS_ORIGIN")
+        self.assertEqual(self._disk(), before)
+
+    def test_same_origin_put_still_writes(self):
+        """前端同源写路径不许被闸门挡住。"""
+        status, data = self._put(origin=self.base, text="同源写入的正文\n")
+        self.assertEqual(status, 200, data)
+        self.assertIn("同源写入的正文", self._disk())
+
+    def test_no_origin_put_still_writes(self):
+        """命令行与 Node 代理不带 Origin 头——这条路径必须照常能写。"""
+        status, data = self._put(origin=None, text="无 Origin 头的写入\n")
+        self.assertEqual(status, 200, data)
+        self.assertIn("无 Origin 头的写入", self._disk())
+
+
 if __name__ == "__main__":
     unittest.main()

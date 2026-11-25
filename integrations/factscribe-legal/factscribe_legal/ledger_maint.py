@@ -27,18 +27,22 @@ def mark_dup_ok(project_dir):
         by_file.setdefault(path, set()).add(fid)
     changed = []
     for path, want in by_file.items():
-        with open(path, encoding="utf-8") as f:
+        # newline=""：读按原样。默认文本模式会把 CRLF 读成 LF，
+        # 后面写回时又整体翻译成 CRLF——账本的原字节就此被改掉。
+        with open(path, encoding="utf-8", newline="") as f:
             text = f.read()
+        newline = "\r\n" if "\r\n" in text else "\n"
 
         def fix(m):
             block = m.group(1)
             fl = _fields(block)
             if fl.get("id") in want and "dup_ok" not in block:
-                block = block.rstrip("\n") + "\ndup_ok = true\n"
+                block = block.rstrip("\r\n") + newline + "dup_ok = true" + newline
                 changed.append(fl["id"])
-            return "[[fact]]\n" + block
+            return "[[fact]]" + newline + block
 
         new = FACT_BLOCK.sub(fix, text)
-        with open(path, "w", encoding="utf-8") as f:
+        # newline=""：写按原样，账本里原有的一行字节都不动。
+        with open(path, "w", encoding="utf-8", newline="") as f:
             f.write(new)
     return changed

@@ -35,8 +35,11 @@ from pathlib import Path
 __all__ = [
     "read_text_exact",
     "write_text_exact",
+    "append_text_exact",
     "split_keepends",
+    "split_lines",
     "dominant_newline",
+    "to_lf",
 ]
 
 
@@ -59,6 +62,50 @@ def write_text_exact(path: Path | str, text: str) -> None:
     `'\r\r\n'`。写出去的字节与传进来的字符串逐字节对应。"""
     with open(path, "w", encoding="utf-8", newline="") as handle:
         handle.write(text)
+
+
+def append_text_exact(path: Path | str, text: str,
+                     newline: str | None = None) -> None:
+    """按原样追加文本：不翻译换行。
+
+    `newline` 给定时用它当行尾（`'\r\n'` / `'\n'` / `'\r'`），
+    追加进去的每一行都带这个行尾；不给时原样追加（调用方自己保证文本里
+    的行尾已经对）。
+
+    Windows 上默认文本模式（`newline=None`）会把追加的 `'\n'` 翻译成
+    `'\r\n'`——一份 LF 账本会被追写成一半 LF 一半 CRLF 的混合行尾。
+    """
+    with open(path, "a", encoding="utf-8", newline="") as handle:
+        if newline is None:
+            handle.write(text)
+        else:
+            handle.write(text.replace("\r\n", "\n").replace("\r", "\n")
+                          .replace("\n", newline))
+
+
+def to_lf(text: str) -> str:
+    """把 `'\r\n'` / `'\r'` 归一成 `'\n'`——**分析层**专用。
+
+    为什么需要它：读盘侧一律按原样读（`read_text_exact`），正文里的
+    `'\r\n'` 原样留在字符串里。可分析层（审计、闸门、文风、数号抽取）
+    是**按行**做事的，它假设 `'\n'` 是行分隔符，正则里也用 `$` 锚行尾。
+    若把带 `'\r\n'` 的文本直接丢进去，行尾会多出一个 `'\r'`，`$`
+    锚点会失配、发现条数会漂。
+
+    所以边界要显式：`.textio` 只负责「读进来不丢字节」，**分析入口**调
+    这条把行尾归一——归一的是**内存里的副本**，磁盘上的字节一个不动。
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def split_lines(text: str) -> list[str]:
+    """按行切开，行尾（CRLF／CR／LF）都不带进行内容。
+
+    等价于「先 `to_lf` 再 `split('\n')`」，但只切 `'\r\n'`/`'\r'`/
+    `'\n'` 三种行尾——不像 `str.splitlines()` 那样把 `'\x0b'`、
+    `'\x0c'`、`'\u2028'` 也当行尾切。
+    """
+    return to_lf(text).split("\n")
 
 
 def split_keepends(text: str) -> list[tuple[str, str]]:

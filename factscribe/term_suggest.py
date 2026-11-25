@@ -23,7 +23,7 @@ from .config import ConfigError, load_config, load_sections
 from .style import _source_view
 from .terms import (load_glossary, key_of, normalize_surface,
                     parse_glossary)
-from .textio import dominant_newline, read_text_exact, write_text_exact
+from .textio import dominant_newline, read_text_exact, to_lf, write_text_exact
 
 # --------------------------------------------------------------------------
 # 语料收集
@@ -60,7 +60,7 @@ def _walk_sources(root: Path) -> list[tuple[str, str]]:
                for part in rel.parts[:-1]):
             continue
         out.append((rel.as_posix(),
-                    path.read_text(encoding="utf-8", errors="replace")))
+                    to_lf(read_text_exact(path, errors="replace"))))
     return out
 
 
@@ -73,7 +73,7 @@ def _project_sources(root: Path) -> list[tuple[str, str]] | None:
         return None
     if not sections:
         return None
-    return [(str(name), str(text)) for name, text in sections]
+    return [(str(name), to_lf(str(text))) for name, text in sections]
 
 
 def collect_sources(root: Path) -> list[tuple[str, str]]:
@@ -485,7 +485,7 @@ _CANDIDATE_COLUMNS = ("surface", "lang", "count", "sections",
 def _read_candidates(path: Path) -> list[dict]:
     if not path.is_file():
         raise ConfigError("候选文件不存在：%s" % path)
-    lines = [line for line in path.read_text(encoding="utf-8").splitlines()
+    lines = [line for line in read_text_exact(path).splitlines()
              if line.strip() and not line.lstrip().startswith("#")]
     if not lines:
         raise ConfigError("候选文件为空：%s" % path)

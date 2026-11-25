@@ -36,7 +36,7 @@ from .checks import aggregate_exit as checks_aggregate_exit
 from .checks import run_packages
 from .config import (Config, ConfigError, load_facts, load_sections)
 from .evidence import lock_check, read_lock, unfrozen_info
-from .textio import read_text_exact
+from .textio import read_text_exact, to_lf
 from .texscan import scan_tex
 
 BUNDLE_VERSION = "1"
@@ -304,7 +304,7 @@ def collect_closure(cfg: Config) -> Closure:
 def _run_gate_audit(cfg: Config, closure: Closure) -> dict:
     """现跑一遍审计（闭包口径），返回退出码与全部判定条目。"""
     facts = load_facts(cfg)
-    sections = [(rel, (cfg.root / rel).read_text(encoding="utf-8"))
+    sections = [(rel, to_lf(read_text_exact(cfg.root / rel)))
                 if (cfg.root / rel).is_file() else (rel, "")
                 for rel in closure.files]
     if not sections:
@@ -364,7 +364,7 @@ def _figure_item(cfg: Config, closure: Closure, audit: dict) -> GateItem:
         if not p.is_file():
             continue
         try:
-            scan = scan_tex(p.read_text(encoding="utf-8"))
+            scan = scan_tex(to_lf(read_text_exact(p)))
         except (OSError, UnicodeDecodeError):
             continue
         figures.update(scan.figures)
@@ -474,7 +474,7 @@ def _extra_item(index: int, check: ExtraCheck, root: Path) -> GateItem:
         return GateItem(code, check.name, STATUS_FAIL,
                         "%s 不存在（正则无处可查）" % check.file, origin="config")
     try:
-        text = target.read_text(encoding="utf-8")
+        text = to_lf(read_text_exact(target))
     except (OSError, UnicodeDecodeError) as exc:
         return GateItem(code, check.name, STATUS_FAIL,
                         "%s 读不了：%s" % (check.file, exc), origin="config")

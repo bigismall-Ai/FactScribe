@@ -37,7 +37,10 @@
 4. **不做 OCR**：图片承载定量一律红，把问题挡在源头。
 5. **Windows 真机未验证**：保存链路的换行保真（读不翻译、写不翻译，
    `newline=""`）已按 CRLF/混合行尾做过逐字节往返测试
-   （`tests/test_newline_fidelity.py`，15 例），但 **Windows 真机端到端未验证**
+   （`tests/test_newline_fidelity.py` 15 例 ＋ `tests/test_newline_fidelity_sweep.py`
+   14 例：接口层读不翻译、CRLF 版与 LF 版审计发现逐条相同、factscribe.toml／
+   事实账／潮汐账本写回逐字节、读调用点确实以 `newline=""` 打开），
+   但 **Windows 真机端到端未验证**
    ——手边没有 Windows 机器；POSIX 上默认文本模式的换行翻译是恒等变换，
    仓库 CI 矩阵（`.github/workflows/test.yml`）也只有 ubuntu。
 

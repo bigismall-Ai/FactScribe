@@ -424,7 +424,7 @@ def update_project(registry: dict, path: str, name: str = "",
     new_desc = str(description or "").strip()
     cfg_file = config_file(Path(entry["path"]))
     if cfg_file.is_file():
-        text = cfg_file.read_text(encoding="utf-8")
+        text = read_text_exact(cfg_file)
         values = {"description": _toml_value(new_desc)}
         if _has_project_table(text):
             # v1 与 v3 形态 B/C：名字在 [project].title。

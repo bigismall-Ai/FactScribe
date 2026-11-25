@@ -13,6 +13,7 @@ from pathlib import Path
 from .facts import Fact, canon_text, fact_value_keys, latex_display
 from .constants import SEV_INFO
 from .texrules import strip_comments_and_verbatim
+from .textio import read_text_exact, to_lf
 
 # --------------------------------------------------------------------------
 # TOML 读写（3.11+ 用 tomllib；3.10 用内置极简解析器兜底）
@@ -1442,7 +1443,7 @@ def _normalise_display(raw, latex: bool = False) -> list[dict]:
 def _locate_id_line(path: Path, fid: str) -> int:
     pat = re.compile(r"""^\s*id\s*=\s*["']%s["']""" % re.escape(fid))
     try:
-        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for i, line in enumerate(read_text_exact(path).splitlines(), 1):
             if pat.match(line):
                 return i
     except OSError:
@@ -2031,7 +2032,7 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         # 普通 \input 闭包（注释/verbatim 里的 \input 不算引用，避免误判）
         while queue:
             p = queue.pop(0)
-            text = _read_text(p, cfg.root)
+            text = to_lf(_read_text(p, cfg.root))
             body = _mask_macro_defs(strip_comments_and_verbatim(text))
             src_rel = _rel_to_root(p, cfg.root)
             for ref, line, closed in _input_refs(body):
@@ -2040,12 +2041,12 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         # 包装宏：定义可能出现在后加载的文件里，故反复扫到稳定为止
         wrappers: dict[str, tuple[str, str]] = {}
         for p in list(seen.values()):
-            wrappers.update(_input_wrappers(_read_text(p, cfg.root)))
+            wrappers.update(_input_wrappers(to_lf(_read_text(p, cfg.root))))
         if not wrappers:
             break
         grew = False
         for p in list(seen.values()):
-            text = strip_comments_and_verbatim(_read_text(p, cfg.root))
+            text = strip_comments_and_verbatim(to_lf(_read_text(p, cfg.root)))
             src_rel = _rel_to_root(p, cfg.root)
             for ref, line in _wrapper_calls(text, wrappers):
                 if add_raw_ref(ref, [p.parent, cfg.root], src_rel, line):
@@ -2060,8 +2061,17 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
 
 
 def _read_text(path: Path, root: Path) -> str:
+    """按原样读项目里的文本文件（不做通用换行翻译）。
+
+    读侧不翻译是「逐字保留」的第一环：通用换行翻译（universal newlines）
+    把 CRLF 读成 LF，正文的行尾就此丢失——后面再写回磁盘，改掉的就是
+    用户自己的字节。
+
+    **分析层要按行看文本的**（正则里用 `$` 锚行尾），调用方自己用
+    `textio.to_lf` 归一；归一的是内存里的副本，磁盘上的字节一个不动。
+    """
     try:
-        return path.read_text(encoding="utf-8")
+        return read_text_exact(path)
     except UnicodeDecodeError as exc:
         raise ConfigError("%s 不是合法 UTF-8：%s" % (path, exc))
     except OSError as exc:

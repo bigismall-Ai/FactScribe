@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -28,6 +29,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -497,6 +499,100 @@ class TestOtherProjectWrites(unittest.TestCase):
             self.assertEqual(list(out_dir.iterdir()), [],
                              "项目外被写了文件")
             self.assertEqual(snapshot(base), before)
+
+
+class TestUnresolvableLandingPoint(unittest.TestCase):
+    """落点「不可解」的判定必须跨平台同一口径（Windows 真机暴露的缺陷 D1）。
+
+    Windows 上 `os.path.realpath(strict=True)` 对成环软链抛的是
+    `OSError(winerror=1921 ERROR_CANT_RESOLVE_FILENAME, errno=22 EINVAL)`，
+    **不是** POSIX 的 `ELOOP`（Windows 的 `errno.ELOOP` 常量是 10062，
+    跟这里收到的 errno 不是同一个东西）。原来的闸按 `exc.errno == errno.ELOOP` 判 →
+    Windows 上必然漏判 → 写侧成环退成 exit 4（工具内部错误），而不是
+    `FACT_FILE_UNRESOLVED` / exit 5（真机实测，2026-11-25）。
+
+    这里的用例用**注入异常**的方式做成平台无关的单元测试：同一份代码在
+    POSIX 与 Windows 上都必须判成同一个码、同一个退出码。真实软链那条路
+    由 `TestFactsWriteOutside.test_symlink_loop_is_refused_as_unresolved` 覆盖
+    （在 Windows 上它走的就是 winerror=1921 那条真路，不是注入）。
+    """
+
+    @staticmethod
+    def _windows_cycle_error():
+        """Windows 真机上成环时 strict realpath 抛的那个错（实测值）。"""
+        exc = OSError(22, "系统无法辨识文件名。")
+        exc.winerror = 1921
+        return exc
+
+    @staticmethod
+    def _posix_cycle_error():
+        return OSError(errno.ELOOP, "Too many levels of symbolic links")
+
+    def _guard_with(self, exc):
+        """让落点解析抛出给定的错，看闸怎么判（返回异常）。"""
+        from factscribe import safepath
+        with mock.patch("factscribe.safepath._real", side_effect=exc):
+            safepath.guard_facts_write(Path("/tmp/proj"),
+                                       Path("/tmp/proj/facts/01-core.toml"))
+
+    def test_windows_cycle_error_is_refused_as_unresolved(self):
+        """Windows 成环错（winerror=1921）→ FACT_FILE_UNRESOLVED / exit 5。"""
+        from factscribe.safepath import WriteRefused
+        with self.assertRaises(WriteRefused) as ctx:
+            self._guard_with(self._windows_cycle_error())
+        self.assertEqual(ctx.exception.code, "FACT_FILE_UNRESOLVED")
+        self.assertEqual(ctx.exception.exit_code, 5)
+        self.assertIn("成环", str(ctx.exception))
+
+    def test_posix_cycle_error_is_refused_as_unresolved(self):
+        """POSIX 成环错（ELOOP）→ 同一个码、同一个退出码（不许两平台分叉）。"""
+        from factscribe.safepath import WriteRefused
+        with self.assertRaises(WriteRefused) as ctx:
+            self._guard_with(self._posix_cycle_error())
+        self.assertEqual(ctx.exception.code, "FACT_FILE_UNRESOLVED")
+        self.assertEqual(ctx.exception.exit_code, 5)
+
+    def test_any_other_oserror_is_refused_not_internal_error(self):
+        """解不出来就判不可解（fail-closed），不许裸崩成 exit 4。"""
+        from factscribe.safepath import WriteRefused
+        with self.assertRaises(WriteRefused) as ctx:
+            self._guard_with(OSError(errno.EACCES, "Permission denied"))
+        self.assertEqual(ctx.exception.code, "FACT_FILE_UNRESOLVED")
+        self.assertEqual(ctx.exception.exit_code, 5)
+
+    def test_project_write_gate_uses_the_same_judgment(self):
+        """同族的其它项目内写盘闸：同一口径（PATH_ESCAPE，exit 2），不许裸崩。"""
+        from factscribe.config import ConfigError
+        from factscribe import safepath
+        with mock.patch("factscribe.safepath._real",
+                       side_effect=self._windows_cycle_error()):
+            with self.assertRaises(ConfigError) as ctx:
+                safepath.guard_project_write(Path("/tmp/proj"),
+                                             Path("/tmp/proj/audit/x.md"),
+                                             what="矩阵产物")
+        self.assertEqual(getattr(ctx.exception, "code", ""),
+                         "PATH_ESCAPE")
+
+    def test_cli_exits_five_with_unresolved_code(self):
+        """命令层：写侧落点不可解 → exit 5 + FACT_FILE_UNRESOLVED（不是 exit 4）。"""
+        import contextlib
+        import io
+        from factscribe import cli
+        with tempfile.TemporaryDirectory() as tmp:
+            root = new_project(tmp)
+            buf = io.StringIO()
+            with mock.patch("factscribe.safepath._real",
+                           side_effect=self._windows_cycle_error()):
+                with contextlib.redirect_stdout(buf):
+                    code = cli.main(["fact", "add", str(root),
+                                     "--id", "A1", "--claim", "成环不许写",
+                                     "--value", "10/16",
+                                     "--source", MANIFEST_REL, "--json"])
+            self.assertEqual(code, 5, buf.getvalue())
+            self.assertNotEqual(code, 4, "不许退成工具内部错误")
+            payload = last_json(buf.getvalue())
+            self.assertEqual(payload["code"], "FACT_FILE_UNRESOLVED")
+            self.assertEqual(payload["exit"], 5)
 
 
 if __name__ == "__main__":

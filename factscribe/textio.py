@@ -30,6 +30,7 @@ Windows 上默认文本模式两头都动手：
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from pathlib import Path
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "split_keepends",
     "split_lines",
     "dominant_newline",
+    "restore_newlines",
     "to_lf",
 ]
 
@@ -150,3 +152,64 @@ def dominant_newline(text: str, default: str = "\n") -> str:
     if lf == best:
         return "\n"
     return "\r"
+
+
+def restore_newlines(original: str, new_text: str) -> str:
+    """把 `new_text` 的行尾还原成 `original` 里各行**原有**的行尾。
+
+    为什么需要它：网页工作台的编辑器是 `<textarea>`，而 **HTML 规范规定
+    textarea 的 API value 把换行一律归一为 LF**（实测：Chrome 里
+    `textarea.value` 把 `\r\n` 与单独的 `\r` 都变成 `\n`）。于是浏览器
+    交回的正文恒是 LF，引擎侧若把它逐字写回，一份 CRLF 的稿件**存一次
+    就变成 LF**——数字、\fact{}/\cite{} 保护面、token 一个字没动，行尾却
+    整篇被换掉了，违反「保存必须逐字保留正文内容」。
+
+    口径（**只动行尾，不动一个字的内容**）：
+
+    * `original` 是这一块**落盘原文**（按原样读，行尾原样）；
+    * `new_text` 是客户端交回的新正文；
+    * 新正文里与原文**逐行对得上**的行 → 用原文那一行的行尾；
+    * 对不上、**用户新输入**的行 → 用该块的主导行尾（`dominant_newline`）；
+    * 客户端自己明确给了 CRLF/CR 的行 → **原样保留**（那是调用方的显式
+      意图，这里一个字都不许改写）。
+
+    原文整个块只有一行、没有任何行尾时，新行按 `dominant_newline` 的缺省
+    走 LF。
+    """
+    old = split_keepends(original)
+    new = split_keepends(new_text)
+    if not old:
+        # 没有原文可依（新建的块）：客户端给什么就是什么。
+        return new_text
+    fallback = dominant_newline(original)
+    old_content = [content for content, _ending in old]
+    new_content = [content for content, _ending in new]
+    inherited: dict[int, str] = {}
+    if old_content == new_content:
+        # 最常见的一档：内容一个字没改（浏览器归一了行尾而已）——逐行照旧。
+        for index, (_content, ending) in enumerate(old):
+            inherited[index] = ending
+    else:
+        # 内容改过：按行内容对齐，把原文那一行的行尾还给对应的新行。
+        matcher = SequenceMatcher(a=old_content, b=new_content, autojunk=False)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == "equal":
+                for offset in range(j2 - j1):
+                    inherited[j1 + offset] = old[i1 + offset][1]
+            elif tag == "replace":
+                # 改写掉的行：按位置继承原文那一行的行尾；多出来的新行走主导行尾。
+                for offset in range(min(i2 - i1, j2 - j1)):
+                    inherited[j1 + offset] = old[i1 + offset][1]
+    out: list[str] = []
+    for index, (content, ending) in enumerate(new):
+        if ending == "":
+            # 最后一行本来就没有行尾——没什么可还原的。
+            out.append(content)
+            continue
+        if ending != "\n":
+            # 客户端明确给了 CRLF/CR：那是调用方的显式意图，一个字符都不动。
+            out.append(content + ending)
+            continue
+        target = inherited.get(index) or fallback
+        out.append(content + target)
+    return "".join(out)

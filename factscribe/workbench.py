@@ -17,7 +17,7 @@ from .evidence import (freeze_evidence, lock_check, log_state, read_lock,
                        unfreeze_evidence, unfrozen_info)
 from .report import _config_block, _severity_of
 from .scaffold import add_fact
-from .textio import read_text_exact, write_text_exact
+from .textio import (read_text_exact, restore_newlines, write_text_exact)
 
 
 def _config_bits(cfg) -> dict:
@@ -152,6 +152,19 @@ def audit_data(project: Path | str) -> dict:
     }
 
 
+def _restore_section_newlines(target: Path, text: str) -> str:
+    """按落盘原文把新正文的行尾还原回去（读不动就按客户端给的原样写）。
+
+    `target` 是**将被覆盖的那个文件**：它的行尾就是这一节原有的行尾，
+    还原的依据只认它，不认客户端怎么说。
+    """
+    try:
+        original = read_text_exact(target)
+    except (OSError, UnicodeDecodeError):
+        return text
+    return restore_newlines(original, text)
+
+
 def write_section_data(project: Path | str, file: str, text: str,
                        allow_write: bool = False) -> dict:
     _require_write(allow_write)
@@ -173,11 +186,17 @@ def write_section_data(project: Path | str, file: str, text: str,
     except ValueError:
         raise ConfigError("章节越出项目根：%s" % rel)
     tmp = target.with_name(target.name + ".tmp")
+    # 行尾还原：浏览器的 <textarea> 交回的正文恒是 LF（HTML 规范把 textarea
+    # 的 API value 归一为 LF），直接逐字写回会把 CRLF 稿件整篇压成 LF——
+    # 内容一个字没动，行尾却全被换掉了。这里按**落盘原文**逐行还原行尾，
+    # 正文内容（数字、\fact{}/\cite{} 保护面、token）一个字都不改。
     # newline=""：不翻译换行。正文里的 '\n' 就是 '\n'，已有的 '\r\n'
     # 也不会被写成 '\r\r\n'（Windows 上默认文本模式会这么干）。
-    write_text_exact(tmp, text)
+    final = _restore_section_newlines(target, text)
+    write_text_exact(tmp, final)
     os.replace(tmp, target)
-    return {"file": rel, "bytes": len(text.encode("utf-8"))}
+    # bytes 报的是**真正落盘**的那份（还原行尾后），不是客户端交来的那份。
+    return {"file": rel, "bytes": len(final.encode("utf-8"))}
 
 
 # ============================================================ 章节增删改

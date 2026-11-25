@@ -36,6 +36,7 @@ from .checks import aggregate_exit as checks_aggregate_exit
 from .checks import run_packages
 from .config import (Config, ConfigError, load_facts, load_sections)
 from .evidence import lock_check, read_lock, unfrozen_info
+from .textio import read_text_exact
 from .texscan import scan_tex
 
 BUNDLE_VERSION = "1"
@@ -675,7 +676,8 @@ def _write_artifact(out_dir: Path, root: Path, rel: str, source: Path,
     target.parent.mkdir(parents=True, exist_ok=True)
     transformed = False
     try:
-        text = source.read_text(encoding="utf-8")
+        # 按原样读：工件是用户文件的副本，行尾不该在打包时被换掉。
+        text = read_text_exact(source)
     except (OSError, UnicodeDecodeError):
         shutil.copyfile(source, target)
         data = target.read_bytes()

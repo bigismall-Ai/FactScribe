@@ -13,12 +13,12 @@ from pathlib import Path, PurePosixPath
 from .audit import _aggregate_exit, run_audit, source_path
 from .brief import build_brief, payload as brief_payload
 from .config import (ConfigError, load_config, load_facts, load_sections)
+from .textio import write_text_exact
 from .evidence import (freeze_evidence, lock_check, log_state, read_lock,
                        unfreeze_evidence, unfrozen_info)
 from .i18n import issue_dict
 from .report import _config_block, _severity_of
 from .scaffold import add_fact
-from .textio import read_text_exact, write_text_exact
 
 
 def _config_bits(cfg) -> dict:
@@ -30,38 +30,6 @@ def _require_write(allow_write: bool) -> None:
     if not allow_write:
         raise ConfigError("当前是只读模式；写操作需要 --allow-write",
                           code="READ_ONLY")
-
-
-def _section_file(cfg, rel: str) -> Path:
-    """章节文件路径。
-
-    `load_sections()` 给的 rel 是相对**解析后的**项目根算的（软链被解析
-    过），而 `cfg.root` 可能还是调用方传进来的那条路径（带软链）。两边
-    拼出来的路径指向同一个文件；这里先按 `cfg.root` 拼，不在就按解析后
-    的根再试一次。
-    """
-    path = cfg.root / rel
-    if path.is_file():
-        return path
-    alt = cfg.root.resolve() / rel
-    return alt if alt.is_file() else path
-
-
-def _sections_exact(cfg) -> list[tuple[str, str]]:
-    """审计闭包里的章节，文本**按原样**读（不做通用换行翻译）。
-
-    `load_sections()` 里的读走的是通用换行翻译（universal newlines）：
-    Windows 风格的 `'\r\n'` 会被读成 `'\n'`。正文进编辑器再存回去，
-    行尾就被悄悄换掉了——违反「保存必须逐字保留正文内容」。这里重新按
-    字节读一遍，读不动就退回闭包里的那份。
-    """
-    out: list[tuple[str, str]] = []
-    for rel, text in load_sections(cfg):
-        try:
-            out.append((rel, read_text_exact(_section_file(cfg, rel))))
-        except (OSError, UnicodeDecodeError):
-            out.append((rel, text))
-    return out
 
 
 def status_data(project: Path | str, allow_write: bool = False) -> dict:
@@ -84,7 +52,7 @@ def project_data(project: Path | str, allow_write: bool = False,
                  allow_build: bool = False) -> dict:
     cfg = load_config(Path(project))
     facts = load_facts(cfg)
-    sections = _sections_exact(cfg)
+    sections = load_sections(cfg)
     source_rows: dict[str, dict] = {}
     for fact in facts:
         src = fact.source.strip()
@@ -95,14 +63,14 @@ def project_data(project: Path | str, allow_write: bool = False,
             base = source_path(cfg, "").resolve()
             path = source_path(cfg, src).resolve()
             path.relative_to(base)
-            text = read_text_exact(path)
+            text = path.read_text(encoding="utf-8")
         except (OSError, ValueError, UnicodeDecodeError):
             text = ""
         source_rows[src] = {"id": src, "name": src, "text": text,
                             "sha256": fact.source_sha256}
     bib_path = cfg.root / cfg.bib
     try:
-        bib = read_text_exact(bib_path)
+        bib = bib_path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         bib = ""
     return {
@@ -175,8 +143,8 @@ def write_section_data(project: Path | str, file: str, text: str,
     except ValueError:
         raise ConfigError("章节越出项目根：%s" % rel)
     tmp = target.with_name(target.name + ".tmp")
-    # newline=""：不翻译换行。正文里的 '\n' 就是 '\n'，已有的 '\r\n'
-    # 也不会被写成 '\r\r\n'（Windows 上默认文本模式会这么干）。
+    # newline=""：不翻译换行。正文里的 '\r\n' 原样落盘——
+    # Windows 上默认文本模式会把它写成 '\r\r\n'（内容损坏）。
     write_text_exact(tmp, text)
     os.replace(tmp, target)
     return {"file": rel, "bytes": len(text.encode("utf-8"))}
@@ -263,7 +231,7 @@ def _scan_project_tex(cfg) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
     try:
-        out.extend(_sections_exact(cfg))
+        out.extend(load_sections(cfg))
         seen.update(rel for rel, _ in out)
     except ConfigError:
         pass  # 闭包坏了也得能删：退回到 root_tex 与根目录
@@ -281,7 +249,7 @@ def _scan_project_tex(cfg) -> list[tuple[str, str]]:
             continue
         seen.add(rel)
         try:
-            out.append((rel, read_text_exact(_section_file(cfg, rel))))
+            out.append((rel, (cfg.root / rel).read_text(encoding="utf-8")))
         except (OSError, UnicodeDecodeError):
             pass
     return out
@@ -331,7 +299,6 @@ def create_section_data(project: Path | str, file: str, text=None,
         raise SectionError("父目录不存在：%s（先建目录再建节）" % rel,
                            code="SECTION_PARENT_MISSING")
     content = text if isinstance(text, str) else DEFAULT_SECTION_TEXT
-    # newline=""：新建的章节同样逐字保留（见 write_section_data 的说明）。
     write_text_exact(target, content)
     return {"file": rel, "bytes": len(content.encode("utf-8"))}
 

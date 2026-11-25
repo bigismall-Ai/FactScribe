@@ -263,7 +263,7 @@ This layer adds no criteria and produces no score. It leaves every decision and 
 
 The exit-code set is closed over 0–9; the authoritative table is §2.5 of [`docs/design/SPEC-V3.0.md`](docs/design/SPEC-V3.0.md). The table above lists the codes this repository can actually exit with; the remaining ones (6 proof not met, 7 stale/replay, 9 attack surface open) are not produced by any command yet.
 
-A missing `factscribe.toml`, an empty ledger, empty prose, or a missing `refs.bib` exits 2 with a reason. Nothing passes silently. A ledger file that points outside the project, or whose symlink cannot be resolved, is rejected by the ledger and reported red (exit 5) — it is never downgraded to an empty ledger.
+A missing `factscribe.toml`, an empty ledger, empty prose, or a missing `refs.bib` exits 2 with a reason. Nothing passes silently. A ledger file that points outside the project, or whose symlink cannot be resolved, is rejected by the ledger and reported red (exit 5). It is never downgraded to an empty ledger.
 
 ## Known gaps
 
@@ -274,7 +274,7 @@ All three limits point at the same promise: the account, the material and the te
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1722 tests, fully offline
+python3 -m unittest discover -s tests     # 1764 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

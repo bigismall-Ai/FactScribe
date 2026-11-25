@@ -16,6 +16,7 @@ from pathlib import Path
 from .config import Config, ConfigError, load_config, load_facts, load_toml
 from .constants import CONFIDENCE_OK
 from .facts import sha256_file
+from .safepath import guard_facts_write, guard_project_write
 
 LANGS = ("zh", "en")
 DEFAULT_TITLE = {"zh": "未命名论文", "en": "Untitled Paper"}
@@ -398,6 +399,15 @@ def init_project(root: Path, *, title: str | None = None,
     files = _render(lang, clean_title, clean_author)
     overwritten = [name for name in files if (root / name).is_file()]
 
+    # 写侧落点闸：七个落点全查一遍再落盘——软链绕出去就拒写，不落盘，也不
+    # 留下半副骨架。闸在 mkdir 之前：目录本身是软链时，mkdir 会把目录建在
+    # 软链那边去；拒写时连目标目录都不必先建出来。
+    for name in files:
+        dest = root / name
+        if name == FACTS_FILE:
+            guard_facts_write(root, dest, rel=name)
+        else:
+            guard_project_write(root, dest, what="项目骨架", rel=name)
     root.mkdir(parents=True, exist_ok=True)
     for name, text in files.items():
         dest = root / name
@@ -535,6 +545,14 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
                           "V3 的审批目标请按 SPEC-V3.0 写在 schema 声明里）")
     known = load_facts(cfg)
     ledger = _ledger_path(root, cfg)
+    try:
+        ledger_rel = ledger.relative_to(root).as_posix()
+    except ValueError:
+        ledger_rel = ledger.name
+    # 写侧信任根闸：账本的真实目标越出项目根就拒写——不落盘、不留半截文件。
+    # 与读侧同一对码（FACT_FILE_OUTSIDE_PROJECT / FACT_FILE_UNRESOLVED，
+    # red / exit 5），severity 与 exit 一律不动。
+    guard_facts_write(root, ledger, rel=ledger_rel)
     if ledger.is_file():
         load_toml(ledger)  # 账坏了就别往上追加
 
@@ -598,7 +616,7 @@ def add_fact(root: Path, *, fid: str, claim: str, value: str, source: str,
         "derived_from": parents,
         "expr": expr,
         "note": str(note or "").strip(),
-        "ledger": ledger.relative_to(root).as_posix(),
+        "ledger": ledger_rel,
         "manifest": cfg.manifest,
         "manifest_line": manifest_line,
     }

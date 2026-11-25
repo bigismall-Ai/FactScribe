@@ -53,6 +53,8 @@ from .report import (PREAMBLE_TEXT, ReportError, _artifact_path, _config_block,
 from .review import payload as review_payload
 from .review import render_human as render_review
 from .review import run_review
+from .safepath import (WriteRefused, guard_facts_write,
+                       guard_project_write)
 from .scaffold import add_fact, init_project
 from .serve import LOOPBACK_HOSTS, create_server
 from .style import (DISCLAIMER, STAGE_DRAFT, STAGE_VALUES, analyze,
@@ -1130,6 +1132,18 @@ def cmd_fact_import(args) -> int:
     if target.parent.resolve() != facts_dir.resolve():
         return _report_fail(args, command, EXIT_CONFIG, rel_report, "FACTS_PATH_INVALID",
                             "只许写 facts/ 一级，不许写子目录")
+    # 写侧信任根闸：账本的真实目标越出项目根就拒写——不落盘、不留半截文件。
+    # 与读侧同一对码（FACT_FILE_OUTSIDE_PROJECT / FACT_FILE_UNRESOLVED，
+    # red / exit 5），severity 与 exit 一律不动。
+    try:
+        target_rel = target.relative_to(cfg.root).as_posix()
+    except ValueError:
+        target_rel = target.name
+    try:
+        guard_facts_write(cfg.root, target, rel=target_rel)
+    except WriteRefused as exc:
+        return _report_fail(args, command, exc.exit_code, rel_report,
+                            exc.code, str(exc))
     header = ("# managed by factscribe fact import; report=%s digest=%s"
               % (rel_report, semantic_digest(report)))
     body = [header, ""]
@@ -1530,6 +1544,9 @@ def cmd_matrix(args) -> int:
     sections = load_sections(cfg)
     text, rows = render_matrix(cfg, facts, sections)
     out = Path(args.out) if getattr(args, "out", None) else cfg.root / "audit" / "matrix.md"
+    if not getattr(args, "out", None):
+        # 写侧落点闸：默认落点（项目内 audit/）必须留在项目根内。
+        guard_project_write(cfg.root, out, what="矩阵产物", rel="audit/matrix.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     human = "== factscribe matrix ==\n写盘：%s\n行数：%d（每行一条 fact）\n%s" % (
@@ -1545,6 +1562,9 @@ def cmd_matrix(args) -> int:
 def cmd_preamble(args) -> int:
     cfg = load_config(Path(args.project))
     out = Path(args.out) if getattr(args, "out", None) else cfg.root / "audit" / "preamble.tex"
+    if not getattr(args, "out", None):
+        # 写侧落点闸：默认落点（项目内 audit/）必须留在项目根内。
+        guard_project_write(cfg.root, out, what="前言产物", rel="audit/preamble.tex")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(PREAMBLE_TEXT, encoding="utf-8")
     human = "== factscribe preamble ==\n写盘：%s\n%s" % (out, PREAMBLE_TEXT)
@@ -2130,8 +2150,11 @@ def main(argv=None) -> int:
         return handlers[args.command](args)
     except ConfigError as exc:
         code = getattr(exc, "code", "CONFIG_INVALID")
+        # 写盘被拒的码自带退出码（事实账越界＝信任链失败 exit 5）；
+        # 其它配置/用法错仍是 exit 2。severity 与 exit 都按码走，不改既有码。
+        exit_code = getattr(exc, "exit_code", EXIT_CONFIG)
         if getattr(args, "json", False):
-            payload = _payload(args.command, "error", EXIT_CONFIG,
+            payload = _payload(args.command, "error", exit_code,
                                message=str(exc))
             payload["code"] = code
             # §8：CONFIG 类码也必须出现在 findings/issues 里，判卷器不用
@@ -2141,8 +2164,10 @@ def main(argv=None) -> int:
             payload["issues"] = [finding]
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)
-        return EXIT_CONFIG
+            label = ("配置/用法错" if exit_code == EXIT_CONFIG
+                     else "信任链失败")
+            print("factscribe: %s：%s" % (label, exc), file=sys.stderr)
+        return exit_code
     except Exception as exc:  # noqa: BLE001 - 内部错误必须与「有违例」分开
         if getattr(args, "json", False):
             print(json.dumps(_payload(args.command, "error", EXIT_INTERNAL,

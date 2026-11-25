@@ -2,6 +2,7 @@
 """项目声明读取：factscribe.toml、迷你 TOML、facts/sections 装载。"""
 from __future__ import annotations
 
+import datetime as _dt
 import hashlib
 import re
 from dataclasses import dataclass, field
@@ -36,161 +37,599 @@ class ConfigError(Exception):
             self.code = code
 
 
-def _strip_toml_comment(line: str) -> str:
-    out = []
-    quote = None
-    i = 0
-    while i < len(line):
-        c = line[i]
-        if quote:
-            out.append(c)
-            if c == "\\" and quote == '"' and i + 1 < len(line):
-                out.append(line[i + 1])
-                i += 2
+# --------------------------------------------------------------------------
+# 3.10 兜底 TOML 解析器（严格档）
+# --------------------------------------------------------------------------
+#
+# 标准库 tomllib 只在 3.11+ 有；3.10 走这份自带解析器。
+#
+# 铁律（CONTRIBUTING §1「fail closed」）：坏 TOML 必须报错，经既有
+# ConfigError 通道变成 exit 2；不许把坏输入当合法内容收下。
+#
+# 为什么必须是严格的：同一份坏文件，3.11+ 的 tomllib 报错（拒绝），
+# 3.10 的兜底若宽松收下（放行），两道闸在两种解释器上结论相反 ——
+# CI 矩阵里 3.10 一条腿红、别的腿绿，audit 输出也不再跨版本一致。
+# 旧兜底正是宽松的：坏表头 `[[ref]` 被当成表名 `[ref` 收下，
+# 未闭合字符串 `id = "X1` 被当裸词吞下 —— 闸门 fail-open（放行）。
+#
+# 覆盖面：factscribe 契约用得到的子集 ＝ 表、表数组、点号表名、点号键、
+# 字符串（基本/字面/多行）、数组、内联表、整数、浮点、布尔、日期时间。
+# 判据照标准库 tomllib 来：同样的写法同样收、同样拒，读出的值也相同 ——
+# 3.10 与 3.11+ 必须是同一个结论（audit 输出跨版本逐字节一致）。
+
+_BARE_KEY_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-")
+_TOML_WS = " \t"
+# 标准库 tomllib 的空白集只有 " \t" 与换行；裸 "\r" 不算空白（判非法语句）。
+_TOML_WS_AND_NEWLINE = " \t\n"
+# 控制字符口径与标准库 tomllib 同源（ASCII 0-31 与 127）：
+# 单行字符串与注释里除制表符外都非法；多行字符串里除制表符与换行外都非法。
+_ASCII_CTRL = frozenset(chr(i) for i in range(32)) | frozenset(chr(127))
+_ILLEGAL_STR_CHARS = _ASCII_CTRL - frozenset("\t")
+_ILLEGAL_MULTILINE_STR_CHARS = _ASCII_CTRL - frozenset("\t\n")
+_BASIC_STR_ESCAPES = {
+    "b": "\b", "t": "\t", "n": "\n", "f": "\f", "r": "\r",
+    '"': '"', "\\": "\\",
+}
+
+# 数字与日期时间的词法（照 tomllib 的正则改写）。
+_RE_NUMBER = re.compile(
+    r"0(?:x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*"
+    r"|b[01](?:_?[01])*"
+    r"|o[0-7](?:_?[0-7])*)"
+    r"|[+-]?(?:0|[1-9](?:_?[0-9])*)"
+    r"(?P<floatpart>(?:\.[0-9](?:_?[0-9])*)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?)")
+_RE_LOCALTIME = re.compile(
+    r"(?P<hour>[01][0-9]|2[0-3]):(?P<minute>[0-5][0-9]):(?P<second>[0-5][0-9])"
+    r"(?:\.(?P<micros>[0-9]{1,6})[0-9]*)?")
+_RE_DATETIME = re.compile(
+    r"(?P<year>[0-9]{4})-(?P<month>0[1-9]|1[0-2])-(?P<day>0[1-9]|[12][0-9]|3[01])"
+    r"(?:[Tt ]"
+    r"(?P<hour>[01][0-9]|2[0-3]):(?P<minute>[0-5][0-9]):(?P<second>[0-5][0-9])"
+    r"(?:\.(?P<micros>[0-9]{1,6})[0-9]*)?"
+    r"(?:(?P<zulu>[Zz])|(?P<osign>[+-])(?P<ohour>[01][0-9]|2[0-3]):(?P<ominute>[0-5][0-9]))?"
+    r")?")
+
+
+class _MiniTomlError(ValueError):
+    """兜底解析器拒绝坏 TOML（与标准库 tomllib 同口径：坏输入必须报错）。"""
+
+
+def _path_frozen(frozen: set, path: tuple) -> bool:
+    """路径（或其任一祖先）在 frozen 里 ⇒ 那块命名空间不可再改写。"""
+    for f in frozen:
+        if path[:len(f)] == f:
+            return True
+    return False
+
+
+def _to_datetime(match):
+    """把日期/时间的正则匹配读成 date/datetime/time 对象（与 tomllib 同型）。"""
+    year = int(match.group("year"))
+    month = int(match.group("month"))
+    day = int(match.group("day"))
+    if match.group("hour") is None:
+        return _dt.date(year, month, day)
+    micros = int(match.group("micros").ljust(6, "0")) if match.group("micros") else 0
+    tz = None
+    if match.group("osign"):
+        sign = 1 if match.group("osign") == "+" else -1
+        tz = _dt.timezone(_dt.timedelta(
+            hours=sign * int(match.group("ohour")),
+            minutes=sign * int(match.group("ominute"))))
+    elif match.group("zulu"):
+        tz = _dt.timezone.utc
+    return _dt.datetime(year, month, day, int(match.group("hour")),
+                         int(match.group("minute")), int(match.group("second")),
+                         micros, tzinfo=tz)
+
+
+class _MiniTomlParser:
+    """3.10 兜底 TOML 解析器：只吃合法 TOML，坏的一律报错。
+
+    规则照标准库 tomllib（CPython 的 Lib/tomllib）来：同样收、同样拒，
+    读出的值也相同 —— 3.10 与 3.11+ 的闸门结论必须一致。
+    """
+
+    def __init__(self, text: str):
+        self.text = text
+        self.n = len(text)
+        self.i = 0
+        self.root: dict = {}
+        self.header: tuple = ()
+        # 表头显式声明过的路径（不许再声明一次）
+        self.explicit: set = set()
+        # 点号键建出的中间表：挂起，等下一条表头才生效（与 tomllib 同口径）
+        self.pending: set = set()
+        # 内联表/内联数组的路径（不可再改写）
+        self.frozen: set = set()
+
+    # ---- 报错 ----
+
+    def fail(self, msg: str):
+        """抛坏 TOML 错误（带行号列号，方便定位）。"""
+        line = self.text.count("\n", 0, self.i) + 1
+        col = self.i - self.text.rfind("\n", 0, self.i)
+        raise _MiniTomlError("TOML 第 %d 行第 %d 列：%s" % (line, col, msg))
+
+    # ---- 空白与注释 ----
+
+    def skip_blank(self):
+        """跳过空白、换行与注释（语句之间用）。"""
+        while self.i < self.n:
+            c = self.text[self.i]
+            if c in _TOML_WS_AND_NEWLINE:
+                self.i += 1
                 continue
-            if c == quote:
-                quote = None
-        else:
-            if c in "\"'":
-                quote = c
-                out.append(c)
-            elif c == "#":
+            if c == "#":
+                self.skip_comment()
+                continue
+            return
+
+    def skip_comment(self):
+        """跳过行尾注释（注释里不许出现控制字符，与 tomllib 同口径）。"""
+        if self.i < self.n and self.text[self.i] == "#":
+            while self.i < self.n and self.text[self.i] != "\n":
+                c = self.text[self.i]
+                if c in _ILLEGAL_STR_CHARS:
+                    self.fail("注释里有非法控制字符")
+                self.i += 1
+
+    def skip_spaces(self):
+        """只跳同行空白（表名/键名里的点号前后允许空格）。"""
+        while self.i < self.n and self.text[self.i] in _TOML_WS:
+            self.i += 1
+
+    def skip_array_ws(self):
+        """数组里可以换行、可以带注释。"""
+        while True:
+            before = self.i
+            while self.i < self.n and self.text[self.i] in _TOML_WS_AND_NEWLINE:
+                self.i += 1
+            if self.i < self.n and self.text[self.i] == "#":
+                self.skip_comment()
+                continue
+            if self.i == before:
+                return
+
+    # ---- 文档 ----
+
+    def parse(self) -> dict:
+        while True:
+            self.skip_blank()
+            if self.i >= self.n:
                 break
+            if self.text[self.i] == "[":
+                self.parse_header()
             else:
-                out.append(c)
-        i += 1
-    return "".join(out)
+                self.parse_key_value()
+            # 一条语句之后只许行尾空白与注释，然后必须换行或到文件尾
+            self.skip_spaces()
+            self.skip_comment()
+            if self.i < self.n and self.text[self.i] != "\n":
+                self.fail("这条语句后面还有多余内容")
+        return self.root
 
+    # ---- 表头 ----
 
-def _split_top_level(body: str) -> list[str]:
-    """按顶层逗号切：顾引号，也顾 {}/[] 嵌套——内联表不当劈开。"""
-    items: list[str] = []
-    buf: list[str] = []
-    quote: str | None = None
-    depth = 0
-    for c in body:
-        if quote:
-            buf.append(c)
-            if c == quote:
-                quote = None
-        elif c in "\"'":
-            quote = c
-            buf.append(c)
-        elif c in "[{":
-            depth += 1
-            buf.append(c)
-        elif c in "]}":
-            depth -= 1
-            buf.append(c)
-        elif c == "," and depth == 0:
-            items.append("".join(buf))
-            buf = []
+    def parse_header(self):
+        # 表头之前先把点号键挂起的标记落定（与 tomllib 同口径）
+        self.explicit |= self.pending
+        self.pending.clear()
+        if self.text.startswith("[[", self.i):
+            self.i += 2
+            path = self.parse_key_path()
+            self.expect("]]")
+            self.declare_array(path)
         else:
-            buf.append(c)
-    if "".join(buf).strip():
-        items.append("".join(buf))
-    return items
+            self.i += 1
+            path = self.parse_key_path()
+            self.expect("]")
+            self.declare_table(path)
 
+    def expect(self, token: str):
+        self.skip_spaces()
+        if not self.text.startswith(token, self.i):
+            self.fail("这里应该是 %r" % token)
+        self.i += len(token)
 
-def _mini_toml_inline_table(raw: str) -> dict:
-    """内联表 `{ key = 值, … }`（3.11+ tomllib 本就支持；此处补齐 3.10 同形）。"""
-    out: dict = {}
-    for part in _split_top_level(raw[1:-1]):
-        part = part.strip()
-        if not part:
-            continue
-        key, sep, value = part.partition("=")
-        if not sep:
-            raise ValueError("内联表缺 key=value：%r" % raw)
-        out[key.strip().strip("\"'")] = _mini_toml_value(value)
-    return out
+    def declare_table(self, path):
+        """`[表]` —— 表已经声明过、或那儿已经是个值，就报错。"""
+        if path in self.explicit or _path_frozen(self.frozen, path):
+            self.fail("不能重复声明表 %r" % (path,))
+        self.explicit.add(path)
+        try:
+            self.get_or_create_nest(path)
+        except KeyError:
+            self.fail("不能覆盖已有的值")
+        self.header = path
 
+    def declare_array(self, path):
+        """`[[表数组]]` —— 表数组可以重复声明（每次追加一个元素）。"""
+        if _path_frozen(self.frozen, path):
+            self.fail("不能改写已冻结的命名空间 %r" % (path,))
+        # 重新声明时，把上一轮挂在这个路径下的标记清掉
+        self.unset_all(path)
+        self.explicit.add(path)
+        try:
+            parent = self.get_or_create_nest(path[:-1])
+        except KeyError:
+            self.fail("不能覆盖已有的值")
+        leaf = path[-1]
+        if leaf in parent:
+            existing = parent[leaf]
+            if not isinstance(existing, list):
+                self.fail("不能覆盖已有的值")
+            item: dict = {}
+            existing.append(item)
+        else:
+            item = {}
+            parent[leaf] = [item]
+        self.header = path
 
-def _mini_toml_value(raw: str):
-    raw = raw.strip()
-    if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2:
-        return raw[1:-1].replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
-    if raw.startswith("'") and raw.endswith("'") and len(raw) >= 2:
-        return raw[1:-1]
-    if raw in ("true", "false"):
-        return raw == "true"
-    if raw.startswith("[") and raw.endswith("]"):
-        return [_mini_toml_value(x)
-                for x in _split_top_level(raw[1:-1]) if x.strip()]
-    if raw.startswith("{") and raw.endswith("}"):
-        return _mini_toml_inline_table(raw)
-    try:
-        if any(ch in raw for ch in ".eE") and not raw.startswith("0x"):
-            return float(raw)
-        return int(raw)
-    except ValueError:
-        return raw  # 裸词，容错
+    # ---- 键值 ----
 
+    def parse_key_value(self):
+        path = self.parse_key_path()
+        self.skip_spaces()
+        if self.i >= self.n or self.text[self.i] != "=":
+            self.fail("键名后面缺 '='")
+        self.i += 1
+        self.skip_spaces()
+        self.set_key_value(path, self.scan_value())
 
-def _needs_more(value: str) -> bool:
-    depth = 0
-    quote = None
-    for c in value:
-        if quote:
-            if c == quote:
-                quote = None
-        elif c in "\"'":
-            quote = c
-        elif c in "[{":
-            depth += 1
-        elif c in "]}":
-            depth -= 1
-    return depth > 0
+    def set_key_value(self, path, value):
+        """把 `键 = 值` 写进当前表（点号键会建出中间的表）。"""
+        header = self.header
+        # 点号键的中间层不许是已显式声明过的表（那是重新定义命名空间）
+        for i in range(1, len(path)):
+            cont = header + path[:i]
+            if cont in self.explicit:
+                self.fail("不能重新定义命名空间 %r" % (cont,))
+            self.pending.add(cont)
+        parent = header + path[:-1]
+        if _path_frozen(self.frozen, parent):
+            self.fail("不能改写已冻结的命名空间 %r" % (parent,))
+        try:
+            nest = self.get_or_create_nest(parent)
+        except KeyError:
+            self.fail("不能覆盖已有的值")
+        if path[-1] in nest:
+            self.fail("不能覆盖已有的值（%r）" % (path[-1],))
+        nest[path[-1]] = value
+        if isinstance(value, (dict, list)):
+            self.frozen.add(header + path)
 
+    # ---- 键名 ----
 
-def _table_for(root: dict, name: str):
-    """按点号分段建表：`[budget.sections]` → root["budget"]["sections"]。"""
-    table = root
-    for part in name.split("."):
-        part = part.strip().strip("\"'")
-        existing = table.setdefault(part, {})
-        if not isinstance(existing, dict):
-            raise ValueError("表 %r 与同名非表值冲突" % name)
-        table = existing
-    return table
+    def parse_key_path(self) -> tuple:
+        self.skip_spaces()
+        parts = [self.parse_key_part()]
+        while True:
+            self.skip_spaces()
+            if self.i < self.n and self.text[self.i] == ".":
+                self.i += 1
+                self.skip_spaces()
+                parts.append(self.parse_key_part())
+                continue
+            return tuple(parts)
+
+    def parse_key_part(self) -> str:
+        if self.i >= self.n:
+            self.fail("键名缺失")
+        c = self.text[self.i]
+        if c == '"':
+            return self.scan_basic_string()
+        if c == "'":
+            return self.scan_literal_string()
+        start = self.i
+        while self.i < self.n and self.text[self.i] in _BARE_KEY_CHARS:
+            self.i += 1
+        if self.i == start:
+            self.fail("不是合法键名（%r）" % self.text[self.i:self.i + 12])
+        return self.text[start:self.i]
+
+    # ---- 值 ----
+
+    def scan_value(self):
+        if self.i >= self.n:
+            self.fail("值缺失")
+        c = self.text[self.i]
+        if c == '"':
+            if self.text.startswith('"""', self.i):
+                return self.scan_multiline_basic()
+            return self.scan_basic_string()
+        if c == "'":
+            if self.text.startswith("'''", self.i):
+                return self.scan_multiline_literal()
+            return self.scan_literal_string()
+        if c == "[":
+            return self.scan_array()
+        if c == "{":
+            return self.scan_inline_table()
+        if self.text.startswith("true", self.i):
+            self.i += 4
+            return True
+        if self.text.startswith("false", self.i):
+            self.i += 5
+            return False
+        return self.scan_number()
+
+    def scan_array(self):
+        """`[…]` —— 元素之间用逗号，可以换行、可以带注释。"""
+        self.i += 1  # '['
+        out: list = []
+        self.skip_array_ws()
+        if self.i < self.n and self.text[self.i] == "]":
+            self.i += 1
+            return out
+        while True:
+            out.append(self.scan_value())
+            self.skip_array_ws()
+            if self.i < self.n and self.text[self.i] == "]":
+                self.i += 1
+                return out
+            if self.i >= self.n or self.text[self.i] != ",":
+                self.fail("数组没闭合")
+            self.i += 1
+            self.skip_array_ws()
+            if self.i < self.n and self.text[self.i] == "]":
+                self.i += 1
+                return out
+
+    def scan_inline_table(self):
+        """`{ 键 = 值, … }` —— 同行写完，不许换行、不许尾逗号。"""
+        self.i += 1  # '{'
+        out: dict = {}
+        frozen: set = set()
+        self.skip_spaces()
+        if self.i < self.n and self.text[self.i] == "}":
+            self.i += 1
+            return out
+        while True:
+            path = self.parse_key_path()
+            self.skip_spaces()
+            if self.i >= self.n or self.text[self.i] != "=":
+                self.fail("内联表里键名后面缺 '='")
+            self.i += 1
+            self.skip_spaces()
+            value = self.scan_value()
+            for i in range(1, len(path)):
+                if _path_frozen(frozen, path[:i]):
+                    self.fail("内联表里不能改写已冻结的命名空间 %r" % (path[:i],))
+            parent = path[:-1]
+            if _path_frozen(frozen, parent):
+                self.fail("内联表里不能改写已冻结的命名空间 %r" % (parent,))
+            try:
+                nest = out
+                for k in parent:
+                    if k not in nest:
+                        nest[k] = {}
+                    nest = nest[k]
+                    if not isinstance(nest, dict):
+                        raise KeyError(k)
+            except KeyError:
+                self.fail("内联表里不能覆盖已有的值")
+            if path[-1] in nest:
+                self.fail("内联表里有重复键 %r" % (path[-1],))
+            nest[path[-1]] = value
+            if isinstance(value, (dict, list)):
+                frozen.add(path)
+            self.skip_spaces()
+            if self.i < self.n and self.text[self.i] == "}":
+                self.i += 1
+                return out
+            if self.i >= self.n or self.text[self.i] != ",":
+                self.fail("内联表没闭合")
+            self.i += 1
+            self.skip_spaces()
+
+    def scan_number(self):
+        """整数、浮点、日期时间（布尔在上面已经收掉）。"""
+        text = self.text
+        pos = self.i
+        m = _RE_DATETIME.match(text, pos)
+        if m:
+            try:
+                value = _to_datetime(m)
+            except ValueError:
+                self.fail("日期/时间不合法")
+            self.i = m.end()
+            return value
+        m = _RE_LOCALTIME.match(text, pos)
+        if m:
+            micros = int(m.group("micros").ljust(6, "0")) if m.group("micros") else 0
+            self.i = m.end()
+            return _dt.time(int(m.group("hour")), int(m.group("minute")),
+                            int(m.group("second")), micros)
+        m = _RE_NUMBER.match(text, pos)
+        if m:
+            self.i = m.end()
+            raw = m.group()
+            if m.group("floatpart"):
+                return float(raw.replace("_", ""))
+            return int(raw.replace("_", ""), 0)
+        for token in ("inf", "nan"):
+            if text.startswith(token, pos):
+                self.i = pos + len(token)
+                return float(token)
+        for token in ("+inf", "-inf", "+nan", "-nan"):
+            if text.startswith(token, pos):
+                self.i = pos + len(token)
+                return float(token)
+        self.fail("不是合法的 TOML 值")
+
+    # ---- 字符串 ----
+
+    def scan_basic_string(self) -> str:
+        """基本字符串 `"…"`（单行；转义照 tomllib 那套）。"""
+        self.i += 1  # 开引号
+        out: list = []
+        while True:
+            if self.i >= self.n:
+                self.fail("字符串没闭合")
+            c = self.text[self.i]
+            if c == '"':
+                self.i += 1
+                return "".join(out)
+            if c in _ILLEGAL_STR_CHARS:
+                self.fail("基本字符串里有非法控制字符"
+                          "（不能有换行，要换行请用三引号）")
+            if c == "\\":
+                self.i += 1
+                out.append(self.scan_escape())
+                continue
+            out.append(c)
+            self.i += 1
+
+    def scan_literal_string(self) -> str:
+        """字面字符串 `'…'`（单行，不解释转义）。"""
+        self.i += 1  # 开引号
+        start = self.i
+        while self.i < self.n:
+            c = self.text[self.i]
+            if c == "'":
+                value = self.text[start:self.i]
+                self.i += 1
+                return value
+            if c in _ILLEGAL_STR_CHARS:
+                self.fail("字面字符串里有非法控制字符（不能有换行）")
+            self.i += 1
+        self.fail("字符串没闭合")
+
+    def scan_escape(self) -> str:
+        """读一个转义序列（self.i 指着反斜杠之后那个字符）。"""
+        if self.i >= self.n:
+            self.fail("转义没写完")
+        e = self.text[self.i]
+        if e in _BASIC_STR_ESCAPES:
+            self.i += 1
+            return _BASIC_STR_ESCAPES[e]
+        if e in ("u", "U"):
+            width = 4 if e == "u" else 8
+            hexs = self.text[self.i + 1:self.i + 1 + width]
+            if len(hexs) != width or any(c not in "0123456789abcdefABCDEF" for c in hexs):
+                self.fail("坏的 \\%s 转义" % e)
+            code = int(hexs, 16)
+            if not (0 <= code <= 55295 or 57344 <= code <= 1114111):
+                self.fail("转义出来的不是合法 Unicode 码位")
+            self.i += 1 + width
+            return chr(code)
+        self.fail("不认识的转义 \\%s" % e)
+
+    def scan_multiline_basic(self) -> str:
+        """多行基本字符串（三引号成对的那种）。"""
+        self.i += 3  # 开引号
+        if self.i < self.n and self.text[self.i] == "\n":
+            self.i += 1
+        out: list = []
+        while True:
+            if self.i >= self.n:
+                self.fail("多行字符串没闭合")
+            c = self.text[self.i]
+            if c == '"':
+                if self.text.startswith('"""', self.i):
+                    # 收尾：内容末尾最多带两个引号（写成 4 个或 5 个引号）
+                    self.i += 3
+                    extra = 0
+                    if self.i < self.n and self.text[self.i] == '"':
+                        extra = 1
+                        self.i += 1
+                        if self.i < self.n and self.text[self.i] == '"':
+                            extra = 2
+                            self.i += 1
+                    return "".join(out) + '"' * extra
+                out.append('"')
+                self.i += 1
+                continue
+            if c == "\\":
+                out.append(self.scan_escape_multiline())
+                continue
+            if c in _ILLEGAL_MULTILINE_STR_CHARS:
+                self.fail("多行字符串里有非法控制字符")
+            out.append(c)
+            self.i += 1
+
+    def scan_multiline_literal(self) -> str:
+        """多行字面字符串 `'''…'''`。"""
+        self.i += 3  # 开引号
+        if self.i < self.n and self.text[self.i] == "\n":
+            self.i += 1
+        start = self.i
+        # 逐字扫：控制字符非法（与 tomllib 同口径），单独的引号算内容
+        while True:
+            if self.i >= self.n:
+                self.fail("多行字符串没闭合")
+            c = self.text[self.i]
+            if c == "'":
+                if self.text.startswith("'''", self.i):
+                    end = self.i
+                    break
+                self.i += 1
+                continue
+            if c in _ILLEGAL_MULTILINE_STR_CHARS:
+                self.fail("多行字面字符串里有非法控制字符")
+            self.i += 1
+        pos = end + 3
+        extra = 0
+        if pos < self.n and self.text[pos] == "'":
+            extra = 1
+            pos += 1
+            if pos < self.n and self.text[pos] == "'":
+                extra = 2
+                pos += 1
+        self.i = pos
+        return self.text[start:end] + "'" * extra
+
+    def scan_escape_multiline(self) -> str:
+        """多行字符串里的转义：行尾反斜杠吃掉换行与随后的空白。"""
+        j = self.i + 1
+        k = j
+        while k < self.n and self.text[k] in " \t":
+            k += 1
+        if (k < self.n and self.text[k] == "\n") or (j < self.n and self.text[j] == "\n"):
+            self.i = (k if k < self.n and self.text[k] == "\n" else j) + 1
+            while self.i < self.n and self.text[self.i] in _TOML_WS_AND_NEWLINE:
+                self.i += 1
+            return ""
+        self.i += 1  # 跳过反斜杠
+        return self.scan_escape()
+
+    # ---- 路径导航 ----
+
+    def get_or_create_nest(self, path) -> dict:
+        """按路径走到（或建出）那张表；中间撞上非表值就报错。"""
+        cont = self.root
+        for k in path:
+            if k not in cont:
+                cont[k] = {}
+            cont = cont[k]
+            if isinstance(cont, list):
+                cont = cont[-1]
+            if not isinstance(cont, dict):
+                raise KeyError(k)
+        return cont
+
+    def unset_all(self, path):
+        """清掉挂在某路径下的标记（表数组重新声明时用）。"""
+        n = len(path)
+        self.explicit = {p for p in self.explicit if p[:n] != path}
+        self.frozen = {p for p in self.frozen if p[:n] != path}
 
 
 def _mini_toml(text: str) -> dict:
-    """只覆盖 factscribe 契约用得到的子集：表、表数组、字符串、数组、数字、布尔。"""
-    root: dict = {}
-    cur: dict = root
-    lines = text.splitlines()
-    i = 0
-    while i < len(lines):
-        raw = lines[i]
-        i += 1
-        s = _strip_toml_comment(raw).strip()
-        if not s:
-            continue
-        if s.startswith("[[") and s.endswith("]]"):
-            name = s[2:-2].strip()
-            parent, _, leaf = name.rpartition(".")
-            holder = _table_for(root, parent) if parent else root
-            arr = holder.setdefault(leaf.strip().strip("\"'"), [])
-            if not isinstance(arr, list):
-                raise ValueError("[[%s]] 与同名表冲突" % name)
-            cur = {}
-            arr.append(cur)
-            continue
-        if s.startswith("[") and s.endswith("]"):
-            name = s[1:-1].strip()
-            tbl = _table_for(root, name)
-            cur = tbl
-            continue
-        if "=" not in s:
-            raise ValueError("无法解析的 TOML 行：%r" % raw)
-        key, value = s.split("=", 1)
-        value = value.strip()
-        while _needs_more(value) and i < len(lines):
-            value += " " + _strip_toml_comment(lines[i]).strip()
-            i += 1
-        cur[key.strip().strip("\"'")] = _mini_toml_value(value)
-    return root
+    """3.10 兜底 TOML 解析器（严格档）。
+
+    坏 TOML 一律抛 _MiniTomlError（ValueError 子类），由 load_toml 转成
+    ConfigError → 退出码 2（配置错），与 3.11+ 的 tomllib 同一口径。
+
+    入口处先把 CRLF 归一成 LF —— 与标准库 tomllib.loads() 做的同一件事
+    （它也在入口把整个文档里的 CRLF 换成 LF，连字符串字面量里也一起换）。
+    不这么做，Windows 写的 factscribe.toml 在 3.10 上会被判成坏 TOML，
+    而 3.11+ 读得动 —— 同一份文件、两种解释器、两个结论。
+    归一之后仍剩下的裸 CR 不是合法 TOML（tomllib 判非法语句），照拒。
+    """
+    return _MiniTomlParser(text.replace("\r\n", "\n")).parse()
 
 
 def load_toml(path: Path) -> dict:

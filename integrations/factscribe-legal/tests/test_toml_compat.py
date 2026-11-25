@@ -93,6 +93,34 @@ class TestMiniParserFailsClosed(unittest.TestCase):
         with self.assertRaises(TomlSubsetError):
             mini_loads("这一行没有等号\n")
 
+    def test_duplicate_key_rejected(self):
+        """重复键必须报错 —— 默默覆盖会让同一份事实账读出两种结果。"""
+        with self.assertRaises(TomlSubsetError):
+            mini_loads("a = 1\na = 2\n")
+
+    def test_duplicate_table_rejected(self):
+        with self.assertRaises(TomlSubsetError):
+            mini_loads("[a]\n[a]\n")
+
+    def test_table_after_array_of_tables_rejected(self):
+        with self.assertRaises(TomlSubsetError):
+            mini_loads("[[a]]\n[a]\n")
+
+    def test_leading_zero_number_rejected(self):
+        """前导零不是合法 TOML 数字（标准库 tomllib 拒）。"""
+        with self.assertRaises(TomlSubsetError):
+            mini_loads("a = 01\n")
+
+    def test_multiline_string_rejected(self):
+        """多行字符串不在这份子集里 —— 报错，不许悄悄按单行解析（值会错）。"""
+        with self.assertRaises(TomlSubsetError):
+            mini_loads('a = """x"""\n')
+
+    def test_trailing_junk_after_string_rejected(self):
+        """字符串闭合之后还有内容 —— 报错（以前会被当字符串收下，值还错了）。"""
+        with self.assertRaises(TomlSubsetError):
+            mini_loads('a = "x" 后面\n')
+
 
 class TestLoaderDispatch(unittest.TestCase):
     def test_load_toml_reads_sample(self):
@@ -201,6 +229,56 @@ class TestWithoutTomllib(unittest.TestCase):
             self.assertIn("2 LBR-GBRQ", out.stdout)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestUpstreamFallbackFailsClosed(unittest.TestCase):
+    """上游 3.10 兜底解析器（factscribe.config._mini_toml）遇坏 TOML 必须报错。
+
+    上游那条兜底路径当年是宽松的：坏表头 `[[ref]` 被当成表名 `[ref` 收下、
+    未闭合字符串 `id = "X1` 被当裸词吞下 —— 闸门 fail-open（放行），
+    而 3.11+ 的 tomllib 拒绝同一份文件（两种解释器结论相反）。
+    这里把「坏输入必须 raise」锁死；任何解释器上都能验（显式调用 `_mini_toml`，
+    不依赖 tomllib 在不在）—— 这正是 3.10 那条腿要验的边界。
+    """
+
+    def _upstream_refused(self, text):
+        try:
+            from factscribe.config import _mini_toml
+        except Exception:
+            raise unittest.SkipTest("拿不到 factscribe")
+        with self.assertRaises(ValueError):
+            _mini_toml(text)
+
+    def test_broken_table_header_refused(self):
+        self._upstream_refused('[[ref]\nslug = "broken"\n')
+
+    def test_unclosed_string_refused(self):
+        self._upstream_refused('id = "X1\nvalue = "42"\n')
+
+    def test_unclosed_array_refused(self):
+        self._upstream_refused("a = [1, 2\n")
+
+    def test_unclosed_inline_table_refused(self):
+        self._upstream_refused("a = {b = 1\n")
+
+    def test_bare_word_refused(self):
+        self._upstream_refused("a = hello\n")
+
+    def test_legal_subset_still_reads(self):
+        """正例：合法写法不许被误伤（不许把闸修成「一律拒绝」）。"""
+        try:
+            from factscribe.config import _mini_toml
+        except Exception:
+            raise unittest.SkipTest("拿不到 factscribe")
+        text = (
+            'schema = "paperkit-fact/3.0"\n\n'
+            '[[fact]]\n'
+            'id = "A"\n'
+            'value = "2018-12-29"\n'
+            'derived_from = []\n'
+            'dup_ok = true\n'
+        )
+        self.assertEqual(_mini_toml(text)["fact"][0]["id"], "A")
 
 
 if __name__ == "__main__":

@@ -494,11 +494,19 @@ class TestZeroDenominator(unittest.TestCase):
 
 
 class TestMiniTomlFallback(unittest.TestCase):
-    """3.10 兜底解析器：inline table 与 inline table 数组要认。"""
+    """3.10 兜底解析器：报告形状（inline table 与 inline table 数组）要认。
+
+    报告 TOML 现在统一走 factscribe.config.load_toml —— 3.11+ 走标准库
+    tomllib，3.10 走仓内那份严格兜底解析器。这里验的是 3.10 那条路径。
+    """
+
+    @staticmethod
+    def _parse(text):
+        from factscribe.config import _mini_toml
+        return _mini_toml(text)
 
     def test_parses_report_shape(self):
-        from factscribe.report import _MiniToml
-        data = _MiniToml(REPORT_TOML).parse()
+        data = self._parse(REPORT_TOML)
         self.assertEqual("factscribe/report@1", data["schema"])
         self.assertEqual({"id": "swb16"}, data["population"])
         self.assertEqual(3, len(data["metric"]))
@@ -512,8 +520,7 @@ class TestMiniTomlFallback(unittest.TestCase):
     def test_matches_tomllib_when_available(self):
         # 3.10 没有 tomllib，不能因此 skip（CI 把跳过当未覆盖）；
         # 没有 tomllib 时改对一份固定的期望值，保证兜底解析器仍被验。
-        from factscribe.report import _MiniToml
-        parsed = _MiniToml(REPORT_TOML).parse()
+        parsed = self._parse(REPORT_TOML)
         try:
             import tomllib
         except ModuleNotFoundError:
@@ -529,6 +536,20 @@ class TestMiniTomlFallback(unittest.TestCase):
             self.assertEqual("10/16", parsed["metric"][0]["value"])
             return
         self.assertEqual(tomllib.loads(REPORT_TOML), parsed)
+
+    def test_broken_report_toml_refused_on_every_interpreter(self):
+        """坏报告在 3.10 与 3.11+ 上必须是同一个结论：拒（BAD_TOML）。
+
+        3.10 以前另有一份宽松的报告解析器：坏 TOML 在 3.10 上能读、
+        在 3.11+ 上被拒 —— 同一份报告两种结论。现在只有一条路径。
+        """
+        from factscribe.report import _load_report_toml
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "broken.report.toml"
+            path.write_text('schema = "factscribe/report@1\n', encoding="utf-8")
+            with self.assertRaises(ReportError) as ctx:
+                _load_report_toml(path)
+            self.assertEqual("BAD_TOML", ctx.exception.code)
 
 
 if __name__ == "__main__":  # pragma: no cover

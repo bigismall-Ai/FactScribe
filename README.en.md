@@ -274,7 +274,7 @@ All three limits point at the same promise: the account, the material and the te
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1764 tests, fully offline
+python3 -m unittest discover -s tests     # 1784 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

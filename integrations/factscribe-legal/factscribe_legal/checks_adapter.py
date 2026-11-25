@@ -66,6 +66,12 @@ from .case_verify import verify_case
 from .cn_verify import verify_cn
 from .es_verify import verify_es
 from .it_verify import verify_it
+# canonical 四键闭集的**唯一实现**在 lock.py（纯标准库、零宿主依赖）——
+# 只读接口层（api.py）要用同一套形态，不能另抄一份。原样再导出，
+# 名字与行为逐字节不变（tests/test_checks_legal.py 直接 import 本模块）。
+from .lock import (LOCK_KEYS, LOCK_REL, LOG_REL,  # noqa: F401
+                   canonical_form, canonical_sha256, index_sha256 as
+                   lock_index_sha256)
 from .verify import PROV_RE, load_citations, load_facts
 from .verify import verify as verify_fr
 
@@ -309,26 +315,8 @@ def verify_legal(cfg, facts, sections, resolve: bool = False):
 # 锁在而现算不符＝红、已解冻未重冻＝黄、没冻过＝不检查。
 # --------------------------------------------------------------------------
 
-LOCK_REL = "audit/evidence-legal.lock"
-LOG_REL = "audit/evidence-legal-log.ndjson"
 LOCK_HEADER = ("# legal 域冻结锁：语料视图＋参考日（canonical 形态由 legal 卡"
                "写死；同输入逐字节一致）")
-LOCK_KEYS = ("corpus", "date", "index_sha256", "view")
-
-
-def canonical_form(corpus, date, view, index_sha256) -> str:
-    """legal 冻结工件的规范化正文（键为闭集、按键名排序；同输入同字节）。"""
-    rows = {"corpus": str(corpus or "").strip(),
-            "date": str(date or "").strip(),
-            "index_sha256": str(index_sha256 or "").strip().lower(),
-            "view": str(view or "").strip()}
-    return "\n".join("%s\t%s" % (k, rows[k]) for k in sorted(rows))
-
-
-def canonical_sha256(corpus, date, view, index_sha256) -> str:
-    return hashlib.sha256(canonical_form(corpus, date, view,
-                                         index_sha256).encode("utf-8")
-                          ).hexdigest()
 
 
 def _file_sha256(path) -> str:
@@ -342,8 +330,7 @@ def _file_sha256(path) -> str:
 
 
 def _index_sha256(corpus_dir) -> str:
-    return _file_sha256(os.path.join(corpus_dir, "index.json")) \
-        if corpus_dir else ""
+    return lock_index_sha256(corpus_dir)
 
 
 def write_evidence_lock(project_root, corpus, date, view="") -> dict:

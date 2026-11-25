@@ -318,6 +318,35 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 > 信封、一套退出码、legal 节并排在 paper 之后。线索层三条（cn-lead-*）
 > 不是核验入口，不挂废弃窗口提示，`[checks]` 也永不点名线索层。
 
+## 只读接口层（`api` 族）：版本化 JSON 契约
+
+第 12 条子命令（**只读**）：吐版本化 JSON 契约，供法律侧工作台消费。
+
+```bash
+# JSON 出口（默认就是 JSON；--human 出人读摘要）
+python3 -m factscribe_legal api contract --project .
+python3 -m factscribe_legal api findings --project .
+python3 -m factscribe_legal api receipts --project .
+python3 -m factscribe_legal api corpus    --project . --country 法国
+python3 -m factscribe_legal api codes     --project .
+python3 -m factscribe_legal api timeliness --project . --domain it
+python3 -m factscribe_legal api summary   --project .
+python3 -m factscribe_legal api proposals --project .
+```
+
+七路通道：**findings**（七条线的判定结果）、**receipts**（统一五元组收据）、
+**corpus**（语料件清单）、**codes**（判定码表）、**timeliness**（跨域统一时效字段）、
+**summary**（各域状态 ＋ 域级锁四键）、**proposals**（待批提案；本步只读 ⇒ 恒空数组）。
+
+- 契约版本 `factscribe-legal-api/1.0`；字段逐条说明见
+  [`docs/design/SPEC-LEGAL-API.md`](../../docs/design/SPEC-LEGAL-API.md)。
+- **本层不下判定**：红黄码、措辞、退出码语义全照抄各闸；材料缺失按 `skipped`
+  如实标出（不崩、不发空壳 finding）。
+- **零写盘**：不写项目、不写语料、不建任何落盘动作；「待批提案」的存储与采纳
+  回写属下一步（UI 与提议存储），本步只读返回空数组。
+- core 侧对应只读路由：`factscribe serve` 的
+  `/api/legal/{findings,receipts,corpus,codes,timeliness,summary,proposals,contract}`。
+
 ## 与上游核心的关系
 
 - 上游 `factscribe/` **一行未改**：行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动。
@@ -331,7 +360,7 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 ```
 
-**154 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
+**193 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
 真端点冒烟是一次性人工验收读数，不进测试套，离线夹具用真响应录制后脱敏）。
 含三类回归：
 

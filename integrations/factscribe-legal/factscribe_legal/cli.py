@@ -185,6 +185,14 @@ def cmd_api(args):
     import json
     from .api import (CHANNELS, build_contract, context_from_project,
                       render_human)
+    # 非 UTF-8 控制台（中文 Windows 的 cp936）：编不出来的字符降级成同义
+    # ASCII，命令照常跑完、退出码照旧（口径照上游 factscribe/console.py；
+    # 本包自带一份，以便独立拷走单跑）。UTF-8 环境下不改变任何一个字节。
+    #
+    # 只装在**本族**上：既有 11 条子命令的输出与退出码一个字都不许动
+    # （它们在 cp936 上的既有崩溃是既有缺陷，本步不碰、不顺手修）。
+    from .console import safe_stdio
+    safe_stdio()
     action = args.action
     if action != "contract" and action not in CHANNELS:
         print("用法：factscribe-legal api <%s|contract> [...]" % "|".join(CHANNELS),
@@ -217,11 +225,6 @@ def cmd_api(args):
 
 
 def main(argv=None):
-    # 非 UTF-8 控制台（中文 Windows 的 cp936）：编不出来的字符降级成同义
-    # ASCII，命令照常跑完、退出码照旧（口径照上游 factscribe/console.py；
-    # 本包自带一份，以便独立拷走单跑）。UTF-8 环境下不改变任何一个字节。
-    from .console import safe_stdio
-    safe_stdio()
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
     sub = ap.add_subparsers(dest="cmd", required=True)

@@ -255,6 +255,9 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/asset":
                 self._asset()
                 return
+            if path.startswith("/api/legal/"):
+                self._legal_contract(path[len("/api/legal/"):])
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
             self._fail_config(exc)
@@ -812,6 +815,49 @@ class _Handler(BaseHTTPRequestHandler):
     def _brief(self, section: str | None) -> None:
         data = brief_data(self._project(), section)
         self._send(200, self._base("brief", **data))
+
+    # ------------------------------------------------------------------ legal
+    # 法律侧只读路由（factscribe-legal 接口层；legal 专属前缀，与论文侧路由
+    # 不冲突）。全部**只读**：不写盘、不下判定（红黄码照抄各闸，退出码语义
+    # 不因这一层改变）。集成件没装 ⇒ 501 说清原因，不给空壳假接口。
+
+    def _legal_api(self):
+        """载入 legal 接口层（integrations/factscribe-legal）；装不上 → None。"""
+        try:
+            from factscribe import checks
+            checks.load_integration("legal")
+        except Exception:  # noqa: BLE001 —— 集成件坏掉不该把服务带崩
+            return None
+        try:
+            from factscribe_legal import api as legal_api
+        except ImportError:
+            return None
+        return legal_api
+
+    def _legal_contract(self, channel: str) -> None:
+        """legal 通道 → 版本化契约（嵌在 payload 的 contract 键下）。"""
+        api = self._legal_api()
+        if api is None:
+            self._error(501, "LEGAL_UNAVAILABLE",
+                        "legal 集成件不可用（integrations/factscribe-legal 没装或"
+                        "装不上）——法律侧接口不提供")
+            return
+        if channel != "contract" and channel not in api.CHANNELS:
+            # 不留空壳假接口：没这条通道就 404。
+            self._error(404, "NOT_FOUND", "没有这个法律侧接口：%s" % channel)
+            return
+        query = parse_qs(urlparse(self.path).query)
+        filters = {}
+        for key in ("country", "domain", "state", "kind", "severity"):
+            val = (query.get(key) or [None])[0]
+            if val:
+                filters[key] = val
+        line = (query.get("line") or [None])[0]
+        ctx = api.context_from_project(str(self._project()))
+        channels = None if channel == "contract" else [channel]
+        contract = api.build_contract(ctx, channels=channels, filters=filters,
+                                      line_ids=[line] if line else None)
+        self._send(200, self._base("legal.%s" % channel, contract=contract))
 
     def _audit(self) -> None:
         data = audit_data(self._project())

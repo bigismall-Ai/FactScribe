@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import ConfigError
+from .textio import read_text_exact
 from .texscan import _balanced
 
 # --------------------------------------------------------------------------
@@ -65,10 +66,16 @@ class BibEntry:
 
 def parse_bib(path: Path, root: Path) -> list[BibEntry]:
     try:
-        text = path.read_text(encoding="utf-8")
+        text = read_text_exact(path)
     except OSError as exc:
         raise ConfigError("读不了参考文献 %s：%s" % (path, exc))
-    rel = path.relative_to(root).as_posix()
+    try:
+        rel = path.relative_to(root).as_posix()
+    except ValueError:
+        # 不在项目根内：不再让 ValueError 裸崩穿透到调用方，按本模块
+        # 既有的错误类型收成 ConfigError（调用方只需要判一种错）。
+        raise ConfigError("参考文献不在项目根内：%s（项目根：%s）"
+                          % (path, root))
     macros = {}
     for sm in _STRING_RE.finditer(text):
         macros[sm.group(1).lower()] = " ".join((sm.group(2) or sm.group(3) or "").split())

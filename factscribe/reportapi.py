@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 from .config import ConfigError, load_config
+from .textio import write_text_exact
 from .report import (ReportError, _artifact_path, _rel_posix, _resolve_in_ws,
                      _ws_root, check_report, load_report, lock_report,
                      report_card, sign_report, verify_signoff)
@@ -311,8 +312,8 @@ def _write_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name("%s.tmp-%d" % (path.name, os.getpid()))
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(text)
+        # newline=""：不翻译换行，报告模板里用户填的数字与注释逐字落盘。
+        write_text_exact(tmp, text)
         os.replace(str(tmp), str(path))
     finally:
         if tmp.exists():

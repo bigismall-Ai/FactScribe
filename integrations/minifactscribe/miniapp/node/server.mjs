@@ -4,8 +4,11 @@
 
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, join, normalize } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { pythonFrom, installSample, serveArgs, startServe, stopServe } from './launcher.mjs';
+import {
+  applyEnding, detectEol, dominantEnding, sameContent, toLfOnly,
+} from './eol.mjs';
 import {
   factscribeDir, isGuidePath, readProjectDescription, readRegistry, removeProject,
   resolveProjectDir, upsertProject, writeRegistry,
@@ -43,6 +46,18 @@ export function normalizeWorkbenchUrl(raw) {
     throw new Error('工作台地址只填 origin，不带路径');
   }
   return url.origin;
+}
+
+/** 把相对路径安全地落在项目根里：越界（..、绝对路径）一律 null。 */
+export function resolveInRoot(root, rel) {
+  const base = String(root ?? '').trim();
+  const relPath = String(rel ?? '').trim();
+  if (!base || !relPath) return null;
+  if (relPath.includes('\0')) return null;
+  const rootPath = resolve(base);
+  const target = resolve(base, relPath);
+  if (target !== rootPath && !target.startsWith(rootPath + sep)) return null;
+  return target;
 }
 
 export async function workbenchFetch(base, token, path, method = 'GET', body = null) {
@@ -126,6 +141,95 @@ export async function start(context) {
   // 一键启动的子进程：只有本进程能停；dispose 时一并收掉
   let run = null;
   let starting = null;
+
+  // 论文项目根：引擎的 /api/project、/api/status 都带 root。记住它，
+  // 保存时才能去磁盘上读原文件的真行尾——接口层给过来的是归一过的 LF。
+  let projectRoot = '';
+
+  function rememberRoot(data) {
+    const root = typeof data?.root === 'string' ? data.root.trim() : '';
+    if (root) projectRoot = root;
+    return projectRoot;
+  }
+
+  /** 没记住就问引擎要一次（/api/status 比 /api/project 轻）。 */
+  async function ensureProjectRoot() {
+    if (projectRoot) return projectRoot;
+    if (!workbench) return '';
+    try {
+      const data = await workbenchFetch(workbench.url, workbench.token, '/api/status');
+      rememberRoot(data);
+    } catch {
+      // 问不到就按「没有根」处理：只是不保行尾，不影响保存本身。
+    }
+    return projectRoot;
+  }
+
+  /**
+   * 保存一节：先把行尾按原文件的风格摆回去，再交给引擎写。
+   *
+   * 引擎那一层拿到的是 LF 形态（不带 '\r'）：Windows 上引擎的写路径是
+   * Python 文本模式（newline=None），每个 '\n' 会被翻成 '\r\n'，
+   * 已经带 '\r' 的还会被写成 '\r\r\n'（内容损坏）。所以 '\r' 绝不
+   * 进引擎那一层，行尾由这里在引擎写完之后按原风格校正。
+   */
+  async function prepareSectionWrite(body) {
+    const file = String(body?.file ?? '');
+    const text = typeof body?.text === 'string' ? body.text : null;
+    if (!file || text === null) return { payload: body, target: null, intended: null };
+    const root = await ensureProjectRoot();
+    const target = resolveInRoot(root, file);
+    if (!target) return { payload: body, target: null, intended: null };
+    let original;
+    try {
+      original = await readFile(target, 'utf8');   // node 读文件不做换行翻译
+    } catch {
+      return { payload: body, target: null, intended: null };
+    }
+    const ending = dominantEnding(original);
+    return {
+      payload: { ...body, text: toLfOnly(applyEnding(text, ending)) },
+      target,
+      intended: applyEnding(text, ending),
+      style: detectEol(original).style,
+    };
+  }
+
+  /**
+   * 引擎写完之后核对字节：只差行尾才改回原风格，内容不一样一个字也不动。
+   */
+  async function settleSectionBytes(prepared) {
+    if (!prepared.target || prepared.intended === null) return null;
+    let actual;
+    try {
+      actual = await readFile(prepared.target, 'utf8');
+    } catch {
+      return { style: prepared.style, repaired: false, note: '读不回写后的文件' };
+    }
+    const bytes = Buffer.byteLength(actual, 'utf8');
+    if (actual === prepared.intended) {
+      return { style: prepared.style, repaired: false, bytes };
+    }
+    if (!sameContent(actual, prepared.intended)) {
+      // 内容不一样＝文件在这期间被别处改过：不动它，也不覆盖别人的改动。
+      return { style: prepared.style, repaired: false, bytes, note: '文件内容已被别处改动' };
+    }
+    const tmp = prepared.target + '.eol-tmp';
+    try {
+      await writeFile(tmp, prepared.intended, 'utf8');
+      await rename(tmp, prepared.target);
+    } catch (err) {
+      await rm(tmp, { force: true }).catch(() => {});
+      return {
+        style: prepared.style, repaired: false, bytes,
+        note: '行尾校正失败：' + err.message,
+      };
+    }
+    return {
+      style: prepared.style, repaired: true,
+      bytes: Buffer.byteLength(prepared.intended, 'utf8'),
+    };
+  }
 
   async function stopRun() {
     if (!run) return false;
@@ -453,16 +557,25 @@ export async function start(context) {
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/project') {
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/project'));
+            const data = await workbenchFetch(workbench.url, workbench.token,
+              '/api/project');
+            // 记住项目根：保存时要去磁盘上读原文件的真行尾（接口层给的是 LF）。
+            rememberRoot(data);
+            sendJson(response, 200, data);
             return;
           }
           if (request.method === 'PUT' && path === '/api/workbench/sections') {
             const body = await readBody(request);
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/sections', 'PUT', body));
+            // 行尾先按原文件的风格摆回去，再交给引擎写；写完核对字节。
+            const prepared = await prepareSectionWrite(body);
+            const upstream = await workbenchFetch(workbench.url, workbench.token,
+              '/api/sections', 'PUT', prepared.payload);
+            const eol = await settleSectionBytes(prepared);
+            // bytes 报落盘后的真实大小：引擎那一层拿到的是 LF 形态，
+            // 它的字节数比实际文件小（CRLF 每行多一个 \r）。
+            sendJson(response, 200, eol
+              ? { ...upstream, ...(eol.bytes == null ? {} : { bytes: eol.bytes }), eol }
+              : upstream);
             return;
           }
           // 章节增删改：上游的 400/403/409 原样带回（409 = 还被正文引用）。

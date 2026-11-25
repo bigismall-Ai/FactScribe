@@ -10,6 +10,7 @@ MiniApp 侧（Node）读写同一个文件，格式必须保持一致：
 `{version, projects: [{path, name, lastOpenedAt}], lastPath, python, pythonpath}`。
 """
 from __future__ import annotations
+from .textio import read_text_exact
 
 import json
 import os

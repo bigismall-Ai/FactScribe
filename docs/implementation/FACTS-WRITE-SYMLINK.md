@@ -237,3 +237,41 @@ Ran 17 tests —— FAILED (failures=12, errors=1)
   登记只在读侧那条，本分支不重复登记（见第五节）。
 - 构建的字体补丁（W10）只做了落点闸的单元级覆盖：本地没有 tectonic，也没有
   触发字体兜底的环境，端到端的那一段没跑。
+
+## 十、Windows 真机复验补的一条（2026-11-25）：不可解的判据改成语义口径
+
+本条原来说「软链成环 → 抛 OSError(ELOOP)」——**这条前提只在 POSIX 成立**。
+Windows 真机（10.0.1.9，ACP=936）实测：
+
+| 软链形态 | `os.path.realpath(strict=True)` 在 Windows 上 | 在 POSIX 上 |
+|---|---|---|
+| 正常 | 返回真实路径 | 同 |
+| 断链 | `OSError(winerror=2, errno=2 ENOENT)` | `ENOENT` |
+| **成环** | `OSError(winerror=1921, errno=22 EINVAL)` | `OSError(ELOOP)` |
+
+> Windows 的 `errno.ELOOP` 常量是 **10062**，跟这里收到的 errno（22）
+> 不是一回事，所以原来那句 `if exc.errno != errno.ELOOP: raise` 在 Windows 上
+> **必然漏判**：写侧成环 → OSError 裸崩 → 命令层退成 **exit 4**（工具内部错误），
+> 而不是 `FACT_FILE_UNRESOLVED` / **exit 5**。
+
+修法（判据从 errno 白名单改成**语义**）：
+
+* `strict realpath 抛错 = 落点解不出来 = 不可解`（成环只是其中最常见的一种，
+  文案按能判出来的形态说；判不出就说「算不出来」，不编原因）；
+* 事实账入口 → `FACT_FILE_UNRESOLVED`（red，exit 5）；其它项目内写盘入口 →
+  `PATH_ESCAPE`（exit 2）。**两个码都是既有的，不新开**（第五节）。
+* 两个入口在 POSIX 上的**原话一个字没动**（成环时事实账那条仍写
+  「是成环软链，真实落点算不出来——拒绝写入（没有落盘，也没有改原文件）」）。
+
+新增用例（`tests/test_facts_write_symlink.py::TestUnresolvableLandingPoint`，5 例）：
+用**注入异常**的方式把「Windows 成环错（winerror=1921 / errno=EINVAL）」
+「POSIX 成环错（ELOOP）」「别的 OSError（EACCES）」三种失败形态喂给闸，
+断言三者判成**同一个码、同一个退出码**；另有一条走命令层（`cli.main`），
+断言 exit **5** + `FACT_FILE_UNRESOLVED`（不是 exit 4）。
+真实软链那条真路仍由 `test_symlink_loop_is_refused_as_unresolved` 覆盖——
+在 Windows 上它走的就是 winerror=1921 那条真路。
+
+**见红再改绿**：同一份新用例指向修前基点（`88d757d`）跑 → 4 红（1 failure
+＋ 3 errors，报错正是 `OSError: [Errno 22] 系统无法辨识文件名。` 与 exit 4）；
+修后全绿。Windows 真机复验读数见同批的《FactScribe Windows 真机验证报告》。
+

@@ -185,5 +185,108 @@ class DataPlayerChainTest(unittest.TestCase):
         self.assertEqual(after.count(b"\r\n"), text.count("\r\n"))
 
 
+
+class SharedCarriersTest(unittest.TestCase):
+    """共享模块里的用户内容载体：bib、factscribe.toml、报告文件、PDF 临时副本。
+
+    这些模块（citeedit／citations／citeview／projects／reportapi／buildpdf）
+    与上游同源，但落在 MiniApp 线的镜像里，跟着改 bib、改声明文件、
+    出报告、编译 PDF 的路径都会碰到——写盘不翻译换行的口径必须一致。
+    """
+
+    def setUp(self):
+        # 落在解析后就是原样的目录下（macOS 的 /var → /private/var 是软链，
+        # 项目根的两种拼法会让别的模块的相对路径算不出来——那是本线自己
+        # 的项目根口径问题，与这里要验的换行保真无关）。
+        self.tmp = Path(tempfile.mkdtemp(
+            prefix="fs-crlf-shared-", dir=str(Path(tempfile.gettempdir()).resolve())))
+        self.disk = self.tmp / "paper"
+        shutil.copytree(MINIMAL, self.disk)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _write_crlf_bib(self) -> Path:
+        bib = self.disk / "refs.bib"
+        bib.write_bytes(("@article{k1,\r\n"
+                         "  title = {A},\r\n"
+                         "  year = {2020}\r\n"
+                         "}\r\n").encode("utf-8"))
+        return bib
+
+    def test_bib_append_keeps_existing_bytes(self):
+        """bib 原子写：原有条目一个字节都不许动。"""
+        from factscribe.citeedit import citation_add_data
+        bib = self._write_crlf_bib()
+        before = bib.read_bytes()
+        citation_add_data(self.disk, {"key": "k2", "title": "B",
+                                      "author": "X", "year": "2024"},
+                          allow_write=True)
+        after = bib.read_bytes()
+        self.assertTrue(after.startswith(before),
+                        "追加 bib 条目把原有字节改了")
+        self.assertEqual(after.count(b"\r\n"), before.count(b"\r\n"),
+                         "原有 CRLF 被改掉了")
+        self.assertIn(b"@article{k2,", after)
+
+    def test_bib_write_call_site_does_not_translate(self):
+        """参数证据：bib 写盘走 newline=""（不翻译换行）。"""
+        from factscribe.citeedit import citation_add_data
+        bib = self._write_crlf_bib()
+        recorder = _OpenRecorder()
+        with _PatchedOpen(recorder):
+            citation_add_data(self.disk, {"key": "k2", "title": "B"},
+                              allow_write=True)
+        calls = recorder.for_path(bib)
+        self.assertTrue(calls, "bib 没有经过 open() 写")
+        for mode, newline in calls:
+            if any(ch in mode for ch in ("w", "a", "x")):
+                self.assertEqual(newline, "",
+                                 "写用户 bib 不许走会翻译换行的文本模式")
+
+    def test_parse_bib_reads_crlf_bib(self):
+        """读侧：CRLF 的 bib 照样能解析出条目。"""
+        from factscribe.citations import parse_bib
+        bib = self._write_crlf_bib()
+        entries = parse_bib(bib, self.disk.resolve())
+        self.assertEqual([e.key for e in entries], ["k1"])
+
+    def test_citeview_read_keeps_crlf(self):
+        """读侧：正文按原样读，CRLF 原样在。"""
+        from factscribe.citeview import _read
+        tex = self.disk / "sections" / "01-intro.tex"
+        tex.write_bytes(SECTION_CRLF.encode("utf-8"))
+        self.assertIn("\r\n", _read(tex))
+
+    def test_factscribe_toml_rewrite_keeps_crlf(self):
+        """factscribe.toml 改写：只改那一个键，别的行与行尾都不动。"""
+        from factscribe.projects import _rewrite_project_table
+        cfg = self.disk / "factscribe.toml"
+        raw = ('[project]\r\n'
+               'title = "旧题"\r\n'
+               'description = "说明"\r\n')
+        cfg.write_bytes(raw.encode("utf-8"))
+        _rewrite_project_table(cfg, {"title": '"新题"'})
+        after = cfg.read_bytes()
+        self.assertIn('description = "说明"\r\n'.encode("utf-8"), after)
+        self.assertIn('title = "新题"\r\n'.encode("utf-8"), after)
+        self.assertEqual(after.count(b"\r\n"), raw.count("\r\n"))
+        self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+
+    def test_report_write_keeps_bytes(self):
+        """报告文件：写盘逐字节（用户填的数字与注释不换行）。"""
+        from factscribe.reportapi import _write_atomic
+        target = self.disk / "notes.report.toml"
+        text = "value = 42\r\n# 用户的注释\r\n"
+        _write_atomic(target, text)
+        self.assertEqual(target.read_bytes(), text.encode("utf-8"))
+
+    def test_buildpdf_temp_copy_uses_exact_write(self):
+        """调用点证据：PDF 临时副本按原样读写（逐字节对应源文件）。"""
+        src = (ROOT / "factscribe" / "buildpdf.py").read_text(encoding="utf-8")
+        self.assertIn("read_text_exact(target)", src)
+        self.assertIn("write_text_exact(target, patched)", src)
+
+
 if __name__ == "__main__":
     unittest.main()

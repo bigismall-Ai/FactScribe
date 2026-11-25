@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import errno
 import hashlib
 import os
 import re
@@ -697,6 +698,17 @@ class Config:
     # 或绝对路径），元素同上。闭包不收它 ⇒ 这一段没进审计 ⇒ 覆盖缺口，
     # 判红（INPUT_OUTSIDE_PROJECT，exit 5）。此前此处静默丢弃＝fail-open。
     outside_inputs: list = field(default_factory=list)
+    # R-04：事实账文件（facts/*.toml）越出项目根——软链的真实目标在项目外，
+    # 或经软链目录绕出去。账本不收它 ⇒ 那些事实没进审计 ⇒ 信任根被突破，
+    # 判红（FACT_FILE_OUTSIDE_PROJECT，exit 5）。此前 `p.is_file()` 跟随软链
+    # 直接读入＝fail-open：审计拿信任根外的数字当账，且无任何码。
+    # 元素为 (相对路径, 真实目标)。由 load_facts 填充，audit 判红。
+    outside_facts: list = field(default_factory=list)
+    # R-04：事实账文件的软链不可解（成环或断链）——真实目标不可解，内容不可知，
+    # 账本同样不收它 ⇒ 那些事实没进审计，判红（FACT_FILE_UNRESOLVED，exit 5）。
+    # 此前成环软链被 `is_file()` 静默跳过（既无码也无位置）。
+    # 元素为 (相对路径, 原因)。由 load_facts 填充，audit 判红。
+    unresolved_facts: list = field(default_factory=list)
     # 批 128：篇幅预算（`[budget]`，可选）。budget_defined=False 时判据不跑，
     # 行为与批 127 完全一致。键＝节文件名去扩展名（sections/04_x.tex → 04_x）。
     budget_defined: bool = False
@@ -1527,8 +1539,95 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
     return f
 
 
+def _facts_link_kind(cfg: Config, path: Path) -> tuple[str, str]:
+    """给一个事实账候选文件定类：能不能进账本。
+
+    返回 (kind, detail)：
+    - ("ok", "")：普通文件，或软链的真实目标在项目根内 → 正常入账（行为不变）。
+    - ("outside", 真实目标)：真实目标越出项目根 → 不进账本（信任根被突破）。
+    - ("unresolved", 原因)：软链成环或断链，内容不可知 → 不进账本。
+
+    为什么不用 `Path.resolve()`：软链成环时各版本行为不一致（3.10–3.12 抛
+    RuntimeError，3.13+ 不抛），跨版本读数会漂。`os.path.realpath(strict=True)`
+    在 3.10–3.14 行为一致：成环抛 ELOOP、断链抛 ENOENT、正常目标返回真实路径。
+    项目根也先 resolve 再比较——macOS 的 /private 前缀会让词法比较误判越界。
+    """
+    try:
+        resolved = os.path.realpath(str(path), strict=True)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            return "unresolved", "软链成环（ELOOP）"
+        if exc.errno == errno.ENOENT:
+            return "unresolved", "软链断链（目标不存在）"
+        return "unresolved", "软链不可解（%s）" % (exc.strerror or exc)
+    try:
+        Path(resolved).relative_to(cfg.root.resolve())
+    except ValueError:
+        return "outside", resolved
+    return "ok", ""
+
+
+def _facts_rel(cfg: Config, path: Path) -> str:
+    """事实账候选文件的人读位置（相对项目根的 posix 路径）。
+
+    取**链接本身**的词法相对路径，不取 resolve 后的目标——断链的 resolve 会
+    落到那个并不存在的目标名上，位置会指错文件。算不出就退回原样：这里只
+    负责给人定位，绝不因算不出相对路径就把整个审计打成 traceback（exit 4）。
+    """
+    try:
+        return path.relative_to(cfg.root).as_posix()
+    except ValueError:
+        pass
+    try:
+        return path.resolve().relative_to(cfg.root.resolve()).as_posix()
+    except (ValueError, OSError, RuntimeError):
+        return path.as_posix()
+
+
+def outside_facts_note(cfg: Config) -> str:
+    """事实账为空的原因说明（区分「没账」与「有账但越界／不可解没进审计」）。
+
+    越界或不可解的事实账文件不进账本——那些事实没进审计，是信任根被突破
+    （红，exit 5），不是「这个项目没有事实账」（配置错，exit 2）。两者混成
+    一个码就把缺口盖住了，所以空账时要说清是哪一种。
+    """
+    outside = getattr(cfg, "outside_facts", []) or []
+    unresolved = getattr(cfg, "unresolved_facts", []) or []
+    if outside:
+        return ("事实账没有可用事实（%s 没匹配到任何 fact）——%s 是指向项目外的"
+                "软链（真实目标 %s），账本不收它，这些事实没进审计"
+                % (cfg.facts_glob, outside[0][0], outside[0][1]))
+    if unresolved:
+        return ("事实账没有可用事实（%s 没匹配到任何 fact）——%s 的软链不可解"
+                "（%s），账本不收它，这些事实没进审计"
+                % (cfg.facts_glob, unresolved[0][0], unresolved[0][1]))
+    return ""
+
+
 def load_facts(cfg: Config) -> list[Fact]:
-    files = sorted(p for p in cfg.root.glob(cfg.facts_glob) if p.is_file())
+    # 事实账的信任根＝项目根。facts/*.toml 若是软链（或经软链目录绕出去），
+    # 真实目标必须在项目根内，否则这些事实就是从信任根外取数——此前
+    # `p.is_file()` 跟随软链直接读入，静默无码（fail-open）。现在越界与不可解
+    # （成环／断链）一律记账不读入，由 audit 判红（FACT_FILE_OUTSIDE_PROJECT /
+    # FACT_FILE_UNRESOLVED，exit 5）。指向项目内的软链照旧入账，行为一字不变。
+    cfg.outside_facts = []
+    cfg.unresolved_facts = []
+    files: list[Path] = []
+    for path in sorted(cfg.root.glob(cfg.facts_glob)):
+        kind, detail = _facts_link_kind(cfg, path)
+        if kind == "outside":
+            entry = (_facts_rel(cfg, path), detail)
+            if entry not in cfg.outside_facts:
+                cfg.outside_facts.append(entry)
+            continue
+        if kind == "unresolved":
+            entry = (_facts_rel(cfg, path), detail)
+            if entry not in cfg.unresolved_facts:
+                cfg.unresolved_facts.append(entry)
+            continue
+        if not path.is_file():
+            continue
+        files.append(path)
     facts: list[Fact] = []
     for path in files:
         data = load_toml(path)
@@ -1986,9 +2085,16 @@ def all_tex_files(cfg: Config) -> list[str]:
 
 
 def facts_digest(cfg: Config) -> str:
-    """账本输入指纹：所有 facts 文件按路径排序后串哈希（红队 D7）。"""
+    """账本输入指纹：所有 facts 文件按路径排序后串哈希（红队 D7）。
+
+    口径与 load_facts 对齐：被账本拒收的文件（越界软链／不可解软链）不进
+    指纹——指纹只覆盖真正进了账本的输入。既有项目没有软链，指纹逐字节不变。
+    """
     h = hashlib.sha256()
     for name, path in sorted(_glob_paths(cfg.root, cfg.facts_glob).items()):
+        kind, _detail = _facts_link_kind(cfg, path)
+        if kind != "ok":
+            continue
         h.update(name.encode("utf-8"))
         h.update(path.read_bytes())
     return h.hexdigest()

@@ -23,8 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import (Config, ConfigError, load_config, load_facts,
-                     load_sections, outside_closure_note, section_budget,
-                     section_evidence)
+                     load_sections, outside_closure_note, outside_facts_note,
+                     section_budget, section_evidence)
 from .evidence import suggest_evidence
 from .style import _headings                     # 复用既有标题抽取，不另写一套
 from .terms import Term, load_glossary
@@ -230,6 +230,11 @@ def build_brief(project: Path | str, section: str | None = None) -> Brief:
 
     facts = load_facts(cfg)
     if not facts:
+        # 空账有两种：真没账（配置错，exit 2）；或账文件是越界／不可解的软链、
+        # 被账本拒收（信任根缺口，exit 5）。后者要说清是哪一种，不许混。
+        note = outside_facts_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError(
             "facts 为空（%s 没匹配到任何 fact）——没有可用主张与数字，"
             "简报无从生成；请先补账。" % cfg.facts_glob)

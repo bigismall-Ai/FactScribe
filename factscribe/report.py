@@ -17,7 +17,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
 
 from .audit import Issue
-from .config import Config, ConfigError, load_toml, outside_closure_note
+from .config import (Config, ConfigError, load_toml, outside_closure_note,
+                     outside_facts_note)
 from .constants import (EXIT_ATTACK_OPEN, EXIT_CONFIG, EXIT_INTEGRITY,
                         EXIT_INTERNAL, EXIT_MISSING, EXIT_OK, EXIT_PROOF,
                         EXIT_RED, EXIT_STALE, EXIT_YELLOW, SCHEMA_VERSION,
@@ -35,6 +36,11 @@ def _cell(v) -> str:
 
 def render_matrix(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]]):
     if not facts:
+        # 空账有两种：真没账（配置错，exit 2）；或账文件是越界／不可解的软链、
+        # 被账本拒收（信任根缺口，exit 5）。后者要说清是哪一种，不许混。
+        note = outside_facts_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError("facts 为空（%s 没匹配到任何 fact）——矩阵无从生成" % cfg.facts_glob)
     if not sections:
         note = outside_closure_note(cfg)

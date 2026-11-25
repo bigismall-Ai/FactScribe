@@ -255,7 +255,9 @@ def _with_reference(obj, reference_date, meta=None):
     domain = obj.get("domain")
     kind = obj.get("kind")
     item_id = obj.get("item_id")
-    note = obj.get("note", "")
+    # 回填前那遍是按「参考日未定」造的（note 里带着这句提示）；
+    # 参考日定了以后它就是过期口径，抹掉再重算，免得 note 自相矛盾。
+    note = tl.strip_hint(obj.get("note", ""))
     if src == "区间":
         return tl.from_interval(domain, kind, item_id,
                                 obj.get("effective_from", ""),

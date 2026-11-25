@@ -360,7 +360,7 @@ python3 -m factscribe_legal api proposals --project .
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 ```
 
-**193 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
+**196 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
 真端点冒烟是一次性人工验收读数，不进测试套，离线夹具用真响应录制后脱敏）。
 含三类回归：
 

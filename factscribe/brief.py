@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import (Config, ConfigError, load_config, load_facts,
-                     load_sections, section_budget, section_evidence)
+                     load_sections, outside_closure_note, section_budget,
+                     section_evidence)
 from .evidence import suggest_evidence
 from .style import _headings                     # 复用既有标题抽取，不另写一套
 from .terms import Term, load_glossary
@@ -236,6 +237,9 @@ def build_brief(project: Path | str, section: str | None = None) -> Brief:
     sections = load_sections(cfg)
     rows = build_sections(cfg, sections)
     if not rows:
+        note = outside_closure_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError(
             "sections 为空（%s 没匹配到任何节文件）——没有可写的节，简报无从生成。"
             % cfg.sections_glob)

@@ -17,7 +17,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
 
 from .audit import Issue
-from .config import Config, ConfigError, load_toml
+from .config import Config, ConfigError, load_toml, outside_closure_note
 from .constants import (EXIT_ATTACK_OPEN, EXIT_CONFIG, EXIT_INTEGRITY,
                         EXIT_INTERNAL, EXIT_MISSING, EXIT_OK, EXIT_PROOF,
                         EXIT_RED, EXIT_STALE, EXIT_YELLOW, SCHEMA_VERSION,
@@ -37,6 +37,9 @@ def render_matrix(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]
     if not facts:
         raise ConfigError("facts 为空（%s 没匹配到任何 fact）——矩阵无从生成" % cfg.facts_glob)
     if not sections:
+        note = outside_closure_note(cfg)
+        if note:
+            raise ConfigError(note)
         raise ConfigError("sections 为空（%s 没匹配到任何 .tex）" % cfg.sections_glob)
 
     used_sections: dict[str, list[str]] = {f.id: [] for f in facts}

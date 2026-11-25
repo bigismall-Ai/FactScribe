@@ -42,7 +42,7 @@ Only two external pieces are optional, and both degrade in a stated way:
 | External piece | Who needs it | What happens without it |
 |---|---|---|
 | poppler (`pdftotext`/`pdfinfo`/`pdfimages`) | the PDF check layer of `verify-pdf` | reports `PDF_TOOL_MISSING` and exits 8, never a silent pass; every other command keeps working |
-| tectonic | `build` and `audit --build` | reports the missing engine and exits 8; `audit` without `--build` never compiles, so it does not need it |
+| tectonic | `build` and `audit --build` | with a `project.build` shell command, a missing engine makes the shell report "command not found" (127), so the build fails and the exit code is **1**; when `project.build` is empty (tectonic is invoked automatically) it reports `PDF_TOOL_MISSING` and exits **8**; `audit` without `--build` never compiles, so it does not need it |
 
 CJK fonts follow the same rule: `fonts --fetch` caches the Fandol fonts locally, and `build` falls back when a font is missing. `doctor` checks all of this, item by item, with a fix command for each.
 
@@ -274,7 +274,7 @@ All three limits point at the same promise: the account, the material and the te
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1645 tests, fully offline
+python3 -m unittest discover -s tests     # 1722 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

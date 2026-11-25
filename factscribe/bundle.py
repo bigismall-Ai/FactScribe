@@ -338,9 +338,14 @@ def _closure_item(closure: Closure) -> GateItem:
         return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
                         STATUS_FAIL, detail)
     if closure.outside:
-        detail = "；".join(
-            "越出项目根的目标：%s:%s → %s（目标存在但闭包不收，覆盖缺口）"
-            % (src, line, ref) for src, ref, line in closure.outside)
+        def _outside_detail(src: str, ref: str, line) -> str:
+            # line=0：不是 \input 声明越界，而是闭包起点（章节软链）越界。
+            if line:
+                return ("越出项目根的目标：%s:%s → %s（目标存在但闭包不收，覆盖缺口）"
+                        % (src, line, ref))
+            return ("闭包起点是软链，越出项目根：%s → %s（目标存在但闭包不收，覆盖缺口）"
+                    % (src, ref))
+        detail = "；".join(_outside_detail(*x) for x in closure.outside)
         return GateItem(GATE_CLOSURE, "闭包完整（无悬空 \\input/\\include）",
                         STATUS_FAIL, detail)
     if not closure.files:

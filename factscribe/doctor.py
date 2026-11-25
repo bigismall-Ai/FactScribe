@@ -23,7 +23,7 @@ from pathlib import Path
 
 from .buildpdf import find_cjk_font, find_fandol_fonts
 from .config import (Config, ConfigError, find_config_file, load_config,
-                     load_facts, load_sections, load_toml)
+                     load_facts, load_sections, load_toml, outside_closure_note)
 from .evidence import LOCK_REL, read_lock, unfrozen_info
 from .scaffold import INIT_FILES
 
@@ -224,6 +224,10 @@ def _sections_check(cfg: Config) -> dict:
         return _check("sections", "章节", LEVEL_FAIL, str(exc),
                       fix="检查 factscribe.toml 的 sections / root_tex")
     if not sections:
+        note = outside_closure_note(cfg)
+        if note:
+            return _check("sections", "章节", LEVEL_FAIL, note,
+                          fix="把越界的软链挪进项目内或改指向")
         return _check("sections", "章节", LEVEL_WARN,
                       "没有匹配到任何 .tex 章节，audit 会对着空正文跑",
                       fix="把正文放进 sections/ 或改 sections 配置")

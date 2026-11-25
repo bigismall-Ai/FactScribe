@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1598,6 +1599,106 @@ def _glob_paths(root: Path, pattern: str) -> dict[str, Path]:
     return found
 
 
+# --------------------------------------------------------------------------
+# 软链（symlink）解析
+# --------------------------------------------------------------------------
+#
+# 为什么要自己走一遍链：`Path.resolve()` 遇到软链成环时各版本行为不一致
+# （3.10 的 realpath 把成环那一段原样留在结果里——不抛异常，但结果没意义；
+# 别的版本直接抛 OSError/ELOOP）。这里逐跳走：同一跳被走第二次就是成环，
+# 跳数超限也算不可解。两种都归「内容不可知」——一律不许当成「文件不存在」
+# 静默跳过。
+_SYMLINK_MAX_HOPS = 64
+
+
+def _symlink_chain_end(path: Path) -> tuple[Path | None, bool]:
+    """逐跳解软链。返回 (最终路径, 是否不可解)。
+
+    - (最终路径, False)：链走完了（最终路径也可能不存在＝断链）。
+    - (None, True)：成环或跳数超限——内容不可知。
+    """
+    current = path
+    seen: set[str] = set()
+    for _ in range(_SYMLINK_MAX_HOPS):
+        try:
+            if not current.is_symlink():
+                return current, False
+        except OSError:
+            return None, True
+        key = os.path.normpath(str(current))
+        if key in seen:
+            return None, True          # 同一跳第二次走到＝成环
+        seen.add(key)
+        try:
+            target = os.readlink(str(current))
+        except OSError:
+            return None, True
+        current = Path(target) if os.path.isabs(target) else current.parent / target
+    return None, True                  # 跳数超限：链太深，当成不可解
+
+
+def _rel_to_root(path: Path, root: Path) -> str:
+    """path 相对 root 的 posix 路径；算不出来退回词法相对路径（绝不抛异常）。
+
+    越界的软链已在闭包入口记账判红，这里只负责给「出处」一个能显示的路径——
+    不能因为算不出相对路径就把整个审计打成 traceback（exit 4）。
+    """
+    try:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+    except (ValueError, OSError, RuntimeError):
+        try:
+            return path.relative_to(root).as_posix()
+        except ValueError:
+            return path.as_posix()
+
+
+def outside_closure_note(cfg: Config) -> str:
+    """闭包空的原因说明（区分「没正文」与「有正文但越界没进审计」）。
+
+    越界的闭包目标（章节软链指向项目外）不进闭包——那一段没进审计，是覆盖缺口
+    （INPUT_OUTSIDE_PROJECT，exit 5），不是「这个项目没有正文」（exit 2）。两者
+    混成一个码就把缺口盖住了，所以空闭包时要说清是哪一种。
+    """
+    outside = getattr(cfg, "outside_inputs", []) or []
+    if not outside:
+        return ""
+    return ("闭包没有正文——%s 是指向项目外的软链，那一段没进审计"
+            "（越界目标不进闭包）；把它挪进项目内或改指向。" % outside[0][0])
+
+
+def _filter_outside_symlinks(cfg: Config, found: dict[str, Path]) -> dict[str, Path]:
+    """闭包起点里的软链：指向项目外的记账判红，不进闭包。
+
+    口径与 F1 已定的越界语义同一条：目标不在信任根内 ⇒ 闭包不收它 ⇒ 那一段
+    没进审计 ⇒ 覆盖缺口 ⇒ 判红 INPUT_OUTSIDE_PROJECT（exit 5）。此前这里直接
+    `p.resolve().relative_to(...)` 抛裸 ValueError（exit 4、traceback）——
+    既不是红也不是绿。
+
+    指向项目内的软链照旧收进闭包（内容照审）；解析不出内容的（成环）也不收，
+    但 `all_tex_files` 会把它算进 glob 命中集 ⇒ 覆盖报告报 UNSCANNED_TEX，
+    不许静默跳过。
+    """
+    root = cfg.root.resolve()
+    kept: dict[str, Path] = {}
+    for rel, p in found.items():
+        target, unresolved = _symlink_chain_end(p)
+        if unresolved or target is None:
+            continue
+        try:
+            resolved = target.resolve()
+        except (OSError, RuntimeError):
+            continue
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            entry = (rel, str(resolved), 0)
+            if entry not in cfg.outside_inputs:
+                cfg.outside_inputs.append(entry)
+            continue
+        kept[rel] = p
+    return kept
+
+
 _INPUT_CMD_RE = re.compile(r"\\(?:input|include|subfile|import)\b")
 _DEF_RE = re.compile(
     r"\\(?:newcommand|renewcommand|providecommand)\*?\s*\{\s*\\([A-Za-z@]+)\s*\}"
@@ -1769,6 +1870,9 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         found = {cfg.root_tex: root_file}
     else:
         found = _glob_paths(cfg.root, cfg.sections_glob)
+    # 软链越界：闭包起点若是指向项目外的软链 ⇒ 记账判红
+    # （INPUT_OUTSIDE_PROJECT），且不进闭包——那一段不在信任根内。
+    found = _filter_outside_symlinks(cfg, found)
     seen: dict[str, Path] = dict(found)
     queue: list[Path] = list(found.values())
 
@@ -1792,6 +1896,17 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
                     if entry not in cfg.outside_inputs:
                         cfg.outside_inputs.append(entry)
                     return False
+                except (OSError, RuntimeError):
+                    # 解析不出来（软链成环等 OSError/ELOOP）：绝不裸崩。
+                    # 按词法相对路径再判一次越界；判不出越界就照旧收进闭包
+                    # （内容读得到才审得到）。
+                    try:
+                        rel = candidate.relative_to(cfg.root).as_posix()
+                    except ValueError:
+                        entry = (src_rel, ref, line)
+                        if entry not in cfg.outside_inputs:
+                            cfg.outside_inputs.append(entry)
+                        return False
                 if rel in seen:
                     return False
                 seen[rel] = candidate
@@ -1819,7 +1934,7 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
             p = queue.pop(0)
             text = _read_text(p, cfg.root)
             body = _mask_macro_defs(strip_comments_and_verbatim(text))
-            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            src_rel = _rel_to_root(p, cfg.root)
             for ref, line, closed in _input_refs(body):
                 add_raw_ref(ref, [p.parent, cfg.root], src_rel, line,
                             closed=closed)
@@ -1832,7 +1947,7 @@ def load_sections(cfg: Config) -> list[tuple[str, str]]:
         grew = False
         for p in list(seen.values()):
             text = strip_comments_and_verbatim(_read_text(p, cfg.root))
-            src_rel = p.resolve().relative_to(cfg.root.resolve()).as_posix()
+            src_rel = _rel_to_root(p, cfg.root)
             for ref, line in _wrapper_calls(text, wrappers):
                 if add_raw_ref(ref, [p.parent, cfg.root], src_rel, line):
                     grew = True
@@ -1858,7 +1973,10 @@ def all_tex_files(cfg: Config) -> list[str]:
     """项目内全部 .tex（用于「闭包外文件是否从未被审计」的覆盖报告）。"""
     out = []
     for p in cfg.root.glob("**/*.tex"):
-        if not p.is_file():
+        # is_file() 跟随软链：断链/成环的软链是 False。它仍在 glob 命中集里
+        # （文件名匹配上了），但内容读不出来 ⇒ 覆盖不了 ⇒ 照旧报 UNSCANNED_TEX
+        # （fail-closed）。此前这里直接 continue，那个文件就静默消失了。
+        if not p.is_file() and not p.is_symlink():
             continue
         parts = set(p.relative_to(cfg.root).parts)
         if parts & _SKIP_DIRS:

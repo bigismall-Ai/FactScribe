@@ -188,7 +188,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dev", action="store_true",
                     help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来，只做界面预览")
     sp.add_argument("--no-token", dest="no_token", action="store_true",
-                    help="不要求 token（只允许本监听地址的同源请求；个人机器可用）")
+                    help="不要求 token（只靠同源检查：带 Origin 的请求必须是本监听"
+                         "地址，否则 403 CROSS_ORIGIN；不带 Origin 的请求一律放行"
+                         "——命令行与 MiniApp 代理走这条；个人机器可用）")
     sp.add_argument("--no-open", dest="no_open", action="store_true",
                     help="网页模式不自动打开浏览器")
     sp.add_argument("--json", action="store_true",
@@ -228,7 +230,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dev", action="store_true",
                     help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来")
     sp.add_argument("--no-token", dest="no_token", action="store_true",
-                    help="不要求 token（只允许本监听地址的同源请求）")
+                    help="不要求 token（只靠同源检查：带 Origin 的请求必须是本监听"
+                         "地址，否则 403 CROSS_ORIGIN；不带 Origin 的请求一律放行"
+                         "——命令行与 MiniApp 代理走这条）")
     sp.add_argument("--no-open", dest="no_open", action="store_true",
                     help="不自动打开浏览器")
     sp.add_argument("--json", action="store_true",

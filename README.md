@@ -42,7 +42,7 @@ FactScribe 是一道机械闸门，专门拦 AI 写论文时最危险的两类�
 | 外部件 | 谁要它 | 缺了怎么办 |
 |---|---|---|
 | poppler（`pdftotext`/`pdfinfo`/`pdfimages`） | `verify-pdf` 的 PDF 回检层 | 报 `PDF_TOOL_MISSING` 并退出码 8，不静默放行；其余命令照跑 |
-| tectonic | `build`、`audit --build` | 报缺引擎并退出码 8；不带 `--build` 的 `audit` 不编译，不需要它 |
+| tectonic | `build`、`audit --build` | 走 `project.build` 的 shell 命令时，缺引擎＝shell 报「command not found」（127）⇒ 构建失败、**退出码 1**；`project.build` 为空（自动用 tectonic 编译）时报 `PDF_TOOL_MISSING`、**退出码 8**；不带 `--build` 的 `audit` 不编译，不需要它 |
 
 中文字体走同一条路：`fonts --fetch` 把 Fandol 字体下到本地缓存，`build` 缺字体时有兜底。`doctor` 会把这几样连同项目状态逐项查一遍，每项给一条修复命令。
 
@@ -272,7 +272,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1645 例，全离线
+python3 -m unittest discover -s tests     # 1722 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

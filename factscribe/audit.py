@@ -15,7 +15,8 @@ from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
                         unused_bib_entries, valid_stable_id)
 from .checks import aggregate_exit
 from .config import (Config, ConfigError, _glob_paths, _read_text,
-                     all_tex_files, facts_digest, git_commit, load_toml)
+                     all_tex_files, facts_digest, git_commit, load_toml,
+                     outside_closure_note)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
                         SEV_RED, SEV_YELLOW, VERSION)
 from .evidence import CHANGED_CODE, UNFROZEN_CODE, lock_check, unfrozen_info
@@ -973,7 +974,10 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
               resolve: bool = False):
     if not facts:
         raise ConfigError("facts 为空（%s 没匹配到任何 fact）——空账不算通过" % cfg.facts_glob)
-    if not sections:
+    # 空闭包有两种：真没正文（exit 2）；或正文是越界软链、被记账挡在闭包外
+    # （exit 5，INPUT_OUTSIDE_PROJECT）。后者由下面的越界记账判红，不许在这里
+    # 改写成「没正文」——那是两回事，混成一个码就把覆盖缺口盖住了。
+    if not sections and not outside_closure_note(cfg):
         raise ConfigError("sections 为空（%s 没匹配到任何 .tex）——没正文不算通过"
                           % cfg.sections_glob)
 
@@ -1097,11 +1101,19 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     # ——闭包不收它，这一段同样没进审计。此前静默丢弃＝fail-open（audit 判绿），
     # 现在按 SPEC-V3.0 码表判红 INPUT_OUTSIDE_PROJECT（exit 5）。
     for src_rel, ref, line in getattr(cfg, "outside_inputs", []):
+        # line=0：不是 \input 声明越界，而是**闭包起点本身**越界（章节软链
+        # 指向项目外）。两类判红同一个码，但文案要说清是哪一种。
+        if line:
+            msg = ("\\input 目标 %r 越出项目根（%s:%s）——闭包不收它，"
+                   "这一段可能整体没进审计（R-05）" % (ref, src_rel, line))
+            loc = "%s:%s" % (src_rel, line)
+        else:
+            msg = ("闭包起点 %s 是软链，越出项目根（目标 %r）——闭包不收它，"
+                   "这一段可能整体没进审计（R-05）" % (src_rel, ref))
+            loc = str(src_rel)
         red.append(Issue(
-            "INPUT_OUTSIDE_PROJECT",
-            "\\input 目标 %r 越出项目根（%s:%s）——闭包不收它，"
-            "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
-            location="%s:%s" % (src_rel, line), token=ref,
+            "INPUT_OUTSIDE_PROJECT", msg,
+            location=loc, token=ref,
             exit_code=EXIT_INTEGRITY))
     # R-05（v1.3）：目标含宏/#/嵌套花括号或为空——静态审计无法确定它拉进
     # 哪个文件；覆盖不了就判红，不许静默跳过（fail-closed）。

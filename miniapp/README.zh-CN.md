@@ -42,18 +42,29 @@ FactScribe 把它们变成可核对的读数：
 
 MiniMax Code 3.1.11 起也可以直接从 Git 仓库导入：贴仓库地址、选中包目录、核对预览即可。
 
+### Python 解释器（本机要有 ≥3.10）
+
+引擎是 Python 写的，源码随包 vendor，所以不用 `pip install` 任何东西；但**本机仍要有一个 Python ≥3.10 解释器**。Mini App 会自己在 PATH 与常见安装目录里找它，找到什么、缺什么、版本够不够，设置页都会写清楚。
+
+**Windows**：到 <https://www.python.org/downloads/windows/> 下载 3.10 或更高版本的安装包，安装时勾上 **Add python.exe to PATH**；装完开一个新的命令行窗口跑 `py -3 --version` 确认。只装了 `py` 启动器也行（会依次试 `py`、`py -3`、`py -3.14` 到 `py -3.10`）。装在 PATH 之外也能找到：`%LOCALAPPDATA%\Programs\Python\Python3xx\`、`%PROGRAMFILES%\Python3xx\`、`C:\Python3xx\` 这些常见位置都会被探到；实在找不到就设环境变量 `FS_PYTHON` 指到解释器绝对路径，设完重启 MiniMax Code。
+
+**为什么 3.9 不行**：引擎要求 ≥3.10（3.10 走随包的兜底 TOML 解析器，3.11 以上用标准库 `tomllib`），3.9 及以下跑不了这份引擎，所以 Mini App 会直接报出「探到的最高版本是 3.9」和它来自哪个可执行文件。旧版本可以和 3.10 以上并存，两个都装不冲突。
+
+**macOS / Linux**：行为不变，按 `python3`、`python`、`/usr/bin/python3`、`/opt/homebrew/bin/python3`、`/usr/local/bin/python3` 的顺序找，`FS_PYTHON` 同样能指到绝对路径。
+
 首次打开会让你填**论文根目录**：含 `factscribe.toml` 的目录会被当作论文项目，之后可在设置页改。
 
 ## 测试环境
 
 - MiniMax Code 3.1.16，macOS 26.6.2（arm64）。从本目录安装、经助手打开、页面渲染正常，
   17 个 MCP 工具在宿主 MCP 运行时上逐个实调通过。
-- 同一台机器上的 Node 26.7 与 Python 3.14。Python 引擎已随包 vendor，不用装任何东西。
+- 同一台机器上的 Node 26.7 与 Python 3.14。Python 引擎源码已随包 vendor，不用 `pip install` 任何东西；但本机仍需一个 Python ≥3.10 解释器（见上）。
 - 最低客户端版本：3.1.2。本包声明 `agentAccess: ["session.run"]`（该能力需要 3.1.2）；
   没有声明 `engines` 下限，所以 3.1.2 起的客户端都能装，只是客户端不提供模型目录时
   面板里少一个模型下拉。
 - **未验证**：Windows 与 Linux 宿主。包内没有平台专属二进制、Node 入口只用内置模块，
-  但没有在这两个平台上实跑过。
+  但没有在这两个平台上实跑过。Windows 上的解释器发现（`py` 启动器、版本化命令、
+  常见安装目录）有单元测试覆盖，但没有在 Windows 真机上端到端跑过。
 
 ## 数据与访问
 
@@ -66,8 +77,9 @@ MiniMax Code 3.1.11 起也可以直接从 Git 仓库导入：贴仓库地址、�
 - **网络 host**：默认没有。Node 服务与 Python 引擎只绑回环（`127.0.0.1`）。若你在面板里
   自加自定义模型，Node 薄壳会把你填的 OpenAI 兼容端点当作目标；面板里的助手回合由宿主代跑，
   走你在 MiniMax Code 上的账号与额度。
-- **拉起的进程**：`python3 -B -m factscribe workbench --root <你的根目录> --port 0 --json
-  --no-browser`（引擎，MiniApp 停止时被杀）、`factscribe audit`（只读重跑检查报告）、
+- **拉起的进程**：`<解释器> -B -m factscribe workbench --root <你的根目录> --port 0 --json
+  --no-browser`（引擎，MiniApp 停止时被杀；解释器是本机探到的那个 ≥3.10 的 Python，可能是
+  `python3`、`py -3`，也可能是 `FS_PYTHON` 指定的绝对路径）、`factscribe audit`（只读重跑检查报告）、
   `tectonic`（只用于可选的 PDF 渲染按钮）、macOS `open`（只用于「打开目录」按钮）。
 - **Agent 回合**：面板通过 `agentAccess: ["session.run"]` 跑宿主 Agent 回合，用的是 MiniMax Code
   自己配的模型、宿主账号与额度；插件不读你的 API key、不读宿主配置。

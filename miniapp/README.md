@@ -48,6 +48,16 @@ Code and ask the Agent to "Open the FactScribe paper workbench".
 MiniMax Code 3.1.11 and later can also import the package straight from a Git repository: paste the
 repository URL, pick the package directory, and confirm the preview.
 
+### Python interpreter (the machine needs ≥3.10)
+
+The engine is written in Python. Its source is vendored into the package, so there is nothing to `pip install`, but the machine still needs a **Python ≥3.10** interpreter. The Mini App looks for one in PATH and in the usual install locations, and the settings page states what it found, what is missing and whether the version is high enough.
+
+**Windows**: download the 3.10 or newer installer from <https://www.python.org/downloads/windows/> and tick **Add python.exe to PATH**; open a fresh command prompt afterwards and run `py -3 --version` to confirm. A `py` launcher on its own is enough (the Mini App tries `py`, `py -3`, `py -3.14` down to `py -3.10`). An interpreter outside PATH is found too: `%LOCALAPPDATA%\Programs\Python\Python3xx\`, `%PROGRAMFILES%\Python3xx\` and `C:\Python3xx\` are all probed. If it still finds nothing, point the `FS_PYTHON` environment variable at the absolute path and restart MiniMax Code.
+
+**Why 3.9 does not work**: the engine needs ≥3.10 (on 3.10 it falls back to the TOML parser bundled with the package, on 3.11 and newer it uses the standard library `tomllib`), so Python 3.9 and older cannot run this engine. The Mini App therefore reports the highest version it found (3.9) and which executable it came from. An old version can stay installed next to 3.10 or newer.
+
+**macOS / Linux**: unchanged. The Mini App tries `python3`, `python`, `/usr/bin/python3`, `/opt/homebrew/bin/python3` and `/usr/local/bin/python3` in that order, and `FS_PYTHON` can point at an absolute path there too.
+
 On first use the page asks for your paper root directory: any directory that contains a
 `factscribe.toml` is treated as a paper project. It can be changed later from the settings page.
 
@@ -55,13 +65,16 @@ On first use the page asks for your paper root directory: any directory that con
 
 - MiniMax Code 3.1.16 on macOS 26.6.2 (arm64). Installed from this directory, opened through the
   Agent, page rendered, and all 17 MCP tools called end to end over the Host's MCP runtime.
-- Node 26.7 and Python 3.14 on the same machine. The Python engine is vendored inside the
-  package, so nothing has to be installed.
+- Node 26.7 and Python 3.14 on the same machine. The Python engine source is vendored inside the
+  package, so nothing has to be `pip install`ed; the machine still needs a Python ≥3.10
+  interpreter (see above).
 - Minimum client version: 3.1.2. The package declares `agentAccess: ["session.run"]`, which
   needs 3.1.2; no `engines` bound is declared, so clients from 3.1.2 on still install it and
   only lose the assistant model picker when their client does not expose the model catalogue.
 - Not verified: Windows and Linux hosts. The package ships no platform-specific binary and the
-  Node entry uses only Node built-ins, but no run on those platforms has been done.
+  Node entry uses only Node built-ins, but no run on those platforms has been done. The Windows
+  interpreter discovery (`py` launcher, versioned commands, common install directories) is
+  covered by unit tests, but no end-to-end run on a real Windows machine has been done.
 
 ## Data & access
 
@@ -77,8 +90,10 @@ On first use the page asks for your paper root directory: any directory that con
   only (`127.0.0.1`). If you add a custom model in the panel, the Node shell sends the prompt to
   the OpenAI-compatible endpoint you typed; the host Agent turn is run by the Host on your
   MiniMax Code account and plan.
-- **Processes spawned**: `python3 -B -m factscribe workbench --root <your root> --port 0 --json
-  --no-browser` (the engine; killed when the Mini App stops), `factscribe audit` (read-only
+- **Processes spawned**: `<interpreter> -B -m factscribe workbench --root <your root> --port 0 --json
+  --no-browser` (the engine; killed when the Mini App stops; the interpreter is the Python ≥3.10
+  the Mini App found on this machine, possibly `python3`, `py -3` or the absolute path named by
+  `FS_PYTHON`), `factscribe audit` (read-only
   re-run of the check report), `tectonic` (only for the optional PDF render button) and macOS
   `open` (only for the "open folder" button).
 - **Agent turns**: the panel runs Host Agent turns through `agentAccess: ["session.run"]`. The

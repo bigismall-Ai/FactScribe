@@ -119,7 +119,7 @@ The `workbench` command above is for scripts and local development. If you want 
 
 ### What it is
 
-A local paper workbench page (route `/workbench`). It is not a cloud service and it does not upload your manuscript: a thin Node shell takes a loopback port and serves the page, and the Python engine **ships inside the package** (vendored into the plugin), so there is nothing to install separately.
+A local paper workbench page (route `/workbench`). It is not a cloud service and it does not upload your manuscript: a thin Node shell takes a loopback port and serves the page, and the Python engine **source ships inside the package** (vendored into the plugin), so there is nothing to `pip install`. The engine is written in Python, so the machine still needs a Python ≥3.10 interpreter; the next section shows how to get one.
 
 It is the same engine and the same criteria as the CLI — the reds you see in the page are the same reds you get in the terminal.
 
@@ -134,6 +134,30 @@ cd miniapp
 `install.sh` is idempotent — running it many times gives the same result; `./install.sh --check` only reports whether the install is complete and writes nothing. Restart the MiniMax Code desktop app when it finishes.
 
 MiniMax Code 3.1.11 and later can also import the package straight from a Git repository: paste the repository URL, pick the package directory, and confirm the preview.
+
+### Python interpreter
+
+The engine is written in Python, so the machine needs a **Python ≥3.10** interpreter. The engine source ships inside the package, so there is nothing to `pip install`; the interpreter is yours to install. The Mini App looks for one itself, and the settings page states what it found, what is missing and whether the version is high enough.
+
+On Windows:
+
+1. Download the 3.10 or newer installer from [python.org/downloads/windows](https://www.python.org/downloads/windows/). Leave 3.9 and older alone; the reason is below.
+2. Tick **Add python.exe to PATH** during the install. Open a fresh command prompt afterwards and run `py -3 --version`; it should print something like `Python 3.12.x`.
+3. A `py` launcher on its own is enough. The Mini App tries `py`, then `py -3`, then `py -3.14` down to `py -3.10`.
+4. An interpreter outside PATH is found as well. The usual locations `%LOCALAPPDATA%\Programs\Python\Python3xx\`, `%PROGRAMFILES%\Python3xx\` and `C:\Python3xx\` are probed one by one.
+5. If it still finds nothing, point the `FS_PYTHON` environment variable at the absolute path:
+
+   ```bat
+   setx FS_PYTHON "C:\Users\you\AppData\Local\Programs\Python\Python312\python.exe"
+   ```
+
+   Restart MiniMax Code afterwards; the settings page probes again.
+
+One Windows trap: the Microsoft Store ships a `python` placeholder alias that takes over the command and looks like an installation that cannot run. If Python is really installed, turn `python` and `python3` off under "Settings → Apps → App execution aliases".
+
+**Why 3.9 does not work.** The engine needs ≥3.10: on 3.10 it falls back to the TOML parser bundled with the engine, on 3.11 and newer it uses the standard library `tomllib`. Python 3.9 and older cannot run this engine, so the Mini App reports the highest version it found (3.9) and which executable it came from instead of saying that Python is missing. An old version can stay installed next to 3.10 or newer; the two do not conflict.
+
+macOS and Linux behave as before: the Mini App tries `python3`, `python`, `/usr/bin/python3`, `/opt/homebrew/bin/python3` and `/usr/local/bin/python3` in that order, and `FS_PYTHON` can point at an absolute path there too. On macOS run `brew install python@3.12`; on Debian and Ubuntu run `sudo apt install python3.12 python3.12-venv`.
 
 ### How to open it
 
@@ -401,7 +425,7 @@ All the structural limits point at the same promise: the account, the material a
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 2350 tests, fully offline
+python3 -m unittest discover -s tests     # 2384 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12/3.13/3.14
 ```
 

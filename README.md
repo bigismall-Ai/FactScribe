@@ -119,7 +119,7 @@ python3 -m factscribe workbench --root /path/to/你的论文目录
 
 ### 它是什么
 
-一个本地论文工作台页面（路由 `/workbench`）。它不是云服务，不上传你的稿子：Node 薄壳占一个回环端口伺服页面，Python 引擎是**随包附带**的（vendored 在插件里），不用另外装 Python 包。
+一个本地论文工作台页面（路由 `/workbench`）。它不是云服务，不上传你的稿子：Node 薄壳占一个回环端口伺服页面，Python 引擎的**源码**是**随包附带**的（vendored 在插件里），不用另外 `pip install`；引擎本身是 Python 写的，本机仍要有一个 Python ≥3.10 解释器（下节给安装办法）。
 
 它和 CLI 是同一套引擎、同一套判据——`audit` 在页面上跑出来的红，和你在命令行跑出来的红是同一批红。
 
@@ -134,6 +134,30 @@ cd miniapp
 `install.sh` 是幂等的，跑多少遍结果一致；`./install.sh --check` 只检查装没装全，不写任何东西。装完重启 MiniMax Code 桌面端。
 
 MiniMax Code 3.1.11 起也可以直接从 Git 仓库导入：贴仓库地址、选中包目录、核对预览即可。
+
+### Python 解释器
+
+引擎是 Python 写的，所以本机要有一个 **Python ≥3.10** 解释器。引擎源码随包附带，不用 `pip install` 任何东西；解释器得自己装。Mini App 会自己找它，找到什么、缺什么、版本够不够，设置页都会写清楚。
+
+Windows 上的装法：
+
+1. 到 [python.org/downloads/windows](https://www.python.org/downloads/windows/) 下载 3.10 或更高版本的安装包。3.9 及以下别装，原因在后面。
+2. 安装时勾上 **Add python.exe to PATH**。装完开一个新的命令行窗口，跑 `py -3 --version`，应该打印 `Python 3.12.x` 这样的版本号。
+3. 只装了 `py` 启动器也认。Mini App 依次试 `py`、`py -3`、`py -3.14` 到 `py -3.10`。
+4. 装在 PATH 之外也认。常见位置 `%LOCALAPPDATA%\Programs\Python\Python3xx\`、`%PROGRAMFILES%\Python3xx\`、`C:\Python3xx\` 会被逐个探过去。
+5. 还是找不到，就设环境变量 `FS_PYTHON` 指到解释器绝对路径：
+
+   ```bat
+   setx FS_PYTHON "C:\Users\你\AppData\Local\Programs\Python\Python312\python.exe"
+   ```
+
+   设完重启 MiniMax Code，设置页会重新探一次。
+
+Windows 上有个常见坑：Microsoft Store 的 `python` 占位别名会抢在前面，像是装了却跑不了。真装了 Python 的话，到「设置 → 应用 → 应用执行别名」把 `python` 和 `python3` 关掉。
+
+**3.9 为什么不行。** 引擎要求 ≥3.10：3.10 用引擎随包的兜底 TOML 解析器，3.11 以上用标准库 `tomllib`。3.9 及以下跑不了这份引擎，所以 Mini App 会直接报出「探到的最高版本是 3.9」和它来自哪个可执行文件，不再含糊地说没找到 Python。旧版本可以和 3.10 以上并存，两个都装不冲突。
+
+macOS 与 Linux 的行为不变：按 `python3`、`python`、`/usr/bin/python3`、`/opt/homebrew/bin/python3`、`/usr/local/bin/python3` 的顺序找，`FS_PYTHON` 同样能指到绝对路径。macOS 用 `brew install python@3.12`，Debian 与 Ubuntu 用 `sudo apt install python3.12 python3.12-venv`。
 
 ### 怎么打开
 
@@ -401,7 +425,7 @@ Mini App 侧的对应纪律：改前端要改**源**（`factscribe/workbench/sta
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 2350 例，全离线
+python3 -m unittest discover -s tests     # 2384 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12/3.13/3.14
 ```
 

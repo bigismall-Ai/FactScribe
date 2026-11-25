@@ -335,6 +335,13 @@ python3 -m factscribe_legal api summary --project <项目目录> --human
   `2` 配置错（如项目目录不存在）。材料缺失不报错——按 `skipped` 如实标出。
 * **既有 11 条子命令的输出与退出码一字未动**（本族是第 12 条子命令，
   且不打「单域调试入口」提示——它的 stdout 必须是纯 JSON）。
+* **控制台编码**：非 UTF-8 控制台（中文 Windows 的 cp936）上编不出来的字符
+  （`✓`／`🔴`／`ñ`…）降级成同义 ASCII，命令照常跑完、退出码照旧
+  （本包自带 `factscribe_legal/console.py`，口径照上游 `factscribe/console.py`；
+  UTF-8 环境下不改变任何一个字节）。**降级只装在本族上**——既有 11 条子命令
+  在 cp936 上的既有崩溃（`verify-case` 打 `✓` 撞 UnicodeEncodeError、退出码 1）
+  是**既有缺陷**，本步不碰、不顺手修：Windows 真机基线 f31a6c76 同样失败，
+  失败集合逐条相同。
 
 ## 10. HTTP 路由（core `factscribe serve`）
 

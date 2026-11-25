@@ -128,7 +128,10 @@ def safe_stream(stream) -> bool:
 
 
 def safe_stdio() -> None:
-    """CLI 入口统一把 stdout/stderr 装上安全降级（幂等，可重复调用）。
+    """把 stdout/stderr 装上安全降级（幂等，可重复调用）。
+
+    **只给 api 族用**（见 cli.cmd_api）：既有 11 条子命令的输出与退出码
+    一个字都不许动，它们在 cp936 上的既有崩溃是**既有缺陷**，本步不碰。
 
     只换**错误处理器**，不换编码：流的编码是环境的事（中文 Windows 上
     就是 cp936），我们不替用户改；改的只是「编不出来时怎么办」。

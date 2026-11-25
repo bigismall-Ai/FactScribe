@@ -14,11 +14,16 @@
    用来在没有 3.10 解释器的机器上验证那条兜底路径（`tests/test_toml_compat.py` 这么用）。
 
 **为什么不直接复用上游 `factscribe.config.load_toml`？**
-实测过（2026-11-15）：上游那份 3.10 兜底解析器（`factscribe/config.py::_mini_toml`）
-不认嵌套数组 —— `nested = [["x"], ["y", "z"]]` 会被拆成 `[['x'], '["y"', '"z"']`。
-若直接复用它，则同一份事实账在 3.10 与 3.11 上会读出**不同的结构**，
-门禁结论不可复现。本包因此自带一份极简解析器，并用交叉校验测试保证
-**它对事实账用得到的子集与标准库 `tomllib` 逐字相同**（见 tests/test_toml_compat.py）。
+当初（2026-11-15）不复用的原因是上游那份 3.10 兜底解析器太弱：不认嵌套数组，
+`nested = [["x"], ["y", "z"]]` 会被拆成 `[['x'], '["y"', '"z"']`。
+**上游那份解析器已在 2026-11-25 重写成严格档**（坏 TOML 一律报错、嵌套数组正常读），
+当年那条理由已经过期。本包仍自带一份极简解析器，理由换成两条：
+1. 本包要能独立安装、独立运行，不把上游包变成运行依赖；
+2. 自带的那份是**更保守**的子集 —— 子集之外的写法一律报错（fail closed），
+   不猜、不静默跳过。
+
+两条路径都必须与标准库 `tomllib` 在事实账用得到的子集上**读出同一个 dict**，
+由 tests/test_toml_compat.py 的交叉校验锁住。
 
 自带解析器的边界
 ----------------
@@ -27,6 +32,7 @@
 （沿用上游 "fail closed / no silent passes" 的规矩）。
 """
 import os
+import re
 from pathlib import Path
 
 __all__ = ["load_toml", "mini_loads", "parser_name", "TomlSubsetError"]
@@ -72,42 +78,74 @@ def _strip_comment(line):
 
 
 def _parse_basic_string(s):
-    if len(s) < 2 or not s.endswith('"'):
-        raise TomlSubsetError("字符串未闭合：%r" % s)
-    body = s[1:-1]
+    """基本字符串：逐字扫到收尾引号；引号后面不许还有东西。
+
+    旧实现只看首尾引号，「引号闭合之后还有内容」会被当成一条字符串收下（值还错了）。
+    """
+    if not s.startswith('"'):
+        raise TomlSubsetError("不是基本字符串：%r" % s)
     out = []
-    i = 0
-    while i < len(body):
-        ch = body[i]
-        if ch != "\\":
-            out.append(ch)
+    i = 1
+    while i < len(s):
+        ch = s[i]
+        if ch == "\\":
             i += 1
+            if i >= len(s):
+                raise TomlSubsetError("转义未结束：%r" % s)
+            e = s[i]
+            if e in _ESCAPES:
+                out.append(_ESCAPES[e])
+                i += 1
+            elif e == "u":
+                hexs = s[i + 1:i + 5]
+                if len(hexs) != 4:
+                    raise TomlSubsetError("坏的 \\u 转义：%r" % s)
+                try:
+                    out.append(chr(int(hexs, 16)))
+                except ValueError:
+                    raise TomlSubsetError("坏的 \\u 转义：%r" % s)
+                i += 5
+            else:
+                raise TomlSubsetError("不认识的转义 \\%s：%r" % (e, s))
             continue
+        if ch == '"':
+            if i != len(s) - 1:
+                raise TomlSubsetError("字符串后面有多余内容：%r" % s)
+            return "".join(out)
+        out.append(ch)
         i += 1
-        if i >= len(body):
-            raise TomlSubsetError("转义未结束：%r" % s)
-        e = body[i]
-        if e in _ESCAPES:
-            out.append(_ESCAPES[e])
-            i += 1
-        elif e == "u":
-            hexs = body[i + 1:i + 5]
-            if len(hexs) != 4:
-                raise TomlSubsetError("坏的 \\u 转义：%r" % s)
-            try:
-                out.append(chr(int(hexs, 16)))
-            except ValueError:
-                raise TomlSubsetError("坏的 \\u 转义：%r" % s)
-            i += 5
-        else:
-            raise TomlSubsetError("不认识的转义 \\%s：%r" % (e, s))
-    return "".join(out)
+    raise TomlSubsetError("字符串未闭合：%r" % s)
 
 
 def _parse_literal_string(s):
-    if len(s) < 2 or not s.endswith("'"):
-        raise TomlSubsetError("字符串未闭合：%r" % s)
-    return s[1:-1]
+    """字面字符串：逐字扫到收尾引号（不解释转义）。"""
+    if not s.startswith("'"):
+        raise TomlSubsetError("不是字面字符串：%r" % s)
+    i = 1
+    while i < len(s):
+        if s[i] == "'":
+            if i != len(s) - 1:
+                raise TomlSubsetError("字符串后面有多余内容：%r" % s)
+            return s[1:i]
+        i += 1
+    raise TomlSubsetError("字符串未闭合：%r" % s)
+
+
+# 整数/浮点的词法照标准库 tomllib：前导零、「1.」「.5」都不是合法写法。
+_INT_RE = re.compile(r"[+-]?(?:0|[1-9](?:_?[0-9])*)")
+_FLOAT_RE = re.compile(
+    r"[+-]?(?:0|[1-9](?:_?[0-9])*)"
+    r"(?:\.[0-9](?:_?[0-9])*)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?")
+
+
+def _parse_number(s):
+    """数字：整数与浮点；前导零、缺小数位都按 tomllib 口径拒。"""
+    body = s.replace("_", "")
+    if _FLOAT_RE.fullmatch(body) and ("." in body or "e" in body or "E" in body):
+        return float(body)
+    if _INT_RE.fullmatch(body):
+        return int(body)
+    raise ValueError("不是合法数字：%r" % s)
 
 
 def _split_items(body):
@@ -157,8 +195,12 @@ def _parse_value(raw):
     if not s:
         raise TomlSubsetError("空值")
     if s.startswith('"'):
+        if s.startswith('"""'):
+            raise TomlSubsetError("不覆盖多行字符串：%r" % raw)
         return _parse_basic_string(s)
     if s.startswith("'"):
+        if s.startswith("'''"):
+            raise TomlSubsetError("不覆盖多行字符串：%r" % raw)
         return _parse_literal_string(s)
     if s.startswith("["):
         if not s.endswith("]"):
@@ -172,9 +214,7 @@ def _parse_value(raw):
     if s in ("true", "false"):
         return s == "true"
     try:
-        if any(c in s for c in ".eE"):
-            return float(s.replace("_", ""))
-        return int(s.replace("_", ""))
+        return _parse_number(s)
     except ValueError:
         raise TomlSubsetError("不认识的取值：%r" % raw)
 
@@ -187,13 +227,33 @@ def _unquote_key(k):
 
 
 def _split_dotted(path):
+    """按点号分段；引号里的点号不算分隔符。"""
     parts = []
-    for p in path.split("."):
-        p = _unquote_key(p)
+    cur = []
+    quote = None
+    for ch in path:
+        if quote:
+            cur.append(ch)
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            quote = ch
+            cur.append(ch)
+            continue
+        if ch == ".":
+            parts.append("".join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    parts.append("".join(cur))
+    out = []
+    for p in parts:
+        p = _unquote_key(p.strip())
         if not p:
             raise TomlSubsetError("空表名：%r" % path)
-        parts.append(p)
-    return parts
+        out.append(p)
+    return out
 
 
 def _table_for(root, path):
@@ -213,9 +273,17 @@ def _table_for(root, path):
 
 
 def mini_loads(text):
-    """极简 TOML 解析：只覆盖事实账用得到的子集。"""
+    """极简 TOML 解析：只覆盖事实账用得到的子集。
+
+    与标准库 tomllib 同一口径：坏输入一律报错（fail closed）。
+    重复键、重复表头、前导零、多行字符串这些"以前能悄悄收下"的写法，
+    现在一律报错 —— 否则同一份事实账在 3.10 与 3.11+ 上读出的结果不同，
+    门禁结论不可复现。
+    """
     root = {}
     cur = root
+    declared = set()   # 显式声明过的 [表] 路径（不许重复声明）
+    arrays = set()     # 显式声明过的 [[表数组]] 路径
     lines = text.splitlines()
     i = 0
     while i < len(lines):
@@ -228,6 +296,10 @@ def mini_loads(text):
             if not s.endswith("]]"):
                 raise TomlSubsetError("表数组头未闭合：%r" % raw)
             name = s[2:-2].strip()
+            path = tuple(_split_dotted(name))
+            if path in declared:
+                raise TomlSubsetError("表 %r 与同名表数组冲突" % name)
+            arrays.add(path)
             parent, _, leaf = name.rpartition(".")
             holder = _table_for(root, parent) if parent else root
             leaf = _unquote_key(leaf)
@@ -240,7 +312,12 @@ def mini_loads(text):
         if s.startswith("["):
             if not s.endswith("]"):
                 raise TomlSubsetError("表头未闭合：%r" % raw)
-            cur = _table_for(root, s[1:-1].strip())
+            name = s[1:-1].strip()
+            path = tuple(_split_dotted(name))
+            if path in declared or path in arrays:
+                raise TomlSubsetError("表 %r 重复声明" % name)
+            declared.add(path)
+            cur = _table_for(root, name)
             continue
         if "=" not in s:
             raise TomlSubsetError("无法解析的行：%r" % raw)
@@ -254,9 +331,13 @@ def mini_loads(text):
         parsed = _parse_value(value)
         if "." in key:
             parent, _, leaf = key.rpartition(".")
-            _table_for(cur, parent)[_unquote_key(leaf)] = parsed
+            target = _table_for(cur, parent)
         else:
-            cur[_unquote_key(key)] = parsed
+            target, leaf = cur, key
+        leaf = _unquote_key(leaf)
+        if leaf in target:
+            raise TomlSubsetError("键 %r 重复定义" % leaf)
+        target[leaf] = parsed
     return root
 
 

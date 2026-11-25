@@ -191,8 +191,12 @@ OK
 9. **`build` 用 `shell=True` 原样执行 `project.build`**，不做沙箱——契约上只该
    写编译命令。
 10. **Python 3.10 没有 `tomllib`**，内置 `_mini_toml` 只支持本契约用到的子集
-    （`[table]`、`[[array of tables]]`、字符串、数组、数字、布尔）；复杂 TOML
-    请用 3.11+。
+    （`[table]`、`[[array of tables]]`、点号表名/点号键、字符串、数组、内联表、
+    数字、布尔、日期时间）；**坏 TOML 一律报错**（与 3.11+ 的 `tomllib` 同一口径，
+    经 `ConfigError` 走 exit 2，不许放行），复杂 TOML 请用 3.11+。
+    入口处把 CRLF 归一成 LF（与 `tomllib.loads()` 同一件事，Windows 写的文件照读）；
+    裸 `\r` 与控制字符按 `tomllib` 口径拒。报告 TOML（`factscribe/report.py`）
+    也走这一条路径：3.10 与 3.11+ 对同一份报告必须给出同一个结论。
 11. 只认 UTF-8；`col` 是**字符**列（CJK 正文里不是字节列）。
 12. 未实现 SPEC 之外的东西：不生成正文、不生成 bib 条目、不查重、不排版美化。
 

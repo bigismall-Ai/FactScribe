@@ -76,8 +76,10 @@ for py in 3.10 3.11 3.12 3.13 3.14; do
     skipped=$(printf '%s\n' "$out" | grep -oE 'skipped=[0-9]+' | head -1)
     ok "Python ${py}：${n}${skipped:+（${skipped}）}"
     # 有 poppler 却跳用例 = 共享标记条件写错，本地少了覆盖。
+    # 判据只认「本机有 poppler」这一条事实：任何跳过都算本地少了覆盖（PDF 层必须真跑）。
+    # 别的层要跳过，得把判据写进用例本身（任何解释器上都有确定断言），不许靠 skip 过关。
     if [ "$missing" -eq 0 ] && [ -n "$skipped" ] && [ "$skipped" != "skipped=0" ]; then
-      bad "Python ${py}：本机有 poppler 却跳过了 PDF 用例（${skipped}）——检查 tests/_pdfdep.py 的条件"
+      bad "Python ${py}：本机有 poppler 却出现跳过用例（${skipped}）——PDF 层必须真跑（检查 tests/_pdfdep.py 的条件）；别的层要跳过，先把用例改成任何版本上都有确定断言，不许靠 skip 过关"
     fi
   else
     bad "Python ${py} 失败："

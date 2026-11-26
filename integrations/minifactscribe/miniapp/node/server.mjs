@@ -544,24 +544,28 @@ export async function start(context) {
         }
         try {
           if (request.method === 'GET' && path === '/api/workbench/status') {
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token, '/api/status'));
+            // 上游的 400/404 原样带回：项目没配好是项目自己的问题，不该变成 502。
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/status');
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/brief') {
             const section = new URL(request.url ?? '/', 'http://x').searchParams.get('section');
             const suffix = section ? '?section=' + encodeURIComponent(section) : '';
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/brief' + suffix));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/brief' + suffix);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/project') {
-            const data = await workbenchFetch(workbench.url, workbench.token,
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
               '/api/project');
-            // 记住项目根：保存时要去磁盘上读原文件的真行尾（接口层给的是 LF）。
-            rememberRoot(data);
-            sendJson(response, 200, data);
+            if (upstream.status === 200) {
+              // 记住项目根：保存时要去磁盘上读原文件的真行尾（接口层给的是 LF）。
+              rememberRoot(upstream.data);
+            }
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'PUT' && path === '/api/workbench/sections') {
@@ -616,35 +620,41 @@ export async function start(context) {
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/facts') {
+            // 追加事实：写账本要上游 --allow-write，上游的 400/403 原样带回。
             const body = await readBody(request);
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/facts', 'POST', body));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/facts', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/audit') {
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/audit', 'POST'));
+            // 审计只读：上游的 400/404 原样带回（注意审计「有发现」也是 200＋ok:true，
+            // 发现条数在 body.exit 里，不在状态码上）。
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/audit', 'POST');
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/evidence') {
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token, '/api/evidence'));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/evidence');
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/evidence/freeze') {
+            // 冻结证据：要上游 --allow-write，上游的 400/403 原样带回。
             const body = await readBody(request);
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/evidence/freeze', 'POST', body));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/evidence/freeze', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/evidence/unfreeze') {
+            // 解冻证据：要上游 --allow-write，上游的 400/403/404 原样带回。
             const body = await readBody(request);
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/evidence/unfreeze', 'POST', body));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/evidence/unfreeze', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/reports') {
@@ -689,10 +699,11 @@ export async function start(context) {
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/build') {
+            // 构建 PDF：要上游 --allow-build，上游的 400/403 原样带回。
             const body = await readBody(request);
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/build', 'POST', body));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/build', 'POST', body);
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'POST' && path === '/api/workbench/browser') {
@@ -703,9 +714,9 @@ export async function start(context) {
           }
           if (request.method === 'GET' && path === '/api/workbench/section-page') {
             const file = new URL(request.url ?? '/', 'http://x').searchParams.get('file') || '';
-            sendJson(response, 200,
-              await workbenchFetch(workbench.url, workbench.token,
-                '/api/section-page?file=' + encodeURIComponent(file)));
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
+              '/api/section-page?file=' + encodeURIComponent(file));
+            sendJson(response, upstream.status, upstream.data);
             return;
           }
           if (request.method === 'GET' && path === '/api/workbench/pdf') {

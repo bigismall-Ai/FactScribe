@@ -568,14 +568,23 @@ export async function start(context) {
             const body = await readBody(request);
             // 行尾先按原文件的风格摆回去，再交给引擎写；写完核对字节。
             const prepared = await prepareSectionWrite(body);
-            const upstream = await workbenchFetch(workbench.url, workbench.token,
+            // 上游的 400/403/409 原样带回（指纹闸拒写＝409）：写盘的成败由
+            // 引擎说了算，代理不许替它压成一个说不清的 502——压掉之后，
+            // 「这一节在别处被改过」与「本地工作台连不上」长得一模一样。
+            const upstream = await workbenchProxy(workbench.url, workbench.token,
               '/api/sections', 'PUT', prepared.payload);
+            if (upstream.status !== 200) {
+              // 没写成功就不碰磁盘：行尾校正那步只对「真写下去了」有意义，
+              // 对着没写成功的目标做校正等于拿旧内容盖回去。
+              sendJson(response, upstream.status, upstream.data);
+              return;
+            }
             const eol = await settleSectionBytes(prepared);
             // bytes 报落盘后的真实大小：引擎那一层拿到的是 LF 形态，
             // 它的字节数比实际文件小（CRLF 每行多一个 \r）。
             sendJson(response, 200, eol
-              ? { ...upstream, ...(eol.bytes == null ? {} : { bytes: eol.bytes }), eol }
-              : upstream);
+              ? { ...upstream.data, ...(eol.bytes == null ? {} : { bytes: eol.bytes }), eol }
+              : upstream.data);
             return;
           }
           // 章节增删改：上游的 400/403/409 原样带回（409 = 还被正文引用）。

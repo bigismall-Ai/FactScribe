@@ -1670,7 +1670,10 @@ _DEF_RE = re.compile(
     r"\s*(?:\[(\d)\])?\s*(?:\[[^\]]*\])?\s*\{")
 _DEF_SIMPLE_RE = re.compile(r"\\def\s*\\[A-Za-z@]+(?:\s*#\d)*\s*")
 _INPUT_WRAPPER_RE = re.compile(r"^\s*\\input\s*\{([^{}]*#(\d)[^{}]*)\}\s*$")
-_SKIP_DIRS = {".git", ".venv", "__pycache__", "audit", "node_modules", ".pytest_cache"}
+# 覆盖报告跳过的目录名（任一层命中即跳）：attic＝删节归档目录——
+# 挪进去的节已经不在审计闭包里了，别再报「未扫描」（口径 8 的删节归档）。
+_SKIP_DIRS = {".git", ".venv", "__pycache__", "audit", "node_modules",
+              ".pytest_cache", "attic"}
 
 
 

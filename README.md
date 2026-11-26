@@ -40,28 +40,7 @@ FactScribe 就是拦这个的。它是**一道机械闸门**：把正文里每�
 
 一句话记住：**它保证账、据、文三者自洽，且据未被改；它不保证论文的结论为真。** 完整的逐条口径见 [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md)，设计侧见 [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md)。
 
-### 联网边界
-
-`refs search` 是唯一默认对外联网的命令，它只发查询词，不发正文，也不发本地路径。
-
-其余命令默认全离线。有两处要显式加参数才会发请求的开关：`audit --resolve` 只发 arXiv 与 DOI 编号给解析服务，`fonts --fetch` 下载 Fandol 字体包。
-
-### 安全边界
-
-只对**你自己信任的项目**跑 `build` 与 `audit --build`。`project.build` 是项目声明里的 shell 命令，工具会照原样执行。`audit` 本身不编译。
-
-## 零依赖身份
-
-运行时只依赖 Python 标准库（≥ 3.10）。没有模型 SDK，没有第三方依赖，不调用任何 LLM。`pip install -e .` 只是省事，不装也能用 `PYTHONPATH` 跑。
-
-可选的外部件只有两样，缺了都有明确去处：
-
-| 外部件 | 谁要它 | 缺了怎么办 |
-|---|---|---|
-| poppler（`pdftotext`/`pdfinfo`/`pdfimages`） | `verify-pdf` 的 PDF 回检层 | 报 `PDF_TOOL_MISSING` 并退出码 8，不静默放行；其余命令照跑 |
-| tectonic | `build`、`audit --build` | 走 `project.build` 的 shell 命令时，缺引擎＝shell 报「command not found」（127）⇒ 构建失败、**退出码 1**；`project.build` 为空（自动用 tectonic 编译）时报 `PDF_TOOL_MISSING`、**退出码 8**；不带 `--build` 的 `audit` 不编译，不需要它 |
-
-中文字体走同一条路：`fonts --fetch` 把 Fandol 字体下到本地缓存，`build` 缺字体时有兜底。`doctor` 会把这几样连同项目状态逐项查一遍，每项给一条修复命令。
+（联网边界与安全边界见下面的[安全与联网边界](#安全与联网边界)；可选外部件见[可选外部件](#可选外部件)。）
 
 ## 五分钟上手
 
@@ -369,7 +348,7 @@ python3 -m factscribe protect --before 旧稿/ --after 新稿/
 | 外部件 | 谁要它 | 缺了怎么办 |
 |---|---|---|
 | poppler（`pdftotext`/`pdfinfo`/`pdfimages`） | `verify-pdf` 的 PDF 回检层 | 报 `PDF_TOOL_MISSING` 并退出码 8，不静默放行；其余命令照跑 |
-| tectonic | `build`、`audit --build` | 报缺引擎并退出码 8；不带 `--build` 的 `audit` 不编译，不需要它 |
+| tectonic | `build`、`audit --build` | 走 `project.build` 的 shell 命令时，缺引擎＝shell 报「command not found」（127）⇒ 构建失败、**退出码 1**；`project.build` 为空（自动用 tectonic 编译）时报 `PDF_TOOL_MISSING`、**退出码 8**；不带 `--build` 的 `audit` 不编译，不需要它 |
 
 中文字体走同一条路：`fonts --fetch` 把 Fandol 字体包（4 个必需 OTF，约 26.7 MB）下到本地缓存（`~/.cache/factscribe/fonts/fandol`），`build` 缺字体时有系统字体兜底。
 
@@ -455,7 +434,7 @@ Mini App 侧的对应纪律：改前端要改**源**（`factscribe/workbench/sta
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 1764 例，全离线
+python3 -m unittest discover -s tests     # 2565 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 
@@ -470,7 +449,5 @@ python3 -m unittest discover -s tests     # 1764 例，全离线
 ## 它到底保证什么
 
 完整口径见 [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md)，设计侧见 [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md)。
-
-一句话：**它保证账、据、文三者自洽，且据未被改；它不保证论文的结论为真。**
 
 审计绿，意思是 0 红 0 黄，这个数字和这条引用都对上了账——**不是「论文没问题」**。

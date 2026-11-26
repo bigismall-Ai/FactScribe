@@ -40,28 +40,7 @@ Four other things are none of its business:
 
 One sentence to keep: **the tool keeps ledger, evidence and prose consistent, and it proves the evidence was not changed; it does not prove the paper's conclusions.** The full wording is in [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md), the design side in [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md).
 
-### Network boundary
-
-`refs search` is the only command that reaches the network by default, and it sends the query terms only. Never prose, never a local path.
-
-Every other command is offline by default. Two switches send a request only when you pass them explicitly: `audit --resolve` sends arXiv and DOI identifiers to the resolver, and `fonts --fetch` downloads the Fandol font package.
-
-### Safety boundary
-
-Run `build` and `audit --build` only on projects you trust yourself. `project.build` is a shell command in the project declaration, and the tool runs it as written. `audit` on its own never compiles.
-
-## Zero dependency identity
-
-The runtime needs the Python standard library and nothing else (≥ 3.10). No model SDK, no third-party dependency, no LLM call anywhere. `pip install -e .` is a convenience; `PYTHONPATH` works just as well.
-
-Only two external pieces are optional, and both degrade in a stated way:
-
-| External piece | Who needs it | What happens without it |
-|---|---|---|
-| poppler (`pdftotext`/`pdfinfo`/`pdfimages`) | the PDF check layer of `verify-pdf` | reports `PDF_TOOL_MISSING` and exits 8, never a silent pass; every other command keeps working |
-| tectonic | `build` and `audit --build` | with a `project.build` shell command, a missing engine makes the shell report "command not found" (127), so the build fails and the exit code is **1**; when `project.build` is empty (tectonic is invoked automatically) it reports `PDF_TOOL_MISSING` and exits **8**; `audit` without `--build` never compiles, so it does not need it |
-
-CJK fonts follow the same rule: `fonts --fetch` caches the Fandol fonts locally, and `build` falls back when a font is missing. `doctor` checks all of this, item by item, with a fix command for each.
+(See [Safety and network boundary](#safety-and-network-boundary) and [Optional external pieces](#optional-external-pieces) below.)
 
 ## Five minutes to first green
 
@@ -369,7 +348,7 @@ Only two external pieces are optional, and both degrade in a stated way:
 | External piece | Who needs it | What happens without it |
 |---|---|---|
 | poppler (`pdftotext`/`pdfinfo`/`pdfimages`) | the PDF check layer of `verify-pdf` | reports `PDF_TOOL_MISSING` and exits 8, never a silent pass; every other command keeps working |
-| tectonic | `build` and `audit --build` | reports the missing engine and exits 8; `audit` without `--build` never compiles, so it does not need it |
+| tectonic | `build` and `audit --build` | with a `project.build` shell command, a missing engine makes the shell report "command not found" (127), so the build fails and the exit code is **1**; when `project.build` is empty (tectonic is invoked automatically) it reports `PDF_TOOL_MISSING` and exits **8**; `audit` without `--build` never compiles, so it does not need it |
 
 CJK fonts follow the same rule: `fonts --fetch` caches the Fandol package (4 required OTFs, about 26.7 MB) under `~/.cache/factscribe/fonts/fandol`, and `build` falls back to a system font when one is missing.
 
@@ -455,7 +434,7 @@ All the structural limits point at the same promise: the account, the material a
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 1764 tests, fully offline
+python3 -m unittest discover -s tests     # 2565 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 
@@ -470,7 +449,5 @@ Specs live in `docs/design/`, implementation notes in `docs/implementation/`, an
 ## What it actually guarantees
 
 The full wording is in [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md), the design side in [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md).
-
-One sentence: **the tool keeps ledger, evidence and prose consistent, and it proves the evidence was not changed; it does not prove the paper's conclusions.**
 
 A green audit means 0 red and 0 yellow — every number and every citation matched the ledger. It does **not** mean the paper is fine.

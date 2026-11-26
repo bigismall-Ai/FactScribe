@@ -771,16 +771,20 @@ def cmd_serve(args) -> int:
     url = "http://%s:%d" % (host, port)
     dev = bool(getattr(args, "dev", False))
     ui_url = ""
+    legal_url = ""
     if getattr(args, "ui", False):
         query = ("token=" + token if token else "")
         if dev:
             query = (query + "&" if query else "") + "dev=1"
         ui_url = url + "/" + ("?" + query if query else "")
+        # 法律侧工作台页面（法律集成件自带的前端；只读档案）。
+        legal_url = url + "/legal" + ("?" + query if query else "")
     command = "web" if getattr(args, "web", False) else "serve"
     if args.json:
         print(json.dumps({
             "event": "listening", "ok": True, "command": command,
             "url": url, "ui": ui_url or None,
+            "legal_ui": legal_url or None,
             "token": token,
             "token_required": not no_token,
             "project": str(server.project) if server.project else None,
@@ -798,6 +802,8 @@ def cmd_serve(args) -> int:
             print("  （旧的节级网页前端已按第 ④ 步废弃；产品前端是段落级工作台："
                   "factscribe workbench --root <目录>。--ui 这条闸留给集成件"
                   "自带的页面。）")
+        if legal_url:
+            print("法律侧页面：%s" % legal_url)
         if token:
             print("Token：%s" % token)
         mode = "可写（--allow-write）" if args.allow_write else "只读"

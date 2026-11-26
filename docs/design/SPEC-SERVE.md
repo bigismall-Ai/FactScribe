@@ -24,6 +24,9 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
   `factscribe web` 这条命令随之退场（不再有 `SPEC-WEB.md`）；`--ui` 这条闸留给
   集成件自带的页面（如 legal 集成件）。产品前端是段落级工作台：
   `factscribe workbench --root <目录>`。
+  仓里自己的旧页面已经不在了，所以 `GET /` 读不到静态件时**不抛 500**（那是「服务端
+  坏了」的读数，而页面是故意退场的）：回 **404** 与一行说明——
+  「旧网页前端已按第 ④ 步下线，请用 miniapp 段落级工作台 / legal 工作台。」
 - `--no-token` 则完全不要求 token，只靠同源检查：带 `Origin` 的请求必须是本监听地址，
   否则 403 `CROSS_ORIGIN`；不带 `Origin` 的请求一律放行（命令行与 MiniApp 代理走这条）。
 

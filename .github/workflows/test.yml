@@ -108,3 +108,47 @@ jobs:
             echo "::error::wheel 缺少运行时数据文件"
             exit 1
           fi
+
+  # 发布源（根 miniapp/）的 node 用例。
+  #
+  # 旧宿主 integrations/minifactscribe/ 已按第 ④ 步删除，它那一格 node job
+  # 随之退场——现在这一格跑的是**真实存在**的 miniapp/tests/（保存链路的行尾
+  # 保持、指纹闸、状态码透传），不引用任何已删目录。
+  #
+  # 这些是真引擎端到端用例：机器上没有 Python ≥3.10 时它们会 skip，一格全绿的
+  # 假绿比红更坏——所以这一格把 Python 也备齐，末尾再核一遍「一份都没跳过」。
+  node:
+    name: node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Node tests (miniapp)
+        run: |
+          set -o pipefail
+          node --test --test-reporter=tap miniapp/tests/*.test.mjs 2>&1 | tee /tmp/node-test.tap
+
+      - name: No test was skipped
+        if: always()
+        run: |
+          if [ ! -f /tmp/node-test.tap ]; then
+            echo "::error::node 用例没产出日志——上一格就失败了"
+            exit 1
+          fi
+          grep -E '^# (tests|pass|fail|skipped)' /tmp/node-test.tap
+          if grep -qE '^# skipped [1-9]' /tmp/node-test.tap; then
+            echo "::error::node 用例出现跳过——CI 里 Python ≥3.10 必须备齐（见 setup-python）"
+            exit 1
+          fi

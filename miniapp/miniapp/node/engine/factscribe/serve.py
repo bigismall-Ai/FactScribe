@@ -55,6 +55,13 @@ _STATIC = {
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
 
+# 第 ④ 步：旧节级网页前端（factscribe/web/）已下线。GET / 这条闸**留着**——
+# 它是集成件自带页面的挂载点（legal 集成件在用）——但仓里自己的旧页面已经
+# 不在了，所以静态件读不到时不再抛 500（那是"服务端坏了"的读数，而页面是
+# 故意退场的），改成一句实话：页面没了，请去段落级工作台。
+UI_RETIRED_NOTE = ("旧网页前端已按第 ④ 步下线，请用 miniapp 段落级工作台 "
+                   "/ legal 工作台。")
+
 # 预览要能真的看见论文里的图：只放行这些扩展名，其余一律 ASSET_INVALID。
 ASSET_CONTENT_TYPES = {
     ".png": "image/png",
@@ -100,8 +107,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_bytes(self, body: bytes, content_type: str) -> None:
-        self.send_response(200)
+    def _send_bytes(self, body: bytes, content_type: str,
+                       status: int = 200) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -187,7 +195,9 @@ class _Handler(BaseHTTPRequestHandler):
             try:
                 self._send_bytes((WEB_DIR / name).read_bytes(), content_type)
             except OSError:
-                self._error(500, "INTERNAL", "UI 文件缺失：%s" % name)
+                # 旧页面是退场的，不是坏了：给一句实话（404），别抛 500。
+                self._send_bytes(UI_RETIRED_NOTE.encode("utf-8"),
+                                 "text/plain; charset=utf-8", status=404)
             return
         if path == "/api/health":
             self._send(200, {"ok": True, "tool": "factscribe",

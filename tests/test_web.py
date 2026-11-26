@@ -72,6 +72,17 @@ class ServeApiAuthTest(unittest.TestCase):
                 exc.close()
             return exc.code, body
 
+    def test_retired_web_ui_answers_note_not_500(self):
+        """第 ④ 步后旧页面已下线：GET / 不再抛 500，改成一句实话（404）。
+
+        页面是**故意退场**的，不是服务端坏了——500 会把这件事说成后者。
+        """
+        for path in ("/", "/index.html", "/app.js", "/app.css"):
+            status, body = self._get(path)
+            self.assertEqual(status, 404, path)
+            self.assertIn("第 ④ 步", body, path)
+            self.assertIn("段落级工作台", body, path)
+
     def test_api_still_requires_token(self):
         status, body = self._get("/api/project")
         self.assertEqual(status, 401)

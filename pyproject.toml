@@ -30,7 +30,7 @@ factscribe = "factscribe.cli:main"
 # Package layout: `factscribe/` is a normal package of stdlib-only modules.
 # See docs/implementation/SPLIT-B.md for the module boundary map.
 [tool.setuptools]
-packages = ["factscribe"]
+packages = ["factscribe", "factscribe.workbench"]
 
 # 运行时要读的数据文件：处方（patterns/）与词表/分词词典（terms/）。
 # 少了它们，`pip install` 出来的包能 import，但 prescribe 与中文 style 会在
@@ -54,9 +54,9 @@ factscribe = [
   "samples/guide/results/*.toml",
   "samples/guide/results/*.json",
   "samples/guide/reports/*.toml",
-  "web/*.html",
-  "web/*.css",
-  "web/*.js",
+  "workbench/static/*.html",
+  "workbench/static/*.css",
+  "workbench/static/*.js",
 ]
 
 [tool.setuptools.dynamic]

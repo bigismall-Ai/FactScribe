@@ -216,8 +216,8 @@ Ran 17 tests —— FAILED (failures=12, errors=1)
 
 - legal 集成套件（`integrations/factscribe-legal/tests`）：3.10–3.14 各
   166 例全绿（3.10 有 4 例 skip，是该套件自己的版本闸）。
-- node 集成件（`node --test integrations/minifactscribe/tests/*.test.mjs`）：
-  158 例全过。
+- node 集成件（旧宿主 `integrations/minifactscribe/` 的 158 例）：第 ④ 步随旧宿主
+  删除，这条读数留作历史；现行 node 用例在 `miniapp/tests/`。
 - 金样例基线 `tests/golden/audit_findings_baseline.json` 逐字节未动：
   `sha256 = fdf772ab9783bb34a21fd34a674f36195797acb6b39d8ced033c013f23844d40`。
 - 27 个 fixture/example 盘（`examples/minimal` ＋ `fixtures/benign/*` 12 ＋

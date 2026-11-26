@@ -10,7 +10,7 @@
 
 | 事项 | 结果 |
 |---|---|
-| 进不进上游包 | **不进**。放 `integrations/factscribe-legal/`，沿用 `integrations/minifactscribe/` 的先例；`pyproject.toml` 的 `packages = ["factscribe"]` 不变 |
+| 进不进上游包 | **不进**。放 `integrations/factscribe-legal/`，沿用早期第三方集成件入仓的先例（旧宿主已按第 ④ 步删除）；`pyproject.toml` 的 `packages = ["factscribe"]` 不变 |
 | 上游核心改动 | 判据**零**。M2 挂槽批（四步走之④）按 SPEC-CHECKS 新增：core `factscribe/checks.py`（M1 已交付的核验槽机构上，加 `load_integration` 约定路径发现＋多包 summary 合并）、`report.py`／`cli.py`（多域分节渲染）；适配器居本件 `checks_adapter.py`，core 不 import integrations |
 | M2 挂槽形态 | `[checks] packages = ["paper", "legal"]` → `factscribe audit` 单命令双域报告（legal 节在后、`summary.by_domain` 域计数、退出码 aggregate_exit 单一入口折算）；发现注册＝约定路径 `check-package.toml`（domain＋adapter 两字段），整目录删掉＝legal 回到未注册（点名即 exit 2），「integrations 独立、可卸载」先例不破 |
 | M2 新增码 | `LEGAL_DATE_INVALID`（红，date 缺/非法）／`LEGAL_EVIDENCE_CHANGED`（红，`audit/evidence-legal.lock` 与现算不符或锁件坏）／`LEGAL_EVIDENCE_UNFROZEN`（黄，已解冻未重冻）——码表只增 |

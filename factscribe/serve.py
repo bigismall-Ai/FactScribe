@@ -38,11 +38,13 @@ from .report import ReportError, _payload, _severity_of
 from .reportapi import report_action_data, reports_data, report_template_data
 from .textio import read_text_exact
 from .samples import SampleError, install_guide_sample, is_guide_path
-from .workbench import (SectionError, add_fact_data, audit_data, brief_data,
-                        create_section_data, delete_section_data,
+from .workbench import (SectionError, add_fact_data, apply_section_proposal,
+                        audit_data, brief_data, create_section_data,
+                        create_section_proposal, delete_section_data,
                         evidence_status_data, freeze_evidence_data,
                         project_data, rename_section_data, status_data,
                         unfreeze_evidence_data, write_section_data)
+from .workbench.proposal import ProposalError
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -52,6 +54,13 @@ _STATIC = {
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
+
+# 第 ④ 步：旧节级网页前端（factscribe/web/）已下线。GET / 这条闸**留着**——
+# 它是集成件自带页面的挂载点（legal 集成件在用）——但仓里自己的旧页面已经
+# 不在了，所以静态件读不到时不再抛 500（那是"服务端坏了"的读数，而页面是
+# 故意退场的），改成一句实话：页面没了，请去段落级工作台。
+UI_RETIRED_NOTE = ("旧网页前端已按第 ④ 步下线，请用 miniapp 段落级工作台 "
+                   "/ legal 工作台。")
 
 # 预览要能真的看见论文里的图：只放行这些扩展名，其余一律 ASSET_INVALID。
 ASSET_CONTENT_TYPES = {
@@ -71,11 +80,13 @@ ASSET_MAX_BYTES = 20 * 1024 * 1024
 #   REPORT_EXISTS   409  目标报告已存在
 #   CITATION_EXISTS 409  这个引用 key 已经有了
 #   CITATION_MISSING 404 找不到这条引用
+#   BLOCK_STALE     409 指纹闸：这节在别处被改过，别覆盖（口径 3 补的闸）
 _STATUS_BY_CODE = {
     "READ_ONLY": 403,
     "REPORT_EXISTS": 409,
     "CITATION_EXISTS": 409,
     "CITATION_MISSING": 404,
+    "BLOCK_STALE": 409,
 }
 
 
@@ -96,8 +107,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_bytes(self, body: bytes, content_type: str) -> None:
-        self.send_response(200)
+    def _send_bytes(self, body: bytes, content_type: str,
+                       status: int = 200) -> None:
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -183,7 +195,9 @@ class _Handler(BaseHTTPRequestHandler):
             try:
                 self._send_bytes((WEB_DIR / name).read_bytes(), content_type)
             except OSError:
-                self._error(500, "INTERNAL", "UI 文件缺失：%s" % name)
+                # 旧页面是退场的，不是坏了：给一句实话（404），别抛 500。
+                self._send_bytes(UI_RETIRED_NOTE.encode("utf-8"),
+                                 "text/plain; charset=utf-8", status=404)
             return
         if path == "/api/health":
             self._send(200, {"ok": True, "tool": "factscribe",
@@ -284,6 +298,12 @@ class _Handler(BaseHTTPRequestHandler):
                         "/api/sections/delete"):
                 self._sections_crud(path)
                 return
+            if path == "/api/sections/propose":
+                self._propose_section()
+                return
+            if path == "/api/sections/propose/confirm":
+                self._confirm_section_proposal()
+                return
             if path == "/api/evidence/freeze":
                 body = self._body()
                 data = freeze_evidence_data(
@@ -345,6 +365,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._error(exc.status, exc.code, str(exc))
         except SampleError as exc:
             # 示例安装：500 = 包里没有示例 / 复制失败。
+            self._error(exc.status, exc.code, str(exc))
+        except ProposalError as exc:
+            # 提议单：400/404/409/500 由提议单自己带（PROPOSAL_*）。
             self._error(exc.status, exc.code, str(exc))
         except ConfigError as exc:
             self._fail_config(exc)
@@ -531,10 +554,36 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _write_section(self) -> None:
         body = self._body()
+        # expect_sha：客户端所基于的那一版正文的指纹（口径 3 补的指纹闸）。
+        # 带了就对不上拒写（409 BLOCK_STALE）；不带就走老路（裸覆盖）。
         data = write_section_data(
             self._project(), str(body.get("file") or ""),
-            body.get("text"), self.server.allow_write)  # type: ignore[attr-defined]
+            body.get("text"), self.server.allow_write,  # type: ignore[attr-defined]
+            str(body.get("expect_sha") or ""))
         self._send(200, self._base("write_section", **data))
+
+    def _propose_section(self) -> None:
+        """建一张节级改稿提议单（**不碰正文**）——口径 7：AI 采纳走提议单。
+
+        人确认（POST /api/sections/propose/confirm）之后才写回；提议之后
+        正文被别处改过，指纹对不上就拒写。
+        """
+        body = self._body()
+        record = create_section_proposal(
+            self._project(), str(body.get("file") or ""),
+            str(body.get("text") or ""),
+            str(body.get("expect_sha") or ""),
+            str(body.get("source") or ""),
+            str(body.get("rationale") or ""))
+        self._send(200, self._base("sections_propose", **record))
+
+    def _confirm_section_proposal(self) -> None:
+        """人点确认之后才写回（指纹闸在写回那一刻再核一遍）。"""
+        body = self._body()
+        pid = str(body.get("id") or body.get("proposal") or "")
+        data = apply_section_proposal(self._project(), pid,
+                                       self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("sections_propose_confirm", **data))
 
     def _add_fact(self) -> None:
         body = self._body()

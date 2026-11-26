@@ -38,7 +38,9 @@ def png_bytes(width: int = 2, height: int = 2) -> bytes:
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
-class WebUITest(unittest.TestCase):
+class ServeApiAuthTest(unittest.TestCase):
+    """serve 的 API 面（网页 UI 那一层已按第 ④ 步删除，见 SPEC-SERVE.md）。"""
+
     @classmethod
     def setUpClass(cls):
         cls.server, cls.token = create_server(
@@ -70,18 +72,16 @@ class WebUITest(unittest.TestCase):
                 exc.close()
             return exc.code, body
 
-    def test_index_is_served_without_token(self):
-        status, body = self._get("/")
-        self.assertEqual(status, 200)
-        self.assertIn("FactScribe", body)
-        self.assertIn("/app.css", body)
+    def test_retired_web_ui_answers_note_not_500(self):
+        """第 ④ 步后旧页面已下线：GET / 不再抛 500，改成一句实话（404）。
 
-    def test_static_assets(self):
-        for path, needle in (("/app.js", "wb('/project')"),
-                             ("/app.css", ".layout")):
+        页面是**故意退场**的，不是服务端坏了——500 会把这件事说成后者。
+        """
+        for path in ("/", "/index.html", "/app.js", "/app.css"):
             status, body = self._get(path)
-            self.assertEqual(status, 200, path)
-            self.assertIn(needle, body)
+            self.assertEqual(status, 404, path)
+            self.assertIn("第 ④ 步", body, path)
+            self.assertIn("段落级工作台", body, path)
 
     def test_api_still_requires_token(self):
         status, body = self._get("/api/project")
@@ -100,16 +100,6 @@ class WebUITest(unittest.TestCase):
             status = exc.code
             exc.close()
         self.assertEqual(status, 403)
-
-    def test_fact_form_is_present(self):
-        status, body = self._get("/")
-        self.assertEqual(status, 200)
-        self.assertIn('id="wb-fact-form"', body)
-        self.assertIn('id="btn-wb-add-fact"', body)
-        status, js = self._get("/app.js")
-        self.assertEqual(status, 200)
-        self.assertIn("wb('/facts')", js)
-        self.assertIn("manifest_line", js)
 
     def test_api_works_with_token(self):
         status, body = self._get("/api/project", token=TOKEN)
@@ -327,6 +317,31 @@ class SectionCrudTest(unittest.TestCase):
                                   {"file": "sections/99-free.tex"})
         self.assertEqual(status, 200, data)
         self.assertFalse((self.root / "sections" / "99-free.tex").exists())
+
+    def test_delete_moves_section_to_attic_instead_of_destroying_it(self):
+        """删节＝挪 attic（可逆），不真删——口径 8 与段落级统一。"""
+        self._create("sections/99-keep.tex", "% keep\n")
+        status, data = self._call("/api/sections/delete",
+                                  {"file": "sections/99-keep.tex"})
+        self.assertEqual(status, 200, data)
+        self.assertTrue(data["ok"])
+        attic = self.root / "attic" / "sections" / "99-keep.tex"
+        self.assertTrue(attic.is_file(), "删掉的节要挪进 attic（可逆）")
+        self.assertEqual(attic.read_text(encoding="utf-8"), "% keep\n")
+        self.assertFalse((self.root / "sections" / "99-keep.tex").exists())
+        self.assertEqual(data.get("attic"), "attic/sections/99-keep.tex")
+
+    def test_deleted_section_leaves_the_audit_closure(self):
+        """挪进 attic 的节不许再进审计闭包（否则等于没删）。"""
+        self._create("sections/99-closure.tex", "% closure\n")
+        status, _data = self._call("/api/sections/delete",
+                                   {"file": "sections/99-closure.tex"})
+        self.assertEqual(status, 200)
+        status, data = self._call("/api/audit", {})
+        self.assertEqual(status, 200)
+        files = [s.get("file") for s in (data.get("project", {}).get("sections")
+                                         or [])]
+        self.assertNotIn("sections/99-closure.tex", files, files)
 
     def test_delete_missing_file(self):
         status, data = self._call("/api/sections/delete",

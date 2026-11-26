@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -150,6 +151,9 @@ class WritableServeTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.tmp.name) / "paper"
         shutil.copytree(ROOT / "examples" / "minimal", cls.root)
+        # 提议单落盘目录：指到临时目录——测试产物不许写进用户自己的家目录。
+        cls._old_state_dir = os.environ.get("FACTSCRIBE_STATE_DIR")
+        os.environ["FACTSCRIBE_STATE_DIR"] = str(Path(cls.tmp.name) / "state")
         cls.server, cls.token = create_server(
             cls.root, port=0, token=TOKEN, allow_write=True)
         cls.port = cls.server.server_address[1]
@@ -163,6 +167,10 @@ class WritableServeTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=5)
+        if cls._old_state_dir is None:
+            os.environ.pop("FACTSCRIBE_STATE_DIR", None)
+        else:
+            os.environ["FACTSCRIBE_STATE_DIR"] = cls._old_state_dir
         cls.tmp.cleanup()
 
     def _request(self, path, method="GET", token=None, body=None):
@@ -218,6 +226,62 @@ class WritableServeTest(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(data["error"]["code"], "CONFIG_INVALID")
 
+    def test_write_section_expect_sha_refuses_stale_write(self):
+        """口径 3：节级兼容层补了指纹闸——指纹对不上就拒写，盘上一个字不动。"""
+        rel = "sections/02-results.tex"
+        target = self.root / rel
+        original = target.read_bytes()
+        status, data = self._request(
+            "/api/sections", method="PUT", token=self.token,
+            body={"file": rel, "text": "覆盖它。\n",
+                  "expect_sha": "0000000000000000"})
+        self.assertEqual(status, 409)
+        self.assertEqual(data["error"]["code"], "BLOCK_STALE")
+        self.assertEqual(target.read_bytes(), original, "拒写就是不许动盘")
+
+    def test_propose_does_not_write_until_confirmed(self):
+        """口径 7：AI 采纳走提议单——算单不碰正文，人确认才写回。"""
+        rel = "sections/02-results.tex"
+        target = self.root / rel
+        original = target.read_bytes()
+        text = "\\section{Results}\n\n提议单里的新正文。\n"
+        status, data = self._request(
+            "/api/sections/propose", method="POST", token=self.token,
+            body={"file": rel, "text": text, "source": "ai"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["endpoint"], "sections_propose")
+        pid = data["id"]
+        self.assertTrue(pid)
+        self.assertEqual(target.read_bytes(), original, "算单这一步不许碰正文")
+
+        status, done = self._request(
+            "/api/sections/propose/confirm", method="POST", token=self.token,
+            body={"id": pid})
+        self.assertEqual(status, 200)
+        self.assertEqual(done["endpoint"], "sections_propose_confirm")
+        self.assertEqual(target.read_text(encoding="utf-8"), text)
+
+    def test_propose_confirm_refuses_when_section_changed_elsewhere(self):
+        """口径 7：提议之后正文被别处改过 ⇒ 指纹对不上 ⇒ 拒写（409）。"""
+        rel = "sections/02-results.tex"
+        target = self.root / rel
+        text = "\\section{Results}\n\n确认之前被人改过。\n"
+        status, data = self._request(
+            "/api/sections/propose", method="POST", token=self.token,
+            body={"file": rel, "text": text})
+        self.assertEqual(status, 200)
+        pid = data["id"]
+        # 提议之后，这一节在别处被改了（模拟另一个窗口／外部编辑器）。
+        others = "\\section{Results}\n\n别人改的。\n"
+        target.write_text(others, encoding="utf-8")
+        status, done = self._request(
+            "/api/sections/propose/confirm", method="POST", token=self.token,
+            body={"id": pid})
+        self.assertEqual(status, 409)
+        self.assertEqual(done["error"]["code"], "BLOCK_STALE")
+        self.assertEqual(target.read_text(encoding="utf-8"), others,
+                         "拒写：不许覆盖别处的改动")
+
     def test_evidence_freeze_and_unfreeze(self):
         status, data = self._request("/api/evidence", token=self.token)
         self.assertEqual(status, 200)
@@ -248,7 +312,7 @@ class WritableServeTest(unittest.TestCase):
     def test_add_fact_round_trip(self):
         status, data = self._request(
             "/api/facts", method="POST", token=self.token,
-            body={"id": "A9", "claim": "测试事实", "value": "42",
+            body={"id": "A9", "claim": "测试事实", "value": "10",
                   "source": "results/swb16.md", "locator": "§二"})
         self.assertEqual(status, 200)
         self.assertEqual(data["endpoint"], "add_fact")

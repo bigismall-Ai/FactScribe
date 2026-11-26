@@ -61,4 +61,4 @@ italiana）开放数据**。
   （物理 CRLF 行尾、无包装）。两者的确定性纯文本 `text_sha256` 完全相同，
   可互为确定性锁；差异记录在 `corpus/state/fetch_state.json` 的
   `sources.it-case.notes.fixture_normalization`。
-- 仓库其余部分（`factscribe/` 核心、`integrations/minifactscribe/` 等）许可不受影响。
+- 仓库其余部分（`factscribe/` 核心、`integrations/factscribe-legal/` 的其余部分等）许可不受影响。

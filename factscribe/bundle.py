@@ -683,29 +683,49 @@ def _prepare_out_dir(out_dir: Path) -> None:
     out_dir.mkdir(parents=True)
 
 
+def _artifact_bytes(root: Path, rel: str, source: Path,
+                  patterns: dict, excluded: set) -> tuple[bytes, bool]:
+    """一件工件进包前的字节（按声明删行）＋ 有没有被改过。
+
+    写盘与**预览**共用这一条路——预览看到的字节/指纹/大小与真导出逐字一致。
+    """
+    try:
+        # 按原样读：工件是用户文件的副本，行尾不该在打包时被换掉。
+        text = read_text_exact(source)
+    except (OSError, UnicodeDecodeError):
+        return source.read_bytes(), False
+    new_text = _apply_exclusions(root, rel, text, patterns, excluded)
+    return new_text.encode("utf-8"), new_text != text
+
+
+def _plan_artifact(root: Path, rel: str, source: Path,
+                   patterns: dict, excluded: set) -> dict:
+    """一件工件的记账条目（**不写盘**）——导出前的预览用这个。"""
+    data, transformed = _artifact_bytes(root, rel, source, patterns, excluded)
+    return {"path": rel, "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data), "transformed": transformed}
+
+
 def _write_artifact(out_dir: Path, root: Path, rel: str, source: Path,
                     patterns: dict, excluded: set) -> dict:
     """把一件工件写进包（按声明删行），返回记账条目。"""
     target = out_dir / rel
     target.parent.mkdir(parents=True, exist_ok=True)
-    transformed = False
-    try:
-        # 按原样读：工件是用户文件的副本，行尾不该在打包时被换掉。
-        text = read_text_exact(source)
-    except (OSError, UnicodeDecodeError):
-        shutil.copyfile(source, target)
-        data = target.read_bytes()
-    else:
-        new_text = _apply_exclusions(root, rel, text, patterns, excluded)
-        transformed = new_text != text
-        data = new_text.encode("utf-8")
-        target.write_bytes(data)
+    data, transformed = _artifact_bytes(root, rel, source, patterns, excluded)
+    target.write_bytes(data)
     return {"path": rel, "sha256": hashlib.sha256(data).hexdigest(),
             "bytes": len(data), "transformed": transformed}
 
 
-def run_bundle(cfg: Config, runs_mode: str = "signed", out_dir=None) -> dict:
-    """跑完三步：收集 → 清单门 → 导出。返回结果字典（含退出码）。"""
+def run_bundle(cfg: Config, runs_mode: str = "signed", out_dir=None,
+               preview: bool = False) -> dict:
+    """跑完三步：收集 → 清单门 → 导出。返回结果字典（含退出码）。
+
+    ``preview=True``＝**只算不写**（导出前的可选预览一步）：闭包、清单门、
+    将要收的每一件（路径/指纹/大小）与真导出走**同一条路**（同一个
+    `_artifact_bytes`），只是不落盘。清单门的判定一字不改：门不过照样
+    ``exit_code=1``、照样不出包。
+    """
     checklist = load_checklist(cfg.root)
     closure = collect_closure(cfg)
     try:
@@ -734,6 +754,10 @@ def run_bundle(cfg: Config, runs_mode: str = "signed", out_dir=None) -> dict:
         result["exit_code"] = 1
         result["failure_reason"] = "清单门未过：%s" % "、".join(
             "%s（%s）" % (i.code, i.name) for i in failed)
+        if preview:
+            # 预览：门不过就**不出包**（与真导出口径一致），只把门结论给出去。
+            result["preview"] = True
+            result["would_export"] = False
         return result
     artifacts = _collect_artifacts(cfg, closure, checklist, runs_mode)
     root = cfg.root.resolve()
@@ -741,6 +765,21 @@ def run_bundle(cfg: Config, runs_mode: str = "signed", out_dir=None) -> dict:
     patterns = _line_patterns(root, checklist.excludes)
     out = Path(out_dir) if out_dir else default_out_dir(cfg)
     out = out.resolve()
+    if preview:
+        # 预览：**一个字节都不写**。将要收的每一件照真导出的口径算出来
+        # （路径/指纹/大小），清单门的结论一字不改。
+        entries = [_plan_artifact(root, rel, source, patterns, excluded)
+                   for rel, source in artifacts["files"]]
+        result.update({
+            "preview": True,
+            "would_export": True,
+            "bundle_dir": str(out),
+            "files": entries,
+            "listed_only": artifacts["listed_only"],
+            "excluded": artifacts["excluded"],
+            "manifest_lines": len(entries) + 1,
+        })
+        return result
     _prepare_out_dir(out)
     entries = []
     for rel, source in artifacts["files"]:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -122,7 +123,10 @@ def make_project(root: Path) -> Path:
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:
-    env = dict(**__import__("os").environ, PYTHONPATH=str(ROOT))
+    # 环境里已经有 PYTHONPATH 时，`dict(**environ, PYTHONPATH=…)` 会抛
+    #「got multiple values for keyword argument」——先复制再覆盖。
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(ROOT)
     return subprocess.run([sys.executable, "-m", "factscribe", *args],
                           cwd=str(ROOT), env=env, capture_output=True, text=True)
 

@@ -20,7 +20,7 @@ C  README 退出码说明与实际不符：README.md 说「tectonic 缺失 → �
 
 D  `--no-token` 帮助词偏松：写「只允许本监听地址的同源请求」，但实现是**无
    Origin 头的请求一律放行**（命令行、Node 代理都走这条）。精确口径在
-   docs/design/SPEC-WEB.md:54。对齐帮助词，不改实现。
+   docs/design/SPEC-SERVE.md（--no-token 的同源口径）。对齐帮助词，不改实现。
 
 跑法（仓根）：python3 -m unittest discover -s tests -v
 """
@@ -406,7 +406,7 @@ class TestReadmeExitCodes(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestNoTokenHelp(unittest.TestCase):
-    """D：--no-token 帮助词必须与实现及 SPEC-WEB.md:54 一致（不改实现）。"""
+    """D：--no-token 帮助词必须与实现及 SPEC-SERVE.md 一致（不改实现）。"""
 
     def _help(self, cmd):
         proc = run([cmd, "--help"])
@@ -420,18 +420,18 @@ class TestNoTokenHelp(unittest.TestCase):
         self.assertIn("不带Origin的请求一律放行", text)
         self.assertNotIn("只允许本监听地址的同源请求", text)
 
-    def test_web_help_matches_origin_semantics(self):
-        text = self._help("web")
-        self.assertIn("Origin", text)
-        self.assertIn("CROSS_ORIGIN", text)
-        self.assertIn("不带Origin的请求一律放行", text)
-        self.assertNotIn("只允许本监听地址的同源请求", text)
-
     def test_spec_states_the_same_semantics(self):
-        """口径来源：docs/design/SPEC-WEB.md:54。"""
-        lines = (ROOT / "docs" / "design" / "SPEC-WEB.md").read_text(
+        """口径来源：docs/design/SPEC-SERVE.md（--no-token 的同源语义）。
+
+        旧的 `factscribe web` 子命令已按第 ④ 步退场，规格随之从
+        SPEC-WEB.md 挪到 SPEC-SERVE.md；措辞不许走样。
+        """
+        lines = (ROOT / "docs" / "design" / "SPEC-SERVE.md").read_text(
             encoding="utf-8").splitlines()
-        text = "".join(lines[53].split()).replace("`", "")
+        hits = [line for line in lines
+                if "带 `Origin` 的请求必须是本监听地址" in line]
+        self.assertTrue(hits, "SPEC-SERVE.md 里没有 --no-token 的同源口径")
+        text = "".join(hits[0].split()).replace("`", "")
         self.assertIn("带Origin的请求必须是本监听地址", text)
 
 

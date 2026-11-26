@@ -133,6 +133,10 @@ def main():
         for link in re.findall(r"\]\(([^)]+)\)", text):
             if link.startswith("http"):
                 continue
+            if link.startswith("#"):
+                # 页内锚点（目录里的「#章节名」）：目标是本文档里的标题，
+                # 没有对应的目标文件可查——按文件存在性查它是查不成的。
+                continue
             if not (ROOT / link).exists():
                 bad(f"{name} 链接失效：{link}")
         good(f"{name} 链接检查完成")

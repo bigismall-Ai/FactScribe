@@ -30,6 +30,12 @@ _WRITE_TOOLS = {
                 "file": {"type": "string",
                          "description": "Project-relative .tex path, e.g. sections/03.tex"},
                 "text": {"type": "string", "description": "Full new file content"},
+                "expect_sha": {"type": "string",
+                               "description": "Optional fingerprint of the section "
+                                              "version this edit was based on "
+                                              "(sha256 hex, first 16 chars). If it "
+                                              "no longer matches the file on disk, "
+                                              "the write is refused (BLOCK_STALE)."},
             },
             "required": ["file", "text"],
             "additionalProperties": False,
@@ -74,6 +80,9 @@ _WRITE_TOOLS = {
                 "derived_from": {"type": "string",
                                  "description": "Comma-separated parent fact ids"},
                 "note": {"type": "string"},
+                "ledger": {"type": "string",
+                           "description": "Target ledger file, project-relative "
+                                          "(must stay inside the project facts glob)"},
             },
             "required": ["id", "claim", "value", "source"],
             "additionalProperties": False,
@@ -111,8 +120,16 @@ _READ_TOOLS = {
     },
     "factscribe_audit": {
         "description": "Run the mechanical gate. Returns exit (0 green / 1 red / 3 yellow), "
-                       "summary and findings. HTTP-free; verdict is in `exit`.",
-        "inputSchema": {"type": "object", "properties": {},
+                       "summary and findings. HTTP-free; verdict is in `exit`. "
+                       "Every finding carries message_key and params (the i18n raw "
+                       "material); lang=en renders the finding text in English "
+                       "(default zh = the gate's own wording).",
+        "inputSchema": {"type": "object",
+                        "properties": {
+                            "lang": {"type": "string", "enum": ["zh", "en"],
+                                     "description": "Language of the finding text "
+                                                    "(default zh)"},
+                        },
                         "additionalProperties": False},
     },
 }
@@ -135,7 +152,7 @@ def _dispatch(project: Path, allow_write: bool, name: str,
     if name == "factscribe_brief":
         return brief_data(project, args.get("section"))
     if name == "factscribe_audit":
-        return audit_data(project)
+        return audit_data(project, str(args.get("lang") or "zh"))
     if name == "factscribe_evidence_status":
         return evidence_status_data(project)
     if name == "factscribe_evidence_freeze":
@@ -146,7 +163,8 @@ def _dispatch(project: Path, allow_write: bool, name: str,
                                       str(args.get("at") or ""), allow_write)
     if name == "factscribe_write_section":
         return write_section_data(project, str(args.get("file") or ""),
-                                  args.get("text"), allow_write)
+                                  args.get("text"), allow_write,
+                                  str(args.get("expect_sha") or ""))
     if name == "factscribe_add_fact":
         return add_fact_data(project, args, allow_write)
     raise KeyError(name)

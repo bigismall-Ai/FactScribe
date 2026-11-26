@@ -66,10 +66,26 @@ def run(*args, cwd=None):
 
 
 def new_project(tmp: str) -> Path:
-    """最小 v1 项目（`init` 落骨架，同参数逐字节一致）。"""
+    """最小 v1 项目（`init` 落骨架，同参数逐字节一致）。
+
+    段落级线改写说明：main 的 `fact add` **没有**写前的 value 硬闸，
+    用例里的 `--value 10/16` 直接写进账。段落级线有 value 硬闸（
+    `factscribe/valuecheck.py`：value 里的数字必须在它所指的产物原文里
+    逐个按序命中）——这是本线**更严**的已定口径，不是缺陷，保留不动。
+
+    为了让这组用例仍然测「写侧落点闸的界内正例」（而不是被 value 硬闸
+    先拦下），这里在骨架的 `results/` 下放一份**含 10 与 16 的产物**：
+    value 硬闸据此放行，用例的落点断言一条不减。
+    """
     target = Path(tmp) / "proj"
     proc = run("init", str(target), "--title", "Demo", "--lang", "zh")
     assert proc.returncode == 0, proc.stderr
+    # 把 10 与 16 写进清单本身（清单就是这组用例 --source 指的文件），
+    # value 硬闸据此放行：value「10/16」的两个数字能在源产物里按序命中。
+    manifest = target / "results" / "MANIFEST.toml"
+    text = manifest.read_text(encoding="utf-8")
+    manifest.write_text(text + "# 示例：开臂解决 10 道题，对照臂解决 16 道题\n",
+                        encoding="utf-8")
     return target
 
 
@@ -83,6 +99,37 @@ def link(target: Path, link_path: Path) -> None:
         os.symlink(str(target), str(link_path))
     except (OSError, NotImplementedError, AttributeError) as exc:
         raise unittest.SkipTest("本机不能建软链：%s" % exc)
+
+
+def link_target_key(link_path: Path, target: str) -> str:
+    r"""软链目标的**比较键**：先做形态归一，再比（跨平台同一口径）。
+
+    为什么要有这个：Windows 上 `os.readlink` 返回**带扩展长度前缀**的形态
+    （\\?\C:\...），而建链时传进去的 `str(real)` 是普通形态（C:\...）——
+    两串直接比必然不等。那是**断言的形态假设错**，不是引擎行为错：引擎那侧
+    早就在 `factscribe/config.py` 里做了同一套归一（`_strip_ext_prefix` +
+    `_norm_for_compare`，见 c5b7592），Windows 真机已验：界内软链不再被误判
+    越界（outside_inputs=[]、界内软链仍在闭包内）。
+
+    归一四步（POSIX 上第 1、4 步是恒等变换）：
+
+    1. 剥掉 Windows 扩展长度前缀（\\?\ 与 \\?\UNC\）；
+    2. 目标是相对路径时，按软链自己所在目录补全（readlink 的老规矩）；
+    3. 取 realpath：把 8.3 短名、大小写、`.`/`..` 收敛到同一形态；
+    4. normcase + normpath（Windows 上忽略大小写）。
+
+    **语义不放宽**：比的仍然是「这条软链指向的那**一个**真实目标」——
+    软链被写成普通文件、被改指到别处，照样红。
+    """
+    text = str(target)
+    if text.startswith("\\\\?\\UNC\\"):
+        text = "\\\\" + text[8:]
+    elif text.startswith("\\\\?\\"):
+        text = text[4:]
+    path = Path(text)
+    if not path.is_absolute():
+        path = Path(link_path).parent / path
+    return os.path.normcase(os.path.normpath(os.path.realpath(str(path))))
 
 
 def snapshot(base: Path) -> dict:
@@ -271,7 +318,19 @@ class TestFactsWriteInside(unittest.TestCase):
             self.assertEqual([f.id for f in facts], ["A1"])
 
     def test_in_project_symlink_keeps_its_shape(self):
-        """项目内软链：内容落在软链的真实目标上，软链本身不变。"""
+        r"""项目内软链：内容落在软链的真实目标上，软链本身不变。
+
+        比较口径：软链目标**先做形态归一再比**（见 link_target_key）。
+        Windows 上 os.readlink 返回带扩展长度前缀的形态（\\?\C:\...），
+        与建链时传入的普通形态直接比必然不等——那是断言的形态假设错，
+        不是引擎行为错。语义不放宽：软链仍须是软链、仍须指向那一个真实目标。
+
+        反向用例（同一条闸的另一头）：项目外软链仍然判越界、拒写，
+        见 TestFactsWriteOutside.test_ledger_file_symlink_outside_is_refused
+        （写侧 FACT_FILE_OUTSIDE_PROJECT / exit 5）与
+        tests/test_residual_defects.py::test_outside_symlink_is_red_not_traceback
+        （读侧 INPUT_OUTSIDE_PROJECT / exit 5）。
+        """
         with tempfile.TemporaryDirectory() as tmp:
             root = new_project(tmp)
             ledger = root / "facts" / "01-core.toml"
@@ -282,7 +341,9 @@ class TestFactsWriteInside(unittest.TestCase):
                             "--value", "10/16", "--source", MANIFEST_REL)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             self.assertTrue(ledger.is_symlink(), "软链被写成了普通文件")
-            self.assertEqual(os.readlink(str(ledger)), str(real))
+            self.assertEqual(link_target_key(ledger, os.readlink(str(ledger))),
+                             link_target_key(ledger, str(real)),
+                             "软链的指向变了（不再是原来那个真实目标）")
             # 内容落在软链的真实目标上（glob 会同时看到软链与真实文件，
             # 那是读侧的口径，不在本用例断言范围内）
             self.assertIn('id = "A1"', real.read_text(encoding="utf-8"))

@@ -29,11 +29,14 @@ from . import code_table
 from . import corpus as corpus_mod
 from . import lines as lines_mod
 from . import lock as lock_mod
+from . import proposals as proposals_mod
 from . import receipts as receipts_mod
 from . import timeliness as tl
+from . import views as views_mod
 
-__all__ = ["API_VERSION", "CHANNELS", "ApiContext", "build_contract",
-           "context_from_project", "load_project_config", "render_human"]
+__all__ = ["API_VERSION", "CHANNELS", "VIEWS", "ApiContext", "build_contract",
+           "build_view", "context_from_project", "create_proposal",
+           "adopt_proposal", "load_project_config", "render_human"]
 
 API_VERSION = "factscribe-legal-api/1.0"
 
@@ -193,21 +196,11 @@ def _channel_receipts(results):
 
 
 def _scan_all_items(ctx):
-    """扫全部语料根 → 件清单（真实件；去重按 root+域+id）。"""
-    seen = set()
-    items = []
-    for root in ctx.roots():
-        for it in corpus_mod.scan_corpus(root, ctx.date):
-            # 去重键含 path：同一个条文 id 在不同 run 下是**不同的件**
-            # （仓内 IT 切片 4 件里有两件都叫 art_2，分属两个 run）
-            key = (root, it.get("path"), it.get("domain"), it.get("id"))
-            if key in seen:
-                continue
-            seen.add(key)
-            item = dict(it)
-            item["root"] = root
-            items.append(item)
-    return items
+    """扫全部语料根 → 件清单（真实件；去重按 root+域+id）。
+
+    扫描本体在 corpus.scan_all_roots（读侧视图要用同一份扫描，不各写一遍）。
+    """
+    return corpus_mod.scan_all_roots(ctx.roots(), ctx.date)
 
 
 def _keep_item(item, filters):
@@ -301,11 +294,18 @@ def _channel_summary(ctx, results):
 
 
 def _channel_proposals():
+    """待批提案通道（第 ② 步）：**只建单、不写盘**。
+
+    提议单存在**服务进程内存**里（proposals.py）：命令行另起进程读到的是
+    本进程的存储（通常为空）——不假装有单。
+    """
+    items = proposals_mod.list_all()
     return {
-        "total": 0,
-        "items": [],
-        "note": ("待批提案通道属第 ② 步（UI 与提议存储）：本步只读，"
-                 "恒返回空数组，不建任何写路径。"),
+        "total": len(items),
+        "items": items,
+        "note": ("待批提案通道（第 ② 步）：只建单不写盘——提议单存在服务进程"
+                 "内存里（重启即失）；采纳只登记意图（法律闸无写路径，真写回"
+                 "等第 ③ 步）。"),
     }
 
 
@@ -411,3 +411,46 @@ def render_human(contract):
         out.append("待批提案：%d 条（%s）" % (proposals.get("total", 0),
                                             proposals.get("note", "")))
     return "\n".join(out)
+
+# ---------------------------------------------------------------------------
+# 第 ② 步：读侧视图 ＋ 待批提案（只建单不写盘）
+# ---------------------------------------------------------------------------
+
+# 读侧视图（第 ① 步没做的那四条；页面的「逐件／逐段」看它们）
+VIEWS = ("corpus_item", "document", "provision_facts", "cli")
+
+
+def build_view(ctx, view, **kwargs):
+    """读侧视图出口。返回 None = 没有这条视图（调用方回 404）。"""
+    if view == "corpus_item":
+        return views_mod.item_detail(ctx, str(kwargs.get("item_id") or ""),
+                                     str(kwargs.get("domain") or ""))
+    if view == "document":
+        return views_mod.document_segments(ctx)
+    if view == "provision_facts":
+        return views_mod.provision_facts(ctx, str(kwargs.get("num") or ""))
+    if view == "cli":
+        return views_mod.cli_manifest()
+    return None
+
+
+def create_proposal(ctx, kind, target, payload=None, before_sha=""):
+    """建一张提议单（**只建单，不写盘**）。
+
+    指纹不符（目标已被别处改过）→ 抛 proposals.ProposalError(PROPOSAL_STALE)。
+    """
+    fingerprint = views_mod.fingerprint_of(ctx, target or {})
+    return proposals_mod.create(kind, target, payload, before_sha, fingerprint)
+
+
+def adopt_proposal(ctx, pid):
+    """采纳一张提议单：过指纹闸才过；**不写任何文件**。
+
+    闸不过 → 抛 proposals.ProposalError(PROPOSAL_STALE)（HTTP 409）。
+    没有这张单 → None。
+    """
+    record = proposals_mod.get(pid)
+    if record is None:
+        return None
+    fingerprint = views_mod.fingerprint_of(ctx, record.get("target") or {})
+    return proposals_mod.adopt(pid, fingerprint)

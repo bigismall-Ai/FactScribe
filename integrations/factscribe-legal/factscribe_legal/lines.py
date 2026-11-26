@@ -55,7 +55,7 @@ from .provisions import norm_text
 from .verify import PROV_RE, load_facts, verify as verify_fr
 
 __all__ = ["Line", "LINES", "LineContext", "LineResult", "line_by_id",
-           "collect", "collect_one"]
+           "collect", "collect_one", "fr_official_text"]
 
 # 各域证据卡的后缀（归属判据：靠文件名后缀，不靠卡内标记——与各闸同一套）
 OTHER_DOMAIN_SUFFIXES = (".cn.card.txt", ".case.card.txt", ".it.card.txt",
@@ -245,6 +245,11 @@ def _resolve_section_dir(corpus_dir, section, key):
     if key in idx:
         return corpus_dir
     return ""
+
+def fr_official_text(ctx, src):
+    """法国法条的官方条文正文（公开出口；与 _fr_receipts 同一份取文逻辑）。"""
+    return _fr_official_text(ctx, src)
+
 
 def _face_of(value, body_text, full_text):
     """命中面：正文 → body；只在正文之外命中 → résumé；没命中 → 缺省标记。"""

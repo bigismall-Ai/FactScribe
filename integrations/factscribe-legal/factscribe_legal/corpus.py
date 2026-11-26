@@ -33,7 +33,7 @@ import os
 
 from . import timeliness as tl
 
-__all__ = ["scan_corpus", "item_fields"]
+__all__ = ["scan_corpus", "scan_all_roots", "item_fields"]
 
 ITEM_FIELDS = ("id", "country", "domain", "kind", "title", "path", "gate",
                "meta", "timeliness")
@@ -242,6 +242,26 @@ def scan_corpus(root, reference_date=""):
         for it in items:
             it["timeliness"] = _with_reference(it["timeliness"], reference_date,
                                               it.get("meta") or {})
+    return items
+
+
+def scan_all_roots(roots, reference_date=""):
+    """扫多个语料根 → 件清单（真实件；去重键含 path）。
+
+    同名不同 run 是**不同的件**（去重键含 path：仓内 IT 切片 4 件里有两件
+    都叫 art_2，分属两个 run）。
+    """
+    seen = set()
+    items = []
+    for root in list(roots or []):
+        for it in scan_corpus(root, reference_date):
+            key = (root, it.get("path"), it.get("domain"), it.get("id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            item = dict(it)
+            item["root"] = root
+            items.append(item)
     return items
 
 

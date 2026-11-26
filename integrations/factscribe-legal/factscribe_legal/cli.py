@@ -224,7 +224,8 @@ def cmd_api(args):
     return 0
 
 
-def main(argv=None):
+def build_parser():
+    """argparse 解析器（命令清单出口与 main 共用这一份，不各抄一份）。"""
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -331,6 +332,11 @@ def main(argv=None):
     a.add_argument("--human", action="store_true", help="输出人读摘要（同源）")
     a.set_defaults(func=cmd_api)
 
+    return ap
+
+
+def main(argv=None):
+    ap = build_parser()
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」

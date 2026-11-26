@@ -328,6 +328,31 @@ class SectionCrudTest(unittest.TestCase):
         self.assertEqual(status, 200, data)
         self.assertFalse((self.root / "sections" / "99-free.tex").exists())
 
+    def test_delete_moves_section_to_attic_instead_of_destroying_it(self):
+        """删节＝挪 attic（可逆），不真删——口径 8 与段落级统一。"""
+        self._create("sections/99-keep.tex", "% keep\n")
+        status, data = self._call("/api/sections/delete",
+                                  {"file": "sections/99-keep.tex"})
+        self.assertEqual(status, 200, data)
+        self.assertTrue(data["ok"])
+        attic = self.root / "attic" / "sections" / "99-keep.tex"
+        self.assertTrue(attic.is_file(), "删掉的节要挪进 attic（可逆）")
+        self.assertEqual(attic.read_text(encoding="utf-8"), "% keep\n")
+        self.assertFalse((self.root / "sections" / "99-keep.tex").exists())
+        self.assertEqual(data.get("attic"), "attic/sections/99-keep.tex")
+
+    def test_deleted_section_leaves_the_audit_closure(self):
+        """挪进 attic 的节不许再进审计闭包（否则等于没删）。"""
+        self._create("sections/99-closure.tex", "% closure\n")
+        status, _data = self._call("/api/sections/delete",
+                                   {"file": "sections/99-closure.tex"})
+        self.assertEqual(status, 200)
+        status, data = self._call("/api/audit", {})
+        self.assertEqual(status, 200)
+        files = [s.get("file") for s in (data.get("project", {}).get("sections")
+                                         or [])]
+        self.assertNotIn("sections/99-closure.tex", files, files)
+
     def test_delete_missing_file(self):
         status, data = self._call("/api/sections/delete",
                                   {"file": "sections/gone.tex"})

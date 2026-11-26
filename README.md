@@ -434,7 +434,7 @@ Mini App 侧的对应纪律：改前端要改**源**（`factscribe/workbench/sta
 ## 复现与贡献
 
 ```bash
-python3 -m unittest discover -s tests     # 2565 例，全离线
+python3 -m unittest discover -s tests     # 2563 例，全离线
 ./scripts/preflight-ci.sh                 # 本地等价 CI：干净克隆 + 3.10/3.11/3.12
 ```
 

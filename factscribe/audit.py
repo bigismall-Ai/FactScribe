@@ -8,7 +8,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
@@ -22,9 +22,11 @@ from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
 from .evidence import CHANGED_CODE, UNFROZEN_CODE, lock_check, unfrozen_info
 from .facts import (Fact, ExprError, _cycles, _declared_number, canon_text,
                     eval_expr, literal_tokens, number_key, sha256_file)
+from .i18n import finding_key
 from .texrules import (adjacency_hits, arith_hits, display_hits,
                        fsignore_quant_hits, numeric_macro_hits,
                        tabular_regions)
+from .textio import read_text_exact, split_lines, to_lf
 from .texscan import (_balanced, _blank, _extract_numbers,
                       _merge_number_units, has_auditable_content, scan_tex,
                       sentence_index, sentence_spans, structural_whitelist)
@@ -43,6 +45,11 @@ class Issue:
     context: str = ""
     severity: str = SEV_RED
     exit_code: int = 1        # 1=FACT/CONFIG，5=COVERAGE/INTEGRITY，7=STALE，8=工具缺失
+    # i18n（只增字段，不动 as_dict 的形状）：message_key 指向
+    # factscribe/i18n.py 的双语目录，params 是模板槽位的取值。
+    # 旧字段 message 仍是中文原文——CLI/JSON 输出与金样例一字不动。
+    message_key: str = ""
+    params: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         d = {"severity": self.severity, "code": self.code, "message": self.message}
@@ -69,9 +76,11 @@ def _display_issues(facts: list[Fact]) -> list[Issue]:
     out: list[Issue] = []
     for f in facts:
         loc = "%s:%s" % (f.file, f.line or "?")
-        for code, detail in display_hits(f):
+        for code, detail, extra in display_hits(f):
             out.append(Issue(code, "fact %r：%s" % (f.id, detail),
-                             location=loc, token=f.id))
+                             location=loc, token=f.id,
+                             message_key=finding_key(code),
+                             params={"fact": repr(f.id), **extra}))
     return out
 
 
@@ -94,7 +103,7 @@ def _expr_issues(f: Fact, known: dict[str, Fact]) -> list[Issue]:
         want = _declared_number(f.value)
     except ExprError as exc:
         return [Issue("EXPR_INVALID", "fact %r 的 expr 不可用：%s" % (f.id, exc),
-                      location=loc, token=f.id)]
+                      location=loc, token=f.id, params={"fact": repr(f.id), "detail": str(exc)})]
     rel = f.expr_tolerance if f.expr_tolerance is not None else EXPR_REL_TOL
     limit = rel * max(1.0, abs(want))
     err = abs(got - want)
@@ -104,7 +113,7 @@ def _expr_issues(f: Fact, known: dict[str, Fact]) -> list[Issue]:
             "fact %r 的 expr=%r 算出 %.10g，与 value=%r（%.10g）不符："
             "误差 %.3g 超过容差 %.3g" % (f.id, f.expr, got, f.value, want,
                                       err, limit),
-            location=loc, token=f.id)]
+            location=loc, token=f.id, params={"fact": repr(f.id), "fact1": repr(f.expr), "got": format(got, ".10g"), "value": repr(f.value), "want": format(want, ".10g"), "detail": format(err, ".3g"), "limit": format(limit, ".3g")})]
     return []
 
 
@@ -155,18 +164,21 @@ def _source_rule_issues(cfg: Config, sections) -> list[Issue]:
                 ("现场计算命令 \\%s 会生成账上没有的数字且未登记——计算值不可寻址（P-06）"
                  if computed else
                  "算术/计数器命令 \\%s 会产生账上没有的数字——数值不可寻址（R-01A-A）")
-                % name, location="%s:%s" % (rel, line), token="\\" + name))
+                % name, location="%s:%s" % (rel, line), token="\\" + name,
+                message_key=("finding.COMPUTED_VALUE_UNREGISTERED.command"
+                             if computed else "finding.ARITH_IN_BODY"),
+                params={"name": name}))
         for name, line, digit in numeric_macro_hits(text, cfg.numeric_macro_allow):
             out.append(Issue(
                 "NUMERIC_IN_MACRO",
                 "宏 \\%s 的定义体携带数字（%r）——宏可以携带 fact id，不可以携带数字"
                 "（R-01A-B；确属布局宏请进 project.numeric_macro_allow 人签登记）"
-                % (name, digit), location="%s:%s" % (rel, line), token="\\" + name))
+                % (name, digit), location="%s:%s" % (rel, line), token="\\" + name, params={"name": str(name), "digit": repr(digit)}))
         for line, arg, hits in fsignore_quant_hits(scan_tex(text).annotation_args):
             out.append(Issue(
                 "FSIGNORE_QUANT",
                 "\\fsignore 参数里出现定量（%s）——豁免宏不得用来抹掉结论句：%r"
-                % (hits, arg), location="%s:%s" % (rel, line), token=hits))
+                % (hits, arg), location="%s:%s" % (rel, line), token=hits, params={"hits": str(hits), "arg": repr(arg)}))
     return out
 
 
@@ -193,12 +205,14 @@ def _v3_source_issues(cfg: Config, facts: list[Fact],
     # 追加一个与 value 不等价的显示形，就是断言漂移。
     for f in facts:
         loc = "%s:%s" % (f.file, f.line or "?")
-        for code, detail in display_hits(f):
+        for code, detail, extra in display_hits(f):
             if code == "DISPLAY_INCONSISTENT":
                 out.append(Issue(
                     "ASSERTION_DRIFT",
                     "fact %r 的批准显示形与 value 不等价：%s（S-03）" % (f.id, detail),
-                    location=loc, token=f.id))
+                    location=loc, token=f.id,
+                    message_key="finding.ASSERTION_DRIFT.display",
+                    params={"fact": repr(f.id), **extra}))
     rpath = cfg.root / "audit" / "report.json"
     report = _load_json(rpath) if rpath.is_file() else None
     out += approval_issues(cfg, facts, report)
@@ -245,7 +259,7 @@ def _duplicate_value_issues(facts: list[Fact]) -> list[Issue]:
             "授权票把同一个数重复登记；确属同值的请显式写 dup_ok = true（R-04）"
             % (key, "、".join(f.id for f in group)),
             location="%s:%s" % (group[0].file, group[0].line or "?"),
-            token=",".join(f.id for f in group), severity=SEV_YELLOW))
+            token=",".join(f.id for f in group), severity=SEV_YELLOW, message_key="finding.DUPLICATE_VALUE.v2", params={"key": str(key), "arg1": str('、'.join((f.id for f in group)))}))
     return out
 
 
@@ -294,7 +308,7 @@ def _drift_issues(cfg: Config, fact_id: str, unit: dict, rel: str) -> list[Issue
         "fact %r 在正文断言的数字 %s 不在被签的 value/display 里——"
         "句子与账的断言漂移（S-03）" % (fact_id, unit["token"]),
         location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
-        token=unit["token"], context=unit["text"])]
+        token=unit["token"], context=unit["text"], message_key="finding.ASSERTION_DRIFT.v3", params={"fact": repr(fact_id), "unit": str(unit['token'])})]
 
 
 def source_base(cfg: Config) -> Path:
@@ -383,7 +397,7 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 没有 source/observation——证据链第 1 节（事实→运行记录）断开"
-                % f.id, location=loc, token=f.id))
+                % f.id, location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v2", params={"fact": repr(f.id)}))
             continue
         full = source_path(cfg, src)
         if not full.is_file():
@@ -397,7 +411,7 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 缺 source_sha256——证据链第 2 节（运行记录→内容锚）断开"
-                % f.id, location=loc, token=f.id))
+                % f.id, location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v3", params={"fact": repr(f.id)}))
             continue
         if f.source_sha256.removeprefix("sha256:").strip() != digest:
             # 哈希不符已有 SOURCE_SHA256_MISMATCH（唯一映射）。
@@ -408,7 +422,7 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 缺回执 %s——证据链第 3 节（运行记录→回执）断开"
                 % (f.id, _rel_to_root(cfg, rec_path)),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v4", params={"fact": repr(f.id), "rel_to_root": str(_rel_to_root(cfg, rec_path))}))
             continue
         try:
             rec = json.loads(rec_path.read_text(encoding="utf-8"))
@@ -417,12 +431,12 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 的回执 %s 不可读或不是 JSON"
                 % (f.id, _rel_to_root(cfg, rec_path)),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v5", params={"fact": repr(f.id), "rel_to_root": str(_rel_to_root(cfg, rec_path))}))
             continue
         if not isinstance(rec, dict):
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
-                "fact %r 的回执不是对象" % f.id, location=loc, token=f.id))
+                "fact %r 的回执不是对象" % f.id, location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v6", params={"fact": repr(f.id)}))
             continue
         run_id = f.run_id.strip() or full.parent.name
         if str(rec.get("run_id") or "").strip() != run_id:
@@ -430,28 +444,28 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 的回执 run_id=%r 与运行目录 %r 不符"
                 % (f.id, rec.get("run_id"), run_id),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v7", params={"fact": repr(f.id), "rec": repr(rec.get('run_id')), "run_id": repr(run_id)}))
             continue
         ids = rec.get("facts")
         if not isinstance(ids, list):
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 的回执缺 facts[]——无法证明回执指向哪条事实"
-                % f.id, location=loc, token=f.id))
+                % f.id, location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v8", params={"fact": repr(f.id)}))
             continue
         id_set = {str(x).strip().casefold() for x in ids}
         if f.id_key not in id_set:
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 不在回执 facts[] 里（回执没有指向这条事实）"
-                % f.id, location=loc, token=f.id))
+                % f.id, location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v9", params={"fact": repr(f.id)}))
             continue
         rec_src = str(rec.get("source") or "").strip()
         if rec_src and rec_src != src:
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 的回执 source=%r 与 fact.source=%r 不符"
-                % (f.id, rec_src, src), location=loc, token=f.id))
+                % (f.id, rec_src, src), location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v10", params={"fact": repr(f.id), "rec_src": repr(rec_src), "src": repr(src)}))
             continue
         rec_sha = str(rec.get("source_sha256") or "").strip().lower()
         if rec_sha.startswith("sha256:"):
@@ -460,7 +474,7 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "EVIDENCE_CHAIN_BROKEN",
                 "fact %r 的回执 source_sha256 与磁盘现算不符" % f.id,
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.EVIDENCE_CHAIN_BROKEN.v11", params={"fact": repr(f.id)}))
             continue
 
     # 反向指针：回执里列出的 fact id 必须在账上存在。
@@ -482,7 +496,7 @@ def _evidence_chain_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
                     "EVIDENCE_CHAIN_BROKEN",
                     "回执 %s 指向账上不存在的 fact id %r"
                     % (_rel_to_root(cfg, rec_path), raw_id),
-                    location=_rel_to_root(cfg, rec_path)))
+                    location=_rel_to_root(cfg, rec_path), message_key="finding.EVIDENCE_CHAIN_BROKEN.v12", params={"rel_to_root": str(_rel_to_root(cfg, rec_path)), "raw_id": repr(raw_id)}))
     return out
 
 
@@ -506,7 +520,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                 # 同样算第 1 节断开；这里不重复出码。
                 continue
             red.append(Issue("MISSING_SOURCE_FIELD", "fact %r 缺 source 字段" % f.id,
-                             location=loc, token=f.id))
+                             location=loc, token=f.id, params={"fact": repr(f.id)}))
             continue
         bad = _source_rel_ok(src)
         if bad:
@@ -517,7 +531,9 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                 rules += "/.. 越界"
             red.append(Issue(bad, "fact %r 的 source 必须是相对路径（%s）：%s"
                              % (f.id, rules, src),
-                             location=loc, token=f.id))
+                             location=loc, token=f.id,
+                             message_key=finding_key(bad),
+                             params={"fact": repr(f.id), "src": src}))
             continue
         full = base / src
         try:
@@ -526,7 +542,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             red.append(Issue(
                 "SOURCE_OUTSIDE_SOURCE_ROOT",
                 "fact %r 的 source 越出 source_root（%s）：%s" % (f.id, base, src),
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id), "base": str(base), "src": str(src)}))
             continue
         if not cfg.source_root.strip():
             # 未配 source_root：沿用口径，source 必须在项目 results/（v1）
@@ -539,18 +555,21 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "fact %r 的 source 不在 %s/ 下（%s）——原始产物必须由人签清单/"
                     "审批目标锁死；跨目录请配 source_root"
                     % (f.id, cfg.source_dir, src),
-                    location=loc, token=f.id))
+                    location=loc, token=f.id,
+                    message_key=finding_key(
+                        "SOURCE_OUTSIDE_RESULTS" if not cfg.is_v3 else "SOURCE_OUTSIDE_RUNS"),
+                    params={"fact": repr(f.id), "dir": cfg.source_dir, "src": src}))
                 continue
         if not full.is_file():
             red.append(Issue("MISSING_SOURCE", "fact %r 的 source 不存在或不是普通文件：%s"
-                             % (f.id, src), location=loc, token=f.id))
+                             % (f.id, src), location=loc, token=f.id, params={"fact": repr(f.id), "src": str(src)}))
             continue
         try:
             digest = sha256_file(full)
             texts[src] = to_lf(read_text_exact(full))
         except (OSError, UnicodeDecodeError) as exc:
             red.append(Issue("UNREADABLE_SOURCE", "fact %r 的 source 读不了：%s（%s）"
-                             % (f.id, src, exc), location=loc, token=f.id))
+                             % (f.id, src, exc), location=loc, token=f.id, params={"fact": repr(f.id), "src": str(src), "detail": str(exc)}))
             continue
         actual[src] = digest
         if not f.source_sha256:
@@ -560,12 +579,12 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                 red.append(Issue(
                     "MISSING_SOURCE_SHA256",
                     "fact %r 缺 source_sha256——没有内容锚定，账就无法证明「从签过那刻起没被改」"
-                    % f.id, location=loc, token=f.id))
+                    % f.id, location=loc, token=f.id, params={"fact": repr(f.id)}))
         elif f.source_sha256.removeprefix("sha256:").strip() != digest:
             red.append(Issue(
                 "SOURCE_SHA256_MISMATCH",
                 "fact %r 的 source_sha256 与现算不符（声明 %s…，实际 %s…）——产物被改过"
-                % (f.id, f.source_sha256[:12], digest[:12]), location=loc, token=f.id))
+                % (f.id, f.source_sha256[:12], digest[:12]), location=loc, token=f.id, params={"fact": repr(f.id), "fact1": str(f.source_sha256[:12]), "digest": str(digest[:12])}))
             if cfg.is_v3:
                 # S-03：source_sha256 是 approve_target 的字段。它比现算值旧，
                 # 就等于「被签的审批对象已经不是磁盘上这一份」。
@@ -573,7 +592,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "APPROVAL_STALE",
                     "fact %r 的 source_sha256 与磁盘现算值不符——审批对象（S-03 的 "
                     "approve_target）已过期，必须重签" % f.id,
-                    location=loc, token=f.id))
+                    location=loc, token=f.id, message_key="finding.APPROVAL_STALE.v2", params={"fact": repr(f.id)}))
 
         # value 回查：非派生 claim 的数字必须字面出现在 source 里（B6 的内容锚）。
         # 报告背书的 fact 例外：它的值由探针重算并进了签收摘要，字面回查对
@@ -595,7 +614,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                     "VALUE_NOT_IN_SOURCE",
                     "fact %r 的 value 数字 %s 没有出现在 source 里（内容回查失败）"
                     % (f.id, "、".join(missing)), location=loc, token=f.id,
-                    severity=SEV_YELLOW))
+                    severity=SEV_YELLOW, params={"fact": repr(f.id), "arg1": str('、'.join(missing))}))
 
     if cfg.is_v3:
         # V3 没有 results/MANIFEST.toml：证据是项目外审批目标 + runs/ 产物，
@@ -609,28 +628,29 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
         yellow.append(Issue(
             "NO_MANIFEST",
             "缺人签清单 %s：工具只能证明「账与正文自洽」，不能证明 results/ 当初没被编"
-            % cfg.manifest, location=cfg.manifest, severity=SEV_YELLOW))
+            % cfg.manifest, location=cfg.manifest, severity=SEV_YELLOW, params={"cfg": str(cfg.manifest)}))
         return red, yellow
     try:
         data = load_toml(mpath)
     except ConfigError as exc:
-        red.append(Issue("MANIFEST_INVALID", str(exc), location=cfg.manifest))
+        red.append(Issue("MANIFEST_INVALID", str(exc), location=cfg.manifest,
+                         message_key=finding_key("MANIFEST_INVALID")))
         return red, yellow
     meta = data.get("manifest")
     if not isinstance(meta, dict) or not str(meta.get("signed_by") or "").strip():
         red.append(Issue(
             "MANIFEST_UNSIGNED",
             "清单 %s 没有 signed_by——没人签的清单不算锚" % cfg.manifest,
-            location=cfg.manifest))
+            location=cfg.manifest, params={"cfg": str(cfg.manifest)}))
     if isinstance(meta, dict) and not str(meta.get("signed_at") or "").strip():
         yellow.append(Issue(
             "MANIFEST_NO_TIMESTAMP", "清单 %s 缺 signed_at（签的时间点）" % cfg.manifest,
-            location=cfg.manifest, severity=SEV_YELLOW))
+            location=cfg.manifest, severity=SEV_YELLOW, params={"cfg": str(cfg.manifest)}))
     files = data.get("files")
     if not isinstance(files, dict):
         files = {}
         yellow.append(Issue("MANIFEST_NO_FILES", "清单 %s 没有 [files] 段" % cfg.manifest,
-                            location=cfg.manifest, severity=SEV_YELLOW))
+                            location=cfg.manifest, severity=SEV_YELLOW, params={"cfg": str(cfg.manifest)}))
     signed = {str(k): str(v).strip().lower() for k, v in files.items()}
 
     for f in facts:
@@ -641,12 +661,12 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
             red.append(Issue(
                 "SOURCE_NOT_SIGNED",
                 "fact %r 的 source %s 不在人签清单里——没人确认过它" % (f.id, src),
-                location="%s:%s" % (f.file, f.line or "?"), token=f.id))
+                location="%s:%s" % (f.file, f.line or "?"), token=f.id, params={"fact": repr(f.id), "src": str(src)}))
         elif signed[src] != actual[src]:
             red.append(Issue(
                 "MANIFEST_HASH_MISMATCH",
                 "清单里 %s 的 sha256 与文件现值不符——签过之后被改过" % src,
-                location=cfg.manifest, token=f.id))
+                location=cfg.manifest, token=f.id, params={"src": str(src)}))
 
     if results_dir.is_dir():
         for p in sorted(results_dir.rglob("*")):
@@ -657,7 +677,7 @@ def verify_sources(cfg: Config, facts: list[Fact]) -> tuple[list[Issue], list[Is
                 yellow.append(Issue(
                     "UNSIGNED_RESULT",
                     "results/ 下有未签文件 %s——它没有被任何清单锁住" % rel,
-                    location=rel, severity=SEV_YELLOW))
+                    location=rel, severity=SEV_YELLOW, params={"rel": str(rel)}))
     return red, yellow
 
 # --------------------------------------------------------------------------
@@ -706,7 +726,7 @@ def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "REPORT_MISSING",
                 "fact %r 指向的报告 %s 找不到（相对工作区的路径）" % (f.id, rel),
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id), "rel": str(rel)}))
             continue
         key = (str(base), rel_path)
         if key not in cache:
@@ -720,7 +740,7 @@ def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "REPORT_METRIC_MISSING",
                 "fact %r 指向的报告 %s 读不了：%s" % (f.id, rel, loaded),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.REPORT_METRIC_MISSING.v2", params={"fact": repr(f.id), "rel": str(rel), "loaded": str(loaded)}))
             continue
         report = loaded
         mid = str(f.report_metric or "").strip()
@@ -730,14 +750,14 @@ def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
             out.append(Issue(
                 "REPORT_METRIC_MISSING",
                 "fact %r 指向的指标 %r 不在报告 %s 里" % (f.id, mid, rel),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.REPORT_METRIC_MISSING.v3", params={"fact": repr(f.id), "mid": repr(mid), "rel": str(rel)}))
             continue
         if not verified.get("ok"):
             out.append(Issue(
                 "REPORT_NOT_SIGNED",
                 "fact %r 指向的报告 %s 没签收或签收已失效：%s"
                 % (f.id, rel, verified.get("reason", "")),
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id), "rel": str(rel), "verified": str(verified.get('reason', ''))}))
         # 来源归属：账里那条 fact 必须指向该指标声明的某个来源文件。
         # 只比路径、不比哈希——哈希不符已有 SOURCE_SHA256_MISMATCH，别为同一个
         # 现象出两个码。路径比较用 realpath，兼容 source_root 的不同写法。
@@ -755,13 +775,13 @@ def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
                 "REPORT_SOURCE_MISMATCH",
                 "fact %r 的来源 %s 不是报告指标 %s 的任何来源"
                 % (f.id, f.source, mid),
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id), "fact1": str(f.source), "mid": str(mid)}))
         if str(f.value).strip() != str(metric.get("display", "")).strip():
             out.append(Issue(
                 "REPORT_METRIC_MISMATCH",
                 "fact %r 的值 %r 与报告指标 %s 的显示值 %r 对不上"
                 % (f.id, f.value, mid, metric.get("display", "")),
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id), "value": repr(f.value), "mid": str(mid), "metric": repr(metric.get('display', ''))}))
     return out
 
 
@@ -781,14 +801,18 @@ def _facts_outside_issues(cfg: Config) -> list[Issue]:
             "FACT_FILE_OUTSIDE_PROJECT",
             "事实账文件 %r 是指向项目外的软链（真实目标 %s）——账本不收它，"
             "这些事实没进审计（信任根被突破）" % (rel, target),
-            location=rel, exit_code=EXIT_INTEGRITY))
+            location=rel, exit_code=EXIT_INTEGRITY,
+            params={"rel": repr(rel), "target": str(target)}))
     for rel, why in getattr(cfg, "unresolved_facts", []):
         out.append(Issue(
             "FACT_FILE_UNRESOLVED",
             "事实账文件 %r 的软链不可解（%s）——账本不收它，"
             "这些事实没进审计" % (rel, why),
-            location=rel, exit_code=EXIT_INTEGRITY))
+            location=rel, exit_code=EXIT_INTEGRITY,
+            params={"rel": repr(rel), "why": str(why)}))
     return out
+
+
 
 
 def run_check(cfg: Config, facts: list[Fact]):
@@ -819,7 +843,7 @@ def run_check(cfg: Config, facts: list[Fact]):
         if key in seen:
             issues.append(Issue(
                 "DUPLICATE_ID", "fact id %r 重复（%s 与 %s；id 按大小写不敏感判重）"
-                % (f.id, seen[key].file, f.file), location=loc, token=f.id))
+                % (f.id, seen[key].file, f.file), location=loc, token=f.id, message_key="finding.DUPLICATE_ID.v2", params={"fact": repr(f.id), "seen": str(seen[key].file), "fact1": str(f.file)}))
         else:
             seen[key] = f
         if cfg.is_v3:
@@ -832,18 +856,18 @@ def run_check(cfg: Config, facts: list[Fact]):
             issues.append(Issue(
                 "BAD_ID_FORMAT",
                 "fact id %r 不合法：%s" % (f.id, id_hint),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.BAD_ID_FORMAT.v2", params={"fact": repr(f.id), "id_hint": str(id_hint)}))
         if f.confidence not in CONFIDENCE_OK:
             issues.append(Issue(
                 "BAD_CONFIDENCE", "fact %r 的 confidence=%r 不合法（只允许 high/med/low）"
-                % (f.id, f.confidence), location=loc, token=f.id))
+                % (f.id, f.confidence), location=loc, token=f.id, params={"fact": repr(f.id), "fact1": repr(f.confidence)}))
         if f.kind not in KINDS_OK:
             issues.append(Issue(
                 "BAD_KIND", "fact %r 的 kind=%r 不合法（只允许 claim/config）"
-                % (f.id, f.kind), location=loc, token=f.id))
+                % (f.id, f.kind), location=loc, token=f.id, params={"fact": repr(f.id), "fact1": repr(f.kind)}))
         if not f.value:
             issues.append(Issue("EMPTY_VALUE", "fact %r 的 value 为空（账上没有数）" % f.id,
-                                location=loc, token=f.id))
+                                location=loc, token=f.id, params={"fact": repr(f.id)}))
 
     known = {f.id_key: f for f in facts}
     for f in facts:
@@ -852,25 +876,25 @@ def run_check(cfg: Config, facts: list[Fact]):
             if dep.strip().casefold() not in known:
                 issues.append(Issue(
                     "BAD_DERIVED_FROM", "fact %r 的 derived_from 指向不存在的 id %r" % (f.id, dep),
-                    location=loc, token=dep))
+                    location=loc, token=dep, params={"fact": repr(f.id), "dep": repr(dep)}))
         for sup in f.supersedes:
             if sup.strip().casefold() not in known:
                 issues.append(Issue(
                     "BAD_SUPERSEDES", "fact %r 的 supersedes 指向不存在的 id %r" % (f.id, sup),
-                    location=loc, token=sup))
+                    location=loc, token=sup, params={"fact": repr(f.id), "sup": repr(sup)}))
         for dep in f.derived_from:
             if dep.strip().casefold() in superseded:
                 issues.append(Issue(
                     "SUPERSEDED_PARENT",
                     "fact %r 从已被 supersedes 的 %r 推算——父值已作废" % (f.id, dep),
-                    location=loc, token=dep))
+                    location=loc, token=dep, params={"fact": repr(f.id), "dep": repr(dep)}))
 
         # derived 值必须写可求值算式
         if f.derived_from and not f.expr:
             issues.append(Issue(
                 "MISSING_EXPR",
                 "fact %r 是推算值，但没写 expr——只写 derived_from 不算可复核" % f.id,
-                location=loc, token=f.id))
+                location=loc, token=f.id, params={"fact": repr(f.id)}))
         if f.expr:
             issues += _expr_issues(f, known)
         elif not f.derived_from and f.is_derived:
@@ -880,7 +904,7 @@ def run_check(cfg: Config, facts: list[Fact]):
     for cyc in _cycles(facts):
         issues.append(Issue(
             "DERIVED_CYCLE", "推算链成环：%s" % " -> ".join(cyc),
-            location="facts/", token=",".join(cyc)))
+            location="facts/", token=",".join(cyc), params={"arg0": str(' -> '.join(cyc))}))
 
     # 冲突：结构化 (metric, scope) 优先，否则 claim 全文；用 supersedes 封冲突
     groups: dict[tuple, list[Fact]] = {}
@@ -910,7 +934,10 @@ def run_check(cfg: Config, facts: list[Fact]):
             "LEDGER_CONFLICT",
             "账本自相矛盾（黄）：" + conflicts[-1]["message"],
             location="%s:%s" % (live[0].file, live[0].line or "?"),
-            token=",".join(f.id for f in live), severity=SEV_YELLOW))
+            token=",".join(f.id for f in live), severity=SEV_YELLOW,
+            message_key=finding_key("LEDGER_CONFLICT"),
+            params={"detail": " / ".join("%s=%s" % (f.id, f.value)
+                                         for f in live)}))
 
     # 账本卫生：同一 value 挂在多条不同 claim 上 -> 疑似「数字白名单」（红队 C6）
     by_value: dict[str, list[Fact]] = {}
@@ -925,7 +952,7 @@ def run_check(cfg: Config, facts: list[Fact]):
                 "同一个 value=%r 挂在 %s 上——像在拿一份数字白名单充事实账"
                 % (value, "、".join(f.id for f in group)),
                 location="%s:%s" % (group[0].file, group[0].line or "?"),
-                token=",".join(f.id for f in group), severity=SEV_YELLOW))
+                token=",".join(f.id for f in group), severity=SEV_YELLOW, message_key="finding.DUPLICATE_VALUE.v3", params={"value": repr(value), "arg1": str('、'.join((f.id for f in group)))}))
 
     summary = {
         "facts": len(facts),
@@ -1049,7 +1076,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             if not p.is_file():
                 red.append(Issue(
                     "BIB_FILE_MISSING", "正文声明的参考文献 %s 不存在" % decl,
-                    location=rel, token=decl))
+                    location=rel, token=decl, params={"decl": str(decl)}))
                 continue
             if p.resolve() not in {q.resolve() for q in bib_paths}:
                 bib_paths.append(p)
@@ -1066,12 +1093,12 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     for k in dup_keys:
         e = bib_by_key[k]
         red.append(Issue("DUPLICATE_BIB_KEY", "bib 里 key %r 定义了不止一次" % k,
-                         location="%s:%s" % (e.file, e.line), token=k))
+                         location="%s:%s" % (e.file, e.line), token=k, params={"key": repr(k)}))
     for ident, ks in dup_ids:
         yellow.append(Issue(
             "DUPLICATE_STABLE_ID", "%s 挂在多个 key 上：%s" % (ident, "、".join(ks)),
             location="%s:%s" % (bib_by_key[ks[0]].file, bib_by_key[ks[0]].line),
-            token=",".join(ks), severity=SEV_YELLOW))
+            token=",".join(ks), severity=SEV_YELLOW, params={"ident": str(ident), "arg1": str('、'.join(ks))}))
 
     fact_by_id = {f.id_key: f for f in facts}
     # SPEC §11.4：id 必须唯一（大小写不敏感）。审计面也要判，否则字典会把
@@ -1084,14 +1111,14 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 "DUPLICATE_ID",
                 "fact id %r 重复（%s 与 %s；id 按大小写不敏感判重）"
                 % (f.id, _seen_ids[f.id_key].file, f.file),
-                location=loc, token=f.id))
+                location=loc, token=f.id, message_key="finding.DUPLICATE_ID.v3", params={"fact": repr(f.id), "seen_ids": str(_seen_ids[f.id_key].file), "fact1": str(f.file)}))
         else:
             _seen_ids[f.id_key] = f
         if (cfg.is_v3 and not re.fullmatch(r"[A-Za-z0-9._-]+", f.id)):
             red.append(Issue(
                 "BAD_ID_FORMAT",
                 "fact id %r 不合法：只允许字母/数字/下划线/点/连字符"
-                "（SPEC-V3.0 §11.1）" % f.id, location=loc, token=f.id))
+                "（SPEC-V3.0 §11.1）" % f.id, location=loc, token=f.id, message_key="finding.BAD_ID_FORMAT.v3", params={"fact": repr(f.id)}))
     # 全局值域只收 claim 事实：config 事实不能当「数字白名单」用（红队 C3/C6）
     key_to_facts: dict[str, list[str]] = {}
     for f in facts:
@@ -1139,7 +1166,9 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             "\\input 目标 %r 不存在（%s:%s）——闭包展开失败，"
             "这一段可能整体没进审计（R-05）" % (ref, src_rel, line),
             location="%s:%s" % (src_rel, line), token=ref,
-            exit_code=EXIT_INTEGRITY))
+            exit_code=EXIT_INTEGRITY,
+            params={"ref": repr(ref), "src_rel": str(src_rel),
+                     "line": str(line)}))
     # R-05：目标存在但解析后越出项目根（\input{../shared/x.tex} 或绝对路径）
     # ——闭包不收它，这一段同样没进审计。此前静默丢弃＝fail-open（audit 判绿），
     # 现在按 SPEC-V3.0 码表判红 INPUT_OUTSIDE_PROJECT（exit 5）。
@@ -1157,7 +1186,11 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         red.append(Issue(
             "INPUT_OUTSIDE_PROJECT", msg,
             location=loc, token=ref,
-            exit_code=EXIT_INTEGRITY))
+            exit_code=EXIT_INTEGRITY,
+            message_key=("finding.INPUT_OUTSIDE_PROJECT.start" if not line
+                         else "finding.INPUT_OUTSIDE_PROJECT"),
+            params={"ref": repr(ref), "src_rel": str(src_rel),
+                     "line": str(line)}))
     # R-05（v1.3）：目标含宏/#/嵌套花括号或为空——静态审计无法确定它拉进
     # 哪个文件；覆盖不了就判红，不许静默跳过（fail-closed）。
     for src_rel, ref, line in getattr(cfg, "dynamic_inputs", []):
@@ -1167,7 +1200,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             "（%s:%s）——无法静态解析，审计覆盖不了这一段（R-05）"
             % (ref, src_rel, line),
             location="%s:%s" % (src_rel, line), token=ref,
-            exit_code=EXIT_INTEGRITY))
+            exit_code=EXIT_INTEGRITY, params={"ref": repr(ref), "src_rel": str(src_rel), "line": str(line)}))
     if cfg.is_v3:
         red += _v3_source_issues(cfg, facts, sections)
         # 批 58：同值重复入账（§8.1 DUPLICATE_VALUE）也进审计面；v1 保持
@@ -1189,7 +1222,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 red.append(Issue(
                     "UNKNOWN_FACT_MARKER",
                     "正文标记了不存在的 fact %r（账上没有这个 id）" % fid,
-                    location="%s:%s" % (rel, _line), token=fid))
+                    location="%s:%s" % (rel, _line), token=fid, params={"fid": repr(fid)}))
             else:
                 marker_count[f.id] += 1
                 if rel not in usage[f.id]:
@@ -1199,12 +1232,12 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             red.append(Issue(
                 "UNKNOWN_CITE_COMMAND",
                 "认不出的引用命令 \\%s——引用闸门默认 fail-closed，请改用已知的 cite 家族命令"
-                % name, location="%s:%s:%s" % (rel, line, col), token=name))
+                % name, location="%s:%s:%s" % (rel, line, col), token=name, params={"name": str(name)}))
 
         # ---- R-01A C：数字不得贴宏 / 不得紧跟闭合组 / 不得被空组拼接 ----
         seen_adj: set[tuple[str, int]] = set()
         for num in nums:
-            for code, detail in adjacency_hits(scan.adjacency, num):
+            for code, detail, extra in adjacency_hits(scan.adjacency, num):
                 mark = (code, num["start_abs"])
                 if mark in seen_adj:
                     continue
@@ -1213,7 +1246,10 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     code, "%s（%r）——渲染出的数字必须由连续字面数字构成"
                     % (detail, num["token"]),
                     location="%s:%s:%s" % (rel, num["line"], num["col"]),
-                    token=num["token"], context=num["text"]))
+                    token=num["token"], context=num["text"],
+                    message_key=finding_key(code)
+                    + (("." + extra["side"]) if extra.get("side") else ""),
+                    params={"num": repr(num["token"]), **extra}))
 
         # ---- R-02/R-03：BU 是句子；标记组只闭合自己那一句，token 按出现顺序归属 ----
         spans = sentence_spans(scan.masked)
@@ -1276,7 +1312,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                         "只有机制陈述（%s）来背数字 %s——非定量 fact 不能授权定量断言"
                         % ("/".join(f.id for f in known_facts), unit["token"]),
                         location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
-                        token=unit["token"], context=unit["text"]))
+                        token=unit["token"], context=unit["text"], params={"arg0": str('/'.join((f.id for f in known_facts))), "unit": str(unit['token'])}))
                 continue
             allowed: set[str] = set()
             for f in quant_facts:
@@ -1297,7 +1333,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             "标记组成员按书写顺序一一对应（想真·同值请写 co_claim）"
                             % (utokens.index(unit) + 1, unit["token"], f.id),
                             location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
-                            token=unit["token"], context=unit["text"]))
+                            token=unit["token"], context=unit["text"], params={"utokens": str(int(utokens.index(unit) + 1)), "unit": str(unit['token']), "fact": str(f.id)}))
                         red += _drift_issues(cfg, f.id, unit, rel)
             else:
                 # ② 并集分支：token 数≠fact 数时整段取并集（R-03）
@@ -1312,7 +1348,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             "该段绑定 %s，但数字 %s 不在其 value 里（内联绑定是硬约束）"
                             % ("/".join(f.id for f in quant_facts), unit["token"]),
                             location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
-                            token=unit["token"], context=unit["text"]))
+                            token=unit["token"], context=unit["text"], message_key="finding.BOUND_MISMATCH.v2", params={"arg0": str('/'.join((f.id for f in quant_facts))), "unit": str(unit['token'])}))
                         red += _drift_issues(cfg, quant_facts[0].id, unit, rel)
 
         # ---- 未被任何标记组闭合的尾段/远句 ----
@@ -1338,7 +1374,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     "表格 cell 里的数字 %s 回不到任何 fact.value——表格必须进扫描闭包"
                     "并带 cell→fact 映射（R-06）" % unit["token"],
                     location="%s:%s:%s" % (rel, unit["line"], unit["col"]),
-                    token=unit["token"], context=unit["text"], exit_code=5))
+                    token=unit["token"], context=unit["text"], exit_code=5, params={"unit": str(unit['token'])}))
                 continue
             if keys_known and unit["keys"]:
                 _ledger_add(rel, key_to_facts[unit["keys"][0]][0], unit)
@@ -1351,7 +1387,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                         "数字 %s 回得到账（%s），但正文没内联绑定——只算黄，不算已核验"
                         % (tok["token"], "/".join(key_to_facts[tok["key"]])),
                         location=loc, token=tok["token"], context=tok["text"],
-                        severity=SEV_YELLOW))
+                        severity=SEV_YELLOW, params={"tok": str(tok['token']), "arg1": str('/'.join(key_to_facts[tok['key']]))}))
                 else:
                     unmatched += 1
                     computed = _computed_construct(text, tok, cfg) if cfg.is_v3 else ""
@@ -1361,13 +1397,17 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                             computed,
                             "数字 %s 由现场计算（\\frac/\\numexpr 等）生成且未登记——"
                             "计算出的值不可寻址（P-06）" % tok["token"],
-                            location=loc, token=tok["token"], context=tok["text"]))
+                            location=loc, token=tok["token"], context=tok["text"],
+                            message_key=finding_key(computed) + ".number",
+                            params={"num": tok["token"]}))
                     elif crossref:
                         yellow.append(Issue(
                             crossref,
                             "数字 %s 是手写的结构编号（Table/Figure 等），不是数据，"
                             "也不能替代 \\ref 的稳定标识" % tok["token"],
                             location=loc, token=tok["token"], context=tok["text"],
+                            message_key=finding_key(crossref),
+                            params={"num": tok["token"]},
                             severity=SEV_YELLOW))
                     else:
                         # v1.3 分诊：该行已经绑定了定量 fact，只是这个数字不在
@@ -1382,14 +1422,14 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                                 % ("/".join(f.id for f in bound_line),
                                    tok["token"]),
                                 location=loc, token=tok["token"],
-                                context=tok["text"]))
+                                context=tok["text"], message_key="finding.BOUND_MISMATCH.v3", params={"arg0": str('/'.join((f.id for f in bound_line))), "tok": str(tok['token'])}))
                             red += _drift_issues(cfg, bound_line[0].id,
                                                  tok, rel)
                         else:
                             red.append(Issue(
                                 "UNMATCHED_NUMBER", "数字 %s 回不到任何 fact.value"
                                 % tok["token"], location=loc, token=tok["token"],
-                                context=tok["text"]))
+                                context=tok["text"], params={"tok": str(tok['token'])}))
         matched = bound + unbound_yellow
 
         for key, line, col in scan.cites:
@@ -1401,7 +1441,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 red.append(Issue(
                     "MISSING_CITE", "引用了 bib 里不存在的 key %r" % key,
                     location="%s:%s:%s" % (rel, line, col), token=key,
-                    context=line_text))
+                    context=line_text, params={"key": repr(key)}))
                 continue
             name, value = entry.stable_id
             if name is None:
@@ -1412,7 +1452,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     "bib 条目 %r（@%s）没有 arxiv/doi%s（不可远端复核）"
                     % (key, entry.kind, "/url" if entry.kind in _URL_OK_TYPES else ""),
                     location="%s:%s" % (entry.file, entry.line), token=key,
-                    severity=SEV_INFO if cfg.is_v3 else SEV_RED)
+                    severity=SEV_INFO if cfg.is_v3 else SEV_RED, message_key="finding.BIB_NO_STABLE_ID.v2", params={"key": repr(key), "entry": str(entry.kind), "arg2": str('/url' if entry.kind in _URL_OK_TYPES else '')})
                 if cfg.is_v3:
                     hints.append(issue)
                 else:
@@ -1422,7 +1462,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                 red.append(Issue(
                     "BAD_STABLE_ID_FORMAT",
                     "%r 的 %s=%r 格式不合法（不能解析成真实标识）" % (key, name, value),
-                    location="%s:%s" % (entry.file, entry.line), token=key))
+                    location="%s:%s" % (entry.file, entry.line), token=key, params={"key": repr(key), "name": str(name), "value": repr(value)}))
                 continue
             if resolve:
                 status, detail = (_resolve_doi(value) if name == "doi"
@@ -1434,13 +1474,13 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
                     red.append(Issue(
                         "UNRESOLVED_CITE",
                         "引用 %r 的 %s=%s 在远端不存在（%s）" % (key, name, value, detail),
-                        location="%s:%s" % (entry.file, entry.line), token=key))
+                        location="%s:%s" % (entry.file, entry.line), token=key, params={"key": repr(key), "name": str(name), "value": str(value), "detail": str(detail)}))
                 elif status == "unverified":
                     hints.append(Issue(
                         "CITE_UNVERIFIED",
                         "%r 的 %s=%s 未能联网核验（%s），不判红" % (key, name, value, detail),
                         location="%s:%s" % (entry.file, entry.line), token=key,
-                        severity=SEV_YELLOW))
+                        severity=SEV_YELLOW, params={"key": repr(key), "name": str(name), "value": str(value), "detail": str(detail)}))
                     yellow.append(hints[-1])
 
         # 图的数据面：没有随图 CSV 的图，数字不可核（红队 D10）
@@ -1456,14 +1496,14 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             yellow.append(Issue(
                 "FIGURE_UNVERIFIED",
                 "图 %s 没有随图数据（.csv），图里的数字不在本闸门覆盖范围内" % path,
-                location="%s:%s" % (rel, line), token=path, severity=SEV_YELLOW))
+                location="%s:%s" % (rel, line), token=path, severity=SEV_YELLOW, params={"path": str(path)}))
 
     # 未进 bib 可复核字段的条目（即使没被引用也要说一声）
     for e in bib_entries:
         if e.key not in used_keys and e.stable_id[0] is None:
             hints.append(Issue(
                 "BIB_NO_STABLE_ID", "bib 条目 %r 既没有 arxiv 也没有 doi（不可复核）" % e.key,
-                location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_INFO))
+                location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_INFO, message_key="finding.BIB_NO_STABLE_ID.v3", params={"e": repr(e.key)}))
         if e.key in used_keys and e.stable_id[0] is not None and not valid_stable_id(*e.stable_id):
             pass  # 已在引用处判红
 
@@ -1471,7 +1511,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         if marker_count.get(f.id, 0) == 0:
             hints.append(Issue(
                 "UNUSED_FACT", "账上有、文里没用：fact %r（%s）" % (f.id, f.claim),
-                location="%s:%s" % (f.file, f.line or "?"), token=f.id, severity=SEV_INFO))
+                location="%s:%s" % (f.file, f.line or "?"), token=f.id, severity=SEV_INFO, params={"fact": repr(f.id), "fact1": str(f.claim)}))
 
     # R-11：bib 里有、闭包内从未被 \cite* 家族引用 → 黄（exit 3）。
     # 引用卫生不是编造风险，--strict/L2 也保持黄（§8.1 UNUSED_BIB）。
@@ -1486,7 +1526,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             "bib 条目 %r 在审计闭包内从未被 \\cite 引用——参考文献里有它、正文没用它"
             "（R-11）；确属保留请写 bib_allow_unused = [%r] 或在正文 \\nocite{%s}"
             % (e.key, e.key, e.key),
-            location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_YELLOW))
+            location="%s:%s" % (e.file, e.line), token=e.key, severity=SEV_YELLOW, params={"e": repr(e.key), "e1": repr(e.key), "e2": str(e.key)}))
 
     # 覆盖：闭包外还有 .tex 从未被审计 -> 黄（红队 B4/B8）。
     # 批 135：只含导言区/`\input`、没有可审计内容的文件不报（它没东西可扫）。
@@ -1496,7 +1536,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     for p in unscanned:
         yellow.append(Issue(
             "UNSCANNED_TEX", "%s 不在审计闭包里（未被扫描）" % p,
-            location=p, token=p, severity=SEV_YELLOW))
+            location=p, token=p, severity=SEV_YELLOW, params={"p": str(p)}))
 
     # 绑定率过低 = 还在靠白名单（红队 C6/C11）
     denom = bound + unbound_yellow + unmatched
@@ -1504,7 +1544,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
         yellow.append(Issue(
             "LOW_BINDING_RATE",
             "内联绑定率 %d/%d 低于 50%%——大部分数字只是「回得到账」，还没回到对的那条账"
-            % (bound, denom), location="audit", severity=SEV_YELLOW))
+            % (bound, denom), location="audit", severity=SEV_YELLOW, params={"bound": str(int(bound)), "denom": str(int(denom))}))
 
     if resolve and len(unresolved) >= 3:
         bad = sum(1 for u in unresolved if u["status"] == "unverified")
@@ -1512,7 +1552,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
             yellow.append(Issue(
                 "RESOLVE_DEGRADED",
                 "联网核验 %d/%d 条都没成功（限流/无网？）——引用存在性本轮等于没验"
-                % (bad, len(unresolved)), location="refs.bib", severity=SEV_YELLOW))
+                % (bad, len(unresolved)), location="refs.bib", severity=SEV_YELLOW, params={"bad": str(int(bad)), "arg1": str(int(len(unresolved)))}))
 
     pdf_summary: dict = {"checked": False}
     if cfg.is_v3:
@@ -1586,14 +1626,19 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     if lock is not None:
         red.append(Issue(CHANGED_CODE, lock["message"],
                          location=lock["location"],
-                         token=lock["current_sha256"][:12]))
+                         token=lock["current_sha256"][:12],
+                         message_key=finding_key(CHANGED_CODE),
+                         params={"current": lock["current_sha256"][:12],
+                                 "frozen": lock["locked_sha256"][:12]}))
 
     # 批 133：处在解冻状态（log 最后一条是 unfreeze）→ 黄，不改退出码语义。
     unfrozen = unfrozen_info(cfg.root)
     if unfrozen is not None:
         yellow.append(Issue(UNFROZEN_CODE, unfrozen["message"],
                             location=unfrozen["location"], token="unfreeze",
-                            severity=SEV_YELLOW))
+                            severity=SEV_YELLOW,
+                            message_key=finding_key(UNFROZEN_CODE),
+                            params={"log": unfrozen["location"]}))
 
     summary = {
         "facts": len(facts),

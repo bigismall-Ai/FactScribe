@@ -28,6 +28,7 @@ from .buildpdf import _is_font_error, auto_build
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .console import safe_stdio
+from .safepath import WriteRefused, guard_facts_write, guard_project_write
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .doctor import collect as collect_doctor
@@ -37,6 +38,7 @@ from .evidence import (freeze_evidence, render_toml, suggest_evidence,
 from .fonts import FontCacheError, fetch as fetch_fandol, font_status
 from .fonts import render_fetch as render_fonts_fetch
 from .fonts import render_status as render_fonts_status
+from .i18n import issue_dict, style_finding_dict
 from .pdfgate import verify_pdf
 from .polish import (build_plan, plan_payload, playbook_text, render_plan)
 from .prescribe import (NOTE, load_prescriptions, prescriptions_for,
@@ -201,6 +203,49 @@ def build_parser() -> argparse.ArgumentParser:
                     help="启动行只出 JSON（服务仍阻塞，直到 Ctrl+C）")
 
     sp = sub.add_parser(
+        "workbench",
+        help="工作台网页：扫根目录聚合论文项目，起本地服务",
+        description="在 --root 下面（深度受限）找出所有含 factscribe.toml 的目录，"
+                    "把同根名的两语言盘（paper 与 paper-zh）聚合成一个项目，"
+                    "起一个只绑回环的本地服务：项目列表、章节渲染、状态行都是真数据。"
+                    "段二起带写接口：正文写回、章节调序/删除/新建、项目新建/编辑。")
+    sp.add_argument("--root", default=".",
+                    help="扫描根目录（默认当前目录；深度受限，找 factscribe.toml）")
+    sp.add_argument("--host", default="127.0.0.1",
+                    choices=sorted(LOOPBACK_HOSTS),
+                    help="监听地址（只允许回环；默认 127.0.0.1）")
+    sp.add_argument("--port", type=int, default=0,
+                    help="端口（默认 0＝让系统分配，启动时打印实际端口）")
+    sp.add_argument("--max-depth", type=int, default=3,
+                    help="扫描深度（默认 3；只数目录层数）")
+    sp.add_argument("--no-browser", dest="no_browser", action="store_true",
+                    help="不自动打开浏览器")
+    sp.add_argument("--json", action="store_true", help="启动行只出 JSON（服务仍阻塞）")
+    sp.add_argument("--state-dir", default="",
+                    help="提议单落盘目录（v2；缺省 ~/.factscribe/state，"
+                         "MiniApp 侧由宿主指定 dataDir）")
+    sp_subs = sp.add_subparsers(dest="workbench_action")
+
+    sp_new = sp_subs.add_parser(
+        "new", help="新建论文项目：在 --root 下落目录骨架",
+        description="在 --root 下建论文项目目录：factscribe.toml（最小合法内容"
+                    "＋[workbench] 表）、sections/、facts/、README.md、main.tex；"
+                    "语言盘按 --lang 建（both＝英文盘＋中文盘各一个目录）。")
+    sp_new.add_argument("--root", default=".",
+                        help="落盘根目录（默认当前目录）")
+    sp_new.add_argument("--title", default="", help="论文标题")
+    sp_new.add_argument("--slug", default="",
+                        help="目录名（默认按标题生成；只允许字母数字点下划线连字符）")
+    sp_new.add_argument("--lang", default="en",
+                        choices=["en", "zh", "both"],
+                        help="写作语言：en / zh / both（默认 en）")
+    sp_new.add_argument("--project-dir", dest="project_dir", default="",
+                        help="项目目录字段（写进 [workbench].project_dir）")
+    sp_new.add_argument("--reports-dir", dest="reports_dir", default="",
+                        help="实验报告目录字段（默认〈项目目录〉/reports）")
+    sp_new.add_argument("--json", action="store_true", help="只出 JSON")
+
+    sp = sub.add_parser(
         "mcp",
         help="MCP stdio 服务器：把 status/project/brief/audit（可选写）暴露给 agent",
         description="以 MCP stdio 协议暴露本地工作台：status / project / brief / audit；"
@@ -256,6 +301,9 @@ def build_parser() -> argparse.ArgumentParser:
             sp.add_argument("--strict", action="store_true",
                             help="黄也当红（CI 用：未核验不许过）")
         if name == "audit":
+            sp.add_argument("--lang", choices=("zh", "en"), default=None,
+                            help="findings 文案语言（只影响 --json 的输出；"
+                                 "不给＝中文原话，一字不动）")
             sp.add_argument("--resolve", action="store_true",
                             help="联网核验 arXiv/DOI（超时 5 秒；失败标 unverified 黄）")
             sp.add_argument("--build", action="store_true",
@@ -452,8 +500,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser(
         "fact", help="事实账：只追加（fact add 自动算 sha256，不代签）",
         description="事实账命令组。fact add 校验 id 与 source，自动把 sha256 写进 "
-                    "source_sha256，再往 facts/01-core.toml 末尾追加一条 [[fact]]；"
-                    "它只提醒人把对应行抄进人签清单，绝不替你签。")
+                    "source_sha256，再往目标账本（--ledger，缺省 facts/01-core.toml）"
+                    "末尾追加一条 [[fact]]；它只提醒人把对应行抄进人签清单，绝不替你签。")
     fp = sp.add_subparsers(dest="fact_action", required=True)
     fa = fp.add_parser("add", help="追加一条 fact：自动算 sha256，不代签")
     fa.add_argument("project", nargs="?", default=".",
@@ -476,6 +524,9 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("--derived-from", dest="derived_from", default=None,
                     metavar="IDS", help="父 fact id，逗号分隔（例 A1,A3）")
     fa.add_argument("--note", default=None, metavar="TEXT", help="备注（可选）")
+    fa.add_argument("--ledger", default=None, metavar="FILE",
+                    help="目标账本文件（相对项目根；必须仍在 facts 的 glob 里，"
+                         "新建文件要沿用本盘既有命名风格；缺省＝默认那本账）")
     fa.add_argument("--json", action="store_true",
                     help="机器可读输出（stdout 只出 JSON）")
 
@@ -536,6 +587,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true", help="机器可读输出（stdout 只出 JSON）")
     sp.add_argument("--prompt", action="store_true",
                     help="只输出给 LLM 的改写指令（≤ 400 字）")
+    sp.add_argument("--lang", choices=("zh", "en"), default=None,
+                    help="findings 文案语言（只影响 --json 的输出；"
+                         "不给＝中文原话）")
     sp.add_argument("--rules", default=None,
                     help="style-rules.toml 路径（默认项目根，其次仓根）")
     sp.add_argument("--stage", choices=list(STAGE_VALUES), default=STAGE_DRAFT,
@@ -803,6 +857,88 @@ def cmd_web(args) -> int:
     return cmd_serve(args)
 
 
+def cmd_workbench(args) -> int:
+    """工作台网页：发现项目 → 起本地服务 → 阻塞到 Ctrl+C。"""
+    if getattr(args, "workbench_action", None) == "new":
+        return cmd_workbench_new(args)
+    from .workbench.server import create_server
+
+    root = Path(args.root).expanduser()
+    if not root.exists():
+        raise ConfigError("根目录不存在：%s" % root, code="PROJECT_INVALID")
+    if not root.is_dir():
+        raise ConfigError("根目录不是文件夹：%s" % root, code="PROJECT_INVALID")
+    server, index = create_server(root, host=args.host, port=args.port,
+                                  max_depth=int(getattr(args, "max_depth", 3)),
+                                  state_dir=str(getattr(args, "state_dir", "") or ""))
+    host, port = server.server_address[0], server.server_address[1]
+    url = "http://%s:%d/" % (host, port)
+    projects = index.projects(refresh=True)
+    if args.json:
+        print(json.dumps({
+            "event": "listening", "ok": True, "command": "workbench",
+            "url": url, "root": str(root), "projects": len(projects),
+            "api": ["/api/projects",
+                    "/api/disk/<project>/<disk>/sections",
+                    "/api/disk/<project>/<disk>/meta",
+                    "/api/disk/<project>/<disk>/assembly",
+                    "/api/disk/<project>/<disk>/block/<id>",
+                    "POST /api/disk/<project>/<disk>/edit",
+                    "POST /api/disk/<project>/<disk>/toc/{move,delete,create}",
+                    "POST /api/disk/<project>/<disk>/proposal[/<id>/{confirm,reject}]",
+                    "POST /api/project/{new,update,opened}"],
+            "write": True,
+        }, ensure_ascii=False), flush=True)
+    else:
+        print("== factscribe workbench ==")
+        print("根目录：%s" % root)
+        print("项目：%d 个" % len(projects))
+        print("URL：%s" % url)
+        print("接口：/api/projects  /api/disk/<project>/<disk>/sections  "
+              "/api/disk/<project>/<disk>/meta  /api/disk/<project>/<disk>/assembly")
+        print("写接口：正文写回、章节调序/删除/新建、项目新建/编辑"
+              "（只写根目录下的项目；保存前留 .bak）")
+        print("只绑回环；按 Ctrl+C 停止。", flush=True)
+    if not getattr(args, "no_browser", False):
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001 - 打不开浏览器不影响服务
+            pass
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n已停止。")
+    finally:
+        server.server_close()
+    return EXIT_OK
+
+
+def cmd_workbench_new(args) -> int:
+    """新建论文项目：落目录骨架（factscribe.toml ＋ sections/ ＋ facts/ ＋ README）。"""
+    from .workbench.write import create_paper_project
+
+    lang = str(getattr(args, "lang", "en") or "en")
+    langs = ["en", "zh"] if lang == "both" else [lang]
+    result = create_paper_project(
+        Path(args.root).expanduser(),
+        slug=str(getattr(args, "slug", "") or ""),
+        title=str(getattr(args, "title", "") or ""),
+        langs=langs,
+        project_dir=str(getattr(args, "project_dir", "") or ""),
+        reports_dir=str(getattr(args, "reports_dir", "") or ""))
+    if getattr(args, "json", False):
+        print(json.dumps({"ok": True, "command": "workbench new", **result},
+                         ensure_ascii=False, indent=2))
+        return EXIT_OK
+    print("已建项目（%d 个盘）：" % len(result["created"]))
+    for disk in result["disks"]:
+        print("  %s（%s 盘）→ %s" % (disk["id"], disk["lang"], disk["path"]))
+        print("    项目目录字段：%s" % disk["project_dir"])
+        print("    实验报告目录：%s" % disk["reports_dir"])
+    print("配置写在 factscribe.toml 的 [workbench] 表里。")
+    return EXIT_OK
+
+
 def cmd_mcp(args) -> int:
     """MCP stdio 服务器：阻塞读 stdin，stdout 只出 JSON-RPC。"""
     from .mcp import run_stdio
@@ -819,7 +955,8 @@ def cmd_fact(args) -> int:
         Path(args.project), fid=args.id, claim=args.claim, value=args.value,
         source=args.source, locator=args.locator,
         confidence=args.confidence, expr=args.expr or "",
-        derived_from=args.derived_from or "", note=args.note or "")
+        derived_from=args.derived_from or "", note=args.note or "",
+        ledger=args.ledger or "")
     if args.json:
         payload = _payload("fact", "ok", EXIT_OK, action="add", **info)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -1487,13 +1624,27 @@ def cmd_audit(args) -> int:
         text += "\nbuild  : 已编译（%d 字节）" % build["pdf_bytes"]
     if cfg.warnings:
         text += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
-    findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
+    # --lang：只影响 JSON 里的 findings 文案。**不给就是现在的样子**
+    # （金样例 tests/golden/audit_findings_baseline.json 逐字节锁着这条路的
+    # 四个数组，所以默认路径一个字都不许动）。
+    lang = str(getattr(args, "lang", "") or "")
+    if lang:
+        findings = ([issue_dict(i, lang) for i in red]
+                    + [issue_dict(w, lang) for w in yellow])
+        issues = [issue_dict(i, lang) for i in red]
+        warnings = [issue_dict(w, lang) for w in yellow]
+        hint_items = [issue_dict(h, lang) for h in hints]
+    else:
+        findings = [i.as_dict() for i in red] + [w.as_dict() for w in yellow]
+        issues = [i.as_dict() for i in red]
+        warnings = [i.as_dict() for i in yellow]
+        hint_items = [h.as_dict() for h in hints]
     payload = _payload("audit", _severity_of(code), code,
                        summary=summary,
                        findings=findings,
-                       issues=[i.as_dict() for i in red],
-                       warnings=[i.as_dict() for i in yellow],
-                       hints=[h.as_dict() for h in hints],
+                       issues=issues,
+                       warnings=warnings,
+                       hints=hint_items,
                        coverage=summary.get("coverage", {}),
                        resolved=unresolved,
                        build=build,
@@ -1641,13 +1792,20 @@ def _cmd_style_doc(args, paths: list[str]) -> int:
     human = render_human(result, root)
     human += "\n文档模式：%d 个文件（%s）" % (
         len(sections), "、".join(formats.get(p, "text") for p in paths))
+    # --lang：findings 的文案语言。**只增键**——message_key / params 始终
+    # 给出，message 按 lang 渲染（不给＝中文原话）。
+    lang = str(getattr(args, "lang", "") or "zh")
+    style_findings = [style_finding_dict(f, lang) for f in result.findings]
+    style_info = [style_finding_dict(f, lang)
+                    for f in getattr(result, "info", [])]
+    style_advisories = [style_finding_dict(f, lang)
+                         for f in getattr(result, "advisories", [])]
     payload = _payload("style", _severity_of(code), code,
                        metrics=result.metrics,
                        thresholds=dict(result.thresholds),
-                       findings=[f.as_dict() for f in result.findings],
-                       info=[f.as_dict() for f in getattr(result, "info", [])],
-                       advisories=[f.as_dict()
-                                   for f in getattr(result, "advisories", [])],
+                       findings=style_findings,
+                       info=style_info,
+                       advisories=style_advisories,
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
@@ -1705,13 +1863,20 @@ def cmd_style(args) -> int:
                      len(result.findings)))
     if cfg.warnings:
         human += "\n配置告警：%d 条（--json 的 config.warnings 有明细）" % len(cfg.warnings)
+    # --lang：findings 的文案语言。**只增键**——message_key / params 始终
+    # 给出，message 按 lang 渲染（不给＝中文原话）。
+    lang = str(getattr(args, "lang", "") or "zh")
+    style_findings = [style_finding_dict(f, lang) for f in result.findings]
+    style_info = [style_finding_dict(f, lang)
+                    for f in getattr(result, "info", [])]
+    style_advisories = [style_finding_dict(f, lang)
+                         for f in getattr(result, "advisories", [])]
     payload = _payload("style", _severity_of(code), code,
                        metrics=result.metrics,
                        thresholds=dict(result.thresholds),
-                       findings=[f.as_dict() for f in result.findings],
-                       info=[f.as_dict() for f in getattr(result, "info", [])],
-                       advisories=[f.as_dict()
-                                   for f in getattr(result, "advisories", [])],
+                       findings=style_findings,
+                       info=style_info,
+                       advisories=style_advisories,
                        paragraphs=[p.as_dict() for p in result.paragraphs],
                        fired=result.fired,
                        summary=result.summary,
@@ -2141,6 +2306,7 @@ def main(argv=None) -> int:
                 "init": cmd_init, "fact": cmd_fact,
                 "doctor": cmd_doctor,
                 "serve": cmd_serve,
+                "workbench": cmd_workbench,
                 "web": cmd_web,
                 "mcp": cmd_mcp,
                 "report": cmd_report,

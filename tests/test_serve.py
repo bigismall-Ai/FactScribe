@@ -248,7 +248,7 @@ class WritableServeTest(unittest.TestCase):
     def test_add_fact_round_trip(self):
         status, data = self._request(
             "/api/facts", method="POST", token=self.token,
-            body={"id": "A9", "claim": "测试事实", "value": "42",
+            body={"id": "A9", "claim": "测试事实", "value": "10",
                   "source": "results/swb16.md", "locator": "§二"})
         self.assertEqual(status, 200)
         self.assertEqual(data["endpoint"], "add_fact")

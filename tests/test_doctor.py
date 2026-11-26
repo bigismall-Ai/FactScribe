@@ -52,7 +52,8 @@ class DoctorTest(unittest.TestCase):
     def _sign_manifest(self, rel: str = "results/data.md") -> None:
         source = self.project / rel
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text("| arm | resolved |\n| open | 10 |\n", encoding="utf-8")
+        source.write_text(
+            "| arm | resolved | total |\n| open | 10 | 16 |\n", encoding="utf-8")
         r = run("fact", "add", str(self.project), "--id", "A1",
                 "--claim", "开臂 resolved", "--value", "10/16",
                 "--source", rel)

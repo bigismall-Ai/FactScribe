@@ -66,10 +66,26 @@ def run(*args, cwd=None):
 
 
 def new_project(tmp: str) -> Path:
-    """最小 v1 项目（`init` 落骨架，同参数逐字节一致）。"""
+    """最小 v1 项目（`init` 落骨架，同参数逐字节一致）。
+
+    段落级线改写说明：main 的 `fact add` **没有**写前的 value 硬闸，
+    用例里的 `--value 10/16` 直接写进账。段落级线有 value 硬闸（
+    `factscribe/valuecheck.py`：value 里的数字必须在它所指的产物原文里
+    逐个按序命中）——这是本线**更严**的已定口径，不是缺陷，保留不动。
+
+    为了让这组用例仍然测「写侧落点闸的界内正例」（而不是被 value 硬闸
+    先拦下），这里在骨架的 `results/` 下放一份**含 10 与 16 的产物**：
+    value 硬闸据此放行，用例的落点断言一条不减。
+    """
     target = Path(tmp) / "proj"
     proc = run("init", str(target), "--title", "Demo", "--lang", "zh")
     assert proc.returncode == 0, proc.stderr
+    # 把 10 与 16 写进清单本身（清单就是这组用例 --source 指的文件），
+    # value 硬闸据此放行：value「10/16」的两个数字能在源产物里按序命中。
+    manifest = target / "results" / "MANIFEST.toml"
+    text = manifest.read_text(encoding="utf-8")
+    manifest.write_text(text + "# 示例：开臂解决 10 道题，对照臂解决 16 道题\n",
+                        encoding="utf-8")
     return target
 
 

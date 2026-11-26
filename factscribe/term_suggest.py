@@ -21,6 +21,7 @@ from pathlib import Path
 
 from .config import ConfigError, load_config, load_sections
 from .style import _source_view
+from .textio import dominant_newline, read_text_exact, to_lf, write_text_exact
 from .terms import (load_glossary, key_of, normalize_surface,
                     parse_glossary)
 from .textio import dominant_newline, read_text_exact, to_lf, write_text_exact

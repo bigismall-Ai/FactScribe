@@ -216,23 +216,29 @@ _RIGHT_MACRO_RE = re.compile(r"\\([A-Za-z]+)")
 _EMPTY_GROUP_DIGIT_RE = re.compile(r"\s*\{\s*\}\s*\d")
 
 
-def adjacency_hits(adjacency: str, num: dict) -> list[tuple[str, str]]:
-    """[(code, detail)]：NUM_AFTER_GROUP / NUM_ADJACENT_MACRO / NUM_ADJACENT_GROUP。"""
+def adjacency_hits(adjacency: str, num: dict) -> list[tuple[str, str, dict]]:
+    """[(code, detail, params)]：NUM_AFTER_GROUP / NUM_ADJACENT_MACRO / NUM_ADJACENT_GROUP。
+
+    detail 是中文原文（一字不改）；params 是给 i18n 目录用的**数据**槽位
+    （宏名等）——英文文案靠 params，不靠 detail 里的中文。
+    """
     s = num["start_abs"]
     e = num["end_abs"]
-    out: list[tuple[str, str]] = []
+    out: list[tuple[str, str, dict]] = []
     if s > 0 and adjacency[s - 1] == "}":
-        out.append(("NUM_AFTER_GROUP", "数字紧跟一个闭合组"))
+        out.append(("NUM_AFTER_GROUP", "数字紧跟一个闭合组", {}))
     left = adjacency[max(0, s - 60):s]
     m = _LEFT_MACRO_RE.search(left)
     if m and m.group(1) not in _SAFE_CMDS:
-        out.append(("NUM_ADJACENT_MACRO", "数字紧贴宏 \\%s" % m.group(1)))
+        out.append(("NUM_ADJACENT_MACRO", "数字紧贴宏 \\%s" % m.group(1),
+                    {"macro": m.group(1), "side": "left"}))
     right = adjacency[e:e + 60]
     m = _RIGHT_MACRO_RE.match(right)
     if m and m.group(1) not in _SAFE_CMDS:
-        out.append(("NUM_ADJACENT_MACRO", "宏 \\%s 紧跟数字" % m.group(1)))
+        out.append(("NUM_ADJACENT_MACRO", "宏 \\%s 紧跟数字" % m.group(1),
+                    {"macro": m.group(1), "side": "right"}))
     if _EMPTY_GROUP_DIGIT_RE.match(right):
-        out.append(("NUM_ADJACENT_GROUP", "空组 {} 把两个数字粘在一起"))
+        out.append(("NUM_ADJACENT_GROUP", "空组 {} 把两个数字粘在一起", {}))
     return out
 
 
@@ -240,9 +246,13 @@ def adjacency_hits(adjacency: str, num: dict) -> list[tuple[str, str]]:
 # R-04：display 严格等价
 # --------------------------------------------------------------------------
 
-def display_hits(fact) -> list[tuple[str, str]]:
-    """[(code, detail)]：DISPLAY_INCONSISTENT / DISPLAY_ROUNDTO_INVALID。"""
-    out: list[tuple[str, str]] = []
+def display_hits(fact) -> list[tuple[str, str, dict]]:
+    """[(code, detail, params)]：DISPLAY_INCONSISTENT / DISPLAY_ROUNDTO_INVALID。
+
+    detail 是中文原文；params 是给 i18n 目录用的**数据**槽位（display 写法与
+    value 本身）——英文文案靠 params。
+    """
+    out: list[tuple[str, str, dict]] = []
     value_canon = canon_text(fact.value)
     for item in getattr(fact, "display", []) or []:
         if item.get("auto"):
@@ -254,7 +264,8 @@ def display_hits(fact) -> list[tuple[str, str]]:
             out.append((
                 "DISPLAY_INCONSISTENT",
                 "display %r 与 value %r 不等价（严格 canon 比较，不再有 round_to 容差）"
-                % (text, fact.value)))
+                % (text, fact.value),
+                {"display": repr(text), "value": repr(fact.value)}))
             continue
         round_to = item.get("round_to")
         if round_to is not None:
@@ -263,5 +274,7 @@ def display_hits(fact) -> list[tuple[str, str]]:
                 out.append((
                     "DISPLAY_ROUNDTO_INVALID",
                     "display %r 的 round_to=%r 必须等于 text 的小数位数 %d"
-                    % (text, round_to, decimal_places(text))))
+                    % (text, round_to, decimal_places(text)),
+                    {"display": repr(text), "round_to": repr(round_to),
+                     "decimals": str(decimal_places(text))}))
     return out

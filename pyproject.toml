@@ -57,6 +57,15 @@ factscribe = [
   "workbench/static/*.html",
   "workbench/static/*.css",
   "workbench/static/*.js",
+  "web/*.html",
+  "web/*.css",
+  "web/*.js",
+  # 法律侧工作台页面（段落级前端体系下的 legal/ 视图）。
+  # 段落级线并进来后，这三条要跟着挪到 factscribe.workbench 的 package-data
+  # （合并时 pyproject 这一段可能要手工合一次）。
+  "workbench/static/legal/*.html",
+  "workbench/static/legal/*.css",
+  "workbench/static/legal/*.js",
 ]
 
 [tool.setuptools.dynamic]

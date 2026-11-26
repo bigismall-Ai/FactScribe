@@ -220,6 +220,37 @@ class ServeLegalWorkbenchTest(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertTrue(payload.get("raw"))
 
+    def test_legal_page_served_on_both_urls(self):
+        """/legal 与 /legal/ 都出页面，且都带 <base href=".">。
+
+        无尾斜杠那个曾经把相对资源解析到根路径（/legal.css）⇒ 取不到 ⇒
+        脚本从未执行 ⇒ 页面零渲染。这个用例就是那个阻断缺陷的回归锁。
+        """
+        for path in ("/legal", "/legal/"):
+            with self.subTest(path=path):
+                status, payload = self._get(path)
+                self.assertEqual(status, 200)
+                body = payload.get("raw", "")
+                self.assertIn('<base href=".">', body)
+                self.assertIn("legal.css", body)
+                self.assertIn("legal.js", body)
+
+    def test_legal_page_assets_on_both_paths(self):
+        for path in ("/legal.css", "/legal.js",
+                     "/legal/legal.css", "/legal/legal.js"):
+            with self.subTest(path=path):
+                status, payload = self._get(path)
+                self.assertEqual(status, 200, path)
+                self.assertTrue(payload.get("raw"), path)
+
+    def test_legal_page_uses_miniapp_palette_not_legacy(self):
+        """色板只许来自段落级 miniapp；不许回退 --mcode-*（factscribe/web 旧前端）。"""
+        status, payload = self._get("/legal/legal.css")
+        self.assertEqual(status, 200)
+        css = payload.get("raw", "")
+        self.assertNotIn("--mcode-", css)
+        self.assertIn("--paper:", css)
+
 
 if __name__ == "__main__":
     unittest.main()

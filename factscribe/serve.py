@@ -214,6 +214,13 @@ class _Handler(BaseHTTPRequestHandler):
         if self.server.serve_ui and path.startswith("/legal/"):  # type: ignore[attr-defined]
             self._legal_ui(path[len("/legal/"):])
             return
+        # /legal（无尾斜杠）时，页面里的相对资源被 <base href="."> 解析到根路径，
+        # 所以根上也托管一份同名静态件：/legal.css、/legal.js 两个 URL 都拿得到。
+        if self.server.serve_ui and path.startswith("/legal."):  # type: ignore[attr-defined]
+            tail = path[len("/legal."):]
+            if "." + tail in _LEGAL_UI_TYPES:
+                self._legal_ui("legal." + tail)
+                return
         if path == "/api/health":
             self._send(200, {"ok": True, "tool": "factscribe",
                              "version": VERSION, "service": "workbench"})
@@ -921,14 +928,17 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, self._base("legal.%s" % channel, contract=contract))
 
     def _legal_ui(self, name: str) -> None:
-        """法律侧工作台页面（静态件；住在 legal 集成件自己的 web/ 目录）。"""
+        """法律侧工作台页面（静态件；住在**段落级前端体系**的
+        factscribe/workbench/static/legal/ 下——法律页是段落级工作台的一个
+        视图，不是独立的另一套界面）。"""
         api = self._legal_api()
         if api is None:
             self._error(501, "LEGAL_UNAVAILABLE",
                         "legal 集成件不可用（integrations/factscribe-legal 没装或"
                         "装不上）——法律侧页面不提供")
             return
-        root = Path(api.__file__).resolve().parent.parent / "web"
+        root = (Path(__file__).resolve().parent / "workbench" / "static"
+                 / "legal")
         target = (root / name).resolve()
         try:
             target.relative_to(root)

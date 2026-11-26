@@ -2,7 +2,7 @@
   "cases": [
     {
       "exit": 0,
-      "help": "usage: factscribe-legal fetch [-h] --corpus CORPUS --project PROJECT\n                              --nums NUMS [NUMS ...]\n\noptions:\n  -h, --help            show this help message and exit\n  --corpus CORPUS       语料目录（provisions/）\n  --project PROJECT\n  --nums NUMS [NUMS ...]\n",
+      "help": "usage: factscribe-legal fetch [-h] --corpus CORPUS --project PROJECT --nums NUMS [NUMS ...] options: -h, --help show this help message and exit --corpus CORPUS 语料目录（provisions/） --project PROJECT --nums NUMS [NUMS ...]",
       "help_exit": 0,
       "name": "fetch",
       "stderr": "",
@@ -10,7 +10,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify [-h] --project PROJECT --corpus CORPUS\n                               --date DATE [--view VIEW]\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n  --corpus CORPUS\n  --date DATE        参考日 YYYY-MM-DD\n  --view VIEW        可选：管线的现行版 JSONL，用于交叉验证\n",
+      "help": "usage: factscribe-legal verify [-h] --project PROJECT --corpus CORPUS --date DATE [--view VIEW] options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS --date DATE 参考日 YYYY-MM-DD --view VIEW 可选：管线的现行版 JSONL，用于交叉验证",
       "help_exit": 0,
       "name": "verify",
       "stderr": "",
@@ -18,7 +18,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify-cn [-h] --project PROJECT --catalog CATALOG\n                                  --date DATE\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n  --catalog CATALOG  catalog.jsonl.gz（FLK 全库）\n  --date DATE        参考日 YYYY-MM-DD\n",
+      "help": "usage: factscribe-legal verify-cn [-h] --project PROJECT --catalog CATALOG --date DATE options: -h, --help show this help message and exit --project PROJECT --catalog CATALOG catalog.jsonl.gz（FLK 全库） --date DATE 参考日 YYYY-MM-DD",
       "help_exit": 0,
       "name": "verify-cn",
       "stderr": "",
@@ -26,7 +26,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify-case [-h] --project PROJECT\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n",
+      "help": "usage: factscribe-legal verify-case [-h] --project PROJECT options: -h, --help show this help message and exit --project PROJECT",
       "help_exit": 0,
       "name": "verify-case",
       "stderr": "",
@@ -34,7 +34,7 @@
     },
     {
       "exit": 3,
-      "help": "usage: factscribe-legal verify-it [-h] --project PROJECT --corpus CORPUS\n                                  --date DATE\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n  --corpus CORPUS    语料目录（runs/<run>-it/）\n  --date DATE        参考日 YYYY-MM-DD\n",
+      "help": "usage: factscribe-legal verify-it [-h] --project PROJECT --corpus CORPUS --date DATE options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（runs/<run>-it/） --date DATE 参考日 YYYY-MM-DD",
       "help_exit": 0,
       "name": "verify-it",
       "stderr": "",
@@ -42,7 +42,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify-es [-h] --project PROJECT --corpus CORPUS\n                                  --date DATE\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n  --corpus CORPUS    语料目录（es/run-<run>-es-<slug>/）\n  --date DATE        参考日 YYYY-MM-DD\n",
+      "help": "usage: factscribe-legal verify-es [-h] --project PROJECT --corpus CORPUS --date DATE options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（es/run-<run>-es-<slug>/） --date DATE 参考日 YYYY-MM-DD",
       "help_exit": 0,
       "name": "verify-es",
       "stderr": "",
@@ -50,7 +50,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify-fr-case [-h] --project PROJECT\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n",
+      "help": "usage: factscribe-legal verify-fr-case [-h] --project PROJECT options: -h, --help show this help message and exit --project PROJECT",
       "help_exit": 0,
       "name": "verify-fr-case",
       "stderr": "",
@@ -58,7 +58,7 @@
     },
     {
       "exit": 0,
-      "help": "usage: factscribe-legal verify-it-case [-h] --project PROJECT --corpus CORPUS\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT\n  --corpus CORPUS    语料目录（it-case/run-<run>-itcase-<tier>/）\n",
+      "help": "usage: factscribe-legal verify-it-case [-h] --project PROJECT --corpus CORPUS options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（it-case/run-<run>-itcase-<tier>/）",
       "help_exit": 0,
       "name": "verify-it-case",
       "stderr": "",
@@ -66,7 +66,7 @@
     },
     {
       "exit": 2,
-      "help": "usage: factscribe-legal cn-lead-search [-h] --q Q [--page-size PAGE_SIZE]\n                                       [--page PAGE] [--config CONFIG]\n\noptions:\n  -h, --help            show this help message and exit\n  --q Q                 检索词（简体中文，法律术语优先）\n  --page-size PAGE_SIZE\n                        每页条数，硬顶 5（默认 5；评估 Key 禁批量）\n  --page PAGE           页码，硬顶 3（默认 1；翻页＝换页码重跑本命令）\n  --config CONFIG       factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）\n",
+      "help": "usage: factscribe-legal cn-lead-search [-h] --q Q [--page-size PAGE_SIZE] [--page PAGE] [--config CONFIG] options: -h, --help show this help message and exit --q Q 检索词（简体中文，法律术语优先） --page-size PAGE_SIZE 每页条数，硬顶 5（默认 5；评估 Key 禁批量） --page PAGE 页码，硬顶 3（默认 1；翻页＝换页码重跑本命令） --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
       "help_exit": 0,
       "name": "cn-lead-search",
       "stderr": "",
@@ -74,7 +74,7 @@
     },
     {
       "exit": 2,
-      "help": "usage: factscribe-legal cn-lead-verify [-h] --case-no CASE_NO\n                                       [--config CONFIG]\n\noptions:\n  -h, --help         show this help message and exit\n  --case-no CASE_NO  案号，如「（2022）苏0322执保100号」\n  --config CONFIG    factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）\n",
+      "help": "usage: factscribe-legal cn-lead-verify [-h] --case-no CASE_NO [--config CONFIG] options: -h, --help show this help message and exit --case-no CASE_NO 案号，如「（2022）苏0322执保100号」 --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
       "help_exit": 0,
       "name": "cn-lead-verify",
       "stderr": "",
@@ -82,7 +82,7 @@
     },
     {
       "exit": 2,
-      "help": "usage: factscribe-legal cn-lead-get [-h] --case-no CASE_NO [--meta]\n                                    [--max-chars MAX_CHARS] [--config CONFIG]\n\noptions:\n  -h, --help            show this help message and exit\n  --case-no CASE_NO     案号，如「（2022）苏0322执保100号」\n  --meta                只取元信息不取正文（省正文配额）\n  --max-chars MAX_CHARS\n                        分段读正文：本次最多取多少字符\n  --config CONFIG       factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）\n",
+      "help": "usage: factscribe-legal cn-lead-get [-h] --case-no CASE_NO [--meta] [--max-chars MAX_CHARS] [--config CONFIG] options: -h, --help show this help message and exit --case-no CASE_NO 案号，如「（2022）苏0322执保100号」 --meta 只取元信息不取正文（省正文配额） --max-chars MAX_CHARS 分段读正文：本次最多取多少字符 --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
       "help_exit": 0,
       "name": "cn-lead-get",
       "stderr": "",

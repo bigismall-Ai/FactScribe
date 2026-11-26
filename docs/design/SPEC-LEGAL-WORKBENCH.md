@@ -3,7 +3,8 @@
 > 本件是**规范**（第 ② 步的形状与口径）。第 ① 步的只读接口层见
 > `docs/design/SPEC-LEGAL-API.md`（本件的底座）。
 > 实现在 `integrations/factscribe-legal/factscribe_legal/{api,views,proposals}.py`
-> 与 `factscribe/serve.py`；页面在 `integrations/factscribe-legal/web/`。
+> 与 `factscribe/serve.py`；页面在 `factscribe/workbench/static/legal/`（段落级前端
+> 体系里的一个视图，见 §1）。
 
 ## 0. 这是什么 / 不是什么
 
@@ -20,38 +21,58 @@
 * 不是第 ③ 步。第 ③ 步（扩六条线、时效统一收口）可以**直接复用**本件的
   通道、收据与页面骨架（见 §9）。
 
-## 1. 前端落点：为什么在 `integrations/factscribe-legal/web/`
+## 1. 前端落点与视觉基准：段落级前端体系
 
-**结论**：法律侧页面放在**法律集成件自己的前端目录**
-`integrations/factscribe-legal/web/`（index.html ＋ legal.css ＋ legal.js），
-由 core `factscribe serve --ui` 在 `GET /legal`（静态件在 `GET /legal/<file>`）
-提供。**不挂 `factscribe/web/`**（节级前端，按已定口径第 ④ 步要废弃；
-挂那儿第 ④ 步还得再搬一次），**也不挂 `factscribe/workbench/static/`**。
+**落点**：`factscribe/workbench/static/legal/`（index.html ＋ legal.css ＋ legal.js）
+—**段落级工作台前端静态目录里的一个视图**，不是独立的另一套界面。
+core `factscribe serve --ui` 在 `GET /legal` 提供它（静态件在 `GET /legal/<file>`）；
+段落级线合并进 main 后，`factscribe/workbench/server.py` 的 `/static/` 路由
+也会提供**同一份文件**（`/static/legal/index.html`）。
 
-理由（逐条）：
+**视觉与交互的唯一基准＝段落级 miniapp 前端**（`factscribe/workbench/static/`
+的 index.html / app.css / app.js，合计 8174 行）。本步的页面按它**逐项复用/对齐**：
+色板与组件写法照抄 miniapp `app.css`（逐字节，注明出处行号），交互形态照抄
+miniapp `app.js`（证据锁独立只读卡、事实芯片与卡片、提议差异卡、弹层与抽屉、
+右栏宽度拖拽、中/EN 语言切换、last_disk 记忆……）。法律侧每个区域 ↔ miniapp 具体
+交互的对照表见 §10。
 
-1. **不在将被废弃的 `factscribe/web/`**：第 ④ 步要废弃的是节级前端；
-   法律侧页面若寄住在那里，第 ④ 步要连带搬一次——白搬。
-2. **不在段落级前端 `factscribe/workbench/static/`**：那一支（引擎统一
-   第②步）**还没并进 main**，而且并进方向（走 C：miniapp 与本仓同一套引擎）
-   **尚未拍板**；挂过去的后果是「本步的页面在本步不可运行」（这工作树里
-   没有 `factscribe/workbench/` 这个包，页面也没有 serve 面），且合并方向
-   一变就要再搬一次。
-3. **法律域的事归法律集成件**：语料、收据、时效、码表、域级锁全在
-   `integrations/factscribe-legal` 里；页面与它的通道同源同仓，第 ③ 步
-   扩线时页面直接复用，不用跨仓找数据。
-4. **将来要迁到段落级前端也可以**：迁的代价是「移动目录 ＋ 改一条 serve
-   路由」（`factscribe/serve.py` 的 `_legal_ui`），页面本身不用动。
+**明确禁止的基准**：`factscribe/web/app.css`（仓库里旧的节级网页前端，5745 行、
+蓝灰 `--mcode-*` 色板）——那不是用户认可的界面。**本步第一版误抄了它**
+（已按新基准整体重做）；法律页也不许自己另造交互风格。
 
-落点被拒的代价记一笔：如果第 ③ 步决定把法律侧并进段落级工作台，这一步
-的工作**不浪费**——通道、契约、测试都留在集成件里，页面换个目录即可。
+**落点的四条理由**：
+
+1. **用户数周打磨的是段落级前端**：它是唯一被认可的交互基准，法律页与它同源
+   同形态，将来合并才是「一个产品」，不是两个产品贴在一起。
+2. **不在 `factscribe/web/`**：节级前端按已定口径第 ④ 步要废弃；挂那儿第 ④ 步
+   还得再搬一次。
+3. **不另起独立前端目录**：独立目录会与段落级体系分叉（两套色板、两套弹层、
+   两套 i18n），合并时还要再搬一次。放在 `workbench/static/legal/` 子目录里，
+   文件名与段落级本体的 index.html / app.css / app.js **不冲突**，合并时干净落地。
+4. **本步可运行**：段落级线还没并进 main（合并方向也未定），但 core 的 serve
+   路由已经能提供这份页面 ⇒ 本步就能跑、能验；等段落级线并进来，页面自动多一个
+   `/static/legal/` 入口，两处指向同一份文件。
+
+**静态件基准路径纪律**（第一版踩过的坑，已修）：页面用 `<base href=".">` ＋
+**相对**引用 `legal.css` / `legal.js`（index.html:9、:195）。关键事实：
+
+| 页面 URL | base URL | 相对资源解析成 | 需要服务器托管 |
+|---|---|---|---|
+| `/legal/`（有尾斜杠） | `/legal/` | `/legal/legal.css` | `GET /legal/<file>` |
+| `/legal`（无尾斜杠） | `/` | `/legal.css` | `GET /legal.css`（根上再托管一份） |
+| `/static/legal/`（段落级线并进来后） | `/static/legal/` | `/static/legal/legal.css` | 段落级 server 的 `/static/` 路由 |
+
+第一版只托管了 `/legal/<file>`，页面挂在 `/legal`（无尾斜杠）时资源落到
+`/legal.css` ⇒ 取不到 ⇒ 脚本从未执行 ⇒ **页面零渲染**（DOM 只有 971 字符）。
+现在 core `factscribe serve` 在根上再托管一份 `/legal.css` / `/legal.js`
+（serve.py 的 `/legal.` 分支），两个 URL 都拿得到样式与脚本。
 
 ## 2. 页面结构：区域 ↔ 数据 ↔ 接口
 
 | 区域 | 用的是**真实读数**（从哪来） | 标「待接接口／示意」的部分 |
 |---|---|---|
 | 顶栏 | 只读档徽章、令牌（`?token=` 或手粘，**只放内存**） | 「重新核验」按钮**禁用**：没有 POST verify；说明写「核验在命令行跑 `python3 -m factscribe_legal api findings`」 |
-| 域级锁状态条 | 四键 corpus／date／index_sha256／view ＋ frozen ＋ matches（`GET /api/legal/summary` → `contract.summary.lock`） | 论文侧冻结锁（`GET /api/evidence`）取不到就写「未取到」；**法律锁蓝实心边条、论文锁灰虚线边条**（视觉区分） |
+| 域级锁状态条 | 四键 corpus／date／index_sha256／view ＋ frozen ＋ matches（`GET /api/legal/summary` → `contract.summary.lock`） | 论文侧冻结锁（`GET /api/evidence`）取不到就写「未取到」；**法律锁＝实线卡、论文锁＝同卡但左边虚线**（miniapp 原生虚线记法，不新增色） |
 | KPI 行 | 红牌／黄牌（findings）、收据数（receipts.total）、件数（corpus.total） | 无（全真读数） |
 | 左栏·语料库 | 件清单（`GET /api/legal/corpus`）＋过滤（国家／域／件型／时效状态）＋每件的时效状态（`timeliness.state_label`） | 件清单只列**真实可见**的件；FR 全量正文不在仓、IT 灌库 403、CN 案例 0 件 —— 界面不补件 |
 | 中栏·件详情 | `GET /api/legal/corpus/{id}`：meta、时效 11 键、ambiguous 候选 | 同 id 多件时列候选让用户按 domain 选 |
@@ -195,7 +216,9 @@
 | GET | `/api/legal/proposals` | 第 ② 步：现在返回在途提议单 |
 | POST | `/api/legal/proposals` | 第 ② 步：建单（**不写盘**） |
 | POST | `/api/legal/proposals/{id}/adopt` | 第 ② 步：采纳（**不写盘**；指纹不过 → 409） |
-| GET | `/legal`、`/legal/<file>` | 第 ② 步：页面静态件 |
+| GET | `/legal`、`/legal/` | 第 ② 步：页面静态件（同一份文件） |
+| GET | `/legal/<file>` | 第 ② 步：页面引用的静态件（`/legal/legal.css`） |
+| GET | `/legal.css`、`/legal.js` | 第 ② 步：**根上再托管一份**——`/legal` 无尾斜杠时相对资源解析到这里（见 §1） |
 | — | `POST /api/legal/verify`、`/api/legal/facts`、`/api/legal/ledger/dup-ok` | **仍未挂**（404） |
 
 ## 6. 测试与闸门
@@ -207,8 +230,17 @@
 * 新增 `integrations/factscribe-legal/tests/_cli_snapshot.py` ＋
   `cli_baseline.json`：**既有 11 条命令的 --help／stdout／退出码快照**，
   只从第 ① 步基线树（23acded）生成过一次。
-* 新增 `tests/test_serve_legal_workbench.py`（13 例）：HTTP 层的四条读侧
-  视图、提案建单／采纳／指纹不符 409、写路径仍 404、页面静态件。
+* 新增 `tests/test_serve_legal_workbench.py`（16 例）：HTTP 层的四条读侧
+  视图、提案建单／采纳／指纹不符 409、写路径仍 404、页面静态件；其中三例是
+  **第一版那个阻断缺陷的回归锁**：`/legal` 与 `/legal/` 都出页面且都带
+  `<base href=".">`、根上与目录下两处静态件都在、色板不许回退 `--mcode-*`。
+* 真后端验收（本地实跑）：无头 Chrome 渲染 `/legal` 与 `/legal/`，两者 DOM
+  **逐字节一致**；读数——语料 27 件、KPI（0 红／0 黄／2 收据／27 件）、收据
+  五元组 `FR-HOURS｜d606875ac0cec22d｜66-68｜body｜numnorm`、码表 70 行、
+  点收据行展开成功、建单 `P-0001` → 采纳 `adopted_pending`（write_path=false）、
+  中/EN 切换生效、右栏拖拽 392px→300px 并落 localStorage、零 JS 错误。
+  红/黄两级卡片用**注入的合成 findings**（仅测试台，非仓库读数）验过：红卡底
+  `#fbeee7`、黄卡底 `#fdf7ea`；仓库里 27 盘的 findings 全为 0，真实盘触发不了。
 * 闸门：Python 3.10–3.14 全矩阵、legal 套件、node 套件、金样例逐字节、
   27 盘 audit --json 逐盘 cmp、preflight、check-readme。
 
@@ -241,3 +273,46 @@
   建单 ＋ 指纹比对 ＋ 拒写，只是把「登记意图」换成「真写」。
 * **域级锁四键与 canonical 形态**（`lock.py`）——锁面不用重做。
 * **CLI 清单出口**——第 ③ 步加命令时清单自动跟着 argparse 走。
+
+## 10. 法律页 ↔ 段落级 miniapp 前端：逐项对照
+
+左列＝本单落点（`factscribe/workbench/static/legal/`），右列＝**段落级前端本体**
+（`.worktrees/miniapp-host/factscribe/workbench/static/` 的 index.html / app.css / app.js）。
+所有色值与组件写法照抄 miniapp，legal.css:16-42 的每个变量都注明了出处行号。
+
+| 法律页区域 | 本单落点（file:line） | miniapp 基准（file:line） |
+|---|---|---|
+| 三栏骨架 | legal.css:160 `.layout`／:189 `.main`／:201 `.col-right` | app.css:255 `.shell`／:259 `.doc`／:289 `.colright` |
+| 左栏语料栏 | legal.css:163-188（`.sidebar`） | app.css:257-260 `.rail`（268px 宽、`#faf9f4`） |
+| 顶栏工具条 | index.html:12-36、legal.css:66-96 | app.css:444-454（`.tb-brand`/`.tb-btn`/`.lang-seg`）、index.html:13,16 |
+| 中/EN 语言切换 | index.html:25、legal.js:1220-1334（`applyLang`/`initLang`） | app.js:4064、5379-5385、index.html:24-30 |
+| 域级证据锁状态条 | index.html:41-66、legal.js:284-360、legal.css:98-159 | app.js:1875-1882（证据锁独立只读卡）、app.css:292（`.rcard`） |
+| KPI 行 | legal.js:663-684、legal.css:170-176 | app.css:305-310（`.recon` 药丸）、app.css:14-18（`.st`） |
+| 左栏·语料清单 | legal.js:395-476、legal.css:165-188 | app.css:266-269（`.pm-proj`／`.pmbtn.on` 反色记法） |
+| 中栏·件详情 | legal.js:477-562、legal.css:236-250 | app.css:134-136（`.ycard` 的两列栅格） |
+| 中栏·逐条收据（五元组） | legal.js:563-662、legal.css:251-259、legal.css:127-131 | app.css:127-131（`table.mt`）、app.css:132-137（`.ycard` 展开卡） |
+| 右栏·问题区（红黄两级） | legal.js:685-739、legal.css:392-419 | app.css:74-75（`.note.ref`/`.note.cost`）、app.css:301-303（`.st.ok`/`.st.warn`）、app.css:322（坏字色 `#9a3b1e`） |
+| 右栏·文书段落区 | legal.js:787-862、legal.css:264-276 | app.js:1079（段落块渲染）、app.css:57-59（`.cite`） |
+| 右栏·待批提案（建单／差异卡／采纳） | legal.js:911-990（渲染）、:1021-1077（建单/采纳）、legal.css:318-326 | app.js:4908-5268（提议差异卡）、app.css:1521-1523（`.proposal-card`） |
+| 右栏宽度可拖 | index.html:170、legal.js:1329-1360、legal.css:206-211 | app.js:5757-5827、app.css:1568-1575、index.html:174 |
+| 弹层／抽屉／toast（样式已抄，本页暂无弹层需求） | legal.css:366-382 | app.css:113-121（backdrop/drawer）、app.css:149-152（toast） |
+| 颜色与组件写法 | legal.css:16-42（`:root`，逐条注出处行号） | app.css:4,9-19,116,292,301-303,322 |
+
+**本单新增（miniapp 无对应物，因为法律侧的数据形状不同）**：
+
+* 条→事实反查面板（`GET /api/legal/provision/{num}/facts`）——miniapp 没有「按条
+  查事实」这回事（它的事实是段落内的芯片）。
+* CLI 清单面板（`GET /api/legal/cli`）——miniapp 是 GUI，没有 CLI 清单页。
+* 域级锁四键状态条——miniapp 的证据锁卡是**论文侧那把**；法律侧这把是
+  corpus/date/index_sha256/view 四键闭集，形状不同。
+* 收据五元组表——miniapp 是事实芯片（单值）；法律侧一条收据是
+  id｜sha16｜span｜face｜how 五元组，只能列表格。
+
+**本单不适用（明确不做假动作）**：正文即编辑、AI 改写、模型选择、保护面插入
+事实、保存链路四层探针、候选区写盘（法律闸无写路径）。
+
+**本单不适用（基准里根本没有）**：深色模式。miniapp app.css 只有一套纸面色板
+（全文无 `prefers-color-scheme`），所以第一版的「深色」开关已撤掉——不自造暗色。
+
+**部分适用**：中/EN 只切**静态外壳**（31 键，legal.js:1221-1298）；接口返回的
+文案（码的中文短名、后端注记、错误原文）保持后端原样——替后端翻译会掩盖口径。

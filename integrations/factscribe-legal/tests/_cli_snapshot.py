@@ -70,6 +70,13 @@ def _norm(text, tmp, repo):
             .replace(os.sep, "/"))
 
 
+def _norm_help(text):
+    """帮助文本做**空白归一**（argparse 的 usage 换行随 Python 版本变：
+    3.12 把 --date 留在参数行、3.13+ 把它折到下一行——那是解释器的排版，
+    不是命令面变了。归一后仍能钉住「参数、顺序、说明」这些真命令面）。"""
+    return " ".join(str(text or "").split())
+
+
 def _expand(argv, pkg_root):
     """把语料占位符换成仓内打包语料的真实路径（输出里会被归一成 <REPO>）。"""
     mapping = {
@@ -108,7 +115,7 @@ def collect(pkg_root=DEFAULT_PKG_ROOT, repo_root=DEFAULT_REPO_ROOT):
                             repo_root)
             rows.append({
                 "name": name,
-                "help": help_out["stdout"],
+                "help": _norm_help(help_out["stdout"]),
                 "help_exit": help_out["exit"],
                 "exit": run_out["exit"],
                 "stdout": run_out["stdout"],

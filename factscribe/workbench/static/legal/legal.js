@@ -277,7 +277,7 @@
         (st.state === "err" ? '<span class="smsg">' + esc(st.code ? st.code + "：" : "") + esc(st.message) + "</span>" : "") +
         "</span>");
     });
-    host.innerHTML = '<span class="stitle">接口状态</span>' + parts.join("");
+    host.innerHTML = '<span class="stitle">' + esc(t("status.title")) + "</span>" + parts.join("");
   }
 
   /* -------------------- 域级证据锁状态条 -------------------- */
@@ -303,7 +303,7 @@
     keyNames.forEach(function (k) {
       var v = lock[k];
       html += '<div class="key"><span class="k">' + esc(k) + '</span><span class="v">' +
-        (isEmpty(v) ? '<span style="color:var(--mcode-text-subtle)">（未声明）</span>' : esc(v)) +
+        (isEmpty(v) ? '<span style="color:var(--muted-3)">（未声明）</span>' : esc(v)) +
         "</span></div>";
     });
     html += '<div class="key"><span class="k">current_canonical_sha256</span><span class="v">' +
@@ -581,12 +581,12 @@
     if (!row) return "";
     var fact = row.fact || null;
     var rows = [];
-    rows.push("<dt>span</dt><dd>" + esc(row.span || MISSING) + "　<span style='color:var(--mcode-text-muted)'>" +
+    rows.push("<dt>span</dt><dd>" + esc(row.span || MISSING) + "　<span style='color:var(--muted)'>" +
       esc(SPAN_EXPLAIN) + "</span></dd>");
-    rows.push("<dt>face</dt><dd>" + esc(row.face || MISSING) + "　<span style='color:var(--mcode-text-muted)'>" +
+    rows.push("<dt>face</dt><dd>" + esc(row.face || MISSING) + "　<span style='color:var(--muted)'>" +
       esc(FACE_EXPLAIN[row.face] || (isEmpty(row.face) ? "—＝未能定面（按全正文口径处理）" : "后端给出的命中面")) +
       "</span></dd>");
-    rows.push("<dt>how</dt><dd>" + esc(row.how || MISSING) + "　<span style='color:var(--mcode-text-muted)'>" +
+    rows.push("<dt>how</dt><dd>" + esc(row.how || MISSING) + "　<span style='color:var(--muted)'>" +
       esc(HOW_EXPLAIN[row.how] || (isEmpty(row.how) ? "—＝该条未跑到核验方式" : "后端给出的核验方式")) +
       "</span></dd>");
     if (fact) {
@@ -597,11 +597,11 @@
       if (!isEmpty(fact.file)) rows.push("<dt>file</dt><dd class='mono-sm'>" + esc(fact.file) + "</dd>");
       if (!isEmpty(fact.id)) rows.push("<dt>fact id</dt><dd class='mono-sm'>" + esc(fact.id) + "</dd>");
     } else {
-      rows.push("<dt>fact</dt><dd style='color:var(--mcode-text-muted)'>接口没有给这条收据附 fact（claim／value／定位）。</dd>");
+      rows.push("<dt>fact</dt><dd style='color:var(--muted)'>接口没有给这条收据附 fact（claim／value／定位）。</dd>");
     }
     return '<div class="receipt-detail"><header><span class="mono">' + esc(row.id) + "</span>" +
       '<span class="badge accent">收据</span><span style="flex:1"></span>' +
-      '<span style="font-weight:400;font-size:11px;color:var(--mcode-text-muted)">点表格任意一行可展开／收起</span></header>' +
+      '<span style="font-weight:400;font-size:11px;color:var(--muted)">点表格任意一行可展开／收起</span></header>' +
       '<div class="rbody"><dl class="explain">' + rows.join("") + "</dl></div></div>";
   }
   function findReceiptRow(items, id) {
@@ -771,7 +771,7 @@
           return '<tr><td class="mono-sm">' + esc(x.code) + "</td>" +
             "<td>" + esc(isEmpty(x.label) ? MISSING : x.label) + "</td>" +
             '<td><span class="badge ' + sev + '">' + (sev === "red" ? "红" : "黄") + "</span></td>" +
-            '<td class="mono-sm" style="color:var(--mcode-text-muted)">' + esc(isEmpty(x.gate) ? MISSING : x.gate) + "</td></tr>";
+            '<td class="mono-sm" style="color:var(--muted)">' + esc(isEmpty(x.gate) ? MISSING : x.gate) + "</td></tr>";
         }).join("") + "</tbody></table></div>";
     });
     host.innerHTML = html;
@@ -967,6 +967,18 @@
               '</span> · write_path ' + esc(isEmpty(dec.write_path) ? MISSING : String(dec.write_path)) +
               (isEmpty(dec.reason) ? '' : ' · ' + esc(dec.reason)) + '</div>';
           }
+          var afterText = (it.status === "adopted_pending")
+            ? "已登记采纳意图 · 未写盘"
+            : ((it.status === "rejected") ? "已拒写（指纹闸拦下）" : "待采纳 · 未写盘");
+          rows += '<div class="diff">' +
+            '<div><div class="dlabel">现状（before_sha）</div><div class="dval">' +
+              esc(isEmpty(it.before_sha) ? MISSING : it.before_sha) + "</div>" +
+              '<div class="dlabel" style="margin-top:6px">指纹来源</div><div class="dval">' +
+              esc(isEmpty(fp.source) ? MISSING : fp.source) + "</div></div>" +
+            '<div class="after"><div class="dlabel">采纳后（' + esc(it.status || MISSING) + "）</div>" +
+              '<div class="dval">' + esc(afterText) + "</div>" +
+              '<div class="dlabel" style="margin-top:6px">write_path</div><div class="dval">' +
+              esc(dec.write_path === undefined ? MISSING : String(dec.write_path)) + "</div></div></div>";
           return '<div class="proprow">' + rows + "</div>";
         }).join("") + "</div>";
         if (!isEmpty(p.note)) html += '<div class="locknote">后端注记：' + esc(p.note) + "</div>";
@@ -999,9 +1011,9 @@
             (isEmpty(a.help) ? "" : "：" + esc(a.help));
         }).join("、");
         return '<tr><td class="mono-sm">' + esc(c.name) + "</td>" +
-          '<td class="mono-sm" style="color:var(--mcode-text-muted)">' + esc(isEmpty(c.group) ? MISSING : c.group) + "</td>" +
+          '<td class="mono-sm" style="color:var(--muted)">' + esc(isEmpty(c.group) ? MISSING : c.group) + "</td>" +
           "<td>" + esc(isEmpty(c.help) ? MISSING : c.help) + "</td>" +
-          '<td class="mono-sm" style="color:var(--mcode-text-muted)">' + (args ? args : MISSING) + "</td></tr>";
+          '<td class="mono-sm" style="color:var(--muted)">' + (args ? args : MISSING) + "</td></tr>";
       }).join("") + "</tbody></table>";
   }
 
@@ -1098,12 +1110,6 @@
     $("#btn-refresh").addEventListener("click", function () {
       if (!S.token) { toast("需要令牌"); return; }
       loadAll();
-    });
-    $("#btn-theme").addEventListener("click", function () {
-      var root = document.documentElement;
-      var cur = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      root.setAttribute("data-theme", cur);
-      $("#btn-theme").textContent = cur === "dark" ? "浅色" : "深色";
     });
     document.addEventListener("click", function (e) {
       var target = e.target;
@@ -1206,6 +1212,153 @@
     });
   }
 
+
+  /* -------------------- 界面语言（中/EN）--------------------
+     基准：miniapp app.js:5379（#langSeg 点击切语言）。
+     范围：只切**静态外壳**文案；接口返回的文案（码的中文短名、注记、
+     错误原文）保持后端原样——后端给什么就显示什么，不替它翻译。 */
+  var LANG_KEY = "factscribe.legal.lang";
+  var I18N = {
+    zh: {
+      "brand.sub": "法律侧工作台 · FR 判例样板页",
+      "tb.readonly": "法律闸暂无写路径",
+      "tb.connect": "连接",
+      "tb.refresh": "刷新读数",
+      "tb.rerun": "重新核验",
+      "lock.legal.tag": "法律域锁",
+      "lock.legal.desc": "域级证据锁 · 四键闭集",
+      "lock.paper.tag": "论文锁",
+      "lock.paper.desc": "论文侧证据锁 · 另一把锁（不是上面这把）",
+      "status.title": "接口状态",
+      "rail.country": "国家 / 法域",
+      "rail.domain": "域（对应闸）",
+      "rail.kind": "件型",
+      "rail.state": "时效状态",
+      "rail.corpus": "语料（依据）",
+      "rail.tl": "时效状态分布",
+      "main.detail": "件详情",
+      "main.receipts": "事实账 · 逐条收据",
+      "main.receipts.hint": "列＝契约 fields 顺序：id｜sha16｜span｜face｜how；点行展开",
+      "right.issues": "问题区",
+      "right.issues.hint": "红牌 / 黄牌 · 码用 codes 通道的中文短名",
+      "tab.issues": "问题清单",
+      "tab.codes": "判定码表",
+      "right.doc": "文书段落区（落点）",
+      "right.doc.hint": "带引证标记的段落 · 点标记 ⇄ 点收据 双向高亮",
+      "right.prov": "条 → 事实反查",
+      "right.prov.hint": "GET /api/legal/provision/{num}/facts · 条号由你给，本页不预置",
+      "right.prov.go": "反查",
+      "right.prov.fill": "用选中件的 id",
+      "right.prop": "待批提案",
+      "right.prop.hint": "建单 · 采纳只登记意图，不写盘",
+      "foot.cli": "法律侧 CLI 子命令（来自 GET /api/legal/cli）",
+      "foot.unmounted": "未挂载的接口（页面不调、不假装有）",
+      "foot.consume": "本页怎么消费接口"
+    },
+    en: {
+      "brand.sub": "Legal workbench · FR case sample",
+      "tb.readonly": "No write path in the legal gate",
+      "tb.connect": "Connect",
+      "tb.refresh": "Refresh",
+      "tb.rerun": "Re-verify",
+      "lock.legal.tag": "Legal lock",
+      "lock.legal.desc": "Domain evidence lock · 4-key closed set",
+      "lock.paper.tag": "Paper lock",
+      "lock.paper.desc": "Paper-side evidence lock · a different lock (not the one above)",
+      "status.title": "Endpoint status",
+      "rail.country": "Country / jurisdiction",
+      "rail.domain": "Domain (gate)",
+      "rail.kind": "Kind",
+      "rail.state": "Timeliness",
+      "rail.corpus": "Corpus (evidence)",
+      "rail.tl": "Timeliness distribution",
+      "main.detail": "Item detail",
+      "main.receipts": "Fact ledger · receipts",
+      "main.receipts.hint": "Columns = contract fields order: id|sha16|span|face|how; click a row to expand",
+      "right.issues": "Findings",
+      "right.issues.hint": "Red / yellow cards · code labels come from the codes channel (Chinese, as returned)",
+      "tab.issues": "Findings",
+      "tab.codes": "Code table",
+      "right.doc": "Document segments (landing)",
+      "right.doc.hint": "Segments with citation markers · click a marker ⇄ click a receipt",
+      "right.prov": "Provision → facts",
+      "right.prov.hint": "GET /api/legal/provision/{num}/facts · the number is yours to type; nothing is preset here",
+      "right.prov.go": "Look up",
+      "right.prov.fill": "Use selected item id",
+      "right.prop": "Pending proposals",
+      "right.prop.hint": "Create a ticket · adopt only registers intent, writes nothing",
+      "foot.cli": "Legal CLI subcommands (from GET /api/legal/cli)",
+      "foot.unmounted": "Unmounted endpoints (the page neither calls nor pretends to have)",
+      "foot.consume": "How this page consumes the API"
+    }
+  };
+  var S_LANG = "zh";
+  function t(key) {
+    var dict = I18N[S_LANG] || I18N.zh;
+    return dict[key] || (I18N.zh[key] || key);
+  }
+  function applyLang(lang) {
+    S_LANG = (lang === "en") ? "en" : "zh";
+    var dict = I18N[S_LANG] || I18N.zh;
+    $$("[data-i18n]").forEach(function (el) {
+      var k = el.getAttribute("data-i18n");
+      if (dict[k]) el.textContent = dict[k];
+    });
+    document.documentElement.setAttribute("lang", S_LANG === "en" ? "en" : "zh-CN");
+    $$("#langSeg button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-lang") === S_LANG);
+    });
+    try { localStorage.setItem(LANG_KEY, S_LANG); } catch (e) { /* 无痕模式：存不下就算了 */ }
+  }
+  function initLang() {
+    var saved = "";
+    try { saved = localStorage.getItem(LANG_KEY) || ""; } catch (e) { saved = ""; }
+    applyLang(saved === "en" ? "en" : "zh");
+    var seg = $("#langSeg");
+    if (!seg) return;
+    seg.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest("button[data-lang]") : null;
+      if (!btn) return;
+      applyLang(btn.getAttribute("data-lang"));
+    });
+  }
+
+  /* -------------------- 右栏宽度拖拽 --------------------
+     基准：miniapp app.js:5757-5827（NAVW_KEY；拖动实时变、松手才记）。
+     宽度是**本机界面偏好**，记在 localStorage，与项目数据无关。 */
+  var NAVW_KEY = "factscribe.legal.navw";
+  var NAVW_MIN = 300, NAVW_MAX = 680, NAVW_DEFAULT = 392;
+  function navWidth(raw) {
+    var w = parseInt(raw, 10) || 0;
+    if (!w) w = NAVW_DEFAULT;
+    return Math.min(NAVW_MAX, Math.max(NAVW_MIN, w));
+  }
+  function initSplitter() {
+    var el = $("#nav-splitter");
+    if (!el) return;
+    var saved = 0;
+    try { saved = localStorage.getItem(NAVW_KEY) || ""; } catch (e) { saved = ""; }
+    document.documentElement.style.setProperty("--nav-w", navWidth(saved) + "px");
+    var dragging = false;
+    el.addEventListener("mousedown", function (ev) {
+      dragging = true;
+      document.body.classList.add("nav-dragging");
+      ev.preventDefault();
+    });
+    window.addEventListener("mousemove", function (ev) {
+      if (!dragging) return;
+      var w = window.innerWidth - ev.clientX;
+      document.documentElement.style.setProperty("--nav-w", navWidth(w) + "px");
+    });
+    window.addEventListener("mouseup", function () {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove("nav-dragging");
+      var now = getComputedStyle(document.documentElement).getPropertyValue("--nav-w");
+      try { localStorage.setItem(NAVW_KEY, String(navWidth(now))); } catch (e) { /* 忽略 */ }
+    });
+  }
+
   /* -------------------- 启动 -------------------- */
   function init() {
     var q = new URLSearchParams(window.location.search || "");
@@ -1215,6 +1368,8 @@
       S.tokenFrom = "URL 查询参数";
       $("#token-input").value = S.token;
     }
+    initLang();
+    initSplitter();
     bindEvents();
     renderAll();
     if (S.token) loadAll();

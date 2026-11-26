@@ -9,6 +9,7 @@
 //      跑真实的 probePythonCandidate，验证「命令不存在」与「版本过低」被分成两类；
 //   3. 文案：拿发现状态喂给 pythonFailureMessage，看它有没有把版本号、路径、FS_PYTHON 说清楚。
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -37,6 +38,37 @@ function fakeBroken(dir, name) {
   writeFileSync(full, '#!/bin/sh\necho "python was not found; run without arguments to install from the Microsoft Store" >&2\nexit 9009\n', 'utf8');
   chmodSync(full, 0o755);
   return full;
+}
+
+/**
+ * 造一个「进程先退出、stdout 数据后到」的假 spawn。
+ *
+ * 真机上就是这样：解释器吐完版本号就退出，stdout 的字节还留在管道里，
+ * Node 的 'exit' 事件并不保证管道已被读空（'close' 才是）。机器一忙
+ * （CI runner 五个矩阵并行），'exit' 就会先于 stdout 的 'data' 到达。
+ *
+ * 用注入的 spawnFn 把这个时序**钉死**在测试里：不看机器忙不忙，
+ * 探针都必须等 stdout 读完再下结论，不许把「读得出版本」误报成「读不出版本」。
+ */
+function lateStdoutSpawn(stdoutText) {
+  return function fakeSpawn() {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stdout.setEncoding = () => {};
+    child.stderr = new EventEmitter();
+    child.stderr.setEncoding = () => {};
+    child.kill = () => {};
+    setImmediate(() => {
+      child.emit('exit', 0);
+      setImmediate(() => {
+        child.stdout.emit('data', stdoutText);
+        child.stdout.emit('end');
+        child.stderr.emit('end');
+        child.emit('close', 0);
+      });
+    });
+    return child;
+  };
 }
 
 try {
@@ -78,6 +110,12 @@ try {
   };
   // 本机真解释器也过一遍探针（证明探针脚本对真 Python 有效）。
   out.realProbe = await probePythonCandidate({ command: 'python3', args: [], kind: 'name' });
+
+  // ---- ②之补：进程先退出、stdout 数据后到（时序钉死，不靠机器忙不忙）----
+  out.lateStdout = await probePythonCandidate(
+    { command: '/fake/late-python', args: [], kind: 'name' },
+    { spawnFn: lateStdoutSpawn('FSVER:3.9\nFSEXE:/fake/late-python') }
+  );
 
   // ---- ③ 发现流程（注入探针：模拟各种 Windows 现场）----
   // 3a. 只有 py 启动器：py 报 3.12 → 成功，且命令带前缀参数

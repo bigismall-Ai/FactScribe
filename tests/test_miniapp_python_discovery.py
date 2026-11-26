@@ -156,6 +156,17 @@ class ProbeClassificationTests(DiscoveryResultTests):
         """命令在、但读不出版本（Windows Store 别名那种）——第三类，不许混进「没装」。"""
         self.assertEqual(self.result["probe"]["broken"]["status"], "broken")
 
+    def test_late_stdout_is_still_read(self):
+        """进程先退出、stdout 数据后到时，探针必须等管道读完再下结论。
+
+        Node 的 'exit' 不保证 stdout 已被读空（'close' 才是）；机器一忙
+        （CI runner 五个矩阵并行）就会先收到 'exit'。早判会把明明吐了版本号的
+        解释器误报成 broken/no_version——用户看到「这个命令不是可用的 Python」。
+        """
+        probe = self.result["lateStdout"]
+        self.assertEqual(probe["status"], "old")
+        self.assertEqual(probe["version"], "3.9")
+
     def test_probe_works_on_real_interpreter(self):
         """探针脚本对真 Python 也有效（本机的 python3）。"""
         probe = self.result["realProbe"]

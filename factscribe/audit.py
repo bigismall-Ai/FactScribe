@@ -15,7 +15,8 @@ from .citations import (BibEntry, _URL_OK_TYPES, bib_duplicates, parse_bib,
                         unused_bib_entries, valid_stable_id)
 from .checks import aggregate_exit
 from .config import (Config, ConfigError, _glob_paths, _read_text,
-                     all_tex_files, facts_digest, git_commit, load_toml)
+                     all_tex_files, facts_digest, git_commit, load_toml,
+                     outside_closure_note, outside_facts_note)
 from .constants import (CONFIDENCE_OK, EXIT_INTEGRITY, KINDS_OK, SEV_INFO,
                         SEV_RED, SEV_YELLOW, VERSION)
 from .evidence import CHANGED_CODE, UNFROZEN_CODE, lock_check, unfrozen_info
@@ -778,13 +779,48 @@ def _report_issues(cfg: Config, facts: list[Fact]) -> list[Issue]:
     return out
 
 
+def _facts_outside_issues(cfg: Config) -> list[Issue]:
+    """事实账侧的两类信任根缺口（红，exit 5）。
+
+    - FACT_FILE_OUTSIDE_PROJECT：账文件的真实目标越出项目根。账本不收它，
+      那些事实没进审计——审计拿不到项目外的数字当账，信任根被突破。
+    - FACT_FILE_UNRESOLVED：账文件的软链成环或断链，真实目标不可解，内容
+      不可知。同样没进审计（覆盖缺口）。
+
+    两条都不许静默：静默读入＝fail-open，静默丢弃＝把缺口盖住。
+    """
+    out: list[Issue] = []
+    for rel, target in getattr(cfg, "outside_facts", []):
+        out.append(Issue(
+            "FACT_FILE_OUTSIDE_PROJECT",
+            "事实账文件 %r 是指向项目外的软链（真实目标 %s）——账本不收它，"
+            "这些事实没进审计（信任根被突破）" % (rel, target),
+            location=rel, exit_code=EXIT_INTEGRITY,
+            params={"rel": repr(rel), "target": str(target)}))
+    for rel, why in getattr(cfg, "unresolved_facts", []):
+        out.append(Issue(
+            "FACT_FILE_UNRESOLVED",
+            "事实账文件 %r 的软链不可解（%s）——账本不收它，"
+            "这些事实没进审计" % (rel, why),
+            location=rel, exit_code=EXIT_INTEGRITY,
+            params={"rel": repr(rel), "why": str(why)}))
+    return out
+
+
+
+
 def run_check(cfg: Config, facts: list[Fact]):
     issues: list[Issue] = []
     warnings: list[Issue] = []
     conflicts: list[dict] = []
 
-    if not facts:
+    # 空账有两种：真没账（配置错，exit 2）；或账文件是越界／不可解的软链、
+    # 被账本拒收（红，exit 5，见 _facts_outside_issues）。后者不许在这里
+    # 改写成「空账」——那是两回事，混成一个码就把信任根缺口盖住了。
+    if not facts and not getattr(cfg, "outside_facts", []) \
+            and not getattr(cfg, "unresolved_facts", []):
         raise ConfigError("facts 为空（%s 没匹配到任何 fact）——空账不算通过" % cfg.facts_glob)
+    issues += _facts_outside_issues(cfg)
 
     red_src, yellow_src = verify_sources(cfg, facts)
     issues += red_src
@@ -992,9 +1028,16 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     # 分析入口归一行尾：读盘侧按原样读（CRLF 不丢），分析层按行做事；
     # 归一的是内存副本，磁盘字节不动。
     sections = [(rel, to_lf(text)) for rel, text in sections]
-    if not facts:
+    # 空账有两种：真没账（配置错，exit 2）；或账文件是越界／不可解的软链、
+    # 被账本拒收（红，exit 5，见 _facts_outside_issues）。后者不许在这里
+    # 改写成「空账」——那是两回事，混成一个码就把信任根缺口盖住了。
+    if not facts and not getattr(cfg, "outside_facts", []) \
+            and not getattr(cfg, "unresolved_facts", []):
         raise ConfigError("facts 为空（%s 没匹配到任何 fact）——空账不算通过" % cfg.facts_glob)
-    if not sections:
+    # 空闭包有两种：真没正文（exit 2）；或正文是越界软链、被记账挡在闭包外
+    # （exit 5，INPUT_OUTSIDE_PROJECT）。后者由下面的越界记账判红，不许在这里
+    # 改写成「没正文」——那是两回事，混成一个码就把覆盖缺口盖住了。
+    if not sections and not outside_closure_note(cfg):
         raise ConfigError("sections 为空（%s 没匹配到任何 .tex）——没正文不算通过"
                           % cfg.sections_glob)
 
@@ -1002,6 +1045,7 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     yellow: list[Issue] = []
     hints: list[Issue] = []
 
+    red += _facts_outside_issues(cfg)
     red_src, yellow_src = verify_sources(cfg, facts)
     red += red_src
     yellow += yellow_src
@@ -1107,6 +1151,28 @@ def run_audit(cfg: Config, facts: list[Fact], sections: list[tuple[str, str]],
     red += _source_rule_issues(cfg, sections)
     # R-05：闭包展开时 \input/\include/\subfile 指向不存在的文件——正文
     # 可能整段没进审计，属覆盖缺口（exit 5），不许静默放行。
+    # R-05：目标存在但解析后越出项目根（\input{../shared/x.tex} 或绝对路径）
+    # ——闭包不收它，这一段同样没进审计。此前静默丢弃＝fail-open（audit 判绿），
+    # 现在按 SPEC-V3.0 码表判红 INPUT_OUTSIDE_PROJECT（exit 5）。
+    for src_rel, ref, line in getattr(cfg, "outside_inputs", []):
+        # line=0：不是 \input 声明越界，而是**闭包起点本身**越界（章节软链
+        # 指向项目外）。两类判红同一个码，但文案要说清是哪一种。
+        if line:
+            msg = ("\\input 目标 %r 越出项目根（%s:%s）——闭包不收它，"
+                   "这一段可能整体没进审计（R-05）" % (ref, src_rel, line))
+            loc = "%s:%s" % (src_rel, line)
+        else:
+            msg = ("闭包起点 %s 是软链，越出项目根（目标 %r）——闭包不收它，"
+                   "这一段可能整体没进审计（R-05）" % (src_rel, ref))
+            loc = str(src_rel)
+        red.append(Issue(
+            "INPUT_OUTSIDE_PROJECT", msg,
+            location=loc, token=ref,
+            exit_code=EXIT_INTEGRITY,
+            message_key=("finding.INPUT_OUTSIDE_PROJECT.start" if not line
+                         else "finding.INPUT_OUTSIDE_PROJECT"),
+            params={"ref": repr(ref), "src_rel": str(src_rel),
+                     "line": str(line)}))
     for src_rel, ref, line in getattr(cfg, "missing_inputs", []):
         red.append(Issue(
             "INPUT_TARGET_MISSING",

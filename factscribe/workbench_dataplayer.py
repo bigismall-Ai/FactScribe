@@ -14,7 +14,7 @@ from .audit import _aggregate_exit, run_audit, source_path
 from .brief import build_brief, payload as brief_payload
 from .config import (ConfigError, load_config, load_facts, load_sections)
 from .landing import resolve_landing
-from .textio import write_text_exact
+from .textio import read_text_exact, write_text_exact
 from .evidence import (freeze_evidence, lock_check, log_state, read_lock,
                        unfreeze_evidence, unfrozen_info)
 from .i18n import issue_dict
@@ -64,14 +64,14 @@ def project_data(project: Path | str, allow_write: bool = False,
             base = source_path(cfg, "").resolve()
             path = source_path(cfg, src).resolve()
             path.relative_to(base)
-            text = path.read_text(encoding="utf-8")
+            text = read_text_exact(path)
         except (OSError, ValueError, UnicodeDecodeError):
             text = ""
         source_rows[src] = {"id": src, "name": src, "text": text,
                             "sha256": fact.source_sha256}
     bib_path = cfg.root / cfg.bib
     try:
-        bib = bib_path.read_text(encoding="utf-8")
+        bib = read_text_exact(bib_path)
     except (OSError, UnicodeDecodeError):
         bib = ""
     return {
@@ -253,7 +253,7 @@ def _scan_project_tex(cfg) -> list[tuple[str, str]]:
             continue
         seen.add(rel)
         try:
-            out.append((rel, (cfg.root / rel).read_text(encoding="utf-8")))
+            out.append((rel, read_text_exact(cfg.root / rel)))
         except (OSError, UnicodeDecodeError):
             pass
     return out

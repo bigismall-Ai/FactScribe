@@ -395,8 +395,13 @@ test('真引擎端到端：CRLF 文件走一遍真 serve，保存后仍是 CRLF'
     assert.equal(view.status, 200, JSON.stringify(view.body));
     const section = view.body.sections.find((s) => s.file === 'sections/01.tex');
     assert.ok(section, '引擎要认得出这一节');
-    assert.equal(eolStats(section.text).crlf, 0,
-      '接口层给的是归一过的 LF（这正是浏览器这一层要自己找回行尾的原因）');
+    // 读侧口径（迁入 main 正确性基线后）：接口层给的是**原样**正文——
+    // CRLF 不在读侧被翻译掉。旧断言「接口层给的是归一过的 LF」锁的是
+    // 修正前的行为（读侧翻译 ⇒ 行尾在进浏览器前就丢了），现已反过来：
+    // 浏览器拿到的就是磁盘上的字节，保存时按原样写回。
+    assert.equal(eolStats(section.text).crlf, 4,
+      '接口层给的应是原样正文（CRLF 不在读侧被翻译掉）');
+    assert.equal(eolStats(section.text).lf, 0);
 
     const saved = await call('/api/workbench/sections', {
       method: 'PUT',

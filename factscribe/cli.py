@@ -28,6 +28,7 @@ from .buildpdf import _is_font_error, auto_build
 from .config import (Config, ConfigError, load_config, load_facts,
                      load_sections)
 from .console import safe_stdio
+from .safepath import WriteRefused, guard_facts_write, guard_project_write
 from .constants import (EXIT_CONFIG, EXIT_INTERNAL, EXIT_OK, EXIT_RED,
                         EXIT_YELLOW, VERSION)
 from .doctor import collect as collect_doctor
@@ -191,7 +192,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dev", action="store_true",
                     help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来，只做界面预览")
     sp.add_argument("--no-token", dest="no_token", action="store_true",
-                    help="不要求 token（只允许本监听地址的同源请求；个人机器可用）")
+                    help="不要求 token（只靠同源检查：带 Origin 的请求必须是本监听"
+                         "地址，否则 403 CROSS_ORIGIN；不带 Origin 的请求一律放行"
+                         "——命令行与 MiniApp 代理走这条；个人机器可用）")
     sp.add_argument("--no-open", dest="no_open", action="store_true",
                     help="网页模式不自动打开浏览器")
     sp.add_argument("--json", action="store_true",
@@ -274,7 +277,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dev", action="store_true",
                     help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来")
     sp.add_argument("--no-token", dest="no_token", action="store_true",
-                    help="不要求 token（只允许本监听地址的同源请求）")
+                    help="不要求 token（只靠同源检查：带 Origin 的请求必须是本监听"
+                         "地址，否则 403 CROSS_ORIGIN；不带 Origin 的请求一律放行"
+                         "——命令行与 MiniApp 代理走这条）")
     sp.add_argument("--no-open", dest="no_open", action="store_true",
                     help="不自动打开浏览器")
     sp.add_argument("--json", action="store_true",
@@ -1263,6 +1268,18 @@ def cmd_fact_import(args) -> int:
     if target.parent.resolve() != facts_dir.resolve():
         return _report_fail(args, command, EXIT_CONFIG, rel_report, "FACTS_PATH_INVALID",
                             "只许写 facts/ 一级，不许写子目录")
+    # 写侧信任根闸：账本的真实目标越出项目根就拒写——不落盘、不留半截文件。
+    # 与读侧同一对码（FACT_FILE_OUTSIDE_PROJECT / FACT_FILE_UNRESOLVED，
+    # red / exit 5），severity 与 exit 一律不动。
+    try:
+        target_rel = target.relative_to(cfg.root).as_posix()
+    except ValueError:
+        target_rel = target.name
+    try:
+        guard_facts_write(cfg.root, target, rel=target_rel)
+    except WriteRefused as exc:
+        return _report_fail(args, command, exc.exit_code, rel_report,
+                            exc.code, str(exc))
     header = ("# managed by factscribe fact import; report=%s digest=%s"
               % (rel_report, semantic_digest(report)))
     body = [header, ""]
@@ -1677,6 +1694,7 @@ def cmd_matrix(args) -> int:
     sections = load_sections(cfg)
     text, rows = render_matrix(cfg, facts, sections)
     out = Path(args.out) if getattr(args, "out", None) else cfg.root / "audit" / "matrix.md"
+    guard_project_write(cfg.root, out, what="矩阵产物", rel="audit/matrix.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     human = "== factscribe matrix ==\n写盘：%s\n行数：%d（每行一条 fact）\n%s" % (
@@ -1692,6 +1710,7 @@ def cmd_matrix(args) -> int:
 def cmd_preamble(args) -> int:
     cfg = load_config(Path(args.project))
     out = Path(args.out) if getattr(args, "out", None) else cfg.root / "audit" / "preamble.tex"
+    guard_project_write(cfg.root, out, what="前言产物", rel="audit/preamble.tex")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(PREAMBLE_TEXT, encoding="utf-8")
     human = "== factscribe preamble ==\n写盘：%s\n%s" % (out, PREAMBLE_TEXT)
@@ -2297,8 +2316,11 @@ def main(argv=None) -> int:
         return handlers[args.command](args)
     except ConfigError as exc:
         code = getattr(exc, "code", "CONFIG_INVALID")
+        # 写盘被拒的码自带退出码（事实账越界＝信任链失败 exit 5）；
+        # 其它配置/用法错仍是 exit 2。severity 与 exit 都按码走，不改既有码。
+        exit_code = getattr(exc, "exit_code", EXIT_CONFIG)
         if getattr(args, "json", False):
-            payload = _payload(args.command, "error", EXIT_CONFIG,
+            payload = _payload(args.command, "error", exit_code,
                                message=str(exc))
             payload["code"] = code
             # §8：CONFIG 类码也必须出现在 findings/issues 里，判卷器不用
@@ -2309,7 +2331,7 @@ def main(argv=None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print("factscribe: 配置/用法错：%s" % exc, file=sys.stderr)
-        return EXIT_CONFIG
+        return exit_code
     except Exception as exc:  # noqa: BLE001 - 内部错误必须与「有违例」分开
         if getattr(args, "json", False):
             print(json.dumps(_payload(args.command, "error", EXIT_INTERNAL,

@@ -229,7 +229,10 @@ miniapp `app.js`（证据锁独立只读卡、事实芯片与卡片、提议差�
   的钉版哈希 ⇒ 指纹变 ⇒ 采纳被拒）、既有 11 条 CLI 快照对表。
 * 新增 `integrations/factscribe-legal/tests/_cli_snapshot.py` ＋
   `cli_baseline.json`：**既有 11 条命令的 --help／stdout／退出码快照**，
-  只从第 ① 步基线树（23acded）生成过一次。
+  只从第 ① 步基线树（23acded）生成过一次。--help 做**空白归一**，钉命令面
+  （参数、顺序、说明）不钉排版；边界：argparse 在 **3.10 改了段名**
+  （`optional arguments:` → `options:`），所以这份快照跨 **3.10–3.14** 成立，
+  **3.9 不在支持矩阵内**（CI/preflight 只跑 3.10–3.14）。
 * 新增 `tests/test_serve_legal_workbench.py`（16 例）：HTTP 层的四条读侧
   视图、提案建单／采纳／指纹不符 409、写路径仍 404、页面静态件；其中三例是
   **第一版那个阻断缺陷的回归锁**：`/legal` 与 `/legal/` 都出页面且都带

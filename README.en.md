@@ -20,7 +20,7 @@ Standard library only. No model SDK. Python ≥ 3.10.
 ## Contents
 
 - [Five minutes to first green](#five-minutes-to-first-green)
-- [I only want to see how my paper looks](#i-only-want-to-see-how-my-paper-looks)
+- [Just to see how my paper looks](#just-to-see-how-my-paper-looks)
 - [The Paper Workbench (Mini App)](#the-paper-workbench-mini-app)
 - [Command reference](#command-reference)
 - [Revising, with a human in the loop](#revising-with-a-human-in-the-loop)
@@ -52,7 +52,7 @@ python3 -m factscribe init mypaper && cd mypaper
 
 `init` writes 7 files: the project declaration `factscribe.toml`, the main file `main.tex`, one section `sections/01-intro.tex`, an empty ledger `facts/01-core.toml`, the human sign-off manifest `results/MANIFEST.toml`, `refs.bib`, and a project `README.md`.
 
-Next, make a **raw artefact** — an experiment log, a results file, a statistics dump, anything:
+Next, make a **raw artefact** (an experiment log, a results file, a statistics dump, anything):
 
 ```bash
 printf '50 道题里答对 42 道。\n' > results/exp.md
@@ -71,7 +71,7 @@ python3 -m factscribe fact add . \
 
 > **`--value` must spell the numbers in the order the artefact has them.** The artefact above shows 50 first and 42 second, so the value is `50/42`; writing `42/50` is refused — the numbers are compared in order of appearance, and a mismatch means the number was made up. This gate is the **value hard check**, and it is the same rule in all three places it lives: the CLI's `fact add`, the MCP tool `factscribe_add_fact`, and the workbench's "insert fact".
 
-`fact add` computes the sha256 of `results/exp.md` and prints one line. **It never signs for you** — copy that line into `results/MANIFEST.toml` yourself:
+`fact add` computes the sha256 of `results/exp.md` and prints one line. **It never signs for you**, so copy that line into `results/MANIFEST.toml` yourself:
 
 ```toml
 [manifest]
@@ -89,7 +89,7 @@ Then check the ledger itself:
 python3 -m factscribe check .    # unique ids, live sha256, signed manifest, expression arithmetic, duplicate values
 ```
 
-Finally hook the prose to the ledger — `\fact{A1}` means "the numbers on this line belong to A1":
+Finally hook the prose to the ledger (`\fact{A1}` means "the numbers on this line belong to A1"):
 
 ```tex
 \section{引言}
@@ -106,7 +106,7 @@ Step by step lives in [`docs/QUICKSTART.md`](docs/QUICKSTART.md). Read [`docs/TR
 
 ---
 
-## I only want to see how my paper looks
+## Just to see how my paper looks
 
 If you do not want to keep a ledger and do not want to learn LaTeX macros, and you just want to know where your manuscript stands, start the local web workbench:
 
@@ -118,7 +118,7 @@ It scans that directory, treats every subdirectory containing `factscribe.toml` 
 
 That path is **read-only** and does not touch your disk (opening a project records one `last_opened`, which is a note that you were last in this paper, not an edit).
 
-To ask "is this manuscript green right now" from your own code, use MCP: `factscribe mcp <project-dir>` exposes five read-only tools — `status`, `project`, `evidence_status`, `brief`, `audit`. `--allow-write` adds four write tools: write section, add fact, freeze evidence, unfreeze evidence.
+To ask "is this manuscript green right now" from your own code, use MCP: `factscribe mcp <project-dir>` exposes five read-only tools, namely `status`, `project`, `evidence_status`, `brief`, `audit`. `--allow-write` adds four write tools: write section, add fact, freeze evidence, unfreeze evidence.
 
 ---
 
@@ -130,7 +130,7 @@ The `workbench` command above is for scripts and local development. If you want 
 
 A local paper workbench page (route `/workbench`). It is not a cloud service and it does not upload your manuscript: a thin Node shell takes a loopback port and serves the page, and the Python engine **source ships inside the package** (vendored into the plugin), so there is nothing to `pip install`. The engine is written in Python, so the machine still needs a Python ≥3.10 interpreter; the next section shows how to get one.
 
-It is the same engine and the same criteria as the CLI — the reds you see in the page are the same reds you get in the terminal.
+It is the same engine and the same criteria as the CLI. The reds you see in the page are the same reds you get in the terminal.
 
 ### How to install it
 
@@ -140,7 +140,7 @@ cd miniapp
 ./install.sh        # sync into ~/.minimax/plugins/factscribe/
 ```
 
-`install.sh` is idempotent — running it many times gives the same result; `./install.sh --check` only reports whether the install is complete and writes nothing. Restart the MiniMax Code desktop app when it finishes.
+`install.sh` is idempotent, which means running it many times gives the same result; `./install.sh --check` only reports whether the install is complete and writes nothing. Restart the MiniMax Code desktop app when it finishes.
 
 MiniMax Code 3.1.11 and later can also import the package straight from a Git repository: paste the repository URL, pick the package directory, and confirm the preview.
 
@@ -170,29 +170,29 @@ macOS and Linux behave as before: the Mini App tries `python3`, `python`, `/usr/
 
 ### How to open it
 
-After the restart, ask the agent to "Open the FactScribe paper workbench". On first use the page asks for your **paper root directory** — any directory containing a `factscribe.toml` counts — and you can change it later from the settings page.
+After the restart, ask the agent to "Open the FactScribe paper workbench". On first use the page asks for your **paper root directory**. Any directory containing a `factscribe.toml` counts, and you can change it later from the settings page.
 
 ### What the page does
 
-**Disks and body text** — a project may hold several language disks (`paper` / `paper-zh`). The table of contents sits on the left, and every row has a pen next to it: **click it to rename that section**. There is another pen beside the cover title, and it edits the `\title{…}` command in that disk's own entry file. Those are two separate write channels, each with its own fingerprint gate and atomic write (a `.bak` is left behind), and every other byte of the file stays untouched.
+**Disks and body text**: a project may hold several language disks (`paper` / `paper-zh`). The table of contents sits on the left, and every row has a pen next to it: **click it to rename that section**. There is another pen beside the cover title, and it edits the `\title{…}` command in that disk's own entry file. Those are two separate write channels, each with its own fingerprint gate and atomic write (a `.bak` is left behind), and every other byte of the file stays untouched.
 
-**The right panel is draggable** — body text on the left, panel on the right, and the divider **changes the ratio when you drag it** (clamped to 240–640px). The width is remembered only when you let go; double-clicking the divider restores the default. It survives a page reload.
+**The right panel is draggable**: body text on the left, panel on the right, and the divider **changes the ratio when you drag it** (clamped to 240–640px). The width is remembered only when you let go; double-clicking the divider restores the default. It survives a page reload.
 
-**The body is the editor** — paragraphs are editable in place; there is no "enter edit mode" step. `\fact{}`, `\cite{}`, `\ref{}` and bound numbers show up as chips, and your typing does not disturb them.
+**The body is the editor**: paragraphs are editable in place; there is no "enter edit mode" step. `\fact{}`, `\cite{}`, `\ref{}` and bound numbers show up as chips, and your typing does not disturb them.
 
-**Check report** — the health summary plus the findings list. The readings of the last step of the four-step chain (evidence) are unchanged: declared / frozen / entries / sha256 / current_sha256 / mismatch each stand on their own.
+**Check report**: the health summary plus the findings list. The readings of the last step of the four-step chain (evidence) are unchanged: declared / frozen / entries / sha256 / current_sha256 / mismatch each stand on their own.
 
-**Prose gate** — reports only mechanically checkable formulaic writing: dash parentheticals, overlong headings, stock connectives, empty adjectives, three-part lists repeated across paragraphs, overlong sentences, rhythm and sentence-length spread. It only shows yellow cards; it does not block and it does not touch the text.
+**Prose gate** reports only mechanically checkable formulaic writing: dash parentheticals, overlong headings, stock connectives, empty adjectives, three-part lists repeated across paragraphs, overlong sentences, rhythm and sentence-length spread. It only shows yellow cards; it does not block and it does not touch the text.
 
-**Bilingual comparison** — compares the two language disks of one project entry by entry over the load-bearing fact fields and the `refs.bib` entries, and lists every drift.
+**Bilingual comparison**: compares the two language disks of one project entry by entry over the load-bearing fact fields and the `refs.bib` entries, and lists every drift.
 
-**Evidence lock** — a separate read-only card: `frozen` / `entries` / `sha256` / `current_sha256` / `mismatch`. If the list moved after the freeze, `mismatch` tells you which sections and which facts changed, and why it is red.
+**Evidence lock** (a separate read-only card: `frozen` / `entries` / `sha256` / `current_sha256` / `mismatch`). If the list moved after the freeze, `mismatch` tells you which sections and which facts changed, and why it is red.
 
-**Fact ledger and knowledge base** — query the ledger (by id / claim / value / source), and browse the project files. Before you write anything involving a number, reconcile here first: **a number that is not in the ledger must not be invented**.
+**Fact ledger and knowledge base**: query the ledger (by id / claim / value / source), and browse the project files. Before you write anything involving a number, reconcile here first: **a number that is not in the ledger must not be invented**.
 
-**Assistant panel** — runs on MiniMax Code's own model, with a Chinese / English interface switch.
+**Assistant panel**: runs on MiniMax Code's own model, with a Chinese / English interface switch.
 
-### The assistant has no interface for writing your manuscript
+### The assistant has no direct write interface
 
 That is a **safety boundary**, not a missing feature.
 
@@ -297,13 +297,13 @@ This is the biggest difference between FactScribe and "let the AI edit my paper"
 3. **The human adopts.** Only clicking "Adopt" writes the change to disk. If you do not click, nothing happens.
 4. **The fingerprint gate.** The proposal carries a `before_sha`. Before writing, the passage is checked again: has it been changed elsewhere? If so the write is **refused** (`BLOCK_STALE`), the card goes grey, and nobody else's words get overwritten.
 
-The write itself goes through the **same channel** as editing by hand: atomic write, a `.bak` left behind (generations rotate — `.bak` is the previous version, `.bak.1` the one before that, and they never overwrite each other), and no protection surface may be dropped.
+The write itself goes through the **same channel** as editing by hand: atomic write, a `.bak` left behind (generations rotate, so `.bak` is the previous version, `.bak.1` the one before that, and they never overwrite each other), and no protection surface may be dropped.
 
 The four ledger and evidence actions (append a fact, freeze evidence, unfreeze evidence, export the submission package) travel the same "a human clicks before anything is written" route, with the same fingerprint gate.
 
 Appending a fact carries an extra **ledger fingerprint gate**: the proposal records the sha of the target ledger file, and if the ledger moved elsewhere in the meantime, the adoption is refused and the card goes grey.
 
-Before exporting a submission package you can **look at the inventory first** — the preview is only for you to read; the manifest gate still decides, and nothing is exported when it does not pass.
+Before exporting a submission package you can **look at the inventory first**. The preview is only for you to read; the manifest gate still decides, and nothing is exported when it does not pass.
 
 ---
 
@@ -321,7 +321,7 @@ python3 -m factscribe protect --before old/ --after new/
 
 **The third gate is the prose gate.** It reports only mechanically checkable formulaic writing: dash parentheticals, headings that are too long or carry an explanation, stock connectives, empty adjectives, three-part lists repeated across paragraphs, overlong sentences, rhythm and sentence-length spread. It only shows yellow cards; it does not block and it does not touch the text. Four rules are rewrite rechecks: `HEADING_ECHO` catches a first sentence that restates its heading, `HEADING_RELATION_CHANGED` catches a swapped contrast word, `HEADING_SUBJECT_LOST` catches a dropped subject from an old heading, and `HEADING_SUBSTITUTED` catches a colon swapped for something else without a rewrite. The term layer has two lists: 33 paper terms from `paper-zh/GLOSSARY.md`, and 153 workspace process terms from the term registry.
 
-**The change record** (`tide`) treats one rewrite as a transaction: rise is what changed (the file hashes of two directories), fall is the real state after the edit (read from disk and hashed again — a human may not fill it in), blast radius is computed from the reverse `\input` and `\include` closure, and closure requires all three to agree. If any piece is missing, everything rolls back: no ledger, no derived view, exit code 1. There is no self-reported change list here — a person can read the result but cannot fill in the list.
+**The change record** (`tide`) treats one rewrite as a transaction: rise is what changed (the file hashes of two directories), fall is the real state after the edit (read from disk and hashed again; a human may not fill it in), blast radius is computed from the reverse `\input` and `\include` closure, and closure requires all three to agree. If any piece is missing, everything rolls back: no ledger, no derived view, exit code 1. There is no self-reported change list here. A person can read the result but cannot fill in the list.
 
 ---
 
@@ -329,11 +329,11 @@ python3 -m factscribe protect --before old/ --after new/
 
 **Offline by default.** `refs search` is the only command that reaches the network by default, and it sends the query terms only. Never prose, never a local path.
 
-Two switches send a request only when you pass them explicitly: `audit --resolve` sends arXiv and DOI identifiers to the resolver, and `fonts --fetch` downloads the Fandol font package. And if you configure a custom model endpoint in the workbench, the AI chat sends your prompt to that endpoint — an address **you** typed, not the default behaviour.
+Two switches send a request only when you pass them explicitly: `audit --resolve` sends arXiv and DOI identifiers to the resolver, and `fonts --fetch` downloads the Fandol font package. And if you configure a custom model endpoint in the workbench, the AI chat sends your prompt to that endpoint (an address **you** typed, not the default behaviour).
 
 **Run `build` and `audit --build` only on projects you trust yourself.** `project.build` is a shell command in the project declaration, and the tool runs it as written. `audit` on its own never compiles and never executes it; only `--build` does.
 
-**What leaves your machine:** nothing from the check report, the evidence lock or the fact ledger — all of it is computed locally. The workbench and the Mini App both bind to the loopback address (`127.0.0.1`) only.
+**What leaves your machine:** nothing from the check report, the evidence lock or the fact ledger (all of it is computed locally). The workbench and the Mini App both bind to the loopback address (`127.0.0.1`) only.
 
 **Verify before you trust it.** `factscribe doctor` checks the environment (Python version, tectonic, poppler, fonts, git) and the project state (declaration, ledger, manifest, freeze) item by item, with a fix command for each.
 
@@ -397,7 +397,7 @@ Four rules:
 3. The read-only endpoints are `/api/disk/<project>/<disk>/report` and `/api/disk/<project>/<disk>/machine`, and `POST /api/disk/<project>/<disk>/report/rerun` is a **read-only re-run** of the real gate: a subprocess runs `factscribe audit --json` (no `--build`, so nothing is compiled and nothing is written), bounded to 120 seconds, with a before/after hash comparison of the project directory to **prove zero writes**;
 4. The write endpoints are `POST /api/disk/<project>/<disk>/edit` (in-place paragraph editing, past the fingerprint gate and the protection chain), `POST /api/disk/<project>/<disk>/action` (`action=pdf|bundle|open_dir` — a real `buildpdf.auto_build` compile, a real `bundle.run_bundle` export, and macOS `open` for the project folder), `POST /api/disk/<project>/<disk>/fact/insert` (insert a fact binding), `GET /api/disk/<project>/<disk>/pdf` (serves the disk's `main.pdf` for preview/download), and `POST /api/project/<project>/reports/delete` (drops an imported draft record — **the report source file is left alone**).
 
-On the Mini App side the rule is the same: change the **source** (`factscribe/workbench/static/`) and then run `./build.sh` to sync — never edit the payload directly, because the three `app.js` copies must stay byte-identical and a test enforces it.
+On the Mini App side the rule is the same: change the **source** (`factscribe/workbench/static/`) and then run `./build.sh` to sync. Never edit the payload directly, because the three `app.js` copies must stay byte-identical and a test enforces it.
 
 ---
 
@@ -450,4 +450,4 @@ Specs live in `docs/design/`, implementation notes in `docs/implementation/`, an
 
 The full wording is in [`docs/WHAT-IT-PROVES.md`](docs/WHAT-IT-PROVES.md), the design side in [`docs/design/SPEC-V1.md`](docs/design/SPEC-V1.md).
 
-A green audit means 0 red and 0 yellow — every number and every citation matched the ledger. It does **not** mean the paper is fine.
+A green audit means 0 red and 0 yellow (every number and every citation matched the ledger). It does **not** mean the paper is fine.

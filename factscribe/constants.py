@@ -37,7 +37,8 @@ SEV_INFO = "info"
 # 对照一份完整的码表。这里把**引擎会抛出的每一个判定码**登记成闭集：
 #
 # * 只加不改：既有码的名字与含义一个字不动；本次新增登记的是段落级线
-#   独有的 13 个（见 PARAGRAPH_ONLY_CODES）。
+#   独有的 13 个（见 PARAGRAPH_ONLY_CODES）；法律侧第 ② 步并进来时又补登了
+#   法律集成件自己的 3 个（PROPOSAL_STALE／PROPOSAL_INVALID／PROPOSAL_UNKNOWN）。
 # * 登记 ≠ 触发：这 13 个码全部落在**写侧**（提议单／段落写回／value 硬闸），
 #   审计（audit --json）那条路上一个都不会抛——27 盘逐盘 cmp 27/27 与金样例
 #   逐字节未动，就是这件事的实测证据。
@@ -147,11 +148,20 @@ CODE_CLOSED_SET = frozenset({
     'PROPOSAL_FACT_MISSING',
     'PROPOSAL_FAILED',
     'PROPOSAL_ID_INVALID',
+    'PROPOSAL_INVALID',
     'PROPOSAL_KIND_INVALID',
     'PROPOSAL_NOT_FOUND',
     'PROPOSAL_SHAPE_MISMATCH',
+    # 法律侧待批提案通道的三个码（integrations/factscribe-legal/factscribe_legal/
+    # proposals.py）：PROPOSAL_STALE＝指纹闸不过（before_sha 与现算的不符），
+    # PROPOSAL_INVALID＝提议单本身不合形状，PROPOSAL_UNKNOWN＝单号查无此单。
+    # 法律侧第 ② 步并进 main 时补登——那个分支的基点早于闭集入宪那笔，
+    # 扫描器看不见这三个码。登记 ≠ 触发：三个码全落在**写侧**（建单／采纳），
+    # 审计那条路一个都不抛（27 盘逐盘 cmp 与金样例逐字节未动即是证据）。
+    'PROPOSAL_STALE',
     'PROPOSAL_TEXT_EMPTY',
     'PROPOSAL_TOKEN_MISMATCH',
+    'PROPOSAL_UNKNOWN',
     'PROPOSAL_UNREADABLE',
     'PROTECT_FILE_SET_CHANGED',
     'PROTECT_HEADING_RENAMED',

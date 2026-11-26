@@ -79,11 +79,11 @@ JSON 报告与信封、审计矩阵、证据锁与流水账、清单 manifest、
 | factscribe/scaffold.py:405/579/587 | 新文件与事实账追加 | 走 write_bytes，**本来就是逐字节** |
 | factscribe/tide.py:607 | 派生账本视图 md | 工具生成 |
 | scripts/*、experiments/* | 开发脚本与实验产物 | 一次性工具与实验输出；其中 ingest_fr_blobstore.py 等写的是语料目录 |
-| integrations/minifactscribe/miniapp/client/app.js | 前端 | 浏览器侧，textarea 的 value 本身归一为 LF |
+| miniapp/miniapp/client/app.js | 前端 | 浏览器侧，textarea 的 value 本身归一为 LF（旧宿主那一份随旧宿主删除） |
 
 ## 四、miniapp 线（feat/miniapp-host-seam）：口径不同，另立分支
 
-这条线的接口层契约写在 integrations/minifactscribe/tests/eol.test.mjs 的注释里：
+这条线的接口层契约写在 miniapp/tests/save-eol.test.mjs 的注释里：
 
 * HTML 规范规定 textarea 的 value 归一为 LF——真 Chrome 实测，浏览器拿不到 CRLF；
 * 引擎的读路径做通用换行翻译，接口层给的就是 LF；

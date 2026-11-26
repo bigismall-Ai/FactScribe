@@ -190,7 +190,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--allow-build", dest="allow_build", action="store_true",
                     help="允许 POST /api/build 编译 PDF；会执行 project.build")
     sp.add_argument("--ui", action="store_true",
-                    help="同时在这个端口提供本地工作台页面（GET /）")
+                    help="同时在这个端口提供页面（GET /）：旧节级网页前端已按第 ④ 步"
+                         "废弃，这条闸留给集成件自带的页面（如 legal 集成件）；"
+                         "产品前端是段落级工作台 factscribe workbench")
     sp.add_argument("--dev", action="store_true",
                     help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来，只做界面预览")
     sp.add_argument("--no-token", dest="no_token", action="store_true",
@@ -256,36 +258,6 @@ def build_parser() -> argparse.ArgumentParser:
                     help="项目目录（默认当前目录）")
     sp.add_argument("--allow-write", dest="allow_write", action="store_true",
                     help="开放 write_section / add_fact（默认只读）")
-
-    sp = sub.add_parser(
-        "web",
-        help="本地工作台页面：serve + 三栏编辑界面（只绑回环）",
-        description="等同 serve --ui：起本地 HTTP 服务，并在 GET / 提供"
-                    "左章节 / 中正文 / 右证据与审计的页面。默认只读；"
-                    "--allow-write 才开放改章节、追加事实与证据冻结。")
-    sp.add_argument("project", nargs="?", default=None,
-                    help="项目目录（省略＝只起服务，在页面里选论文项目）")
-    sp.add_argument("--host", default="127.0.0.1",
-                    choices=sorted(LOOPBACK_HOSTS),
-                    help="监听地址（只允许回环；默认 127.0.0.1）")
-    sp.add_argument("--port", type=int, default=0,
-                    help="端口（默认 0＝让系统分配）")
-    sp.add_argument("--token", default=None,
-                    help="固定 token（默认每次随机生成）")
-    sp.add_argument("--allow-write", dest="allow_write", action="store_true",
-                    help="打开写接口（章节/事实/证据）")
-    sp.add_argument("--allow-build", dest="allow_build", action="store_true",
-                    help="允许编译 PDF（会执行 project.build）")
-    sp.add_argument("--dev", action="store_true",
-                    help="开发模式：页面把 MiniApp 专属区（AI、启动）也显示出来")
-    sp.add_argument("--no-token", dest="no_token", action="store_true",
-                    help="不要求 token（只靠同源检查：带 Origin 的请求必须是本监听"
-                         "地址，否则 403 CROSS_ORIGIN；不带 Origin 的请求一律放行"
-                         "——命令行与 MiniApp 代理走这条）")
-    sp.add_argument("--no-open", dest="no_open", action="store_true",
-                    help="不自动打开浏览器")
-    sp.add_argument("--json", action="store_true",
-                    help="启动行只出 JSON（服务仍阻塞）")
 
     for name, help_text in (
         ("check", "校验事实账：id/sha256/人签清单/expr 算术/冲突"),
@@ -823,6 +795,9 @@ def cmd_serve(args) -> int:
         print("URL：%s" % url)
         if ui_url:
             print("页面：%s" % ui_url)
+            print("  （旧的节级网页前端已按第 ④ 步废弃；产品前端是段落级工作台："
+                  "factscribe workbench --root <目录>。--ui 这条闸留给集成件"
+                  "自带的页面。）")
         if token:
             print("Token：%s" % token)
         mode = "可写（--allow-write）" if args.allow_write else "只读"
@@ -848,13 +823,6 @@ def cmd_serve(args) -> int:
     finally:
         server.server_close()
     return EXIT_OK
-
-
-def cmd_web(args) -> int:
-    """本地工作台页面：serve + UI。"""
-    args.ui = True
-    args.web = True
-    return cmd_serve(args)
 
 
 def cmd_workbench(args) -> int:
@@ -2307,7 +2275,6 @@ def main(argv=None) -> int:
                 "doctor": cmd_doctor,
                 "serve": cmd_serve,
                 "workbench": cmd_workbench,
-                "web": cmd_web,
                 "mcp": cmd_mcp,
                 "report": cmd_report,
                 "verify-pdf": cmd_verify_pdf, "style": cmd_style,

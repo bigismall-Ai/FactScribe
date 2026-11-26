@@ -38,7 +38,9 @@ def png_bytes(width: int = 2, height: int = 2) -> bytes:
             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
 
 
-class WebUITest(unittest.TestCase):
+class ServeApiAuthTest(unittest.TestCase):
+    """serve 的 API 面（网页 UI 那一层已按第 ④ 步删除，见 SPEC-SERVE.md）。"""
+
     @classmethod
     def setUpClass(cls):
         cls.server, cls.token = create_server(
@@ -70,19 +72,6 @@ class WebUITest(unittest.TestCase):
                 exc.close()
             return exc.code, body
 
-    def test_index_is_served_without_token(self):
-        status, body = self._get("/")
-        self.assertEqual(status, 200)
-        self.assertIn("FactScribe", body)
-        self.assertIn("/app.css", body)
-
-    def test_static_assets(self):
-        for path, needle in (("/app.js", "wb('/project')"),
-                             ("/app.css", ".layout")):
-            status, body = self._get(path)
-            self.assertEqual(status, 200, path)
-            self.assertIn(needle, body)
-
     def test_api_still_requires_token(self):
         status, body = self._get("/api/project")
         self.assertEqual(status, 401)
@@ -100,16 +89,6 @@ class WebUITest(unittest.TestCase):
             status = exc.code
             exc.close()
         self.assertEqual(status, 403)
-
-    def test_fact_form_is_present(self):
-        status, body = self._get("/")
-        self.assertEqual(status, 200)
-        self.assertIn('id="wb-fact-form"', body)
-        self.assertIn('id="btn-wb-add-fact"', body)
-        status, js = self._get("/app.js")
-        self.assertEqual(status, 200)
-        self.assertIn("wb('/facts')", js)
-        self.assertIn("manifest_line", js)
 
     def test_api_works_with_token(self):
         status, body = self._get("/api/project", token=TOKEN)

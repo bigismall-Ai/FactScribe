@@ -20,7 +20,12 @@ factscribe serve <项目> [--host 127.0.0.1] [--port 0] [--token TOKEN] [--allow
 - 默认只读；`--allow-write` 才开放 `PUT /api/sections` 与 `POST /api/facts`。
 - `--allow-build` 才开放 `POST /api/build`；它会执行 `project.build`（shell），
   默认关闭。`GET /api/pdf` 只读已生成的 PDF。
-- `--ui` 在 `GET /` 提供本地工作台页面；`factscribe web` 是它的别名（见 `SPEC-WEB.md`）。
+- `--ui` 在 `GET /` 提供页面：旧的节级网页前端（`factscribe/web/`）已按第 ④ 步删除，
+  `factscribe web` 这条命令随之退场（不再有 `SPEC-WEB.md`）；`--ui` 这条闸留给
+  集成件自带的页面（如 legal 集成件）。产品前端是段落级工作台：
+  `factscribe workbench --root <目录>`。
+- `--no-token` 则完全不要求 token，只靠同源检查：带 `Origin` 的请求必须是本监听地址，
+  否则 403 `CROSS_ORIGIN`；不带 `Origin` 的请求一律放行（命令行与 MiniApp 代理走这条）。
 
 启动行：
 

@@ -243,7 +243,7 @@ view   = "out/legifrance/view_20261114/merged_current.jsonl"
 
 ### M0　合入法律件为独立维（已完成）
 
-`integrations/factscribe-legal/` 已按 minifactscribe 先例合入 main
+`integrations/factscribe-legal/` 已按早期第三方集成件先例合入 main
 （合并提交 `9cd6a2d`，纯增量不碰核心）：独立子命令、独立码表
 （`LEGAL_`/`CN_`/`CASE_`/`IT_`）、50 例离线自测、上游 core 零改动。
 它现在的形态＝**第一个候任核验包的实体样本**：本稿 §3 的契约形状就是
@@ -346,7 +346,7 @@ CI 与判卷都要各自合流，「单命令双域报告」做不到；挂槽�
 退出码语义，红即红。② **机制无法反哺 core**：两级证据、语料视图冻结、参考日、
 材料依赖声明这些法律域实证出的器官永远留在域内，第三个领域（医学指南、
 产品规格……）来时只能从零再造一遍而不是复用；裁定四步里的 M3「择机升 core」
-在纯外挂路线下无处着落。③ minifactscribe 先例不适用：它是**移植件**（另一套
+在纯外挂路线下无处着落。③ 早期第三方集成件先例不适用：它是**移植件**（另一套
 运行时搬运输层），legal 是**同一条证据链上的第二个判定维**——共享同一本事实账
 与同一个 `source_sha256`，天然该挂同一槽。否决边界：legal 在 M2 前继续按
 独立件跑（M0 现状），B 案否决的是「永久」而非「过渡」。
@@ -393,7 +393,7 @@ CI 与判卷都要各自合流，「单命令双域报告」做不到；挂槽�
    落点：已落地——`integrations/factscribe-legal/factscribe_legal/ledger_maint.py`
    （M2，commit `ca32252`）、`tests/test_legal_maint.py`。
 8. **核验包的安装形态**（原开放问题：integrations/ 入仓注册还是 pip 命名空间分发）
-   → **裁定⑧：`integrations/<pkg>/` 入仓注册**（沿 minifactscribe、
+   → **裁定⑧：`integrations/<pkg>/` 入仓注册**（沿早期第三方集成件、
    factscribe-legal 两先例）。
    落点：已采纳，M2 落地——`integrations/factscribe-legal/check-package.toml`
    ＋`factscribe/checks.py::load_integration` 约定路径发现（commit `2d5fe8c`）。
@@ -419,7 +419,8 @@ CI 与判卷都要各自合流，「单命令双域报告」做不到；挂槽�
   边界声明、三条工程纪律）
 - `integrations/factscribe-legal/README.md`（第二个核验包的现成样本：
   码表形状、材料依赖、退出码沿用、防假绿自测；「核验槽时代」废弃窗口文案）
-- `integrations/minifactscribe/README.md`（第三方件先例与其适用边界）
+- 第三方件入仓的先例与其适用边界（旧宿主 `integrations/minifactscribe/` 已按第 ④ 步
+  删除；该先例由 `integrations/factscribe-legal/` 承接）
 - `factscribe/config.py`（`Config` 形状；`[budget]` 批 128 / `[evidence]` 批 131
   「节不出现＝判据不跑、行为与之前完全一致」的兼容先例；`_parse_checks` 三态）
 - `factscribe/checks.py`（核验槽机构：注册表、`EXIT_CODE_CLOSED_SET`、

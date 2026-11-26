@@ -56,8 +56,9 @@ MiniFactScribe 的「AI 起草」页签用 mcode 宿主 agent/模型，不接模
 
 ## 5. 验收
 
-`integrations/minifactscribe/tests/ui.test.mjs`：manifest 有 `agentAccess` 与
-`hostAccess`、面板/按钮存在、页面调用 `agent.run`、处理 `text.delta` /
-`permission.requested`、非对话位置 fail-closed、读取当前对话项目文件夹、
-采纳后才写工作台。
+旧宿主 `integrations/minifactscribe/` 已按第 ④ 步删除，它那份 `ui.test.mjs`
+（manifest 有 `agentAccess` 与 `hostAccess`、面板/按钮存在、页面调用 `agent.run`、
+处理 `text.delta` / `permission.requested`、非对话位置 fail-closed、
+读取当前对话项目文件夹、采纳后才写工作台）随之退场；这些不变量现在由段落级
+前端（`factscribe/workbench/static/`）承担。
 真实 agent 行为需在 mcode 项目对话里手测。

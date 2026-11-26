@@ -821,9 +821,10 @@ class PaneHeaderContrastTests(unittest.TestCase):
                 for bad in ("#a3a29c", "#9b9a96", "#8f8d86", "#a49e8d"):
                     self.assertNotIn(bad, body, selector + " still pale: " + bad)
         # 三个面板（目录 / 智能助手 / 更多）都挂着 .np-pane-h：
-        # 目录 ＋ 智能助手 ＋（更多里的）实验报告 / 知识库 / 事实账 / 版式。
+        # 目录 ＋ 智能助手 ＋（更多里的）实验报告 / 知识库 / 事实账 / 版式
+        # ＋ 引用 / 图片（第 ④ 步从旧节级前端搬过来的两段）。
         # 新增段也必须挂同一条类——色值由上面那条规则统一守住，不另开样式。
-        self.assertEqual(HTML.count('class="np-pane-h'), 6)
+        self.assertEqual(HTML.count('class="np-pane-h'), 8)
 
     def test_5_decorative_who_is_untouched(self):
         """案五：AI 层 ``.who`` 发送者标是装饰，保持原浅色。"""

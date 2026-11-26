@@ -23,7 +23,7 @@ import subprocess
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from .citeview import citations_data
 from .citeedit import citation_add_data, citation_delete_data
@@ -61,6 +61,15 @@ _STATIC = {
 # 故意退场的），改成一句实话：页面没了，请去段落级工作台。
 UI_RETIRED_NOTE = ("旧网页前端已按第 ④ 步下线，请用 miniapp 段落级工作台 "
                    "/ legal 工作台。")
+# 法律侧工作台页面（静态件；住在 legal 集成件自己的 web/ 目录里，
+# 不在 factscribe/web/——那个节级前端按已定口径第 ④ 步要废弃）
+_LEGAL_UI_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+}
 
 # 预览要能真的看见论文里的图：只放行这些扩展名，其余一律 ASSET_INVALID。
 ASSET_CONTENT_TYPES = {
@@ -199,6 +208,19 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_bytes(UI_RETIRED_NOTE.encode("utf-8"),
                                  "text/plain; charset=utf-8", status=404)
             return
+        if self.server.serve_ui and path in ("/legal", "/legal/"):  # type: ignore[attr-defined]
+            self._legal_ui("index.html")
+            return
+        if self.server.serve_ui and path.startswith("/legal/"):  # type: ignore[attr-defined]
+            self._legal_ui(path[len("/legal/"):])
+            return
+        # /legal（无尾斜杠）时，页面里的相对资源被 <base href="."> 解析到根路径，
+        # 所以根上也托管一份同名静态件：/legal.css、/legal.js 两个 URL 都拿得到。
+        if self.server.serve_ui and path.startswith("/legal."):  # type: ignore[attr-defined]
+            tail = path[len("/legal."):]
+            if "." + tail in _LEGAL_UI_TYPES:
+                self._legal_ui("legal." + tail)
+                return
         if path == "/api/health":
             self._send(200, {"ok": True, "tool": "factscribe",
                              "version": VERSION, "service": "workbench"})
@@ -255,6 +277,9 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/asset":
                 self._asset()
                 return
+            if path.startswith("/api/legal/"):
+                self._legal_route(path[len("/api/legal/"):])
+                return
             self._error(404, "NOT_FOUND", "没有这个接口：%s" % path)
         except ConfigError as exc:
             self._fail_config(exc)
@@ -276,6 +301,14 @@ class _Handler(BaseHTTPRequestHandler):
                         "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
             return
         try:
+            if path == "/api/legal/proposals":
+                # 待批提案：**只建单，不写盘**（法律闸没有写路径）。
+                self._legal_proposal_create()
+                return
+            hit = re.match(r"^/api/legal/proposals/([^/]+)/adopt$", path)
+            if hit:
+                self._legal_proposal_adopt(unquote(hit.group(1)))
+                return
             if path == "/api/projects":
                 self._projects_add()
                 return
@@ -812,6 +845,158 @@ class _Handler(BaseHTTPRequestHandler):
     def _brief(self, section: str | None) -> None:
         data = brief_data(self._project(), section)
         self._send(200, self._base("brief", **data))
+
+    # ------------------------------------------------------------------ legal
+    # 法律侧只读路由（factscribe-legal 接口层；legal 专属前缀，与论文侧路由
+    # 不冲突）。全部**只读**：不写盘、不下判定（红黄码照抄各闸，退出码语义
+    # 不因这一层改变）。集成件没装 ⇒ 501 说清原因，不给空壳假接口。
+
+    def _legal_api(self):
+        """载入 legal 接口层（integrations/factscribe-legal）；装不上 → None。"""
+        try:
+            from factscribe import checks
+            checks.load_integration("legal")
+        except Exception:  # noqa: BLE001 —— 集成件坏掉不该把服务带崩
+            return None
+        try:
+            from factscribe_legal import api as legal_api
+        except ImportError:
+            return None
+        return legal_api
+
+    def _legal_route(self, rest: str) -> None:
+        """legal 路由分发：七路通道 ＋ 第 ② 步补的四条读侧视图。
+
+        全部**只读**：不写盘、不下判定（红黄码照抄各闸，退出码语义不因
+        这一层改变）。没有这条路由就 404——不留空壳假接口。
+        """
+        api = self._legal_api()
+        if api is None:
+            self._error(501, "LEGAL_UNAVAILABLE",
+                        "legal 集成件不可用（integrations/factscribe-legal 没装或"
+                        "装不上）——法律侧接口不提供")
+            return
+        query = parse_qs(urlparse(self.path).query)
+
+        def one(key):
+            return (query.get(key) or [None])[0]
+
+        ctx = api.context_from_project(str(self._project()))
+
+        # ---- 读侧视图（第 ② 步补的四条）----
+        if rest.startswith("corpus/"):
+            item_id = unquote(rest[len("corpus/"):])
+            data = api.build_view(ctx, "corpus_item", item_id=item_id,
+                                  domain=one("domain") or "")
+            if data is None:
+                self._error(404, "NOT_FOUND", "语料里没有这件：%s" % item_id)
+                return
+            self._send(200, self._base("legal.corpus_item", contract=data))
+            return
+        if rest == "document":
+            data = api.build_view(ctx, "document")
+            self._send(200, self._base("legal.document", contract=data))
+            return
+        if rest.startswith("provision/"):
+            hit = re.match(r"^provision/([^/]+)/facts$", rest)
+            if not hit:
+                self._error(404, "NOT_FOUND", "没有这个法律侧接口：%s" % rest)
+                return
+            data = api.build_view(ctx, "provision_facts",
+                                  num=unquote(hit.group(1)))
+            self._send(200, self._base("legal.provision_facts", contract=data))
+            return
+        if rest == "cli":
+            data = api.build_view(ctx, "cli")
+            self._send(200, self._base("legal.cli", contract=data))
+            return
+
+        # ---- 七路通道（版本化契约）----
+        channel = rest
+        if channel != "contract" and channel not in api.CHANNELS:
+            self._error(404, "NOT_FOUND", "没有这个法律侧接口：%s" % channel)
+            return
+        filters = {}
+        for key in ("country", "domain", "state", "kind", "severity"):
+            val = one(key)
+            if val:
+                filters[key] = val
+        line = one("line")
+        channels = None if channel == "contract" else [channel]
+        contract = api.build_contract(ctx, channels=channels, filters=filters,
+                                      line_ids=[line] if line else None)
+        self._send(200, self._base("legal.%s" % channel, contract=contract))
+
+    def _legal_ui(self, name: str) -> None:
+        """法律侧工作台页面（静态件；住在**段落级前端体系**的
+        factscribe/workbench/static/legal/ 下——法律页是段落级工作台的一个
+        视图，不是独立的另一套界面）。"""
+        api = self._legal_api()
+        if api is None:
+            self._error(501, "LEGAL_UNAVAILABLE",
+                        "legal 集成件不可用（integrations/factscribe-legal 没装或"
+                        "装不上）——法律侧页面不提供")
+            return
+        root = (Path(__file__).resolve().parent / "workbench" / "static"
+                 / "legal")
+        target = (root / name).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            self._error(404, "NOT_FOUND", "没有这个法律侧页面文件")
+            return
+        if not target.is_file():
+            self._error(404, "NOT_FOUND", "没有这个法律侧页面文件：%s" % name)
+            return
+        ctype = _LEGAL_UI_TYPES.get(target.suffix.lower(),
+                                    "application/octet-stream")
+        self._send_bytes(target.read_bytes(), ctype)
+
+    def _legal_proposal_create(self) -> None:
+        """建一张待批提议单（**只建单，不写盘**）。"""
+        api = self._legal_api()
+        if api is None:
+            self._error(501, "LEGAL_UNAVAILABLE",
+                        "legal 集成件不可用——法律侧提议单不提供")
+            return
+        body = self._body()
+        ctx = api.context_from_project(str(self._project()))
+        try:
+            record = api.create_proposal(
+                ctx, str(body.get("kind") or ""), body.get("target") or {},
+                body.get("payload") or {}, str(body.get("before_sha") or ""))
+        except Exception as exc:  # noqa: BLE001 —— proposals.ProposalError
+            code = getattr(exc, "code", "PROPOSAL_INVALID")
+            self._error(409 if code == "PROPOSAL_STALE" else 400, code,
+                        str(exc))
+            return
+        self._send(201, self._base(
+            "legal.proposal",
+            contract={"version": api.API_VERSION, "view": "proposal",
+                      "proposal": record}))
+
+    def _legal_proposal_adopt(self, pid: str) -> None:
+        """采纳一张提议单：过指纹闸才过；**不写任何文件**。"""
+        api = self._legal_api()
+        if api is None:
+            self._error(501, "LEGAL_UNAVAILABLE",
+                        "legal 集成件不可用——法律侧提议单不提供")
+            return
+        ctx = api.context_from_project(str(self._project()))
+        try:
+            record = api.adopt_proposal(ctx, pid)
+        except Exception as exc:  # noqa: BLE001 —— proposals.ProposalError
+            code = getattr(exc, "code", "PROPOSAL_INVALID")
+            self._error(409 if code == "PROPOSAL_STALE" else 400, code,
+                        str(exc))
+            return
+        if record is None:
+            self._error(404, "NOT_FOUND", "没有这张提议单：%s" % pid)
+            return
+        self._send(200, self._base(
+            "legal.proposal",
+            contract={"version": api.API_VERSION, "view": "proposal",
+                      "proposal": record}))
 
     def _audit(self) -> None:
         data = audit_data(self._project())

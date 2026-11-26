@@ -318,9 +318,68 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 > 信封、一套退出码、legal 节并排在 paper 之后。线索层三条（cn-lead-*）
 > 不是核验入口，不挂废弃窗口提示，`[checks]` 也永不点名线索层。
 
+## 只读接口层（`api` 族）：版本化 JSON 契约
+
+第 12 条子命令（**只读**）：吐版本化 JSON 契约，供法律侧工作台消费。
+
+```bash
+# JSON 出口（默认就是 JSON；--human 出人读摘要）
+python3 -m factscribe_legal api contract --project .
+python3 -m factscribe_legal api findings --project .
+python3 -m factscribe_legal api receipts --project .
+python3 -m factscribe_legal api corpus    --project . --country 法国
+python3 -m factscribe_legal api codes     --project .
+python3 -m factscribe_legal api timeliness --project . --domain it
+python3 -m factscribe_legal api summary   --project .
+python3 -m factscribe_legal api proposals --project .
+```
+
+七路通道：**findings**（七条线的判定结果）、**receipts**（统一五元组收据）、
+**corpus**（语料件清单）、**codes**（判定码表）、**timeliness**（跨域统一时效字段）、
+**summary**（各域状态 ＋ 域级锁四键）、**proposals**（待批提案；第 ② 步起接提议存储）。
+
+- 契约版本 `factscribe-legal-api/1.0`；字段逐条说明见
+  [`docs/design/SPEC-LEGAL-API.md`](../../docs/design/SPEC-LEGAL-API.md)。
+- **本层不下判定**：红黄码、措辞、退出码语义全照抄各闸；材料缺失按 `skipped`
+  如实标出（不崩、不发空壳 finding）。
+- **零写盘**：不写项目、不写语料、不建任何落盘动作；「待批提案」在第 ② 步
+  只到**提议单**这一层（进程内存，见下节），本层仍然只读。
+- core 侧对应只读路由：`factscribe serve` 的
+  `/api/legal/{findings,receipts,corpus,codes,timeliness,summary,proposals,contract}`。
+
+## 法律侧工作台（第 ② 步）：FR 判例样板页与待批提案通道
+
+法律侧的第一个**真页面**：三栏证据链工作台——左栏语料（依据）、中栏该件＋
+逐条收据（主张）、右栏问题区＋文书段落区（落点），外加一条「待批提案」通道。
+
+* **页面落点**：`integrations/factscribe-legal/web/»（index.html ＋ legal.css ＋ legal.js），
+  由 core `factscribe serve --ui» 在 `GET /legal» 提供（静态件在 `GET /legal/<file>»）。
+  **不挂** `factscribe/web/»（节级前端，第 ④ 步要废弃），**也不挂**段落级前端
+  `factscribe/workbench/static/»（那一支还没并进 main，合并方向未拍板）。理由见
+  `docs/design/SPEC-LEGAL-WORKBENCH.md»。
+* **第 ① 步没做的读侧视图，本步补齐四条**：
+  `GET /api/legal/corpus/{id}»（单件详情 ＋ 该件收据）、`GET /api/legal/document»
+  （文书分段 ＋ 引证标记 ＋ 官方逐字片段）、`GET /api/legal/provision/{num}/facts»
+  （条→事实反查）、`GET /api/legal/cli»（子命令清单，从 argparse 现取）。
+* **待批提案通道**：「POST /api/legal/proposals」（建单）、「POST /api/legal/proposals/{id}/adopt」
+  （采纳）。**只建单、不写盘**：提议单存在服务进程内存里（重启即失）；
+  每张单带 `before_sha» **指纹闸**——采纳时现算目标指纹，对不上就**拒写**
+  （409 `PROPOSAL_STALE»）。采纳只登记意图（`decision.write_path=false»），
+  **不写任何文件**：法律闸没有写路径，真写回等第 ③ 步。
+* **写路径仍未挂**：「POST /api/legal/verify」、「/api/legal/facts」、
+  「/api/legal/ledger/dup-ok」一律 404（不留假接口）。
+
+```bash
+# 起服务（项目目录是位置参数），然后开页面
+python3 -m factscribe serve <项目目录> --ui
+# 页面：http://127.0.0.1:<端口>/legal?token=<令牌>
+```
+
+字段逐条说明与口径见 `docs/design/SPEC-LEGAL-WORKBENCH.md»。
+
 ## 与上游核心的关系
 
-- 上游 `factscribe/` **一行未改**：行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动。
+- 上游 `factscribe/` 的**论文侧行为一行未改**：行为、退出码、违规码、`packages = ["factscribe"]` 打包范围都不动；core 只多了 legal 专属的只读路由与法律侧页面托管（见上两节）。
 - 本包判据与五子命令**不 import 上游 `factscribe`**（只 import 标准库）⇒ 可以单独拷走单跑，也可以放进上游仓里共存。唯一例外＝`checks_adapter.py`（核验槽适配器）：它 import 宿主的 `factscribe.checks`／`factscribe.audit`，且只在 `[checks]` 点名 legal 时才被核验槽载入（见「核验包注册形态」）。
 - 事实账的字段用上游已有的那套（`id` / `claim` / `value` / `source` / `source_sha256` /
   `locator` / `confidence` / `derived_from`），**不新增 schema**。
@@ -331,7 +390,7 @@ python3 -m factscribe_legal cn-lead-get    --case-no "（2022）苏0322执保100
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 ```
 
-**154 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
+**216 条测试，全部离线**（不联网、不写仓库外的东西；线索层 `cn-lead-*` 的
 真端点冒烟是一次性人工验收读数，不进测试套，离线夹具用真响应录制后脱敏）。
 含三类回归：
 

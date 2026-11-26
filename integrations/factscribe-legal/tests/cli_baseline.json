@@ -1,0 +1,94 @@
+{
+  "cases": [
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal fetch [-h] --corpus CORPUS --project PROJECT --nums NUMS [NUMS ...] options: -h, --help show this help message and exit --corpus CORPUS 语料目录（provisions/） --project PROJECT --nums NUMS [NUMS ...]",
+      "help_exit": 0,
+      "name": "fetch",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n语料：1 条（results/corpus-legal）\n  ✓ L3121-27  LEGIARTI000006331684  VIGUEUR  2008-05-01→\n      官方 XML   L3121-27.xml  sha256 d606875ac0cec22d716f2ba43b8aa2758656af5eae383af614ffcbebe9f86a54\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify [-h] --project PROJECT --corpus CORPUS --date DATE [--view VIEW] options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS --date DATE 参考日 YYYY-MM-DD --view VIEW 可选：管线的现行版 JSONL，用于交叉验证",
+      "help_exit": 0,
+      "name": "verify",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify ==\ncorpus : 1 条法条\n\n[红] 0 处\n\n结论：0 红 / 0 黄 → 绿（退出码 0）\n注意：绿只代表「引用的法条真实存在、哈希未变、且在参考日生效」，不代表法条写得对。\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify-cn [-h] --project PROJECT --catalog CATALOG --date DATE options: -h, --help show this help message and exit --project PROJECT --catalog CATALOG catalog.jsonl.gz（FLK 全库） --date DATE 参考日 YYYY-MM-DD",
+      "help_exit": 0,
+      "name": "verify-cn",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify-cn ==\n[红] 0 处\n\n[黄] 0 处\n\n结论：0 红 / 0 黄 → 绿（退出码 0）\n注意：中国侧官方件不含条文正文 ⇒ 可核的是「法规现行有效」「条文号存在」「官方件未变」，不是「数字出自正文」。\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify-case [-h] --project PROJECT options: -h, --help show this help message and exit --project PROJECT",
+      "help_exit": 0,
+      "name": "verify-case",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n【第 5 层 · 中国案例维度】\n  ✓ 绿：案例官方正文哈希、金额、案号、日期、证据链全部一致\n  —— 红 0 / 黄 0\n  退出码 0\n"
+    },
+    {
+      "exit": 3,
+      "help": "usage: factscribe-legal verify-it [-h] --project PROJECT --corpus CORPUS --date DATE options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（runs/<run>-it/） --date DATE 参考日 YYYY-MM-DD",
+      "help_exit": 0,
+      "name": "verify-it",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify-it（意大利法条）==\nact    : urn:nir:stato:legge:1990-08-07;241  LEGGE\n版本日 : 2026-04-21   参考日 : 2026-11-16\n条文数 : 3\n\n[黄] 1 处\n  1. IT_VERSION_GAP               corpus  →  钉住的是「2026-11-16 当天生效」的时点版本（文本日期戳 2026-04-21），而本次参考日是 2026-11-14——两日之间的法律变化不在钉住的版本里（要当日最新请按新参考日重新取件）\n\n[红] 0 处\n\n结论：0 红 / 1 黄 → 黄（退出码 3）\n注意：绿只代表「引用的意大利条文真实存在、哈希未变、且数值真出自官方正文」，不代表法条写得对。\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify-es [-h] --project PROJECT --corpus CORPUS --date DATE options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（es/run-<run>-es-<slug>/） --date DATE 参考日 YYYY-MM-DD",
+      "help_exit": 0,
+      "name": "verify-es",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify-es（西班牙法条）==\nact    : BOE-A-2015-10565  Ley 39/2015, de 1 de octubre, del Procedimiento Administrativo y de Administración Electrónica.\n版本日 : 2026-11-16   参考日 : 2026-11-14\n条文数 : 2\n\n[红] 0 处\n\n结论：0 红 / 0 黄 → 绿（退出码 0）\n注意：绿只代表「引用的西班牙条文真实存在、哈希未变、且数值真出自官方正文」，不代表法条写得对。\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify-fr-case [-h] --project PROJECT options: -h, --help show this help message and exit --project PROJECT",
+      "help_exit": 0,
+      "name": "verify-fr-case",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify-fr-case（法国判例）==\n判例数 : 0 件（卡 0 张 / 事实 0 条 / run 0 个）\n\n[红] 0 处\n\n结论：0 红 / 0 黄 → 绿（退出码 0）\n注意：绿只代表「引用的法国判决真实存在、官方件哈希未变、且数值/日期真出自官方判决正文」，不代表判决写得对、也不代表该案结论适用于你的案子。\n"
+    },
+    {
+      "exit": 0,
+      "help": "usage: factscribe-legal verify-it-case [-h] --project PROJECT --corpus CORPUS options: -h, --help show this help message and exit --project PROJECT --corpus CORPUS 语料目录（it-case/run-<run>-itcase-<tier>/）",
+      "help_exit": 0,
+      "name": "verify-it-case",
+      "stderr": "",
+      "stdout": "提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；正式报告走 factscribe audit [checks]（单命令双域）。\n== factscribe-legal verify-it-case（意大利宪法法院判例）==\n档位   : 1956_1980\n来源   : https://dati.cortecostituzionale.it/opendata/distribuzione/CC_OpenPronunce_1956_1980.zip\n判决数 : 2\n\n[红] 0 处\n\n结论：0 红 / 0 黄 → 绿（退出码 0）\n注意：绿只代表「引用的判决真实存在、哈希未变、且数值真出自官方正文」，不代表判决写得对。\n"
+    },
+    {
+      "exit": 2,
+      "help": "usage: factscribe-legal cn-lead-search [-h] --q Q [--page-size PAGE_SIZE] [--page PAGE] [--config CONFIG] options: -h, --help show this help message and exit --q Q 检索词（简体中文，法律术语优先） --page-size PAGE_SIZE 每页条数，硬顶 5（默认 5；评估 Key 禁批量） --page PAGE 页码，硬顶 3（默认 1；翻页＝换页码重跑本命令） --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
+      "help_exit": 0,
+      "name": "cn-lead-search",
+      "stderr": "",
+      "stdout": "配置文件不存在：no-such-cn-lead.toml\n线索层失败＝退出码 2（fail-closed）；官方维度请走 verify-case / verify-cn。\n"
+    },
+    {
+      "exit": 2,
+      "help": "usage: factscribe-legal cn-lead-verify [-h] --case-no CASE_NO [--config CONFIG] options: -h, --help show this help message and exit --case-no CASE_NO 案号，如「（2022）苏0322执保100号」 --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
+      "help_exit": 0,
+      "name": "cn-lead-verify",
+      "stderr": "",
+      "stdout": "配置文件不存在：no-such-cn-lead.toml\n线索层失败＝退出码 2（fail-closed）；官方维度请走 verify-case / verify-cn。\n"
+    },
+    {
+      "exit": 2,
+      "help": "usage: factscribe-legal cn-lead-get [-h] --case-no CASE_NO [--meta] [--max-chars MAX_CHARS] [--config CONFIG] options: -h, --help show this help message and exit --case-no CASE_NO 案号，如「（2022）苏0322执保100号」 --meta 只取元信息不取正文（省正文配额） --max-chars MAX_CHARS 分段读正文：本次最多取多少字符 --config CONFIG factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）",
+      "help_exit": 0,
+      "name": "cn-lead-get",
+      "stderr": "",
+      "stdout": "配置文件不存在：no-such-cn-lead.toml\n线索层失败＝退出码 2（fail-closed）；官方维度请走 verify-case / verify-cn。\n"
+    }
+  ],
+  "note": "既有 11 条子命令的 --help／stdout／退出码快照；只从第 ① 步基线树（23acded）生成过一次。第 12 条 api 族不在其中。",
+  "schema": "factscribe-legal-cli-baseline/1.0"
+}

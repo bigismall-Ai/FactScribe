@@ -10,6 +10,13 @@
   factscribe-legal cn-lead-search / cn-lead-verify / cn-lead-get
         中国判例线索层（第三方文书查，非官方核验）：找案子／案号存在性／取正文。
         不属核验槽——输出首行固定是线索层标注，溯源凭三元组上裁判文书网核对。
+
+  factscribe-legal api <动作>
+        只读接口层：吐版本化 JSON 契约（factscribe-legal-api/1.0），七路通道
+        ——findings / receipts / corpus / codes / timeliness / summary / proposals。
+        默认输出 JSON（--json 同义）；--human 出人读摘要。
+        只读：不下任何判定（红黄码照抄各闸），不写盘，退出码 0＝接口可用、
+        2＝配置错（项目目录不存在等）；材料缺失不报错，按「skipped」如实标出。
 """
 import argparse
 import os
@@ -166,7 +173,59 @@ def cmd_cn_lead_get(args):
     return 0 if inner.get("found") is not False else 1
 
 
-def main(argv=None):
+
+# ---- 只读接口层（api 族）--------------------------------------------------
+
+def cmd_api(args):
+    """api：只读接口层，吐版本化 JSON 契约（七路通道）。
+
+    退出码：0＝接口可用（本层不下判定，红黄码照抄各闸，不据此改退出码）；
+    2＝配置错（项目目录不存在等）。材料缺失不报错——按 skipped 如实标出。
+    """
+    import json
+    from .api import (CHANNELS, build_contract, context_from_project,
+                      render_human)
+    # 非 UTF-8 控制台（中文 Windows 的 cp936）：编不出来的字符降级成同义
+    # ASCII，命令照常跑完、退出码照旧（口径照上游 factscribe/console.py；
+    # 本包自带一份，以便独立拷走单跑）。UTF-8 环境下不改变任何一个字节。
+    #
+    # 只装在**本族**上：既有 11 条子命令的输出与退出码一个字都不许动
+    # （它们在 cp936 上的既有崩溃是既有缺陷，本步不碰、不顺手修）。
+    from .console import safe_stdio
+    safe_stdio()
+    action = args.action
+    if action != "contract" and action not in CHANNELS:
+        print("用法：factscribe-legal api <%s|contract> [...]" % "|".join(CHANNELS),
+              file=sys.stderr)
+        return 2
+    project = args.project or "."
+    if not os.path.isdir(project):
+        print("配置错：项目目录不存在：%s" % project, file=sys.stderr)
+        return 2
+    ctx = context_from_project(project,
+                               corpus=args.corpus,
+                               date=args.date,
+                               view=args.view,
+                               catalog=args.catalog,
+                               itcase=args.itcase)
+    filters = {}
+    for key in ("country", "domain", "state", "kind", "severity"):
+        val = getattr(args, key, None)
+        if val:
+            filters[key] = val
+    line_ids = [args.line] if args.line else None
+    channels = None if action == "contract" else [action]
+    contract = build_contract(ctx, channels=channels, filters=filters,
+                              line_ids=line_ids)
+    if args.human:
+        print(render_human(contract))
+    else:
+        print(json.dumps(contract, ensure_ascii=False, indent=2))
+    return 0
+
+
+def build_parser():
+    """argparse 解析器（命令清单出口与 main 共用这一份，不各抄一份）。"""
     ap = argparse.ArgumentParser(prog="factscribe-legal",
                                  description="给 FactScribe 接上法律维度")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -248,13 +307,45 @@ def main(argv=None):
                    help="factscribe.toml 路径（可选 [cn_lead] 节：endpoint/key）")
     g.set_defaults(func=cmd_cn_lead_get)
 
+    a = sub.add_parser("api", help="只读接口层（JSON 出口；七路通道）")
+    a.add_argument("action",
+                   choices=["findings", "receipts", "corpus", "codes",
+                            "timeliness", "summary", "proposals", "contract"],
+                   help="要取哪一路通道（contract＝七路全给）")
+    a.add_argument("--project", default=".", help="项目目录（默认当前目录）")
+    a.add_argument("--corpus", default=None,
+                   help="语料视图目录（缺省取项目 factscribe.toml 的 [checks.legal] corpus）")
+    a.add_argument("--date", default=None,
+                   help="参考日 YYYY-MM-DD（缺省取 [checks.legal] date）")
+    a.add_argument("--view", default=None,
+                   help="现行视图 JSONL（缺省取 [checks.legal] view）")
+    a.add_argument("--catalog", default=None, help="中国全库目录（可选）")
+    a.add_argument("--itcase", default=None, help="意大利判例语料 run 目录（可选）")
+    a.add_argument("--line", default=None, help="只看某一条线（fr/cn/case/it/es/fr-case/it-case）")
+    a.add_argument("--country", default=None, help="按国家过滤（语料/时效通道）")
+    a.add_argument("--domain", default=None, help="按域过滤（语料/时效/码表通道）")
+    a.add_argument("--state", default=None, help="按时效状态过滤（in_force/…）")
+    a.add_argument("--kind", default=None, help="按件型过滤（法条/法规/判例/案例）")
+    a.add_argument("--severity", default=None, help="码表按红黄过滤（red/yellow）")
+    a.add_argument("--json", action="store_true",
+                   help="输出 JSON（默认就是 JSON；此旗显式同义）")
+    a.add_argument("--human", action="store_true", help="输出人读摘要（同源）")
+    a.set_defaults(func=cmd_api)
+
+    return ap
+
+
+def main(argv=None):
+    ap = build_parser()
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／
     # 单域入口（不删功能、废弃窗口不限期）——措辞照 README「核验槽时代」
     # 一节的既有文案；正式的跨域报告走 factscribe audit [checks]。
     # 线索层三条（cn-lead-*）不属核验入口，提示不适用且不得占输出首行
     # （红线一：线索层首行必须是线索层标注）。
-    if not args.cmd.startswith("cn-lead-"):
+    # api 族不是单域调试入口（它是只读接口层，stdout 必须是纯 JSON）⇒
+    # 不打这条提示，也不在 stdout 混任何别的行。
+    if not args.cmd.startswith("cn-lead-") and args.cmd != "api":
         print("提示：本命令是单域调试入口（废弃窗口不限期，功能保留）；"
               "正式报告走 factscribe audit [checks]（单命令双域）。")
     if args.cmd == "fetch":
@@ -277,6 +368,8 @@ def main(argv=None):
         return cmd_cn_lead_verify(args)
     if args.cmd == "cn-lead-get":
         return cmd_cn_lead_get(args)
+    if args.cmd == "api":
+        return cmd_api(args)
     return cmd_verify(args)
 
 

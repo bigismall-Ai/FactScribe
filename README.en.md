@@ -433,7 +433,7 @@ All the structural limits point at the same promise: the account, the material a
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 2581 tests, fully offline
+python3 -m unittest discover -s tests     # 2605 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

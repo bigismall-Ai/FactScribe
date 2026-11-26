@@ -38,11 +38,13 @@ from .report import ReportError, _payload, _severity_of
 from .reportapi import report_action_data, reports_data, report_template_data
 from .textio import read_text_exact
 from .samples import SampleError, install_guide_sample, is_guide_path
-from .workbench import (SectionError, add_fact_data, audit_data, brief_data,
-                        create_section_data, delete_section_data,
+from .workbench import (SectionError, add_fact_data, apply_section_proposal,
+                        audit_data, brief_data, create_section_data,
+                        create_section_proposal, delete_section_data,
                         evidence_status_data, freeze_evidence_data,
                         project_data, rename_section_data, status_data,
                         unfreeze_evidence_data, write_section_data)
+from .workbench.proposal import ProposalError
 
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -71,11 +73,13 @@ ASSET_MAX_BYTES = 20 * 1024 * 1024
 #   REPORT_EXISTS   409  目标报告已存在
 #   CITATION_EXISTS 409  这个引用 key 已经有了
 #   CITATION_MISSING 404 找不到这条引用
+#   BLOCK_STALE     409 指纹闸：这节在别处被改过，别覆盖（口径 3 补的闸）
 _STATUS_BY_CODE = {
     "READ_ONLY": 403,
     "REPORT_EXISTS": 409,
     "CITATION_EXISTS": 409,
     "CITATION_MISSING": 404,
+    "BLOCK_STALE": 409,
 }
 
 
@@ -284,6 +288,12 @@ class _Handler(BaseHTTPRequestHandler):
                         "/api/sections/delete"):
                 self._sections_crud(path)
                 return
+            if path == "/api/sections/propose":
+                self._propose_section()
+                return
+            if path == "/api/sections/propose/confirm":
+                self._confirm_section_proposal()
+                return
             if path == "/api/evidence/freeze":
                 body = self._body()
                 data = freeze_evidence_data(
@@ -346,6 +356,9 @@ class _Handler(BaseHTTPRequestHandler):
         except SampleError as exc:
             # 示例安装：500 = 包里没有示例 / 复制失败。
             self._error(exc.status, exc.code, str(exc))
+        except ProposalError as exc:
+            # 提议单：400/404/409/500 由提议单自己带（PROPOSAL_*）。
+            self._error(exc.status, exc.code, str(exc))
         except ConfigError as exc:
             self._fail_config(exc)
         except ReportError as exc:
@@ -357,6 +370,14 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:  # noqa: N802 - stdlib signature
         path = urlparse(self.path).path
+        # 同源闸：四个 HTTP 方法里 do_PUT 原先独缺这一道（GET/POST/DELETE
+        # 都有）。PUT /api/sections 是唯一覆盖论文正文 .tex 的写接口，
+        # 缺这道闸＝任意页面可跨源改写正文。语义与其它三处一致：
+        # 没有 Origin 头放行；带了 Origin 但不是本监听地址就拒。
+        if not self._origin_ok():
+            self._error(403, "CROSS_ORIGIN",
+                        "跨源请求不接：只允许本监听地址（同源）")
+            return
         if not self._authorized():
             self._error(401, "UNAUTHORIZED",
                         "需要 Bearer token（Authorization 或 X-FactScribe-Token）")
@@ -523,10 +544,36 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _write_section(self) -> None:
         body = self._body()
+        # expect_sha：客户端所基于的那一版正文的指纹（口径 3 补的指纹闸）。
+        # 带了就对不上拒写（409 BLOCK_STALE）；不带就走老路（裸覆盖）。
         data = write_section_data(
             self._project(), str(body.get("file") or ""),
-            body.get("text"), self.server.allow_write)  # type: ignore[attr-defined]
+            body.get("text"), self.server.allow_write,  # type: ignore[attr-defined]
+            str(body.get("expect_sha") or ""))
         self._send(200, self._base("write_section", **data))
+
+    def _propose_section(self) -> None:
+        """建一张节级改稿提议单（**不碰正文**）——口径 7：AI 采纳走提议单。
+
+        人确认（POST /api/sections/propose/confirm）之后才写回；提议之后
+        正文被别处改过，指纹对不上就拒写。
+        """
+        body = self._body()
+        record = create_section_proposal(
+            self._project(), str(body.get("file") or ""),
+            str(body.get("text") or ""),
+            str(body.get("expect_sha") or ""),
+            str(body.get("source") or ""),
+            str(body.get("rationale") or ""))
+        self._send(200, self._base("sections_propose", **record))
+
+    def _confirm_section_proposal(self) -> None:
+        """人点确认之后才写回（指纹闸在写回那一刻再核一遍）。"""
+        body = self._body()
+        pid = str(body.get("id") or body.get("proposal") or "")
+        data = apply_section_proposal(self._project(), pid,
+                                       self.server.allow_write)  # type: ignore[attr-defined]
+        self._send(200, self._base("sections_propose_confirm", **data))
 
     def _add_fact(self) -> None:
         body = self._body()

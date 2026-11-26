@@ -16,6 +16,14 @@ r"""F4：保存必须逐字保留正文内容 —— 换行保真测试。
 3. **写入证据**：交给 `write()` 的字符串与传进去的字符串逐字符相同
    ——保存链路没有对正文做任何改写。
 
+**浏览器那一层（网页工作台）**：编辑器是 `<textarea>`，HTML 规范把它的
+API value 归一为 LF（本机实测：Chrome 158 headless 里 `textarea.value` 的
+CRLF 与单独 CR 都变成 LF）。引擎侧若把浏览器交回的正文逐字写回，一份
+CRLF 稿件**存一次就变成 LF**——正文内容一个字没动，行尾整篇被换掉。
+写侧因此按**落盘原文**逐行还原行尾（`textio.restore_newlines`）：CRLF 稿
+仍是 CRLF、LF 稿仍是 LF、混合稿逐行照旧，用户新输入的行用该节的主导
+行尾。端到端那一组走真实的 `PUT /api/sections`。
+
 **Windows 真机端到端仍未验证**：本机是 macOS，仓库 CI 只有 ubuntu
 （`.github/workflows/test.yml`）。POSIX 上默认文本模式的换行翻译是恒等
 变换，所以「Windows 上会变成 CRLF/CRLFCRLF」这一段是**机制链核实**
@@ -42,7 +50,8 @@ from factscribe.citeedit import citation_add_data  # noqa: E402
 from factscribe.config import ConfigError  # noqa: E402
 from factscribe.serve import create_server  # noqa: E402
 from factscribe.textio import (dominant_newline, read_text_exact,  # noqa: E402
-                               split_keepends, write_text_exact)
+                               restore_newlines, split_keepends,
+                               write_text_exact)
 from factscribe.workbench import (project_data, write_section_data)  # noqa: E402
 
 TOKEN = "newline-token"
@@ -81,6 +90,17 @@ MIXED_TEX = (
     b"end without newline"
 )
 LF_TEX = b"\\section{Intro}\n\nThe accuracy is 56.25\\%.\n"
+
+
+def browser_text(text: str) -> str:
+    """模拟浏览器的 `<textarea>`：行尾一律归一为 LF。
+
+    HTML 规范规定 textarea 的 API value 把换行归一为 LF；本机实测
+    （Chrome 158 headless）：`textarea.value` 里的 CRLF 与单独的 CR
+    都变成 LF。网页工作台的编辑器就是 `<textarea>`，所以它交回给
+    `PUT /api/sections` 的正文恒是 LF。
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def make_project(base: Path, tex_bytes: bytes = CRLF_TEX) -> Path:
@@ -161,6 +181,40 @@ class TextIoUnitTest(unittest.TestCase):
         self.assertEqual(dominant_newline("a\r\nb\r\nc\n"), "\r\n")
         self.assertEqual(dominant_newline("a\nb\nc\n"), "\n")
         self.assertEqual(dominant_newline(""), "\n")
+
+    def test_restore_newlines_keeps_each_original_line(self):
+        original = "a\r\nb\nc\rd"
+        self.assertEqual(restore_newlines("a\nb\nc\nd", original), original)
+
+    def test_restore_newlines_new_line_takes_dominant_newline(self):
+        self.assertEqual(restore_newlines("a\nb\nc\n", "a\r\nb\r\n"),
+                         "a\r\nb\r\nc\r\n")
+        self.assertEqual(restore_newlines("a\nb\nc\n", "a\nb\n"),
+                         "a\nb\nc\n")
+
+    def test_restore_newlines_never_adds_or_drops_a_line_break(self):
+        # 用户把两行并成一行：那个换行没了就是没了，不许被还原回来；
+        # 剩下的那一行仍按该节的行尾风格（CRLF）写。
+        self.assertEqual(restore_newlines("ab\n", "a\r\nb\r\n"), "ab\r\n")
+        # 用户在末尾补一个换行：补出来的换行按主导行尾写。
+        self.assertEqual(restore_newlines("a\nb\n", "a\r\nb"),
+                         "a\r\nb\r\n")
+        # 换行的**个数**只由客户端那份文本决定：还原只改风格，不改个数。
+        for original, new in (("a\r\nb\r\n", "ab\n"),
+                              ("a\r\nb", "a\nb\n"),
+                              ("a\nb\n", "a\nb\n")):
+            self.assertEqual(restore_newlines(new, original).count("\n"),
+                             new.count("\n"))
+
+    def test_restore_newlines_keeps_explicit_client_crlf(self):
+        # 客户端自己明确给了 CRLF（不是浏览器的 LF 归一）：一个字都不改。
+        self.assertEqual(restore_newlines("a\r\nb\r\n", "a\nb\n"),
+                         "a\r\nb\r\n")
+
+    def test_restore_newlines_never_touches_content(self):
+        original = "x \\fact{A1} 56.25\\% y\r\n"
+        self.assertEqual(restore_newlines("x \\fact{A1} 56.26\\% y\n", original),
+                         "x \\fact{A1} 56.26\\% y\r\n")
 
 
 class RoundTripTest(unittest.TestCase):
@@ -301,6 +355,99 @@ class NewlineParameterTest(unittest.TestCase):
             self.assertEqual(newline, "", path)
 
 
+class BrowserSaveNewlineTest(unittest.TestCase):
+    """网页工作台保存：浏览器交回 LF，落盘必须还原成该节原有的行尾。
+
+    这一组是本批的**缺陷复现与修复锁**：修复前，浏览器在 `<textarea>` 里
+    交回的 LF 正文被逐字写回，CRLF 稿件存一次就变成 LF（内容一个字
+    没动，行尾整篇被换掉）。修复后：
+
+    * CRLF 节 → 仍是 CRLF，且逐字节不变；
+    * LF 节 → 仍是 LF，不许被改成 CRLF；
+    * 混合节 → 逐行照旧；
+    * 用户新输入的行 → 用该节的主导行尾。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _save(self, tex_bytes: bytes, submitted: str) -> bytes:
+        """造盘 → 按客户端给的那份正文保存 → 交回落盘字节。"""
+        root = make_project(self.base, tex_bytes)
+        section = root / "sections" / "01-intro.tex"
+        write_section_data(root, "sections/01-intro.tex", submitted,
+                           allow_write=True)
+        return section.read_bytes()
+
+    def test_crlf_section_saved_from_browser_stays_crlf(self):
+        """CRLF 稿存一次仍是 CRLF，且逐字节不变。"""
+        original = CRLF_TEX.decode("utf-8")
+        after = self._save(CRLF_TEX, browser_text(original))
+        self.assertEqual(after, CRLF_TEX)
+        self.assertEqual(after.count(b"\r\n"), CRLF_TEX.count(b"\r\n"))
+        self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+
+    def test_lf_section_saved_from_browser_stays_lf(self):
+        """LF 稿不许被改成 CRLF。"""
+        original = LF_TEX.decode("utf-8")
+        after = self._save(LF_TEX, browser_text(original))
+        self.assertEqual(after, LF_TEX)
+        self.assertNotIn(b"\r", after)
+
+    def test_mixed_section_saved_from_browser_keeps_every_line(self):
+        """混合行尾逐行照旧：CRLF 的行、LF 的行、单独 CR 的行都不动。"""
+        original = MIXED_TEX.decode("utf-8")
+        after = self._save(MIXED_TEX, browser_text(original))
+        self.assertEqual(after, MIXED_TEX)
+        self.assertEqual(after.count(b"\r\n"), MIXED_TEX.count(b"\r\n"))
+        self.assertEqual(after.count(b"\r"), MIXED_TEX.count(b"\r"))
+
+    def test_new_user_line_takes_dominant_newline(self):
+        """用户新输入的行：用该节的主导行尾，不拍脑袋选。"""
+        original = CRLF_TEX.decode("utf-8")
+        submitted = browser_text(original + "A brand new line.\n")
+        after = self._save(CRLF_TEX, submitted)
+        self.assertTrue(after.endswith(b"A brand new line.\r\n"), after)
+        self.assertEqual(after.count(b"\r\n"), CRLF_TEX.count(b"\r\n") + 1)
+
+    def test_new_user_line_in_lf_section_stays_lf(self):
+        """LF 节里新输入的行也是 LF。"""
+        original = LF_TEX.decode("utf-8")
+        submitted = browser_text(original + "A brand new line.\n")
+        after = self._save(LF_TEX, submitted)
+        self.assertTrue(after.endswith(b"A brand new line.\n"), after)
+        self.assertNotIn(b"\r", after)
+
+    def test_edited_line_keeps_section_style(self):
+        """真改一个字：改掉的那行仍是该节的行尾，其余字节一个不动。"""
+        original = CRLF_TEX.decode("utf-8")
+        submitted = browser_text(original.replace("56.25", "56.26"))
+        after = self._save(CRLF_TEX, submitted)
+        self.assertIn(b"56.26", after)
+        self.assertEqual(after.count(b"\r\n"), CRLF_TEX.count(b"\r\n"))
+        self.assertNotIn(b"\r\r\n", after)
+        self.assertNotIn(b"56.25", after)
+
+    def test_protected_surface_numbers_and_tokens_untouched(self):
+        """保护面、数字、token 一个字都不能被保存链路改写。"""
+        original = CRLF_TEX.decode("utf-8")
+        submitted = browser_text(original)
+        after = self._save(CRLF_TEX, submitted).decode("utf-8")
+        self.assertIn("\\fact{A1}", after)
+        self.assertIn("\\cite{alpha2020}", after)
+        self.assertIn("56.25\\%", after)
+        self.assertEqual(after.replace("\r\n", "\n"), original.replace("\r\n", "\n"))
+
+    def test_explicit_client_crlf_is_not_rewritten(self):
+        """非浏览器客户端明确给了 CRLF：一个字符都不许被改写。"""
+        after = self._save(LF_TEX, "\\section{Intro}\r\nbody\r\n")
+        self.assertEqual(after, b"\\section{Intro}\r\nbody\r\n")
+
+
 class HttpRoundTripTest(unittest.TestCase):
     """走真实 HTTP 链路（Miniapp 用的那条）：GET 拿到的原样 PUT 回去。"""
 
@@ -353,6 +500,85 @@ class HttpRoundTripTest(unittest.TestCase):
                                      body={"file": row["file"], "text": row["text"]})
         self.assertEqual(status, 200, data)
         self.assertEqual(section.read_bytes(), before)
+
+
+class HttpBrowserSaveTest(unittest.TestCase):
+    """端到端：走真实 HTTP 保存接口，浏览器交回的 LF 不得吃掉行尾。
+
+    这一组起真服务器（`create_server`），用真实的 `PUT /api/sections`
+    把浏览器归一后的正文存回去，再读落盘字节——网页工作台那条路就
+    是这么走的（`app.js` 的 `saveWorkbenchSection()` → PUT → 引擎写盘）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = make_project(Path(cls._tmp.name), CRLF_TEX)
+        sections = cls.root / "sections"
+        (sections / "02-lf.tex").write_bytes(LF_TEX)
+        (sections / "03-mixed.tex").write_bytes(MIXED_TEX)
+        cls.server, cls.token = create_server(cls.root, port=0, token=TOKEN,
+                                              allow_write=True)
+        cls.port = cls.server.server_address[1]
+        cls.base = "http://127.0.0.1:%d" % cls.port
+        cls.thread = threading.Thread(target=cls.server.serve_forever,
+                                       daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=5)
+        cls._tmp.cleanup()
+
+    def _request(self, path, method="GET", body=None):
+        headers = {"Authorization": "Bearer " + self.token}
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(self.base + path, method=method,
+                                     headers=headers, data=data)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = exc.read().decode("utf-8")
+            finally:
+                exc.close()
+            return exc.code, json.loads(payload) if payload else {}
+
+    def _browser_save(self, name: str, before: bytes) -> bytes:
+        status, project = self._request("/api/project")
+        self.assertEqual(status, 200)
+        row = next(s for s in project["sections"] if s["file"] == name)
+        # 浏览器那一层：<textarea> 交回的恒是 LF。
+        submitted = browser_text(row["text"])
+        self.assertNotIn("\r", submitted)
+        status, data = self._request("/api/sections", method="PUT",
+                                     body={"file": name, "text": submitted})
+        self.assertEqual(status, 200, data)
+        path = self.root / name
+        after = path.read_bytes()
+        self.assertEqual(after, before,
+                         "%s 存一次后行尾变了（浏览器交回 LF 不得吃掉 CRLF）" % name)
+        return after
+
+    def test_http_put_crlf_section_stays_crlf(self):
+        after = self._browser_save("sections/01-intro.tex", CRLF_TEX)
+        self.assertIn(b"\r\n", after)
+        self.assertNotIn(b"\n", after.replace(b"\r\n", b""))
+
+    def test_http_put_lf_section_stays_lf(self):
+        after = self._browser_save("sections/02-lf.tex", LF_TEX)
+        self.assertNotIn(b"\r", after)
+
+    def test_http_put_mixed_section_keeps_every_line(self):
+        after = self._browser_save("sections/03-mixed.tex", MIXED_TEX)
+        self.assertEqual(after.count(b"\r\n"), MIXED_TEX.count(b"\r\n"))
+        self.assertEqual(after.count(b"\r"), MIXED_TEX.count(b"\r"))
 
 
 if __name__ == "__main__":

@@ -1545,6 +1545,37 @@ def _fact_from_mapping(raw: dict, path: Path, cfg: Config) -> Fact:
 # 逐跳走软链时的最大跳数（成环与跳数超限都归「内容不可知」）。
 _SYMLINK_MAX_HOPS = 64
 
+
+def _strip_ext_prefix(text: str) -> str:
+    r"""剥掉 Windows 扩展长度前缀（`\\?\` 与 `\\?\UNC\`）。
+
+    Windows 上 `os.readlink` 与 `os.path.realpath` 返回带 `\\?\` 的扩展
+    长度形态，而项目根多半是普通形态；两者直接比相对关系必然不相等——界内软链
+    会被误判成越界（闭包被丢、事实账被拒，还误报 INPUT_OUTSIDE_PROJECT）。
+
+    POSIX 上不存在这个前缀，本函数是恒等变换。
+    """
+    if text.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + text[8:]
+    if text.startswith("\\\\?\\"):
+        return text[4:]
+    return text
+
+
+def _norm_for_compare(path: Path | str) -> str:
+    """比较用的形态归一：剥扩展长度前缀 + normcase（Windows 忽略大小写）。"""
+    return os.path.normcase(os.path.normpath(_strip_ext_prefix(str(path))))
+
+
+def _is_inside_root(path: Path | str, root: Path | str) -> bool:
+    """path 是否在 root 之内（按归一形态比较；跨盘、形态不一致都算不在内）。"""
+    try:
+        Path(_norm_for_compare(path)).relative_to(Path(_norm_for_compare(root)))
+        return True
+    except ValueError:
+        return False
+
+
 def _symlink_chain_end(path: Path) -> tuple[Path | None, bool]:
     """逐跳解软链。返回 (最终路径, 是否不可解)。
 
@@ -1567,6 +1598,9 @@ def _symlink_chain_end(path: Path) -> tuple[Path | None, bool]:
             target = os.readlink(str(current))
         except OSError:
             return None, True
+        # Windows 的 readlink 返回扩展长度形态（\\?\C:\...），剥掉再拼，
+        # 否则后面与项目根比相对关系时形态对不上（界内软链会被误判成越界）。
+        target = _strip_ext_prefix(target)
         current = Path(target) if os.path.isabs(target) else current.parent / target
     return None, True                  # 跳数超限：链太深，当成不可解
 
@@ -1580,7 +1614,8 @@ def _rel_to_root(path: Path, root: Path) -> str:
     不能因为算不出相对路径就把整个审计打成 traceback（exit 4）。
     """
     try:
-        return path.resolve().relative_to(root.resolve()).as_posix()
+        return Path(_norm_for_compare(path.resolve())).relative_to(
+            Path(_norm_for_compare(root.resolve()))).as_posix()
     except (ValueError, OSError, RuntimeError):
         try:
             return path.relative_to(root).as_posix()
@@ -1612,10 +1647,8 @@ def _filter_outside_symlinks(cfg: Config, found: dict[str, Path]) -> dict[str, P
             resolved = target.resolve()
         except (OSError, RuntimeError):
             continue
-        try:
-            resolved.relative_to(root)
-        except ValueError:
-            entry = (rel, str(resolved), 0)
+        if not _is_inside_root(resolved, root):
+            entry = (rel, _strip_ext_prefix(str(resolved)), 0)
             if entry not in cfg.outside_inputs:
                 cfg.outside_inputs.append(entry)
             continue
@@ -1655,10 +1688,8 @@ def _facts_link_kind(cfg: Config, path: Path) -> tuple[str, str]:
         if exc.errno == errno.ENOENT:
             return "unresolved", "软链断链（目标不存在）"
         return "unresolved", "软链不可解（%s）" % (exc.strerror or exc)
-    try:
-        Path(resolved).relative_to(cfg.root.resolve())
-    except ValueError:
-        return "outside", resolved
+    if not _is_inside_root(resolved, cfg.root.resolve()):
+        return "outside", _strip_ext_prefix(resolved)
     return "ok", ""
 
 
@@ -1676,7 +1707,8 @@ def _facts_rel(cfg: Config, path: Path) -> str:
     except ValueError:
         pass
     try:
-        return path.resolve().relative_to(cfg.root.resolve()).as_posix()
+        return Path(_norm_for_compare(path.resolve())).relative_to(
+            Path(_norm_for_compare(cfg.root.resolve()))).as_posix()
     except (ValueError, OSError, RuntimeError):
         return path.as_posix()
 

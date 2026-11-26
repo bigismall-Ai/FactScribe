@@ -22,6 +22,7 @@ import argparse
 import os
 import sys
 
+from .console import safe_stdio, write_json_text
 from .provisions import load_corpus
 from .verify import render, verify
 
@@ -185,14 +186,10 @@ def cmd_api(args):
     import json
     from .api import (CHANNELS, build_contract, context_from_project,
                       render_human)
-    # 非 UTF-8 控制台（中文 Windows 的 cp936）：编不出来的字符降级成同义
-    # ASCII，命令照常跑完、退出码照旧（口径照上游 factscribe/console.py；
-    # 本包自带一份，以便独立拷走单跑）。UTF-8 环境下不改变任何一个字节。
-    #
-    # 只装在**本族**上：既有 11 条子命令的输出与退出码一个字都不许动
-    # （它们在 cp936 上的既有崩溃是既有缺陷，本步不碰、不顺手修）。
-    from .console import safe_stdio
-    safe_stdio()
+    # 非 UTF-8 控制台（中文 Windows 的 cp936）的降级**装在 CLI 入口**
+    # （见 main）：本族与既有 11 条子命令一视同仁——人读输出编不出来的
+    # 装饰字符换同义 ASCII，命令照常跑完、退出码照旧（口径照上游
+    # factscribe/console.py；本包自带一份，以便独立拷走单跑）。
     action = args.action
     if action != "contract" and action not in CHANNELS:
         print("用法：factscribe-legal api <%s|contract> [...]" % "|".join(CHANNELS),
@@ -220,7 +217,10 @@ def cmd_api(args):
     if args.human:
         print(render_human(contract))
     else:
-        print(json.dumps(contract, ensure_ascii=False, indent=2))
+        # JSON 是机器通道：载荷按 UTF-8 字节出（UTF-8 环境与 cp936 环境
+        # 逐字相同），人读通道的降级不许改写它、载荷也不做 NFKD 折叠
+        # （见 console.write_json_text）。
+        write_json_text(json.dumps(contract, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -336,6 +336,13 @@ def build_parser():
 
 
 def main(argv=None):
+    # 非 UTF-8 控制台（中文 Windows 的 cp936/gbk）：人读输出里的装饰字符
+    # （✓ / 🔴 / ⚠ …）编不出来 → UnicodeEncodeError → 命令退成异常路径，
+    # 退出码不是它本来的判定码（UTF-8 下是 0 绿 / 1 红或查无 / 2 配置错 /
+    # 3 黄，cp936 下必须一模一样）。这里在**入口**统一把 stdout/stderr
+    # 装上「安全降级」的编码错误处理器：编不出来的字符换同义 ASCII，命令
+    # 照常跑完、退出码照旧。UTF-8 环境下不改变任何一个字节。
+    safe_stdio()
     ap = build_parser()
     args = ap.parse_args(argv)
     # 废弃窗口（SPEC-CHECKS 裁定⑥，2026-11-16）：六条子命令保留作调试／

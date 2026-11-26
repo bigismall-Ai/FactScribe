@@ -270,7 +270,6 @@ The bilingual interface **applies to the display layer only**. The prose that la
 |---|---|
 | `serve` | Local workbench HTTP API: loopback only, random token by default; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
 | `mcp` | MCP stdio server exposing five read-only tools — `status`, `project`, `evidence_status`, `brief`, `audit` — to agents; `--allow-write` adds write section, add fact, freeze evidence and unfreeze evidence |
-| `web` | Local workbench page: the `serve` backend plus the workbench UI; read-only unless `--allow-write`, PDF builds only with `--allow-build` |
 | `workbench` | Workbench page: scans `--root` for `factscribe.toml`, groups disks that share a root name into one project (`paper` pairs with `paper-zh`); body text and the status line come from the real files. It also writes: in-place paragraph editing (with `\fact`/`\cite`/`\ref` and bound numbers kept verbatim, `.bak` kept on save), section reorder/delete (moved to `sections/attic/`)/create, renaming a section and the paper title, inserting a fact binding from the paragraph menu, project create and edit |
 | `workbench new` | Create a paper project: writes the skeleton under `--root` (`factscribe.toml` + `sections/` + `facts/` + `README.md` + `main.tex`); project directory and experiment report directory go into the `[workbench]` table; `--lang en/zh/both` picks how many language disks to create |
 
@@ -434,7 +433,7 @@ All the structural limits point at the same promise: the account, the material a
 ## Reproduce and contribute
 
 ```bash
-python3 -m unittest discover -s tests     # 2564 tests, fully offline
+python3 -m unittest discover -s tests     # 2581 tests, fully offline
 ./scripts/preflight-ci.sh                 # local CI: clean clone + 3.10/3.11/3.12
 ```
 

@@ -69,6 +69,13 @@ CODE_CLOSED_SET = frozenset({
     'AI_UNAVAILABLE',
     'ASSEMBLY_MISSING',
     'ASSET_INVALID',
+    # 图片预览通道（factscribe/workbench/assets.py ＋ serve.py 的 /api/asset）
+    # 抛的码。它在第 ④ 步之前就由 serve.py 抛了，只是那时闭集扫描器看不见
+    # （扫描认的是 code= 关键字与异常默认值，不认 _error() 的位置参数）；
+    # 第 ④ 步并进来的 assets.py 用了 code="ASSET_NOT_FOUND"，闭集核对照实
+    # 把它点出来了——补登即可，码的名字与含义一个字没改，运行行为零变化
+    # （CODE_CLOSED_SET 是登记表，不是派发表）。
+    'ASSET_NOT_FOUND',
     'BAD_ENUM',
     'BAD_TOML',
     'BAD_VALUE',

@@ -23,11 +23,15 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { createReadStream, promises as fs } from 'node:fs';
 import { createServer, request as httpRequest } from 'node:http';
-import { delimiter, join, resolve as resolvePath, sep } from 'node:path';
+import { delimiter, extname, join, resolve as resolvePath, sep } from 'node:path';
 import { homedir } from 'node:os';
 // 解释器发现（候选表/探针/文案都在这个模块里，纯函数可单测）：
 // 候选带参数前缀（py -3 这类），探测与拉起引擎共用同一份候选。
 import { discoverPython, pythonFailureMessage, pythonAdvice } from './python_discovery.mjs';
+// 行尾保真（切分/识别/按原风格摆回，纯函数可单测）：
+// 引擎读文件用 Python 文本模式（通用换行翻译：CRLF→LF）、写文件用二进制写，
+// 一次保存就会把 CRLF 的稿子整篇改成 LF；行尾的真相只在磁盘上的原文件里。
+import { detectEol, restoreOriginalEndings, toLfOnly } from './eol.mjs';
 
 // ---------------------------------------------------------------- 常量
 
@@ -756,6 +760,119 @@ function createEngine(env) {
     get root() { return engineRoot; },
     get running() { return Boolean(child && port); },
   };
+}
+
+// ---------------------------------------------------------------- 行尾保真（保存时把原行尾摆回去）
+//
+// 引擎读文件用 Python 文本模式（通用换行翻译：CRLF→LF），写文件用二进制模式：
+// 一次保存就会把整篇的行尾改成 LF——CRLF 的稿子存一次就没了（macOS / Linux
+// 上同样发生，与 Windows 无关）。所以 Node 这一层在保存前把原文件的真行尾
+// 读下来，引擎写完再按它摆回去：只换行尾，不换内容。
+
+/** 正文文本文件：只有这些进行尾快照（其余是数据、产物或二进制）。 */
+const TEXT_FILE_EXTENSIONS = new Set([
+  '.tex', '.bib', '.md', '.txt', '.toml', '.sty', '.cls', '.cfg', '.yaml', '.yml',
+]);
+
+/** 单文件上限：超过就不进快照（读一遍太贵，也不该被行尾逻辑碰）。 */
+const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024;
+
+/** 快照最多收多少个文件：防病态目录。 */
+const SNAPSHOT_MAX_FILES = 500;
+
+/** decodeURIComponent 可能抛（坏百分号）：解不开就原样返回。 */
+function safeDecode(value) {
+  const raw = String(value ?? '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * 盘目录下的正文文本文件快照：绝对路径 → 原始内容。
+ *
+ * Node 的 readFile(path, 'utf8') 不做换行翻译，所以这里拿得到磁盘上的真行尾。
+ *
+ * @param {string} dir 盘的绝对目录
+ * @returns {Promise<Map<string, string>>}
+ */
+async function snapshotTextFiles(dir) {
+  /** @type {Map<string, string>} */
+  const snap = new Map();
+  const stack = [String(dir)];
+  while (stack.length && snap.size < SNAPSHOT_MAX_FILES) {
+    const current = /** @type {string} */ (stack.pop());
+    let entries;
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (snap.size >= SNAPSHOT_MAX_FILES) break;
+      if (entry.name.startsWith('.')) continue;
+      const absolute = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(absolute);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!TEXT_FILE_EXTENSIONS.has(extname(entry.name).toLowerCase())) continue;
+      try {
+        const info = await fs.stat(absolute);
+        if (!info.isFile() || info.size > SNAPSHOT_MAX_BYTES) continue;
+        snap.set(absolute, await fs.readFile(absolute, 'utf8'));
+      } catch {
+        /* 读不到就当没这个文件 */
+      }
+    }
+  }
+  return snap;
+}
+
+/**
+ * 引擎写完之后，把被这次保存改过的文件按**原文件的行尾**摆回去。
+ *
+ * 引擎那一层拿到的是 LF 形态（不带 '\r'），它写出来的文件是 LF 的；这里按
+ * 快照里的原行尾把它摆回去：内容一个字不动，没被这次保存碰到的行连原来的
+ * 混合行尾都原样留着。摆不回去（内容对不上）就一个字也不动。
+ *
+ * @param {Map<string, string>} snapshot 保存前的快照
+ */
+async function restoreSnapshotEndings(snapshot) {
+  /** @type {{file: string, style: string, repaired: boolean, note?: string}[]} */
+  const report = [];
+  for (const [file, before] of snapshot) {
+    let after;
+    try {
+      after = await fs.readFile(file, 'utf8');
+    } catch {
+      continue;
+    }
+    if (after === before) continue; // 这次保存没碰这个文件
+    const restored = restoreOriginalEndings(before, after);
+    const style = detectEol(before).style;
+    if (!restored || restored === after) {
+      report.push({ file, style, repaired: false });
+      continue;
+    }
+    // 原子写：同目录临时文件 → rename；保留原权限。
+    const tmp = file + '.eol-tmp-' + process.pid;
+    try {
+      const info = await fs.stat(file);
+      await fs.writeFile(tmp, restored, 'utf8');
+      await fs.chmod(tmp, info.mode & 0o7777);
+      await fs.rename(tmp, file);
+    } catch (err) {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+      report.push({ file, style, repaired: false, note: String(err?.message || err) });
+      continue;
+    }
+    report.push({ file, style, repaired: true });
+  }
+  return report;
 }
 
 // ---------------------------------------------------------------- 引擎 HTTP 客户端（MCP 工具用）
@@ -1930,6 +2047,83 @@ export async function start(context) {
     return setupPageHtml(configured, warnings);
   }
 
+  /** 盘目录缓存：引擎的 /api/projects 给出每个盘的绝对路径（它自己扫出来的）。 */
+  /** @type {Map<string, string>} */
+  const diskDirs = new Map();
+  let diskDirsAt = 0;
+
+  /**
+   * 盘目录（绝对路径）：<project>/<disk> → 目录。
+   *
+   * 引擎的 /api/projects 里带着每个盘的 path（引擎自己发现的，不靠猜）。
+   * 问不到就按「没有盘目录」处理——那只是不保行尾，不影响保存本身。
+   *
+   * @param {string} project
+   * @param {string} disk
+   * @returns {Promise<string>}
+   */
+  async function diskDirOf(project, disk) {
+    const now = Date.now();
+    if (!diskDirs.size || now - diskDirsAt > 2000) {
+      diskDirsAt = now;
+      diskDirs.clear();
+      try {
+        const data = await engineGet(engine.port, '/api/projects');
+        for (const one of data?.projects || []) {
+          for (const item of one?.disks || []) {
+            if (one?.id && item?.id && typeof item.path === 'string') {
+              diskDirs.set(one.id + '\u0000' + item.id, item.path);
+            }
+          }
+        }
+      } catch {
+        /* 问不到就按「没有盘目录」处理 */
+      }
+    }
+    for (const p of [project, safeDecode(project)]) {
+      for (const d of [disk, safeDecode(disk)]) {
+        const hit = diskDirs.get(p + '\u0000' + d);
+        if (hit) return hit;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * 写盘的两条路（页面直写一段、采纳一张提议单）：行尾保真在这一层做。
+   *
+   * 引擎那一层拿到的是 LF 形态（不带 '\r'），它写出来的文件也是 LF 的——
+   * CRLF 的稿子存一次就没了。这里在写之前把原文件的真行尾读下来，引擎写完
+   * 再按原风格摆回去：内容一个字不动。
+   *
+   * @param {import('node:http').IncomingMessage} request
+   * @param {import('node:http').ServerResponse} response
+   * @param {string} project
+   * @param {string} disk
+   */
+  async function handleManuscriptWrite(request, response, project, disk) {
+    await engine.ensureReady();
+    const body = await readJsonBody(request);
+    const dir = await diskDirOf(project, disk);
+    const snapshot = dir ? await snapshotTextFiles(dir) : new Map();
+    // 传给引擎的一律 LF：引擎写盘是二进制写，带 '\r' 会原样写进文件。
+    const payload = typeof body?.text === 'string' ? { ...body, text: toLfOnly(body.text) } : body;
+    const upstream = await enginePostRaw(engine.port, request.url || '', payload);
+    const status = upstream.status || 502;
+    const data = upstream.data;
+    if (status === 200 && data && data.ok !== false && snapshot.size) {
+      const report = await restoreSnapshotEndings(snapshot);
+      if (report.length) {
+        data.eol = {
+          files: report.length,
+          repaired: report.filter((item) => item.repaired).length,
+          style: report[0]?.style || 'none',
+        };
+      }
+    }
+    return sendJson(response, status, data ?? { ok: false, error: '引擎没应答', code: 502 });
+  }
+
   /**
    * 反向代理：页面同源请求 /api/* 透传给 Python 引擎内部端口（只回环）。
    * @param {import('node:http').IncomingMessage} request
@@ -2612,6 +2806,19 @@ export async function start(context) {
       }
       await writeCustomModels(context.dataDir, kept);
       return sendJson(response, 200, { ok: true, models: kept.map(publicCustomModel) });
+    }
+
+    // 写盘的两条路：行尾保真在这一层做（引擎读用文本模式、写用二进制写，
+    // 一次保存就会把 CRLF 的稿子整篇改成 LF）。
+    const writeMatch = /^\/api\/disk\/([^/]+)\/([^/]+)\/(?:edit|proposal\/[^/]+\/confirm)$/.exec(path);
+    if (writeMatch && method === 'POST') {
+      try {
+        return await handleManuscriptWrite(request, response, writeMatch[1], writeMatch[2]);
+      } catch (error) {
+        const e = /** @type {HttpError} */ (error);
+        const status = typeof e?.status === 'number' ? e.status : 502;
+        return sendJson(response, status, { ok: false, error: e?.userMessage || '引擎暂不可用', code: status });
+      }
     }
 
     // 业务请求：全部透传 Python 引擎（设置接口除外，上面已收）。

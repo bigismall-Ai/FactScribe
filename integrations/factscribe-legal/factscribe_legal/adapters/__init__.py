@@ -5,7 +5,9 @@
 ------
 一个**加在前面的只读派生层**：输入＝现有卡片＋index（或 catalog/manifest），
 输出＝统一契约字段字典。各国原有卡片一个字段都不删，现有卡片继续是事实账
-钉哈希的对象（`factscribe_legal/verify.py:157-160` 等处依赖这一点）。
+钉哈希的对象（`factscribe_legal/verify.py:157-160` 等处依赖这一点）；
+⇒ 若日后重排语料，**卡被改后重钉一次**即可（哈希能重算），不是「不可行」——
+口径见 `integrations/factscribe-legal/docs/legal-card-contract-draft.md` §1.2。
 
 六个形状各一个 adapter（草案 §1.3「第一步」；形状清单见映射表 §2-§8）：
 

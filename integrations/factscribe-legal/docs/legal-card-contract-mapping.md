@@ -26,7 +26,7 @@
 | `kind` | 证据类型：`provision` / `case` / `agreement` | 枚举 |
 | `jurisdiction` | 法域：`fr` / `cn` / `es` / `it` | 枚举 |
 | `local_id` | 各国自己的号，原样保留，不翻译 | 字符串 |
-| `canonical_id` | 跨法域寻址用的合成标识（本轮不落值，见草案 §5） | 字符串 |
+| `canonical_id` | 跨法域寻址用的合成标识（**v0 统一填「—」**，官方数据里无此字段、无权威来源，见草案 §5） | 字符串 |
 | `instrument` | 法条所属法件（法典／法律／宪法） | 字符串 |
 | `provision_no` | 条文号 | 字符串 |
 | `effective_from` | 生效起 | ISO 日期 |
@@ -85,7 +85,7 @@
 | `TITLE` | `...劳动合同法_2c909f.cn.card.txt:2` | `instrument` | 直映 | 中国侧一张卡＝一部法规（**不含条文正文**，见 §9.1） |
 | `BBBS` | 同上 `:3`（`2c909fdd678bf17901678bf74d7106b3`） | `local_id` | 直映 | 国家法律法规数据库版本标识，原样 |
 | `OFFICIAL_DETAIL_SHA256` | 同上 `:4` | `official_ref.sha256` | 直映 | 官方详情 JSON 原字节哈希 |
-| `SXX` | 同上 `:5`（`3`） | `status` | 转换 | `1 废止 / 2 修改 / 3 有效 / 4 未生效`（判据 `factscribe_legal/cn_verify.py:91-93`）→ 见时点表 §7.2 |
+| `SXX` | 同上 `:5`（`3`） | `status` | 转换 | `1 废止 / 2 修改 / 3 有效 / 4 未生效`（判据 `factscribe_legal/cn_verify.py:91-93`）。**已定规则**：`3`⇒`in_force`；`1`⇒`repealed`；`4`⇒`unknown`；`2`⇒`unknown`（「已修改」不足以证明今天还在适用）⇒ 见时点表 §2.2 |
 | `GBRQ` | 同上 `:6`（`2012-12-28`） | — | 国别专属 | 公布日期。**不进** `effective_from`——公布 ≠ 生效 |
 | `SXRQ` | 同上 `:7`（`2013-07-01`） | `effective_from` | 直映 | 施行日期＝生效起 |
 | `FLXZ` | 同上 `:8`（`法律`） | — | 国别专属 | 法律形式分类 |
@@ -130,7 +130,7 @@
 | `ATTRIBUTION` | 同上 `:19` | — | 国别专属 | 署名（建议契约加 `source_attribution` 字段承接） |
 | `FETCHED_AT` | 同上 `:20` | `fetched_at` | 直映 | ISO 8601 |
 | —（卡上无） | — | `effective_from`/`effective_to` | 转换（可补） | 卡片没有，但 `index.json` 有 `fecha_vigencia`（`20161002`）、`fecha_publicacion`、`fecha_disposicion`，且**官方整件每块带 `fecha_vigencia` 属性**（实读 `corpus/es/.../official/act.xml`：`fecha_vigencia="20161002"`；`a1.xml` 内 `<version ... fecha_vigencia="20161002">`）⇒ adapter 可补 |
-| —（卡上无） | — | `status` | 转换 | 源侧有 `estado_consolidacion`（实读三个 run 均为 `"Finalizado"`）＋ `fecha_vigencia`；语义见时点表 §7.3 |
+| —（卡上无） | — | `status` | 转换 | 源侧有 `estado_consolidacion`（实读三个 run 均为 `"Finalizado"`）＋ `fecha_vigencia`。**已定规则**：**不用 `estado_consolidacion`**（全为 `"Finalizado"` 而三法今天全部现行有效，拿它判必错），改判「官方是否仍提供现行合并文本」，判不出落 `unknown` ⇒ 见时点表 §2.3 |
 
 `index.json` 顶层 `estado_consolidacion` / `fecha_publicacion` / `fecha_disposicion` /
 `fecha_vigencia` / `version_date` / `fetch_reference_date` / `reference_date` /

@@ -19,8 +19,8 @@
 | 形状 | 源侧用什么表达「有效」 | 机制 | 映射到三态的规则 | 取不到时填什么 |
 |---|---|---|---|---|
 | 法国法条 | `DATE_DEBUT` + `DATE_FIN` 区间（**不看 ETAT**） | 区间与参考日比 | `date_debut <= ref < date_fin` ⇒ `in_force`；`date_fin <= ref` ⇒ `repealed`；`date_debut > ref` ⇒ `unknown`（未来才生效，尚未在效） | 两字段皆空 ⇒ `unknown`＋`effective_from`/`effective_to` 填 `—` |
-| 中国法规 | `SXX` 状态标志 | 单值枚举 | `3`⇒`in_force`；`1`⇒`repealed`；`2`⇒`in_force`（见 §2.2 争议）；`4`⇒`unknown`；其余/缺失⇒`unknown` | `SXX` 缺失 ⇒ `unknown`；失效日不可得 ⇒ `effective_to` 填 `—` |
-| 西班牙法条 | `fecha_vigencia`（生效日）＋ `estado_consolidacion` | 日期比 + 合并状态 | `fecha_vigencia <= ref` ⇒ `in_force`；`fecha_vigencia > ref` ⇒ `unknown`；`estado_consolidacion` 为废止类值 ⇒ `repealed` | 两个源字段皆无 ⇒ `unknown`；`effective_to` 恒填 `—`（合并文本无终止日） |
+| 中国法规 | `SXX` 状态标志 | 单值枚举 | `3`⇒`in_force`；`1`（已废止）⇒`repealed`；`2`（已修改）⇒`unknown`；`4`（未生效）⇒`unknown`（**已定**，见 §2.2）；其余/缺失⇒`unknown` | `SXX` 缺失 ⇒ `unknown`；失效日不可得 ⇒ `effective_to` 填 `—` |
+| 西班牙法条 | `fecha_vigencia`（生效日）＋ 官方是否仍提供现行合并文本（**不用 `estado_consolidacion`**，已定见 §2.3） | 日期比 + 现行合并文本可得性 | `fecha_vigencia <= ref` ⇒ `in_force`；`fecha_vigencia > ref` ⇒ `unknown`；官方已不再提供现行合并文本 ⇒ `repealed`；判不出 ⇒ `unknown` | `fecha_vigencia` 缺失 ⇒ `unknown`；`effective_to` 恒填 `—`（合并文本无终止日） |
 | 意大利法条 | **无官方效力字段**（AKN 只有 `<act name="monovigente">`） | 无 | 取件口径：`asof` 日取到的就是该日生效版 ⇒ 记 `in_force`（弱口径，非官方判定） | 官方层取不到 ⇒ 若连 `asof` 也没有 ⇒ `unknown` |
 | 意大利判例 | 不适用 | 无 | 三态**不适用** ⇒ `—` | 一律 `—` |
 | 法国判例 | 不适用 | 无 | 三态**不适用** ⇒ `—` | 一律 `—` |
@@ -53,18 +53,34 @@
   ⇒ 本地这 3 张卡全是在效条文；`date_fin` 真实到期的条文**根本没进库**。
   统一层的 `repealed` 态在法国侧**当前无法被语料实证**，除非走 bulk 全量包。
 
-### 2.2 中国法规：状态标志制，SXX=2 是争议点
+### 2.2 中国法规：状态标志制（**口径已定 2026-11-28**）
 
 - 源字段：`corpus/cn/cards/中华人民共和国劳动合同法_2c909f.cn.card.txt:5`（`SXX: 3`）。
 - 枚举含义在 `factscribe_legal/cn_verify.py:91-93` 写死：**1 废止 / 2 修改 / 3 有效 / 4 未生效**。
 - 现行闸判据：`cn_verify.py:89-93`，`sxx != 3` ⇒ 红牌 `CN_PROV_NOT_IN_FORCE`。
 - 取代表偏好：`factscribe_legal/cn_corpus.py:56-63`（`_prefer`），
   优先级 `{3:3, 2:2, 4:1, 1:0}`＝现行有效 > 已修改 > 未生效 > 废止，同级比 `gbrq` 新旧。
-- **争议点**：`sxx=2`（修改）时，现行闸判**红**（不是 3 就红）；但 `_prefer` 又把 2 排在 4 和 1 之上
-  ＝「已修改」仍被当作可用版本。统一三态该落哪一态？
-  - 建议：`2` ⇒ `in_force`（该版本仍在用），并另设国别专属标记 `amended=true`。
-  - 代价：这会让统一层的 `in_force` 比现行闸的「在效」宽松 ⇒ 需要在 adapter 里显式记这条差异，
-    否则红线语义被悄悄放宽。**这是本轮唯一一个需要拍板的语义分歧。**
+
+**已定口径（2026-11-28 用户拍板）**——`sxx` 的 status 判定规则：
+
+| `sxx` | 含义 | 有效无效 | 三态落法 |
+|---|---|---|---|
+| `3` | 现行有效 | 在效 | `in_force` |
+| `1` | 已废止 | 不在效 | `repealed` |
+| `4` | 尚未生效 | 不在效 | `unknown`（尚未在效，与 §2.1 法国「未来才生效」同口径） |
+| `2` | 已修改 | **判不出**——「已修改」不足以证明今天还在适用 | `unknown` |
+| 缺失/其余 | — | 判不出 | `unknown` |
+
+- **关键区分（矛盾消解的关键）**：「**挑代表版本时的排序**」与「**这条今天算不算有效**」是两件事。
+  - `factscribe_legal/cn_corpus.py:56-63` 的 `_prefer`（`{3:3, 2:2, 4:1, 1:0}`）**保持不动**——
+    它管的是「同题多条里挑哪条当代表」；
+  - status 判定只管「有效无效」，两者互不覆盖，**不必二选一**。
+- **原先那个矛盾因此消解**：旧稿把「统一三态落哪一态」当成必须与 `_prefer` 二选一，
+  才觉得 `sxx=2` 必须放宽成 `in_force`（那会让统一层比现行闸宽松、悄悄放宽红线语义）。
+  按已定口径 `sxx=2` ⇒ `unknown`，**统一层不比现行闸宽松**，冲突不存在了。
+- 现行闸 `cn_verify.py:89-93` 的 `sxx != 3` ⇒ 红牌 `CN_PROV_NOT_IN_FORCE` **保持不动**——
+  它答的是「这条能不能引」（红线判定），status 答的是「今天算不算有效」（描述），各管各的。
+  ⚠️ 本次只落**文档口径**，未改动任何代码；第 3 步（status/asof 落地）由并行任务做。
 - **盲区**：中国侧官方详情只给 `sxrq`（施行日），**不给失效日** ⇒ `sxx=1` 时
   `effective_to` 只能填 `—`，不能反推。
 - `GBRQ`（公布日）**不是**生效日，不进 `effective_from`；生效日用 `SXRQ`。
@@ -86,7 +102,20 @@
   ⚠️ 该值在 BOE 语义里指「合并文本的**编纂流程**已结束」，**不是**「该法已废止」。
   实读三个法（1978 宪法、39/2015、40/2015）今天全部现行有效，但状态串都是 `Finalizado`。
   ⇒ **不能把 `Finalizado` 当 `repealed`**，否则会把三法全判成已失效。
-- 结论：西班牙的 `status` 只能由 `fecha_vigencia <= ref` 推出，`estado_consolidacion` 留国别专属。
+- **已定口径（2026-11-28 用户拍板）**：**不用 `estado_consolidacion` 判 status**——
+  它三个 run 全是 `"Finalizado"` 而三法今天全部现行有效，拿它判必错（上面已证）。
+  status 改从「**官方是否仍提供现行合并文本**」判定：
+  - `fecha_vigencia <= ref` 且官方仍提供现行合并文本 ⇒ `in_force`；
+  - 官方已不再提供现行合并文本 ⇒ `repealed`；
+  - 判不出 ⇒ `unknown`；
+  - `estado_consolidacion` **留国别专属，不参与 status 判定**。
+- ⚠️ 两个日期别混用（`factscribe_legal/es_verify.py:189-196`）：
+  `fetch_reference_date`（取件参考日）**可比**——它对应「取件那天的官方现行合并文本」；
+  `version_date`（合并文本自身最后更新日）**不是**「这一版何时生效」（同文件 `:186-188` 注释）。
+  现行闸在两日不一致时出黄牌 `ES_VERSION_GAP`（`es_verify.py:191-196`），**保持不动**。
+- ⚠️ 现状：本地语料**没有**「官方是否仍提供现行合并文本」这个信号
+  （三个法都是 `Finalizado` ＋ `fecha_vigencia`）⇒ 现阶段西侧 status 实测只能落
+  `in_force`／`unknown` 两支；「不再提供 ⇒ `repealed`」那一支待采集侧给信号后才可实证。
 
 ### 2.4 意大利法条：官方件无生效字段
 
@@ -149,10 +178,12 @@
 
 - **西班牙 `estado_consolidacion` 的完整取值域未查**：本轮只见到三个 run 的
   `"Finalizado"`，BOE 该字段的其它取值（如废止/暂停/草案）本轮未取证，
-  ⇒ 规则只按「日期比」写，`estado_consolidacion` 一律留国别专属。
+  ⇒ 该字段**一律留国别专属、不参与 status 判定**（已定口径，§2.3）——
+  查不查取值域都不改变这条结论。
 - **意大利法条官方效力元数据未接**：Normattiva 侧有 vigente/abrogato 信息，
   本轮未探接口。
 - **法国 bulk 全量包的已失效条文未取**：`fetch_corpus.py:733` 的 sample 过滤
   导致本地库无已失效条文，`repealed` 态在法国侧无实证样本。
 - **CCNL 协议正文未采**：无法核条款级事实，只能核协议级元数据。
-- **中国 sxx=2（修改）的三态归属是待拍板项**（§2.2），本轮给了建议但未改动任何代码。
+- **中国 sxx=2（修改）的三态归属已定**（§2.2，2026-11-28 用户拍板）：落 `unknown`。
+  本次只落文档口径，未改动任何代码（现行闸 `cn_verify.py:89-93` 不动）。

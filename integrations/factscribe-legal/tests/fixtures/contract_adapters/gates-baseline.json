@@ -1,0 +1,80 @@
+{
+  "gates": {
+    "case": [
+      {
+        "code": "CASE_OFFICIAL_HASH_MISMATCH",
+        "location": "facts/10-case.toml:CNCASE-TAMPERED",
+        "message": "官方正文哈希与卡片声明不符：声明 c7f5b9b68e1db93f… 实算 f5247f31168e7e10…（官方件被改）",
+        "severity": "red"
+      }
+    ],
+    "cn": [
+      {
+        "code": "CN_CARD_SHA256_MISMATCH",
+        "location": "facts/10-cn.toml:CN-TAMPERED",
+        "message": "证据卡 cards/cn/中华人民共和国劳动合同法_2c909f.cn.card.txt 自身被改过（事实钉的哈希与现算不符）",
+        "severity": "red"
+      }
+    ],
+    "es": [
+      {
+        "code": "ES_CARD_SHA256_MISMATCH",
+        "location": "facts/10-es.toml:ES-TAMPERED",
+        "message": "证据卡 cards/es/run-20261116-es-ley39-2015-procedimiento-administrativo/a1.es.card.txt 自身被改过（事实账钉的哈希与现算不符）",
+        "severity": "red"
+      },
+      {
+        "code": "ES_VERSION_GAP",
+        "location": "corpus",
+        "message": "钉住的是「2026-11-16 取件时」的合并文本（最后更新 2026-11-16），而本次参考日是 2026-11-20——两日之间的法律变化不在钉住的版本里（要当日最新请按新参考日重新取件）",
+        "severity": "yellow"
+      }
+    ],
+    "fr": [
+      {
+        "code": "LEGAL_CARD_SHA256_MISMATCH",
+        "location": "facts/10-fr.toml:FR-TAMPERED",
+        "message": "证据卡 cards/fr/L594-8.card.txt 自身被改过（事实账钉的哈希与现算不符）",
+        "severity": "red"
+      },
+      {
+        "code": "LEGAL_COVERAGE_GAP",
+        "location": "corpus",
+        "message": "版本池的数据截止日是 2026-11-15，比参考日 2026-11-20 落后 5 天——这段时间内的法律变化不在池子里；引用仍是「池内最新」，不是「今日最新」（要当日最新请先拉日更增量包）",
+        "severity": "yellow"
+      }
+    ],
+    "fr_case": [
+      {
+        "code": "FR_CASE_CARD_SHA256_MISMATCH",
+        "location": "facts/10-fr_case.toml:FRCASE-TAMPERED",
+        "message": "证据卡 runs/run-20261116-inca/JURITEXT000006951547.fr-case.card.txt 自身被改过（事实账钉的哈希与现算不符）",
+        "severity": "red"
+      }
+    ],
+    "it": [
+      {
+        "code": "IT_CARD_SHA256_MISMATCH",
+        "location": "facts/10-it.toml:IT-TAMPERED",
+        "message": "证据卡 cards/it/run-20261116-it-1990n241/art_1.it.card.txt 自身被改过（事实账钉的哈希与现算不符）",
+        "severity": "red"
+      },
+      {
+        "code": "IT_VERSION_GAP",
+        "location": "corpus",
+        "message": "钉住的是「2026-11-16 当天生效」的时点版本（文本日期戳 2026-04-21），而本次参考日是 2026-11-20——两日之间的法律变化不在钉住的版本里（要当日最新请按新参考日重新取件）",
+        "severity": "yellow"
+      }
+    ],
+    "it_case": [
+      {
+        "code": "ITCASE_CARD_SHA256_MISMATCH",
+        "location": "facts/10-it_case.toml:ITCASE-TAMPERED",
+        "message": "证据卡 cards/it-case/run-20261116-itcase-1956_1980/ECLI-IT-COST-1956-1.itcase.card.txt 自身被改过（事实账钉的哈希与现算不符）",
+        "severity": "red"
+      }
+    ]
+  },
+  "note": "改造前捕获的六闸判定基线；公共层（factscribe_legal/adapters/）落地后必须逐条一致。改动闸或改动夹具才重录。",
+  "reference_date": "2026-11-20"
+}

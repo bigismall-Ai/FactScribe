@@ -110,14 +110,56 @@ class PathEscape(BlobstoreError):
 
 # ---------------------------------------------------------------- 块库
 
-def open_blobstore(db_path):
-    """只读打开块库。"""
+# 两种只读 URI：先常规只读（走 fcntl 文件锁），失败再免锁的 immutable 只读
+_OPEN_MODES = (
+    ("?mode=ro", "常规只读（走 fcntl 文件锁）"),
+    ("?mode=ro&immutable=1", "只读免锁（immutable，声明文件内容不会变）"),
+)
+
+
+def open_blobstore(db_path, connect=None):
+    """只读打开块库。
+
+    先试 mode=ro。sqlite 走 fcntl 文件锁，在部分沙箱/受保护目录下拿不到锁，
+    会直接抛 sqlite3.OperationalError: unable to open database file，
+    取件第一步就走不下去。失败时回退 mode=ro&immutable=1：免锁，并声明文件
+    内容不会变——适合「只读打开一份自己下载、自己校验过 sha256 的静态快照」
+    这个场景（块库是 GitHub release 的一次性资产，下载后就不再变）。
+
+    两次都失败才报错，报错里把两次尝试各自的原因都写清楚。
+
+    connect 是可注入的连接工厂（签名同 sqlite3.connect），供单测构造
+    「mode=ro 失败、回退成功」这类情形；缺省用 sqlite3.connect。
+    """
     if not os.path.isfile(db_path):
         raise FileNotFoundError("块库文件不存在：%s" % db_path)
-    uri = "file:" + urllib.parse.quote(os.path.abspath(db_path)) + "?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
+    connector = connect or sqlite3.connect
+    quoted = urllib.parse.quote(os.path.abspath(db_path))
+    attempts = []
+    for suffix, note in _OPEN_MODES:
+        uri = "file:" + quoted + suffix
+        conn = None
+        try:
+            conn = connector(uri, uri=True)
+            conn.row_factory = sqlite3.Row
+            # connect() 不一定当场报错（有的环境是首次读才报），
+            # 所以探一下，确保「打不开」在这里就暴露，而不是拖到取件中途。
+            conn.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
+            if attempts:
+                print("[提示] 块库改用 %s 打开（常规只读失败：%s）"
+                      % (note, attempts[0][2]), file=sys.stderr)
+            return conn
+        except sqlite3.Error as exc:
+            attempts.append((suffix, note, "%s: %s" % (type(exc).__name__, exc)))
+            if conn is not None:
+                try:
+                    conn.close()
+                except sqlite3.Error:
+                    pass
+    detail = "\n  ".join(
+        "尝试 %s（%s）失败 -> %s" % (suffix, note, err)
+        for suffix, note, err in attempts)
+    raise BlobstoreError("打开块库失败，两种只读方式都试过了：\n  " + detail)
 
 
 def fetch_payload(conn, sha256=None, sha16=None):
@@ -395,7 +437,7 @@ def main(argv=None):
 
     try:
         conn = open_blobstore(args.blobs)
-    except (OSError, sqlite3.Error) as exc:
+    except (OSError, sqlite3.Error, BlobstoreError) as exc:
         print("打开块库失败：%s" % exc, file=sys.stderr)
         return EXIT_ERROR
 

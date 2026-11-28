@@ -427,5 +427,138 @@ class TestCli(unittest.TestCase):
             self.assertEqual(fh.read(), plain)
 
 
+class _FakeConn:
+    """假连接：够 open_blobstore 的探测与断言用。"""
+
+    def __init__(self, fail_on_execute=False):
+        self.row_factory = None
+        self.fail_on_execute = fail_on_execute
+        self.closed = False
+        self.executed = []
+
+    def execute(self, sql, *args):
+        self.executed.append(sql)
+        if self.fail_on_execute:
+            raise sqlite3.OperationalError("unable to open database file")
+        return self
+
+    def fetchone(self):
+        return ("blobs",)
+
+    def close(self):
+        self.closed = True
+
+
+class TestOpenBlobstoreFallback(unittest.TestCase):
+    """打开块库：mode=ro 失败要能回退到 immutable 只读。
+
+    背景：sqlite 的 mode=ro 要走 fcntl 文件锁，在部分沙箱/受保护目录下
+    拿不到锁，直接抛 "unable to open database file"，取件第一步就走不下去。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.db = _make_store(
+            self.tmp.name,
+            blobs=[("a" * 64, "fr-law-card", b"PAYLOAD", 7, 7, "79a30ff9f31903a5")],
+            dicts=[("79a30ff9f31903a5", b"DICTBYTES")])
+
+    def test_mode_ro_success_does_not_fall_back(self):
+        """常规只读能开就不该多走一趟。"""
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            return _FakeConn()
+
+        conn = ing.open_blobstore(self.db, connect=connector)
+        self.addCleanup(conn.close)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("mode=ro", calls[0])
+        self.assertNotIn("immutable", calls[0])
+
+    def test_falls_back_to_immutable_when_mode_ro_fails(self):
+        """mode=ro 抛错 -> 回退 mode=ro&immutable=1，并真的能用。"""
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            if len(calls) == 1:
+                raise sqlite3.OperationalError("unable to open database file")
+            return _FakeConn()
+
+        conn = ing.open_blobstore(self.db, connect=connector)
+        self.addCleanup(conn.close)
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("immutable", calls[0])
+        self.assertIn("mode=ro&immutable=1", calls[1])
+        self.assertTrue(conn.executed)
+
+    def test_immutable_uri_really_opens_a_real_store(self):
+        """回退用的 URI 形态要真能打开一个真实 sqlite 文件。"""
+        real_connect = sqlite3.connect
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            if len(calls) == 1:
+                raise sqlite3.OperationalError("unable to open database file")
+            return real_connect(target, uri=True)
+
+        conn = ing.open_blobstore(self.db, connect=connector)
+        self.addCleanup(conn.close)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(
+            conn.execute("SELECT COUNT(*) FROM blobs").fetchone()[0], 1)
+
+    def test_probe_failure_triggers_fallback(self):
+        """connect 成功但首次读就报错（有的环境是首次读才报锁错）-> 同样要回退。"""
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            if len(calls) == 1:
+                return _FakeConn(fail_on_execute=True)
+            return _FakeConn()
+
+        conn = ing.open_blobstore(self.db, connect=connector)
+        self.addCleanup(conn.close)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("mode=ro&immutable=1", calls[1])
+
+    def test_both_attempts_fail_reports_both_reasons(self):
+        """两种都失败 -> 报错，且两种尝试各自的原因都在错误信息里。"""
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            if len(calls) == 1:
+                raise sqlite3.OperationalError("unable to open database file")
+            raise sqlite3.OperationalError("database is locked")
+
+        with self.assertRaises(ing.BlobstoreError) as ctx:
+            ing.open_blobstore(self.db, connect=connector)
+        self.assertEqual(len(calls), 2)
+        msg = str(ctx.exception)
+        self.assertIn("unable to open database file", msg)
+        self.assertIn("database is locked", msg)
+        self.assertIn("mode=ro", msg)
+        self.assertIn("immutable", msg)
+
+    def test_missing_file_still_raises_before_connecting(self):
+        """文件不存在时不要去试两种 URI，直接报缺文件。"""
+        calls = []
+
+        def connector(target, uri=False):
+            calls.append(target)
+            return _FakeConn()
+
+        with self.assertRaises(FileNotFoundError):
+            ing.open_blobstore(os.path.join(self.tmp.name, "nope.sqlite"),
+                               connect=connector)
+        self.assertEqual(calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1294,7 +1294,23 @@ def _es_attr(attrs, name):
 
 
 def _es_meta(raw):
-    """从 <metadatos> 里取法件元数据（字段缺了也不炸，空串照填）。"""
+    """从 <metadatos> 里取法件元数据（字段缺了也不炸，空串照填）。
+
+    ⚠️ **三个效力标志**（BOE 官方件自带的件级效力信号）必须抽出来：
+      * `estatus_derogacion` ＝ 是否**已废止**（S ＝ 是）；
+      * `estatus_anulacion` ＝ 是否**已撤销**（S ＝ 是）；
+      * `vigencia_agotada` ＝ **效力是否已耗尽**（已被后续规范取代；S ＝ 是）。
+    任一为 `S` ⇒ 该法件已不现行有效（repealed）；三者皆 `N` ⇒ 官方仍在
+    提供现行合并文本（in_force 的判据，见统一契约
+    `factscribe_legal/adapters/es_provision.py` 的 `_judge`）。
+
+    ⚠️ `estado_consolidacion`（本函数也抽，但**不得**用来判效力）：
+    实读三个 run 全是 `Finalizado`，而它们今天全部现行有效——BOE 语义里
+    `Finalizado` 指「合并文本的**编纂流程**已结束」，不是「该法已废止」。
+
+    `fecha_derogacion` / `fecha_anulacion`（废止／撤销日）是**可选**字段：
+    官方件不一定带（如三份现行件就没有），带了就一并抽走。
+    """
     m = ES_META_RE.search(raw)
     blob = m.group(1) if m else b""
 
@@ -1315,6 +1331,13 @@ def _es_meta(raw):
         "numero_oficial": _g("numero_oficial"),
         "rango": _g("rango"),
         "estado_consolidacion": _g("estado_consolidacion"),
+        # ---- 三个效力标志（管效力；S ＝ 该件已不现行有效）----
+        "estatus_derogacion": _g("estatus_derogacion"),
+        "estatus_anulacion": _g("estatus_anulacion"),
+        "vigencia_agotada": _g("vigencia_agotada"),
+        # ---- 可选：废止日／撤销日（官方件不一定带）----
+        "fecha_derogacion": _g("fecha_derogacion"),
+        "fecha_anulacion": _g("fecha_anulacion"),
         "url_eli": _g("url_eli"),
         "url_html_consolidada": _g("url_html_consolidada"),
     }
@@ -1459,6 +1482,15 @@ def fetch_es(http, corpus_root, state, max_items, mode, reference_date, yes):
             "fecha_disposicion": meta.get("fecha_disposicion"),
             "fecha_publicacion": meta.get("fecha_publicacion"),
             "fecha_vigencia": meta.get("fecha_vigencia"),
+            # ---- 三个效力标志：写进索引，判效力的判据才随件走 ----
+            # （官方整件不在本地时，统一契约的西班牙 adapter 从这里读；
+            #   官方件在时以官方件为准，见 adapters/es_provision.py）
+            "estatus_derogacion": meta.get("estatus_derogacion"),
+            "estatus_anulacion": meta.get("estatus_anulacion"),
+            "vigencia_agotada": meta.get("vigencia_agotada"),
+            # 可选：废止日／撤销日（官方件不一定带 ⇒ 空串）
+            "fecha_derogacion": meta.get("fecha_derogacion"),
+            "fecha_anulacion": meta.get("fecha_anulacion"),
             "url_html_consolidada": meta.get("url_html_consolidada"),
             "source_url": url,
             "source_file": "official/act.xml",

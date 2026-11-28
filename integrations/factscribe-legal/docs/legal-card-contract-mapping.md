@@ -37,8 +37,10 @@
 | `official_ref` | 官方件路径＋官方件哈希 | 结构 |
 | `source_url` | 来源 URL | 字符串 |
 | `source_licence` | 许可 | 字符串 |
+| `source_attribution` | 署名（六形状都有，载体各异：卡片 `ATTRIBUTION` 行／`ATTRIBUTION.txt`／`ATTRIBUTION.md`） | 字符串／缺省「—」 |
 | `fetched_at` | 取件时刻 | ISO 8601 |
 | `asof` | 该证据对应的时点版本基准日 | ISO 日期（取不到填「—」） |
+| `decided_on` | 判决日（仅 `kind=case`：判例有判决日但无生效日） | ISO 日期／缺省「—」 |
 | `span` / `face` / `how` | 已定收据五元组的其余三位 | 字符串／缺省「—」 |
 
 「缺」一律填 `—`，与**共用件层**的收据缺省口径一致
@@ -99,7 +101,7 @@
 | —（卡上无） | — | `text_sha256` | **缺** | 官方详情 JSON **不含条文正文**（`factscribe_legal/cn_corpus.py:4-10` 明写），无正文可哈希 |
 | —（卡上无） | — | `source_licence` | **缺** | 中国侧许可未在卡片与 catalog 中声明（实读 `catalog.jsonl.gz` 全部字段：`bbbs/detail_bytes/detail_sha256/detail_url/fetched_at/flxz/gbrq/n_articles/office/sxrq/sxx/title`） |
 | —（卡上无） | — | `fetched_at` | 转换 | 卡片无，但 `corpus/cn/catalog.jsonl.gz` 每条有 `fetched_at`（实读 `2026-11-16T04:58:16Z`）⇒ 取 catalog 值 |
-| —（卡上无） | — | `asof` | **缺** | 中国侧卡片不记参考日；参考日在闸的入参（`factscribe_legal/cn_verify.py:42` 的 `reference_date`） |
+| —（卡上无） | — | `asof` | 转换 | **已定（选项 A）**：取**全库目录 `corpus/cn/catalog.jsonl.gz` 里该卡 `local_id`（=`BBBS`）对应条目的 `fetched_at` 的日期部分**（UTC 截断；实读两条为 `2026-11-16T04:58:11Z`／`2026-11-16T04:58:16Z` ⇒ `2026-11-16`）。理由：`sxx` 是**官方全库快照那一刻**的状态标志，锚点就是快照日（同法国 `POOL_ASOF`／西班牙 `REFERENCE_DATE`／意大利 `FETCH_VIGENZA` 一类的「取件/快照日」锚点）。**这不是跨卡推断**——经的是卡片自带的 `local_id`（BBBS）这把键，直连它自己的目录条目（同法国侧「卡上无 NUM 时到 `corpus/fr/index.json` 反查」同型）；目录缺该 BBBS 或目录不可得 ⇒ 填「—」 |
 
 `catalog.jsonl.gz` 另有 `detail_bytes` / `n_articles` / `office` / `detail_url` ⇒ 国别专属。
 
@@ -132,7 +134,7 @@
 | `ATTRIBUTION` | 同上 `:19` | — | 国别专属 | 署名（建议契约加 `source_attribution` 字段承接） |
 | `FETCHED_AT` | 同上 `:20` | `fetched_at` | 直映 | ISO 8601 |
 | —（卡上无） | — | `effective_from`/`effective_to` | 转换（可补） | 卡片没有，但 `index.json` 有 `fecha_vigencia`（`20161002`）、`fecha_publicacion`、`fecha_disposicion`，且**官方整件每块带 `fecha_vigencia` 属性**（实读 `corpus/es/.../official/act.xml`：`fecha_vigencia="20161002"`；`a1.xml` 内 `<version ... fecha_vigencia="20161002">`）⇒ adapter 可补 |
-| —（卡上无） | — | `status` | 转换 | 源侧有 `estado_consolidacion`（实读三个 run 均为 `"Finalizado"`）＋ `fecha_vigencia`。**已定规则**：**不用 `estado_consolidacion`**（全为 `"Finalizado"` 而三法今天全部现行有效，拿它判必错），改判「官方是否仍提供现行合并文本」，判不出落 `unknown` ⇒ 见时点表 §2.3 |
+| —（卡上无） | — | `status` | 转换 | **官方整件 `official/act.xml` 的三个效力标志**：`estatus_derogacion`（已废止）／`estatus_anulacion`（已撤销）／`vigencia_agotada`（效力已耗尽），实读三个 run 全为 `N`；**当前不在 `index.json` 里**（采集器 `tools/fetch_corpus.py:1296-1320` 的 `_es_meta` 未抽这三个键）。**已定规则**：**不用 `estado_consolidacion`**（全为 `"Finalizado"` 而三法今天全部现行有效，拿它判必错）；按三个标志判——任一为 `S` ⇒ `repealed`；全 `N` 且 `fecha_vigencia <= 参考日` ⇒ `in_force`；全 `N` 且 `fecha_vigencia > 参考日` ⇒ `unknown`；判不出落 `unknown` ⇒ 见时点表 §2.3 |
 
 `index.json` 顶层 `estado_consolidacion` / `fecha_publicacion` / `fecha_disposicion` /
 `fecha_vigencia` / `version_date` / `fetch_reference_date` / `reference_date` /

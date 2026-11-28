@@ -56,12 +56,20 @@
    （`factscribe_legal/cn_verify.py:89-93`）**保持不动**。
    ⚠️ 关键区分：`factscribe_legal/cn_corpus.py:56-63` 的 `_prefer`（`3>2>4>1`）
    管的是「同题多条挑哪条当代表」，**排序保持不动**；status 只管有效无效，
-   两者不冲突。落地在 `cn_provision.py`。
+   两者不冲突。
+   **中国 `asof`（时点锚点）已定**：取全库目录 `corpus/cn/catalog.jsonl.gz` 里该卡
+   `local_id`（=`BBBS`）对应条目的 `fetched_at` 的**日期部分**（UTC 截断；
+   实读 `2026-11-16T04:58:11Z` ⇒ `2026-11-16`）。理由：`sxx` 是官方全库快照那一刻的
+   状态标志，锚点就是快照日；**不是跨卡推断**——经的是卡片自带的 `local_id`（BBBS）
+   这把键，直连它自己的目录条目。目录缺该 BBBS 或目录不可得 ⇒ 填「—」。
+   落地在 `cn_provision.py`。
 2. **西班牙 status**：**不用 `estado_consolidacion`**（三个法全是 `"Finalizado"`
-   而它们今天都现行有效，拿它判必错）。改从「官方是否仍提供现行合并文本」判定，
-   信号取官方整件 `official/act.xml` 的件级效力标志
-   （`estatus_derogacion` / `estatus_anulacion` / `vigencia_agotada`），
-   判不出落 `unknown`。⚠️ 两个日期别混用（`factscribe_legal/es_verify.py:189-196`）：
+   而它们今天都现行有效，拿它判必错）。改按**官方整件 `official/act.xml` 的三个效力标志**
+   判定——`estatus_derogacion`（已废止）／`estatus_anulacion`（已撤销）／
+   `vigencia_agotada`（效力已耗尽）：任一为 `S` ⇒ `repealed`；全 `N` 且
+   `fecha_vigencia <= 参考日` ⇒ `in_force`；全 `N` 且 `fecha_vigencia > 参考日` ⇒ `unknown`；
+   判不出落 `unknown`。⚠️ 这三个标志**在官方整件里、但没进 `index.json`**（采集器未抽）。
+   ⚠️ 两个日期别混用（`factscribe_legal/es_verify.py:189-196`）：
    `fetch_reference_date`（取件参考日）可比，`version_date`（合并文本自身最后更新日）
    不是「这一版何时生效」。落地在 `es_provision.py`。
 3. **法国 status**：**复用闸里的判定，不另写一套**

@@ -29,6 +29,9 @@ status 改从「**官方是否仍提供现行合并文本**」判定（时点表
   * `fecha_vigencia`（生效日）> 参考日 ⇒ 尚未生效 ⇒ `unknown`；
   * 官方整件取不到 / 标志读不出 ⇒ 判不出 ⇒ `unknown`（不猜）。
 
+  ⚠️ 这三个标志**在官方整件里、但没进 `index.json`**（采集器未抽这三个键）
+  ⇒ 要实证 `repealed` 支，得先补采集侧。
+
   * `effective_from` ＝ `fecha_vigencia`（官方 `<fecha_vigencia>`，
     实读 `official/act.xml:20`＝`20161002`；取不到退回 run 的
     `index.json` 顶层同名字段；再取不到填「—」）。

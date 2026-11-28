@@ -311,7 +311,11 @@ asof:            2026-11-17
    `_prefer` 的 `3>2>4>1` 排序**保持不动**（管的是挑哪条当代表，不是有效无效）。
 8. **西班牙 `estado_consolidacion` 不可当废止标志**——实读三法全是 `"Finalizado"`，
    而三法今天全部现行有效。**已定**：该字段不参与 status 判定，
-   改判「官方是否仍提供现行合并文本」，判不出落 `unknown`（时点表 §2.3）。
+   改按**官方整件 `official/act.xml` 的三个效力标志**
+   （`estatus_derogacion`／`estatus_anulacion`／`vigencia_agotada`）判定：
+   任一为 `S` ⇒ `repealed`；全 `N` 且 `fecha_vigencia <= 参考日` ⇒ `in_force`；
+   全 `N` 且 `fecha_vigencia > 参考日` ⇒ `unknown`；判不出落 `unknown`（时点表 §2.3）。
+   ⚠️ 这三个标志**在官方件里、但没进 `index.json`**（采集器未抽）——不是判据不存在。
 9. **意大利法条 `in_force` 是取件口径不是官方判定**——须用 `status_source` 标出来。
 
 ---

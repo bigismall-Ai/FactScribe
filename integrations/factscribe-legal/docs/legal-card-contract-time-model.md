@@ -22,7 +22,7 @@
 |---|---|---|---|---|
 | 法国法条 | `DATE_DEBUT` + `DATE_FIN` 区间（**不看 ETAT**） | 区间与参考日比 | `date_debut <= ref < date_fin` ⇒ `in_force`；`date_fin <= ref` ⇒ `repealed`；`date_debut > ref` ⇒ `unknown`（未来才生效，尚未在效） | 两字段皆空 ⇒ `unknown`＋`effective_from`/`effective_to` 填 `—` |
 | 中国法规 | `SXX` 状态标志 | 单值枚举 | `3`⇒`in_force`；`1`（已废止）⇒`repealed`；`2`（已修改）⇒`unknown`；`4`（未生效）⇒`unknown`（**已定**，见 §2.2）；其余/缺失⇒`unknown` | `SXX` 缺失 ⇒ `unknown`；失效日不可得 ⇒ `effective_to` 填 `—` |
-| 西班牙法条 | `fecha_vigencia`（生效日）＋ 官方是否仍提供现行合并文本（**不用 `estado_consolidacion`**，已定见 §2.3） | 日期比 + 现行合并文本可得性 | `fecha_vigencia <= ref` ⇒ `in_force`；`fecha_vigencia > ref` ⇒ `unknown`；官方已不再提供现行合并文本 ⇒ `repealed`；判不出 ⇒ `unknown` | `fecha_vigencia` 缺失 ⇒ `unknown`；`effective_to` 恒填 `—`（合并文本无终止日） |
+| 西班牙法条 | 官方整件 `official/act.xml` 的三个效力标志 `estatus_derogacion`／`estatus_anulacion`／`vigencia_agotada`（**不用 `estado_consolidacion`**，已定见 §2.3）＋ `fecha_vigencia`（生效日） | 标志位 + 日期比 | 任一标志为 `S` ⇒ `repealed`；全 `N` 且 `fecha_vigencia <= ref` ⇒ `in_force`；全 `N` 且 `fecha_vigencia > ref` ⇒ `unknown`；判不出 ⇒ `unknown` | `fecha_vigencia` 缺失 ⇒ `unknown`；`effective_to` 恒填 `—`（合并文本无终止日） |
 | 意大利法条 | **无官方效力字段**（AKN 只有 `<act name="monovigente">`） | 无 | 取件口径：`asof` 日取到的就是该日生效版 ⇒ 记 `in_force`（弱口径，非官方判定） | 官方层取不到 ⇒ 若连 `asof` 也没有 ⇒ `unknown` |
 | 意大利判例 | 不适用 | 无 | 三态**不适用** ⇒ `—` | 一律 `—` |
 | 法国判例 | 不适用 | 无 | 三态**不适用** ⇒ `—` | 一律 `—` |
@@ -86,6 +86,13 @@
 - **盲区**：中国侧官方详情只给 `sxrq`（施行日），**不给失效日** ⇒ `sxx=1` 时
   `effective_to` 只能填 `—`，不能反推。
 - `GBRQ`（公布日）**不是**生效日，不进 `effective_from`；生效日用 `SXRQ`。
+- **`asof`（时点锚点）已定**：中国侧卡片本身不记参考日 ⇒ `asof` 取**全库目录**
+  `corpus/cn/catalog.jsonl.gz` 里该卡 `local_id`（=`BBBS`）对应条目的 `fetched_at`
+  的**日期部分**（UTC 截断；实读两条 `2026-11-16T04:58:11Z`／`2026-11-16T04:58:16Z` ⇒ `2026-11-16`）。
+  理由：`sxx` 是**官方全库快照那一刻**的状态标志，快照日就是它的时点锚点
+  （同法国 `POOL_ASOF`／西班牙 `REFERENCE_DATE`／意大利 `FETCH_VIGENZA` 一类锚点）。
+  **这不是跨卡推断**——经的是卡片自带的 `local_id`（BBBS）这把键，直连它自己的目录条目。
+  目录缺该 BBBS 或目录不可得 ⇒ 填「—」。
 
 ### 2.3 西班牙法条：日期制，但生效日不在卡上
 
@@ -106,18 +113,36 @@
   ⇒ **不能把 `Finalizado` 当 `repealed`**，否则会把三法全判成已失效。
 - **已定口径（2026-11-28 用户拍板）**：**不用 `estado_consolidacion` 判 status**——
   它三个 run 全是 `"Finalizado"` 而三法今天全部现行有效，拿它判必错（上面已证）。
-  status 改从「**官方是否仍提供现行合并文本**」判定：
-  - `fecha_vigencia <= ref` 且官方仍提供现行合并文本 ⇒ `in_force`；
-  - 官方已不再提供现行合并文本 ⇒ `repealed`；
-  - 判不出 ⇒ `unknown`；
+  status 改从**官方整件 `official/act.xml` 的三个效力标志**判定（BOE 的 `S`/`N` 位）：
+  - `estatus_derogacion`＝**已废止**标志（`S`＝已废止）；
+  - `estatus_anulacion`＝**已撤销**标志（`S`＝已宣布无效）；
+  - `vigencia_agotada`＝**效力已耗尽**标志（`S`＝已被后续规范取代）。
+  落法：
+  - 任一标志为 `S` ⇒ `repealed`（已失效：废止／撤销／被后法取代都算）；
+  - 三个标志全为 `N` 且 `fecha_vigencia <= ref` ⇒ `in_force`；
+  - 三个标志全为 `N` 且 `fecha_vigencia > ref` ⇒ `unknown`（尚未生效）；
+  - 标志或 `fecha_vigencia` 取不到 ⇒ `unknown`；
   - `estado_consolidacion` **留国别专属，不参与 status 判定**。
 - ⚠️ 两个日期别混用（`factscribe_legal/es_verify.py:189-196`）：
   `fetch_reference_date`（取件参考日）**可比**——它对应「取件那天的官方现行合并文本」；
   `version_date`（合并文本自身最后更新日）**不是**「这一版何时生效」（同文件 `:186-188` 注释）。
   现行闸在两日不一致时出黄牌 `ES_VERSION_GAP`（`es_verify.py:191-196`），**保持不动**。
-- ⚠️ 现状：本地语料**没有**「官方是否仍提供现行合并文本」这个信号
-  （三个法都是 `Finalizado` ＋ `fecha_vigencia`）⇒ 现阶段西侧 status 实测只能落
-  `in_force`／`unknown` 两支；「不再提供 ⇒ `repealed`」那一支待采集侧给信号后才可实证。
+- ✅ **现状（2026-11-28 订正）**：**这个信号本地语料里是有的**——三个官方整件
+  `corpus/es/run-*/official/act.xml` 的 `<metadatos>` 块里都带这三个效力标志，
+  实读三个 run **全为 `N`**：
+  - `corpus/es/run-20261116-es-ley39-2015-procedimiento-administrativo/official/act.xml:21-23`
+  - `corpus/es/run-20261116-es-const1978-constitucion-espanola/official/act.xml:20-22`
+  - `corpus/es/run-20261116-es-ley40-2015-regimen-local/official/act.xml:21-23`
+  ⇒ **不是「本地没有信号」，是「信号在官方件里、没进索引」**：采集器
+  `tools/fetch_corpus.py:1296-1320` 的 `_es_meta` 只抽了 `identificador`/`titulo`/
+  `fecha_actualizacion`/`fecha_disposicion`/`fecha_publicacion`/`fecha_vigencia`/
+  `numero_oficial`/`rango`/`estado_consolidacion`/`url_eli`/`url_html_consolidada`
+  十一个字段，**三个效力标志没抽**，所以 `index.json` 里看不到（实读三个 run 的
+  `index.json` 均无这三个键）。
+  ⇒ 现阶段西侧 status 实测只落 `in_force`／`unknown` 两支，**不是因为判据不存在，
+  是因为采集侧没把它们抽进索引**；`repealed` 支待采集侧补三个字段后才可实证。
+- 📌 BOE 另有两个**可选**废止日字段 `fecha_derogacion`／`fecha_anulacion`
+  （本次三件官方整件**未带**）⇒ 后续接入时用于填 `effective_to`；**本轮不改判定**。
 
 ### 2.4 意大利法条：官方件无生效字段
 

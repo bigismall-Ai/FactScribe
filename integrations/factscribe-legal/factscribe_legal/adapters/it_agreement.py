@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """意大利集体协议（CCNL）清单 → 统一契约字段（读侧派生）。
 
-**单独形状**：CNNL 这套**不是卡片**——无 `.card.txt`、无官方件副本、无正文，
+**单独形状**：CNEL 这套**不是卡片**——无 `.card.txt`、无官方件副本、无正文，
 引用单位是「协议 § 条款／附件／等级表」而不是条文号（草案 §2.4、
 映射表 §8）⇒ `kind=agreement`，不塞进法条模板。
 
@@ -9,14 +9,41 @@
   · `code`（CNEL 簇码，如 `A011`）→ `local_id`：**直映**，原样保留；
   · 形状 → `kind=agreement`、`jurisdiction=it`：**转换**。
 
-本轮只产三个字段。`status`（到期日 ≠ 失效日）属第 3 步，见
-`integrations/factscribe-legal/docs/legal-card-contract-time-model.md` §2.5。
+第 3 步的时点字段（status / asof / effective_from / effective_to / status_source）
+--------------------------------------------------------------------------
+**到期日 ≠ 失效日**（时点表 §2.5）——这是本线唯一的语义陷阱：
+
+  * 源字段：`corpus-bulk-it/it-inventory-vigenti.tsv` 第 7、8 列
+    （`inizio_storia`、`scadenza_ultimo_accordo`）；实读 144 行两列全非空
+    （示例 `A011`：`1979-06-25` / `2029-12-31`）；
+  * `scadenza_ultimo_accordo` 是「**末次协议**的到期日」，**不是**该协议的
+    失效日——集体协议续签不改变 `local_id`，到期日过了只能说明
+    「末次协议文本过期」，**不能判该 CCNL 已废止** ⇒ 过期落 `unknown`，
+    **不落 `repealed`**；
+  * status 取值：
+      - 到期日 ≥ 参考日 ⇒ `in_force`；
+      - 到期日 < 参考日 ⇒ `unknown`（末次协议文本过期，判不出是否还在用）；
+      - 到期日为空 ⇒ `unknown`；
+      - 没有参考日可依时 ⇒ 依「官方清单本身」判：清单来自 CNEL 档案的
+        「**现行或超期有效**」专区（`corpus-bulk-it/ATTRIBUTION` 自述，
+        144 簇全是），清单**不含已废止协议** ⇒ `in_force`，
+        `status_source` 标 `it:cnel_vigenti`（取件口径，非逐条官方判定）。
+  * `effective_from` ＝ `inizio_storia`（协议起始日）；
+    `effective_to` ＝ `scadenza_ultimo_accordo`（末次协议到期日，
+    **不是**失效日）；
+  * `asof` ＝ `scadenza_ultimo_accordo`（本线唯一与「是否还在用」直接
+    相关的官方时点，也是 status 判定的锚点）；取不到则退回
+    `inizio_storia`；再取不到填「—」。
 """
 import csv
 import json
 
-from .base import (FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
-                   JURISDICTION_IT, KIND_AGREEMENT, ContractFieldMissing)
+from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
+                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
+                   FIELD_STATUS_SOURCE, JURISDICTION_IT, KIND_AGREEMENT,
+                   ContractFieldMissing)
+from .status import STATUS_IN_FORCE, STATUS_UNKNOWN, iso_date
 
 SHAPE = "it_agreement"
 KIND = KIND_AGREEMENT
@@ -45,8 +72,11 @@ def load_index(path):
         return json.load(fh)
 
 
-def adapt(source, index=None):
-    """source：清单行 dict（键＝表头名）；index：it-clusters.json（可空）。"""
+def adapt(source, index=None, reference_date=None):
+    """source：清单行 dict（键＝表头名）；index：it-clusters.json（可空）。
+
+    reference_date：参考日（可空）——有则与到期日比；无则依官方清单本身判。
+    """
     if not isinstance(source, dict):
         raise ContractFieldMissing(SHAPE, FIELD_LOCAL_ID,
                                    "集体协议不是卡片，source 必须是清单行")
@@ -60,6 +90,29 @@ def adapt(source, index=None):
                 break
     if not code:
         raise ContractFieldMissing(SHAPE, FIELD_LOCAL_ID, "清单行没有 code 列")
+
+    scadenza = iso_date(source.get("scadenza_ultimo_accordo"))
+    inizio = iso_date(source.get("inizio_storia"))
+    ref = str(reference_date or "").strip()
+
+    if not scadenza:
+        status = STATUS_UNKNOWN
+        status_source = "it:scadenza_ultimo_accordo"
+    elif ref and scadenza < ref:
+        # 末次协议文本已过期 ⇒ 判不出该 CCNL 是否还在用（不是 repealed！）
+        status = STATUS_UNKNOWN
+        status_source = "it:scadenza_ultimo_accordo@%s" % ref
+    else:
+        status = STATUS_IN_FORCE
+        status_source = ("it:scadenza_ultimo_accordo@%s" % ref) if ref else "it:cnel_vigenti"
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
-            FIELD_LOCAL_ID: code}
+            FIELD_LOCAL_ID: code,
+            FIELD_CANONICAL_ID: "—",      # v0 统一填「—」（映射表 §1）
+            FIELD_EFFECTIVE_FROM: inizio or "—",
+            FIELD_EFFECTIVE_TO: scadenza or "—",
+            FIELD_STATUS: status,
+            FIELD_ASOF: scadenza or inizio or "—",
+            FIELD_DECIDED_ON: "—",        # 仅 kind=case 有效
+            FIELD_STATUS_SOURCE: status_source}

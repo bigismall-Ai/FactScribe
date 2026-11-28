@@ -18,9 +18,15 @@
 3. **判定不动**：现有各闸的红黄码逐字不变（回归锁：
    `tests/test_contract_gates_regression.py`，基线在公共层落地**前**捕获）。
 
-本轮（第 1、2 步）只落三个零歧义字段：`kind` / `jurisdiction` / `local_id`。
+第 1、2 步落三个零歧义字段：`kind` / `jurisdiction` / `local_id`。
 这三个字段在六种语料形状里全是直映（映射表 §2-§8）⇒ 零转换、零歧义。
-`status` / `asof` 属第 3 步（口径待用户拍板），五元组属第 4 步。
+
+第 3 步（已落）落**时点字段**：`status`（三态）、`asof`、`status_source`、
+`effective_from` / `effective_to`、`decided_on`，外加 `canonical_id`
+（v0 统一填「—」，映射表 §1）。**三态的枚举名与字段名逐字照抄契约草案
+§2.2**（`in_force` / `repealed` / `unknown`；三态之外填「—」）。
+**判据全部在各国 adapter**（契约草案 §1.3「第三步」），本层只定名字与缺省，
+共用件见 `adapters/status.py`。五元组属第 4 步。
 
 与既有模块的分工
 ----------------
@@ -42,7 +48,10 @@ __all__ = [
     "KIND_PROVISION", "KIND_CASE", "KIND_AGREEMENT", "KINDS",
     "JURISDICTION_FR", "JURISDICTION_CN", "JURISDICTION_ES",
     "JURISDICTION_IT", "JURISDICTIONS",
-    "FIELD_KIND", "FIELD_JURISDICTION", "FIELD_LOCAL_ID", "FIELDS",
+    "FIELD_KIND", "FIELD_JURISDICTION", "FIELD_LOCAL_ID",
+    "FIELD_CANONICAL_ID", "FIELD_EFFECTIVE_FROM", "FIELD_EFFECTIVE_TO",
+    "FIELD_STATUS", "FIELD_ASOF", "FIELD_DECIDED_ON", "FIELD_STATUS_SOURCE",
+    "FIELDS",
     "ContractFieldMissing", "parse_card_fields", "read_card_fields",
     "load_json", "card_stem", "view_key", "load_view", "view_record",
 ]
@@ -64,13 +73,24 @@ JURISDICTION_IT = "it"
 JURISDICTIONS = (JURISDICTION_FR, JURISDICTION_CN, JURISDICTION_ES,
                  JURISDICTION_IT)
 
-# ---- 字段名（契约 §2.2）----
+# ---- 字段名（契约 §2.2；**逐字照抄契约草案的字段名**，不另造）----
 FIELD_KIND = "kind"
 FIELD_JURISDICTION = "jurisdiction"
 FIELD_LOCAL_ID = "local_id"
+FIELD_CANONICAL_ID = "canonical_id"
+FIELD_EFFECTIVE_FROM = "effective_from"
+FIELD_EFFECTIVE_TO = "effective_to"
+FIELD_STATUS = "status"
+FIELD_ASOF = "asof"
+FIELD_DECIDED_ON = "decided_on"
+FIELD_STATUS_SOURCE = "status_source"
 
-# 本轮（第 1、2 步）只产这三个；第 3 步加 status/asof，第 4 步加五元组。
-FIELDS = (FIELD_KIND, FIELD_JURISDICTION, FIELD_LOCAL_ID)
+# 第 1、2 步的三个直映字段 ＋ 第 3 步的时点字段（status/asof 及其配套）。
+# ⚠️ 五元组（span/face/how）属第 4 步，**不在本轮**；instrument/provision_no/
+#    text_sha256/official_ref/source_* 等契约字段也属后续步，本轮不落。
+FIELDS = (FIELD_KIND, FIELD_JURISDICTION, FIELD_LOCAL_ID,
+          FIELD_CANONICAL_ID, FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO,
+          FIELD_STATUS, FIELD_ASOF, FIELD_DECIDED_ON, FIELD_STATUS_SOURCE)
 
 # 卡片正文段的起始标记：解析卡头字段时到此为止（正文里也有冒号，不能混进去）
 CARD_TEXT_MARKER = "--- OFFICIAL TEXT ---"

@@ -7,25 +7,48 @@
     ＝一部法规（**法规级**不是条文级，官方详情 JSON 不含条文正文，
     见 `factscribe_legal/cn_corpus.py:4-10`）⇒ 归 provision。
 
-本轮只产三个字段。
+第 3 步的时点字段（status / asof / effective_from / effective_to / status_source）
+--------------------------------------------------------------------------
+**status：`SXX` 状态标志的枚举映射**（枚举含义见
+`factscribe_legal/cn_verify.py:91-93`：1 废止 / 2 修改 / 3 有效 / 4 未生效；
+时点表 §2.2 已定口径）：
 
-TODO（第 3 步 · 待用户拍板，本轮**不自行决定**）
-------------------------------------------------
-中国 `SXX=2`（修改）在统一三态里落 `in_force` 还是 `unknown`，两处现有口径
-相反，本轮不碰：
-  * 现行闸判**红**：`factscribe_legal/cn_verify.py:89-93`（`sxx != 3` ⇒
-    `CN_PROV_NOT_IN_FORCE`）；
-  * 取代表偏好却把 2 排在废止之上：`factscribe_legal/cn_corpus.py:56-63`
-    （`_prefer` 的 `{3:3, 2:2, 4:1, 1:0}`）。
-口径见 `integrations/factscribe-legal/docs/legal-card-contract-time-model.md` §2.2（含建议与代价）与
-`integrations/factscribe-legal/docs/legal-card-contract-mapping.md` §3 的 status 行。拍板后在本模块补
-`status` 字段，并在 `integrations/factscribe-legal/docs/legal-card-contract-draft.md` §1.3「第三步」处
-记录该差异。
+    3（现行有效）⇒ `in_force`
+    1（已废止）  ⇒ `repealed`
+    4（尚未生效）⇒ `unknown`   （未来才生效，与法国 `date_debut>ref` 同构）
+    2（已修改）  ⇒ `unknown`   （「已修改」不足以证明今天还在适用）
+    缺失/其余    ⇒ `unknown`
+
+  枚举本体**复用**仓里已有的跨域归一层 `factscribe_legal/timeliness.py`
+  （`CN_SXX_STATE`，`timeliness.py:81-86`；入口
+  `from_status_flag`，`:164-176`），本模块只做
+  **归一层闭集 → 契约三态**的压平（`adapters/status.py` 的
+  `from_timeliness_state`），**不另写一套枚举**。
+
+  ⚠️ **关键区分**：「挑代表版本时的排序」与「这条今天算不算有效」是两件事。
+  `factscribe_legal/cn_corpus.py:56-63` 的 `_prefer`（`{3:3, 2:2, 4:1, 1:0}`）
+  管的是「同题多条里挑哪条当代表」，**排序保持不动**；本模块只管有效无效。
+  现行闸 `cn_verify.py:89-93`（`sxx != 3` ⇒ 红牌）**保持不动**——
+  它答「这条能不能引」（红线），status 答「今天算不算有效」（描述）。
+  ⇒ 统一层落 `unknown` **不比现行闸宽松**（unknown ≠ 在效）。
+
+  * `effective_from` ＝ 卡上 `SXRQ`（施行日＝生效起；映射表 §3 直映）。
+    ⚠️ `GBRQ`（公布日）**不是**生效日，不进 `effective_from`（时点表 §2.2）。
+  * `effective_to` ＝ 「—」：官方详情只给 `sxrq`，**不给失效日**
+    （时点表 §2.2 盲区）⇒ 不许拿 status 反推日期（时点表 §3.4）。
+  * `asof` ＝ 官方全库快照日（全库目录记录 `fetched_at` 的日期；
+    实读 `corpus/cn/catalog.jsonl.gz` 每条记录都带 `fetched_at`
+    ＝`2026-11-16T…`）——**`sxx` 是官方快照状态，它的时点锚点就是这个
+    快照日**；没有全库目录时填「—」（卡上不记参考日，映射表 §3）。
 """
 from ..cn_corpus import load_catalog
-from .base import (FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
-                   JURISDICTION_CN, KIND_PROVISION, ContractFieldMissing,
-                   read_card_fields)
+from ..timeliness import from_status_flag
+from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
+                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
+                   FIELD_STATUS_SOURCE, JURISDICTION_CN, KIND_PROVISION,
+                   ContractFieldMissing, read_card_fields)
+from .status import from_timeliness_state, iso_date
 
 SHAPE = "cn_provision"
 KIND = KIND_PROVISION
@@ -38,8 +61,12 @@ def load_index(catalog_path):
     return load_catalog(catalog_path)
 
 
-def adapt(source, index=None):
-    """source：中国法规证据卡路径；index：全库目录 {bbbs: record}（可空）。"""
+def adapt(source, index=None, reference_date=None):
+    """source：中国法规证据卡路径；index：全库目录 {bbbs: record}（可空）。
+
+    reference_date：参考日（可空）——中国侧的 `SXX` 是官方**当前状态标志**，
+    与参考日无关（本模块不拿参考日判 status），故本形不消费该入参。
+    """
     fields = read_card_fields(source)
     local_id = fields.get("BBBS", "").strip()
     if not local_id:
@@ -47,9 +74,22 @@ def adapt(source, index=None):
         local_id = _bbbs_from_index(index, fields)
     if not local_id:
         raise ContractFieldMissing(SHAPE, FIELD_LOCAL_ID, "卡上没有 BBBS 行")
+
+    sxx = (fields.get("SXX") or "").strip()
+    # 枚举复用归一层（timeliness.CN_SXX_STATE），本模块只做闭集压平
+    state = from_status_flag("cn", KIND, local_id, sxx, "")["state"]
+    status = from_timeliness_state(state)
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
-            FIELD_LOCAL_ID: local_id}
+            FIELD_LOCAL_ID: local_id,
+            FIELD_CANONICAL_ID: "—",      # v0 统一填「—」（映射表 §1）
+            FIELD_EFFECTIVE_FROM: iso_date(fields.get("SXRQ")) or "—",
+            FIELD_EFFECTIVE_TO: "—",      # 官方不给失效日（时点表 §2.2）
+            FIELD_STATUS: status,
+            FIELD_ASOF: _asof_from_index(index, local_id),
+            FIELD_DECIDED_ON: "—",        # 仅 kind=case 有效
+            FIELD_STATUS_SOURCE: ("cn:sxx=%s" % sxx) if sxx else "cn:sxx"}
 
 
 def _bbbs_from_index(index, fields):
@@ -62,3 +102,16 @@ def _bbbs_from_index(index, fields):
         if str((rec or {}).get("title") or "").strip() == title:
             return str(bbbs)
     return ""
+
+
+def _asof_from_index(index, local_id):
+    """asof ＝ 官方全库快照日（全库目录记录 `fetched_at` 的日期）。
+
+    `sxx` 说的是「官方全库快照那一刻的状态」，锚点就是这个快照日。
+    取不到（全库目录没给或没有这条记录）⇒ 填「—」。
+    """
+    if not index:
+        return "—"
+    rec = index.get(local_id) or {}
+    stamp = str((rec or {}).get("fetched_at") or "").strip()
+    return iso_date(stamp[:10]) or "—"

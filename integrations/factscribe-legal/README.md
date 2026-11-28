@@ -44,7 +44,7 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `verify-case` | 中国（人民法院案例库入库案例） | 官方案例正文 + 回执链 | 案号/日期/金额与官方件一致 |
 | `verify-it` | 意大利（Normattiva） | 官方 AKN XML + 条文切片 | 数值真出自官方 AKN 正文 |
 | `verify-es` | 西班牙（BOE 官方公报） | 官方合并文本 XML + 条文切片 | 数值真出自官方 BOE 合并文本正文 |
-| `verify-fr-case` | 法国（判例：Cour de cassation 等） | DILA INCA 官方判决 XML + 纯文本还原件 | 数值/日期真出自官方判决正文、案号与官方元数据一致 |
+| `verify-fr-case` | 法国（判例：Cour de cassation 等） | DILA INCA 官方判决 XML + 纯文本还原件 | value 逐字引文出自官方判决正文（分面：正文/摘要段）、数值/日期真出自官方判决正文、案号与官方元数据一致 |
 
 各闸的错误码（**红 = 必须修，黄 = 不是绿**）：
 
@@ -65,6 +65,22 @@ factscribe 判的是：**正文里的数字，能不能回到一份签过字、�
 | `LEGAL_DATE_INVALID` | 红 | `[checks.legal]` 的 `date` 缺失或不是 YYYY-MM-DD——参考日是时效判据的根基，缺它不许跑也不许只给建议 |
 | `LEGAL_EVIDENCE_CHANGED` | 红 | `audit/evidence-legal.lock` 在，而语料索引／参考日／现行视图路径与冻结时不符（要换先解冻再重冻）；锁件坏了也是此码（不许静默当成没冻结） |
 | `LEGAL_EVIDENCE_UNFROZEN` | 黄 | 冻结处在「已解冻、未重冻」状态（`audit/evidence-legal-log.ndjson` 最后一条是 unfreeze），或流水账不可读 |
+
+**判例引文契约三码**（P-166 收编自试车线闸包装层 quote_contract，2026-11-21；判定逻辑照搬，判定依据见 `fr-trial-rolls/gate-align/QUOTE-CONTRACT-REPORT.md`）：
+
+| 码 | 严重度 | 判什么 |
+|---|---|---|
+| `FR_CASE_VALUE_NOT_QUOTE` | 红 | 判例事实账 value 必须＝逐字引文：案号形（`01-16.595`／`01-16595`）或去空白后 <25 字 ⇒ 红。数字/日期型 value 走 numnorm 对账，不受此契约约束 |
+| `FR_CASE_STITCH_UNMARKED` | 红 | 无省略号标记（`[…]`／`[...]`／`…`）且既不连续命中判决正文（CONTENU）也不连续命中官方件全文 ⇒ 红（拼接/截断嫌疑；伪造由 `FR_CASE_VALUE_NOT_IN_OFFICIAL` 双红并存）；带标记拼接里有片段两面皆不命中也是此码 |
+| `FR_CASE_QUOTE_FACE_UNDECLARED` | 黄 | value 连续命中官方件全文但不在判决正文内（＝官方摘要段 SOMMAIRE/ANA 引文）且事实账未声明面（claim/note 含 résumé/摘要/sommaire/要旨，或 `quote_face` 字段明标非正文面）——声明后按全文对账放行 |
+
+分面区间（official txt 里哪些字符段来自 CONTENU 正文）从官方 XML 现算
+（`to_plain_faces`，确定性还原，与 official txt 逐字节同源——INCA 与 fr-cass
+两种形状都已钉版），或读旁车 `official/<ID>.faces.json`（正文区间列表＋钉
+txt 哈希，旁车失效即回落现算）；official/*.txt 的**字节一概不动**（卡哈希钉版），
+无法定面时按「全正文」处理，不发明面黄码。报告为三区格式：
+✅ 收据闭环（每条事实一行：id｜sha256 前 16｜span｜命中面｜核验方式）
+→ ⚠️ 黄码区 → 🔴 红码区，尾部固定边界声明；退出码语义不变（红 1 > 黄 3 > 绿 0）。
 
 **各闸的判据边界（很重要，不要越界引用）**：
 

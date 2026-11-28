@@ -43,6 +43,10 @@
   }
  },
  "estado_consolidacion": "Finalizado",
+ "estatus_anulacion": "N",
+ "estatus_derogacion": "N",
+ "fecha_anulacion": "",
+ "fecha_derogacion": "",
  "fecha_disposicion": "19781227",
  "fecha_publicacion": "19781229",
  "fecha_vigencia": "19781229",
@@ -53,5 +57,6 @@
  "source_sha256": "cfb83636174b516a794b79b3d6077792a7d0f3b188ed1fe704263415b2387f2e",
  "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-1978-31229",
  "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-1978-31229",
- "version_date": "2026-11-04"
+ "version_date": "2026-11-04",
+ "vigencia_agotada": "N"
 }

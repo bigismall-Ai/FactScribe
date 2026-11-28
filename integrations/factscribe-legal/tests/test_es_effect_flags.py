@@ -28,6 +28,7 @@ BOE 官方整件（`official/act.xml` 的 `<metadatos>`）里确实有三个**�
 
   python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 """
+import hashlib
 import json
 import os
 import shutil
@@ -304,6 +305,50 @@ class TestContractStatusReadsFlags(unittest.TestCase):
         card, index = self._card(tmp)
         out = es_provision.adapt(card, index=index)
         self.assertEqual(out["status"], "unknown")
+
+
+class TestBackfilledIndexes(unittest.TestCase):
+    """存量三份 index.json（离线补齐后）：标志在、且与官方原文一致。
+
+    补齐是**离线**做的（用仓内已有的 `official/act.xml` 重算，没打官方接口），
+    所以这里能断言：索引里的三个标志 ＝ 官方原文的值，且索引仍然指着**没被动过**
+    的官方整件。
+    """
+
+    def test_index_carries_the_three_flags(self):
+        for run in _es_runs():
+            with open(os.path.join(ES_ROOT, run, "index.json"),
+                      encoding="utf-8") as fh:
+                index = json.load(fh)
+            source = _xml_tags(_official_xml(run))
+            for tag in EFFECT_FLAGS:
+                self.assertIn(tag, index, "%s 的索引里没有 %s" % (run, tag))
+                self.assertEqual(index.get(tag), source.get(tag, ""),
+                                 "%s 的 %s 与官方原文不一致" % (run, tag))
+
+    def test_index_still_points_at_untouched_official_file(self):
+        """补齐只加键：官方整件的哈希声明仍与盘上原文一致。"""
+        for run in _es_runs():
+            with open(os.path.join(ES_ROOT, run, "index.json"),
+                      encoding="utf-8") as fh:
+                index = json.load(fh)
+            self.assertEqual(index.get("source_sha256"),
+                             hashlib.sha256(_read_bytes(_official_xml(run))).hexdigest(),
+                             "%s 的官方整件哈希声明对不上" % run)
+
+    def test_manifest_entries_match_disk(self):
+        """清单（manifest.json）对得上：三条 ES 索引条目 ＝ 盘上实际字节。"""
+        manifest_path = os.path.join(CORPUS, "manifest.json")
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+        entries = {f["path"]: f for f in manifest.get("files") or []}
+        for run in _es_runs():
+            rel = os.path.join("es", run, "index.json")
+            self.assertIn(rel, entries, "清单里没有 %s" % rel)
+            raw = _read_bytes(os.path.join(ES_ROOT, run, "index.json"))
+            self.assertEqual(entries[rel]["bytes"], len(raw))
+            self.assertEqual(entries[rel]["sha256"],
+                             hashlib.sha256(raw).hexdigest())
 
 
 if __name__ == "__main__":

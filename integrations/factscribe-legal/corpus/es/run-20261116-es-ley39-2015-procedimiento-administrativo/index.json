@@ -43,6 +43,10 @@
   }
  },
  "estado_consolidacion": "Finalizado",
+ "estatus_anulacion": "N",
+ "estatus_derogacion": "N",
+ "fecha_anulacion": "",
+ "fecha_derogacion": "",
  "fecha_disposicion": "20151001",
  "fecha_publicacion": "20151002",
  "fecha_vigencia": "20161002",
@@ -53,5 +57,6 @@
  "source_sha256": "affccb82f6f8677439b4b83f1b6a3b6c63611c0259cc42b337a073930c20ae57",
  "source_url": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2015-10565",
  "url_html_consolidada": "https://www.boe.es/buscar/act.php?id=BOE-A-2015-10565",
- "version_date": "2026-11-16"
+ "version_date": "2026-11-16",
+ "vigencia_agotada": "N"
 }

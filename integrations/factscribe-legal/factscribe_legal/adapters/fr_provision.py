@@ -25,13 +25,38 @@
   * `effective_from` ＝ `DATE_DEBUT`；`effective_to` ＝ `DATE_FIN`
     （`2999-01-01` 是「无终止」哨兵值，**原样保留**，不归一成「—」，
     时点表 §2.1）。
+
+第 4 步的五元组后三位（span / face / how）
+----------------------------------------
+**取值不另立一套定义**：直接用 `factscribe_legal/receipts.py` 的共用生产逻辑
+（`span_in_text` `:60-73`、`classify_how` `:76-85`、`build_receipt`
+`:89-100`）与 `factscribe_legal/lines.py` 的七线适配点，卡粒度的投影口径见
+`adapters/card_receipts.py`。本形状的「材料在哪」判据：
+
+  * **官方正文**＝卡边上那份官方 XML 的 `BLOC_TEXTUEL` 归一正文——取文口径
+    **直接复用** `factscribe_legal/lines.py:285-306` 的 `_fr_official_text`
+    （公开出口 `lines.py:249-252` 的 `fr_official_text`）；
+  * **卡所钉正文**＝同一段（法国法条卡只钉哈希与元数据、**不内嵌正文**，
+    实读 `corpus/fr/D641-10-1.card.txt` 全文无 `--- OFFICIAL TEXT ---` 段）
+    ⇒ 卡所钉正文＝官方正文本身；
+  * **how**＝逐字核验（`factscribe_legal/lines.py:309-322` 的 `_fr_how` 对
+    正文文本取值＝`contains`；本线是**由值推出** how 的一条）。
+
+官方件取不到 ⇒ 三位全「—」：**我们还没接**——法国 171,801 件批量语料在
+仓外 blobstore，本层只读仓内已取件的件（卡上 `OFFICIAL_XML` 指向的 XML
+不在仓内时就是这个情形）。
 """
+import os
+
+from .. import lines
 from ..provisions import Provision
 from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
-                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
-                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
-                   FIELD_STATUS_SOURCE, JURISDICTION_FR, KIND_PROVISION,
-                   ContractFieldMissing, load_json, read_card_fields)
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_FACE,
+                   FIELD_HOW, FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
+                   FIELD_SPAN, FIELD_STATUS, FIELD_STATUS_SOURCE,
+                   JURISDICTION_FR, KIND_PROVISION, ContractFieldMissing,
+                   MISSING, load_json, read_card_fields)
+from .card_receipts import project
 from .status import STATUS_IN_FORCE, STATUS_REPEALED, STATUS_UNKNOWN, iso_date
 
 SHAPE = "fr_provision"
@@ -77,6 +102,8 @@ def adapt(source, index=None, reference_date=None):
     else:
         status = STATUS_UNKNOWN
 
+    span, face, how = _span_face_how(source)
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
             FIELD_LOCAL_ID: local_id,
@@ -86,7 +113,23 @@ def adapt(source, index=None, reference_date=None):
             FIELD_STATUS: status,
             FIELD_ASOF: iso_date(pool_asof) or "—",
             FIELD_DECIDED_ON: "—",        # 仅 kind=case 有效
-            FIELD_STATUS_SOURCE: ("fr:date_range@%s" % ref) if ref else "fr:date_range"}
+            FIELD_STATUS_SOURCE: ("fr:date_range@%s" % ref) if ref else "fr:date_range",
+            FIELD_SPAN: span,
+            FIELD_FACE: face,
+            FIELD_HOW: how}
+
+
+def _span_face_how(source):
+    """法国法条：卡级五元组后三位（span / face / how）→ 三元组。
+
+    口径逐条写在模块 docstring 的「第 4 步的五元组后三位」一节里。
+    """
+    body = lines.fr_official_text(lines.LineContext(),
+                                  os.path.abspath(str(source)))
+    if not body:
+        # 官方件不在仓内（我们还没接：法国批量件在仓外 blobstore）
+        return MISSING, MISSING, MISSING
+    return project(body, body, how=lines._fr_how(body))
 
 
 def _num_from_index(index, fields):

@@ -28,6 +28,12 @@
 **字段名与三态的枚举名逐字照抄契约草案 §2.2**
 （`in_force` / `repealed` / `unknown`；三态之外填「—」）。
 
+第 4 步（**已落**）落**收据五元组的后三位**：`span` / `face` / `how`。
+**不另立一套定义**——直接用仓里已有的共用生产逻辑
+`factscribe_legal/receipts.py` 与 `factscribe_legal/lines.py` 的七线适配点，
+取不到统一填「—」（与收据五元组同一个缺省标记）。
+卡粒度的投影口径见 `adapters/card_receipts.py`。
+
 读路径（有视图 / 没视图都吃）
 ---------------------------
 `adapt()` 同时兼容两种情况：
@@ -70,17 +76,21 @@
 7. **五元组**（`span`/`face`/`how`）：**直接与收据五元组对齐**——
    引用仓里已有的共用生产逻辑 `factscribe_legal/receipts.py`（`build_receipt`，
    缺省标记统一为「—」）与 `factscribe_legal/lines.py`（七条线各自的适配点，
-   产出同构的五元组），取不到填「—」，**不另立一套定义**。落地在第 4 步。
+   产出同构的五元组），取不到填「—」，**不另立一套定义**。**已落（第 4 步）**：
+   事实级收据是**按事实**产出、统一契约是**按卡**产出，卡粒度的投影口径见
+   `adapters/card_receipts.py`；各形状的「材料在哪」判据在各国 adapter 的
+   `_span_face_how`。
 """
-from . import (base, cn_provision, es_provision, fr_case, fr_provision,
-               it_agreement, it_case, it_provision, status)
+from . import (base, cn_provision, es_provision, fr_case,
+               fr_provision, it_agreement, it_case, it_provision, status)
 from .base import (CARD_CONTRACT_VERSION, FIELDS, FIELD_ASOF,
                    FIELD_CANONICAL_ID, FIELD_DECIDED_ON, FIELD_EFFECTIVE_FROM,
-                   FIELD_EFFECTIVE_TO, FIELD_JURISDICTION, FIELD_KIND,
-                   FIELD_LOCAL_ID, FIELD_STATUS, FIELD_STATUS_SOURCE,
-                   JURISDICTIONS, KINDS, KIND_AGREEMENT, KIND_CASE,
-                   KIND_PROVISION, MISSING, ContractFieldMissing, load_view,
-                   read_card_fields, view_key, view_record)
+                   FIELD_EFFECTIVE_TO, FIELD_FACE, FIELD_HOW,
+                   FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID, FIELD_SPAN,
+                   FIELD_STATUS, FIELD_STATUS_SOURCE, JURISDICTIONS, KINDS,
+                   KIND_AGREEMENT, KIND_CASE, KIND_PROVISION, MISSING,
+                   ContractFieldMissing, load_view, read_card_fields,
+                   view_key, view_record)
 from .status import (STATUS_IN_FORCE, STATUS_NA, STATUS_REPEALED,  # noqa: F401
                      STATUS_UNKNOWN, STATUSES, from_timeliness_state, iso_date,
                      iso_date_dmy)
@@ -90,6 +100,7 @@ __all__ = [
     "FIELD_KIND", "FIELD_JURISDICTION", "FIELD_LOCAL_ID", "FIELD_CANONICAL_ID",
     "FIELD_EFFECTIVE_FROM", "FIELD_EFFECTIVE_TO", "FIELD_STATUS", "FIELD_ASOF",
     "FIELD_DECIDED_ON", "FIELD_STATUS_SOURCE",
+    "FIELD_SPAN", "FIELD_FACE", "FIELD_HOW",
     "KIND_PROVISION", "KIND_CASE", "KIND_AGREEMENT", "KINDS",
     "JURISDICTIONS", "ContractFieldMissing",
     "STATUS_IN_FORCE", "STATUS_REPEALED", "STATUS_UNKNOWN", "STATUSES",

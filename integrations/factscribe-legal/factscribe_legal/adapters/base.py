@@ -26,7 +26,15 @@
 （v0 统一填「—」，映射表 §1）。**三态的枚举名与字段名逐字照抄契约草案
 §2.2**（`in_force` / `repealed` / `unknown`；三态之外填「—」）。
 **判据全部在各国 adapter**（契约草案 §1.3「第三步」），本层只定名字与缺省，
-共用件见 `adapters/status.py`。五元组属第 4 步。
+共用件见 `adapters/status.py`。
+
+第 4 步（**已落**）落**收据五元组的后三位**：`span` / `face` / `how`。
+取值**不另立一套定义**——直接用仓里已有的共用生产逻辑
+`factscribe_legal/receipts.py`（`build_receipt` / `span_in_text` /
+`classify_how`，缺省标记 `MISSING`）与 `factscribe_legal/lines.py` 的七线
+适配点（`lines.py:22-38`）。事实级收据是**按事实**产出、统一契约是
+**按卡**产出，卡粒度的投影口径见 `adapters/card_receipts.py` 的 docstring；
+各形状的「材料在哪」判据仍在各国 adapter（`_span_face_how`）。
 
 与既有模块的分工
 ----------------
@@ -51,13 +59,15 @@ __all__ = [
     "FIELD_KIND", "FIELD_JURISDICTION", "FIELD_LOCAL_ID",
     "FIELD_CANONICAL_ID", "FIELD_EFFECTIVE_FROM", "FIELD_EFFECTIVE_TO",
     "FIELD_STATUS", "FIELD_ASOF", "FIELD_DECIDED_ON", "FIELD_STATUS_SOURCE",
+    "FIELD_SPAN", "FIELD_FACE", "FIELD_HOW",
     "FIELDS",
     "ContractFieldMissing", "parse_card_fields", "read_card_fields",
     "load_json", "card_stem", "view_key", "load_view", "view_record",
 ]
 
-# 统一契约版本（本轮＝第 1、2 步的三个字段；加了字段再升版）
-CARD_CONTRACT_VERSION = "factscribe-legal-card/0.1"
+# 统一契约版本（0.1 ＝ 第 1、2 步的三个字段；0.2 ＝ 第 3 步的时点字段
+# ＋ 第 4 步的五元组后三位；加了字段再升版）
+CARD_CONTRACT_VERSION = "factscribe-legal-card/0.2"
 
 # ---- 证据类型（契约 §2.2 的 kind）----
 KIND_PROVISION = "provision"   # 法条／法规
@@ -85,12 +95,19 @@ FIELD_ASOF = "asof"
 FIELD_DECIDED_ON = "decided_on"
 FIELD_STATUS_SOURCE = "status_source"
 
-# 第 1、2 步的三个直映字段 ＋ 第 3 步的时点字段（status/asof 及其配套）。
-# ⚠️ 五元组（span/face/how）属第 4 步，**不在本轮**；instrument/provision_no/
-#    text_sha256/official_ref/source_* 等契约字段也属后续步，本轮不落。
+# 第 4 步：收据五元组的后三位（契约草案 §2.2；逐字照抄，不另造字段名）
+FIELD_SPAN = "span"
+FIELD_FACE = "face"
+FIELD_HOW = "how"
+
+# 第 1、2 步的三个直映字段 ＋ 第 3 步的时点字段（status/asof 及其配套）
+# ＋ 第 4 步的五元组后三位（span/face/how）。
+# ⚠️ instrument/provision_no/text_sha256/official_ref/source_* 等契约字段属
+#    后续步，本轮不落。
 FIELDS = (FIELD_KIND, FIELD_JURISDICTION, FIELD_LOCAL_ID,
           FIELD_CANONICAL_ID, FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO,
-          FIELD_STATUS, FIELD_ASOF, FIELD_DECIDED_ON, FIELD_STATUS_SOURCE)
+          FIELD_STATUS, FIELD_ASOF, FIELD_DECIDED_ON, FIELD_STATUS_SOURCE,
+          FIELD_SPAN, FIELD_FACE, FIELD_HOW)
 
 # 卡片正文段的起始标记：解析卡头字段时到此为止（正文里也有冒号，不能混进去）
 CARD_TEXT_MARKER = "--- OFFICIAL TEXT ---"

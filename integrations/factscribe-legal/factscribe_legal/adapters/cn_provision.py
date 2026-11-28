@@ -40,14 +40,31 @@
     实读 `corpus/cn/catalog.jsonl.gz` 每条记录都带 `fetched_at`
     ＝`2026-11-16T…`）——**`sxx` 是官方快照状态，它的时点锚点就是这个
     快照日**；没有全库目录时填「—」（卡上不记参考日，映射表 §3）。
+
+第 4 步的五元组后三位（span / face / how）
+----------------------------------------
+**取值不另立一套定义**：直接用 `factscribe_legal/receipts.py` 的共用生产逻辑
+与 `factscribe_legal/lines.py` 的七线适配点（卡粒度的投影口径见
+`adapters/card_receipts.py`）。本形状的口径：
+
+  * **官方数据里没有这个概念**：官方详情 JSON **不含条文正文**——中国侧一张
+    卡＝一部法规（**法规级不是条文级**，`factscribe_legal/cn_corpus.py:4-10`；
+    `factscribe_legal/lines.py:22-38` 的 cn 行）⇒ **span / face 缺省**，
+    与 `factscribe_legal/lines.py:348-359` 的 `_cn_receipts` 同一口径；
+  * **how**＝`catalog`（目录树·详情元数据对账）——本线是**核验方式常量**
+    的一条（`factscribe_legal/lines.py:348-359` 硬编码 `catalog`）。
+
+⇒ 三位里只有 **how** 取得到；span / face 一律「—」（缺省标记与收据五元组
+同一个，`factscribe_legal/receipts.py:34`）。
 """
 from ..cn_corpus import load_catalog
 from ..timeliness import from_status_flag
 from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
-                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
-                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
-                   FIELD_STATUS_SOURCE, JURISDICTION_CN, KIND_PROVISION,
-                   ContractFieldMissing, read_card_fields)
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_FACE,
+                   FIELD_HOW, FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
+                   FIELD_SPAN, FIELD_STATUS, FIELD_STATUS_SOURCE,
+                   JURISDICTION_CN, KIND_PROVISION, ContractFieldMissing,
+                   MISSING, read_card_fields)
 from .status import from_timeliness_state, iso_date
 
 SHAPE = "cn_provision"
@@ -80,6 +97,8 @@ def adapt(source, index=None, reference_date=None):
     state = from_status_flag("cn", KIND, local_id, sxx, "")["state"]
     status = from_timeliness_state(state)
 
+    span, face, how = _span_face_how()
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
             FIELD_LOCAL_ID: local_id,
@@ -89,7 +108,19 @@ def adapt(source, index=None, reference_date=None):
             FIELD_STATUS: status,
             FIELD_ASOF: _asof_from_index(index, local_id),
             FIELD_DECIDED_ON: "—",        # 仅 kind=case 有效
-            FIELD_STATUS_SOURCE: ("cn:sxx=%s" % sxx) if sxx else "cn:sxx"}
+            FIELD_STATUS_SOURCE: ("cn:sxx=%s" % sxx) if sxx else "cn:sxx",
+            FIELD_SPAN: span,
+            FIELD_FACE: face,
+            FIELD_HOW: how}
+
+
+def _span_face_how():
+    """中国法规：卡级五元组后三位（span / face / how）→ 三元组。
+
+    口径逐条写在模块 docstring 的「第 4 步的五元组后三位」一节里。
+    """
+    # 官方详情 JSON 无条文正文 ⇒ span/face 缺省；how＝目录对账（常量）
+    return MISSING, MISSING, "catalog"
 
 
 def _bbbs_from_index(index, fields):

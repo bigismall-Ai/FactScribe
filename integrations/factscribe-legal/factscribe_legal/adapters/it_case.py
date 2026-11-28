@@ -23,13 +23,66 @@
   ⚠️ 判决日**不占用** `effective_from` / `effective_to`（那是生效日），
   也不占用 `asof`（asof 是「status 相对于哪个时点」，本线没有 status）：
   判决日归契约草案另设的 `decided_on` 字段承接（时点表 §2.6 末段）。
+
+第 4 步的五元组后三位（span / face / how）
+----------------------------------------
+**取值不另立一套定义**：直接用 `factscribe_legal/receipts.py` 的共用生产逻辑
+与 `factscribe_legal/lines.py` 的七线适配点（卡粒度的投影口径见
+`adapters/card_receipts.py`）。本形状的口径：
+
+  * **官方正文**＝判决**切片件**的纯文本——取件口径**直接复用**
+    `factscribe_legal/lines.py:539-570` 的 `_it_case_receipts`：run 的
+    `index.json` 的 `judgments` 段里按 ECLI 对上，取 `slice_file` →
+    `it_case_verify._itcase_plain`；
+  * **卡所钉正文**＝卡内嵌的官方正文段（取件端点截到 600 字，
+    `tools/fetch_corpus.py:1814`；截断记号「…」在定位前剥掉，见
+    `adapters/card_receipts.py` 的 `strip_truncation`）；
+  * **how**＝该线**由值推出**（`factscribe_legal/lines.py:539-570` 用
+    `receipts.classify_how(value)`）⇒ 对正文文本取值＝`contains`；值取不到
+    ⇒ `classify_how` 自己给「—」（与收据五元组同一个缺省标记）。
+
+切片件取不到 ⇒ 退回卡内嵌正文（同 `lines.py` 的兜底顺序）；两处都没有 ⇒
+span / face / how 全「—」（**我们还没接**：仓外批量件没取到）。
 """
+from .. import receipts
+from ..it_case_verify import _itcase_plain
 from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
-                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
-                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
-                   FIELD_STATUS_SOURCE, JURISDICTION_IT, KIND_CASE,
-                   ContractFieldMissing, card_stem, load_json, read_card_fields)
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_FACE,
+                   FIELD_HOW, FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
+                   FIELD_SPAN, FIELD_STATUS, FIELD_STATUS_SOURCE,
+                   JURISDICTION_IT, KIND_CASE, ContractFieldMissing,
+                   card_stem, load_json, read_card_fields)
+from .card_receipts import embedded_text, project, run_index, slice_text
 from .status import iso_date, iso_date_dmy
+
+
+def _span_face_how(source, fields, index=None):
+    """意大利判例：卡级五元组后三位（span / face / how）→ 三元组。
+
+    口径逐条写在模块 docstring 的「第 4 步的五元组后三位」一节里。
+    """
+    judgments = run_index(source, index).get("judgments") or {}
+    ecli = (fields.get("ECLI") or "").strip()
+    meta = {}
+    for key, item in judgments.items():
+        item = item or {}
+        if ecli and (item.get("ecli") or "") != ecli and key != ecli:
+            continue
+        meta = item
+        break
+    text = slice_text(source, meta, _slice_reader)
+    value = embedded_text(source)
+    if not text:
+        # 切片件取不到 ⇒ 退回卡内嵌正文（同 lines.py 的兜底顺序）
+        text = value
+    return project(value, text, how=receipts.classify_how(value))
+
+
+def _slice_reader(raw):
+    """切片件的纯文本（`factscribe_legal/it_case_verify.py` 的 `_itcase_plain`；
+    `factscribe_legal/lines.py:539-570` 同一套：它**吃字节**不喂字符串）。"""
+    return _itcase_plain(raw)
+
 
 SHAPE = "it_case"
 KIND = KIND_CASE
@@ -60,6 +113,8 @@ def adapt(source, index=None, reference_date=None):
     decided_on = iso_date(fields.get("DATA_DECISIONE_ISO")) \
         or iso_date_dmy(fields.get("DATA_DECISIONE"))
 
+    span, face, how = _span_face_how(source, fields, index)
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
             FIELD_LOCAL_ID: ecli,
@@ -69,4 +124,7 @@ def adapt(source, index=None, reference_date=None):
             FIELD_STATUS: "—",            # 本线不产 status（三态不适用）
             FIELD_ASOF: "—",              # 没有 status ⇒ 没有判定锚点
             FIELD_DECIDED_ON: decided_on or "—",
-            FIELD_STATUS_SOURCE: "—"}
+            FIELD_STATUS_SOURCE: "—",
+            FIELD_SPAN: span,
+            FIELD_FACE: face,
+            FIELD_HOW: how}

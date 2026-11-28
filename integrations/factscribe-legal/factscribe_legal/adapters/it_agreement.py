@@ -34,16 +34,39 @@
   * `asof` ＝ `scadenza_ultimo_accordo`（本线唯一与「是否还在用」直接
     相关的官方时点，也是 status 判定的锚点）；取不到则退回
     `inizio_storia`；再取不到填「—」。
+
+第 4 步的五元组后三位（span / face / how）：**三位全「—」**
+----------------------------------------------------
+  * **我们还没接**：仓内 CCNL 材料**只有元数据**（清单 TSV / 簇表 /
+    manifest，**无全文**），官方全文取件端点「已探明但**本层不调用**」
+    （`corpus-bulk-it/ATTRIBUTION`：链接层只取列表与链接；且全文再分发
+    未清权，**全文 PDF 不得对外再分发**）⇒ 没有正文可定位 ⇒ span / face「—」；
+  * **how** 也「—」：`factscribe_legal/lines.py:75-83` 的七条线里**没有 CCNL
+    这一条** ⇒ 本层**没有可复用的核验方式**（不借用中国线的 `catalog`
+    ——那是中国法规那条线的口径）。
+
+⇒ 将来把 CCNL 接成第八条线（调用官方全文端点）时，how 随该线一起定。
 """
 import csv
 import json
 
 from .base import (FIELD_ASOF, FIELD_CANONICAL_ID, FIELD_DECIDED_ON,
-                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_JURISDICTION,
-                   FIELD_KIND, FIELD_LOCAL_ID, FIELD_STATUS,
-                   FIELD_STATUS_SOURCE, JURISDICTION_IT, KIND_AGREEMENT,
-                   ContractFieldMissing)
+                   FIELD_EFFECTIVE_FROM, FIELD_EFFECTIVE_TO, FIELD_FACE,
+                   FIELD_HOW, FIELD_JURISDICTION, FIELD_KIND, FIELD_LOCAL_ID,
+                   FIELD_SPAN, FIELD_STATUS, FIELD_STATUS_SOURCE,
+                   JURISDICTION_IT, KIND_AGREEMENT, ContractFieldMissing,
+                   MISSING)
 from .status import STATUS_IN_FORCE, STATUS_UNKNOWN, iso_date
+
+
+def _span_face_how():
+    """集体协议（CCNL）：卡级五元组后三位（span / face / how）→ 三元组。
+
+    口径逐条写在模块 docstring 的「第 4 步的五元组后三位」一节里。
+    """
+    # 仓内只有元数据、官方全文端点本层不调用 ⇒ 三位全「—」
+    return MISSING, MISSING, MISSING
+
 
 SHAPE = "it_agreement"
 KIND = KIND_AGREEMENT
@@ -106,6 +129,8 @@ def adapt(source, index=None, reference_date=None):
         status = STATUS_IN_FORCE
         status_source = ("it:scadenza_ultimo_accordo@%s" % ref) if ref else "it:cnel_vigenti"
 
+    span, face, how = _span_face_how()
+
     return {FIELD_KIND: KIND,
             FIELD_JURISDICTION: JURISDICTION,
             FIELD_LOCAL_ID: code,
@@ -115,4 +140,7 @@ def adapt(source, index=None, reference_date=None):
             FIELD_STATUS: status,
             FIELD_ASOF: scadenza or inizio or "—",
             FIELD_DECIDED_ON: "—",        # 仅 kind=case 有效
-            FIELD_STATUS_SOURCE: status_source}
+            FIELD_STATUS_SOURCE: status_source,
+            FIELD_SPAN: span,
+            FIELD_FACE: face,
+            FIELD_HOW: how}

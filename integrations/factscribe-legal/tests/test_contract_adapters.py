@@ -12,6 +12,9 @@
   3. **统一读路径**：有公共层视图时走视图，没有时现场从旧卡推导；
      视图缺字段时从旧卡补齐（视图是缓存，不是唯一真相）。
   4. **fail-closed**：取不到必填字段就报错，不给空值混进统一层。
+  5. **第 4 步的卡级五元组后三位**（`span` / `face` / `how`）：每个形状
+     一例「取到」、一例「取不到落『—』」；并断言口径与收据五元组**同一个**
+     （同一套 `receipts.span_in_text`）。
 
 python3 -m unittest discover -s integrations/factscribe-legal/tests -v
 """
@@ -25,9 +28,10 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from factscribe_legal import adapters  # noqa: E402
-from factscribe_legal.adapters import (cn_provision, es_provision,  # noqa: E402
-                                        fr_case, fr_provision, it_agreement,
-                                        it_case, it_provision, status)
+from factscribe_legal.adapters import (card_receipts,  # noqa: E402
+                                       cn_provision, es_provision, fr_case,
+                                       fr_provision, it_agreement, it_case,
+                                       it_provision, status)
 from factscribe_legal.adapters.base import (FIELDS, MISSING,  # noqa: E402
                                              ContractFieldMissing,
                                              load_view, view_key, view_record)
@@ -583,7 +587,7 @@ class TestStatusContractShape(unittest.TestCase):
         self.assertEqual(sorted(FIELDS), sorted([
             "kind", "jurisdiction", "local_id", "canonical_id",
             "effective_from", "effective_to", "status", "asof",
-            "decided_on", "status_source"]))
+            "decided_on", "status_source", "span", "face", "how"]))
 
     def test_every_adapter_returns_all_fields(self):
         for out in self._all_real():
@@ -751,6 +755,250 @@ def _sha256_file(path):
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# ---------------------------------------------------------------------------
+# 第 4 步：卡级收据五元组后三位（span / face / how）
+# ---------------------------------------------------------------------------
+
+class TestCardReceiptProjection(unittest.TestCase):
+    """卡级 `span` / `face` / `how`：每个形状「取到」＋「取不到落『—』」两例。
+
+    口径（与收据五元组**同一个**，不另立定义）：
+      * 「值」＝**这张卡自己钉住的官方正文**；
+      * 「官方正文」＝该线 `factscribe_legal/lines.py` 适配点所用的那份官方文本；
+      * `span`＝`receipts.span_in_text`、`face`＝`lines._face_of`、
+        `how`＝该线适配点定的核验方式；
+      * 取不到 ⇒ 缺省标记「—」（＝`factscribe_legal/receipts.py:34` 的
+        `MISSING`，与收据五元组同一个）。
+    """
+
+    # 值域（factscribe_legal/receipts.py:13-17 的字段定义）
+    FACE_VALUES = ("body", "résumé", MISSING)
+    HOW_VALUES = ("contains", "numnorm", "catalog", MISSING)
+
+    # ---------------- 法国法条 ----------------
+
+    def test_fr_provision_present(self):
+        """法国法条：卡所钉正文＝官方 XML 的 BLOC_TEXTUEL 归一正文（364 字）。"""
+        out = fr_provision.adapt(_card("fr", "D641-10-1.card.txt"))
+        self.assertEqual(out["span"], "0-364")
+        self.assertEqual(out["face"], "body")
+        self.assertEqual(out["how"], "contains")
+
+    def test_fr_provision_missing_official_xml(self):
+        """官方件不在仓内 ⇒ 三位全「—」（**我们还没接**：法国批量件在仓外）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "x.card.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# 法国法条证据卡\nNUM: X-1\nOFFICIAL_XML: X.xml\n")
+            out = fr_provision.adapt(path)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], MISSING)
+
+    # ---------------- 中国法规 ----------------
+
+    def test_cn_provision_how_is_catalog(self):
+        """中国法规：how＝catalog（目录树·详情元数据对账；lines.py 的 cn 行）。"""
+        out = cn_provision.adapt(_card("cn", "cards", CN_CARD))
+        self.assertEqual(out["how"], "catalog")
+
+    def test_cn_provision_span_face_missing_no_article_text(self):
+        """官方详情 JSON 无条文正文 ⇒ span/face「—」（**官方数据里没有这个概念**）。"""
+        out = cn_provision.adapt(_card("cn", "cards", CN_CARD))
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+
+    # ---------------- 西班牙法条 ----------------
+
+    def test_es_provision_present(self):
+        out = es_provision.adapt(_card("es", ES_RUN, "a1.es.card.txt"))
+        self.assertEqual(out["span"], "0-600")
+        self.assertEqual(out["face"], "body")
+        self.assertEqual(out["how"], "contains")
+
+    def test_es_provision_missing_official_material(self):
+        """卡不内嵌正文且切片件没取到 ⇒ span/face「—」（how 仍是该线常量）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "a1.es.card.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# 西班牙法条证据卡\n"
+                         "ACT_ID: BOE-A-2015-10565\nBLOCK_ID: a1\n")
+            out = es_provision.adapt(path)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], "contains")
+
+    def test_es_provision_falls_back_to_embedded_text(self):
+        """切片件不在仓内 ⇒ 退回卡内嵌正文（同 lines.py 的兜底顺序）。"""
+        card = _card("es", ES_RUN, "a1.es.card.txt")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "a1.es.card.txt")
+            shutil.copyfile(card, path)
+            out = es_provision.adapt(path)
+        self.assertNotEqual(out["span"], MISSING)
+        self.assertTrue(out["span"].startswith("0-"), out["span"])
+        self.assertEqual(out["face"], "body")
+
+    # ---------------- 意大利法条 ----------------
+
+    def test_it_provision_present(self):
+        out = it_provision.adapt(_card("it", IT_RUN, "art_1.it.card.txt"))
+        self.assertEqual(out["span"], "0-600")
+        self.assertEqual(out["face"], "body")
+        self.assertEqual(out["how"], "contains")
+
+    def test_it_provision_missing_official_material(self):
+        """卡不内嵌正文且切片件没取到 ⇒ span/face「—」（how 仍是该线常量）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "art_1.it.card.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# 意大利法条证据卡\n"
+                         "ACT_URN: urn:nir:stato:legge:1990-08-07;241\n"
+                         "ARTICLE_EID: art_1\n")
+            out = it_provision.adapt(path)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], "contains")
+
+    # ---------------- 意大利判例 ----------------
+
+    def test_it_case_present(self):
+        out = it_case.adapt(_card("it-case", ITCASE_RUN,
+                                  "ECLI-IT-COST-1956-1.itcase.card.txt"))
+        self.assertEqual(out["span"], "0-599")
+        self.assertEqual(out["face"], "body")
+        self.assertEqual(out["how"], "contains")
+
+    def test_it_case_missing_official_material(self):
+        """卡不内嵌正文且判决切片件没取到 ⇒ 三位全「—」（how 由值推出，值也没了）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "E.itcase.card.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# 意大利宪法法院判例证据卡\n"
+                         "ECLI: ECLI:IT:COST:1956:1\n")
+            out = it_case.adapt(path)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], MISSING)
+
+    # ---------------- 法国判例 ----------------
+
+    def test_fr_case_present(self):
+        """法国判例：判决正文段在官方还原件**全文**里的坐标（330-13669）。"""
+        out = fr_case.adapt(_card("fr-case", FRCASE_RUN,
+                                  "JURITEXT000006951547.fr-case.card.txt"))
+        self.assertEqual(out["span"], "330-13669")
+        self.assertEqual(out["face"], "body")
+        self.assertEqual(out["how"], "contains")
+
+    def test_fr_case_missing_official_txt(self):
+        """官方还原件不在仓内 ⇒ 三位全「—」。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "C.fr-case.card.txt")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("# 法国判例证据卡\n"
+                         "CASE_ID: C1\nOFFICIAL_TXT: official/C1.txt\n")
+            out = fr_case.adapt(path)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], MISSING)
+
+    # ---------------- 集体协议（CCNL） ----------------
+
+    def test_agreement_all_three_missing(self):
+        """CCNL：仓内只有元数据、官方全文端点本层不调用 ⇒ 三位全「—」。"""
+        rows = it_agreement.read_inventory(
+            os.path.join(BULK_IT, "it-inventory-vigenti.tsv"))
+        row = next(r for r in rows if r["code"] == "A011")
+        out = it_agreement.adapt(row)
+        self.assertEqual(out["span"], MISSING)
+        self.assertEqual(out["face"], MISSING)
+        self.assertEqual(out["how"], MISSING)
+
+    def test_agreement_has_no_line_to_borrow_how_from(self):
+        """CCNL 在 lines.py 的七条线里没有对应的一条 ⇒ how 不借用他线口径。"""
+        from factscribe_legal import lines
+        ids = [ln.id for ln in lines.LINES]
+        self.assertNotIn("agreement", ids)
+        self.assertNotIn("ccnl", ids)
+        self.assertEqual(len(ids), 7)
+
+    # ---------------- 跨形状 ----------------
+
+    def _all_real(self):
+        """七个形状的真实产出（判例/协议用仓内真件）。"""
+        catalog = cn_provision.load_index(
+            os.path.join(CORPUS, "cn", "catalog.jsonl.gz"))
+        rows = it_agreement.read_inventory(
+            os.path.join(BULK_IT, "it-inventory-vigenti.tsv"))
+        row = next(r for r in rows if r["code"] == "A011")
+        return [
+            ("fr_provision",
+             fr_provision.adapt(_card("fr", "D641-10-1.card.txt"))),
+            ("cn_provision",
+             cn_provision.adapt(_card("cn", "cards", CN_CARD), index=catalog)),
+            ("es_provision",
+             es_provision.adapt(_card("es", ES_RUN, "a1.es.card.txt"))),
+            ("it_provision",
+             it_provision.adapt(_card("it", IT_RUN, "art_1.it.card.txt"))),
+            ("it_case",
+             it_case.adapt(_card("it-case", ITCASE_RUN,
+                                 "ECLI-IT-COST-1956-1.itcase.card.txt"))),
+            ("fr_case",
+             fr_case.adapt(_card("fr-case", FRCASE_RUN,
+                                 "JURITEXT000006951547.fr-case.card.txt"))),
+            ("it_agreement", it_agreement.adapt(row)),
+        ]
+
+    def test_every_shape_fills_the_three_fields(self):
+        for shape, out in self._all_real():
+            for name in ("span", "face", "how"):
+                self.assertIn(name, out, shape)
+                self.assertTrue(out[name], "%s 的 %s 是空的" % (shape, name))
+
+    def test_face_and_how_stay_in_their_value_domains(self):
+        """face ∈ {body, résumé,「—」}；how ∈ {contains, numnorm, catalog,「—」}。"""
+        for shape, out in self._all_real():
+            self.assertIn(out["face"], self.FACE_VALUES, shape)
+            self.assertIn(out["how"], self.HOW_VALUES, shape)
+
+    def test_span_format_is_offset_range_or_missing(self):
+        """span 形如 "s-e"（原文坐标区间）；取不到 ⇒ 「—」。"""
+        for shape, out in self._all_real():
+            if out["span"] == MISSING:
+                continue
+            self.assertRegex(out["span"], r"^\d+-\d+$", shape)
+
+    def test_span_uses_the_same_primitive_as_the_receipt(self):
+        """卡级 span 用的就是收据那套 span_in_text（**不是另写一套**）。"""
+        from factscribe_legal import receipts
+        from factscribe_legal.es_verify import _plain_text as es_plain
+        card = _card("es", ES_RUN, "a1.es.card.txt")
+        value = card_receipts.embedded_text(card)
+        with open(os.path.join(os.path.dirname(card), "official", "a1.xml"),
+                  encoding="utf-8") as fh:
+            official = es_plain(fh.read())
+        out = es_provision.adapt(card)
+        self.assertEqual(out["span"], receipts.span_in_text(value, official))
+
+    def test_truncation_marker_is_stripped_before_locating(self):
+        """卡内嵌正文尾部的「…」是取件端点的截断记号（tools/fetch_corpus.py:1427），
+        **不是**官方正文 ⇒ 定位前剥掉。"""
+        card = _card("es", ES_RUN, "a1.es.card.txt")
+        with open(card, encoding="utf-8") as fh:
+            raw = fh.read()
+        self.assertIn(card_receipts.TRUNCATION_MARK, raw)
+        self.assertFalse(card_receipts.embedded_text(card)
+                         .endswith(card_receipts.TRUNCATION_MARK))
+        self.assertEqual(card_receipts.strip_truncation("abc…"), "abc")
+
+    def test_missing_marker_is_the_receipt_one(self):
+        """三字段取不到 ⇒ 用收据五元组同一个「—」，不新造标记形状。"""
+        from factscribe_legal.receipts import MISSING as RECEIPT_MISSING
+        self.assertEqual(MISSING, RECEIPT_MISSING)
+        self.assertEqual(MISSING, "—")
 
 
 if __name__ == "__main__":

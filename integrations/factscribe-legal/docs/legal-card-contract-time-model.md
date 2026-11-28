@@ -4,9 +4,11 @@
 六种形状里，只有法国法条和 CCNL 能直接回答「这条现在有效吗」，其余四形状
 要么只能间接推、要么根本不适用。
 
-统一层只定**三态**：`in_force`（在效）／`repealed`（已失效）／`unknown`（未知）。
-三态之外一律填 `—`（不适用），与收据缺省口径一致
-（`factscribe_legal/fr_case_verify.py:303`）。
+统一层只定**三态**：`in_force`（在效）／`repealed`（已失效）／`unknown`（未知）——
+**枚举名固定，就这三个**（不写 `not_in_force`；「不在效」按情形落 `repealed` 或 `unknown`）。
+三态之外一律填 `—`（不适用），与共用件层的收据缺省口径一致
+（`factscribe_legal/receipts.py:34` 的 `MISSING = "—"`；
+`receipts.py:96-100` 的 `build_receipt` 里 `span`/`face`/`how` 取不到即填该标记）。
 
 **统一层的判定只有一个输入**：参考日 `reference_date`。参考日缺失即无法判时点，
 这是既有闸的 fail-closed 口径（`factscribe_legal/checks_adapter.py:151-159`，
@@ -151,7 +153,7 @@
 - 判例没有「在效/失效」这个概念：判决作出即固定，不随时间失效。
 - 现有代码也没有任何 status 判定：`factscribe_legal/fr_case_verify.py`、
   `it_case_verify.py` 全文无 status 字段消费（实读两文件的字段消费点：
-  `fr_case_verify.py:330-331` 只认 `OFFICIAL_XML_SHA256`/`OFFICIAL_TXT_SHA256`；
+  `fr_case_verify.py` 全文——判据清单见其 docstring `:9-20`，逐条判据里无 status 项；
   `it_case_verify.py:295-296` 只认 `OFFICIAL_XML_SHA256`/`TEXT_SHA256`）。
 - ⇒ `kind=case` 时 `status`/`effective_from`/`effective_to` 一律填 `—`，
   **不要**拿判决日 `DATE_DEC`/`DATA_DECISIONE_ISO` 去填 `effective_from`

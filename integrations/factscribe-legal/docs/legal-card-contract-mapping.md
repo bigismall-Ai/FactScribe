@@ -31,17 +31,19 @@
 | `provision_no` | 条文号 | 字符串 |
 | `effective_from` | 生效起 | ISO 日期 |
 | `effective_to` | 生效止（上界） | ISO 日期 |
-| `status` | 三态：`in_force` / `repealed` / `unknown` | 枚举 |
+| `status` | 三态：`in_force` / `repealed` / `unknown`（枚举名固定） | 枚举 |
+| `status_source` | status 的判据出处（`国家:机制`，如 `cn:sxx`、`fr:date_range`） | 字符串／缺省「—」 |
 | `text_sha256` | 正文哈希 | hex64 |
 | `official_ref` | 官方件路径＋官方件哈希 | 结构 |
 | `source_url` | 来源 URL | 字符串 |
 | `source_licence` | 许可 | 字符串 |
 | `fetched_at` | 取件时刻 | ISO 8601 |
-| `asof` | 该证据对应的时点版本基准日 | ISO 日期 |
+| `asof` | 该证据对应的时点版本基准日 | ISO 日期（取不到填「—」） |
 | `span` / `face` / `how` | 已定收据五元组的其余三位 | 字符串／缺省「—」 |
 
-「缺」一律填 `—`，与现行收据口径一致（`factscribe_legal/fr_case_verify.py:303`
-的 `{"span": "—", "face": "—", "how": "—"}`）。
+「缺」一律填 `—`，与**共用件层**的收据缺省口径一致
+（`factscribe_legal/receipts.py:34` 的 `MISSING = "—"`；
+`receipts.py:96-100` 的 `build_receipt` 里 `span`/`face`/`how` 取不到即填该标记）。
 
 ---
 
@@ -56,7 +58,7 @@
 | `CODE_ID` | 同上 `:3`（`LEGITEXT000022197698`） | `canonical_id`（候选源） | 转换 | 法国法条号→法典号，与 `canonical_id` 不同层，见草案 §5 |
 | `CODE_TITLE` | 同上 `:4` | `instrument` | 直映 | 已是法典全称 |
 | `LEGIARTI` | 同上 `:5`（`LEGIARTI000034616245`） | — | 国别专属 | Légifrance 条文版本号，仅法国侧用 |
-| `ETAT` | 同上 `:6`（`VIGUEUR`） | `status` | 转换 | **不能直接用 ETAT 判在效**：`factscribe_legal/provisions.py:102` 明写「⚠️ 不能用 etat 判：etat=VIGUEUR 的版本可能只是『未来才生效』」。规则见时点表 §7.1 |
+| `ETAT` | 同上 `:6`（`VIGUEUR`） | `status` | 转换 | **不能直接用 ETAT 判在效**：`factscribe_legal/provisions.py:102` 明写「⚠️ 不能用 etat 判：etat=VIGUEUR 的版本可能只是『未来才生效』」。规则见时点表 §2.1 |
 | `DATE_DEBUT` | 同上 `:7` | `effective_from` | 直映 | 已是 `YYYY-MM-DD` |
 | `DATE_FIN` | 同上 `:8`（`2999-01-01`） | `effective_to` | 直映 | 已是 `YYYY-MM-DD`；`2999-01-01` 是「无终止」哨兵值，不改 |
 | `POOL_ASOF` | 同上 `:9` | `asof` | 直映 | `2026-11-15` |
@@ -69,7 +71,7 @@
 | —（卡上无） | — | `source_licence` | **缺** | 法国侧许可写在 `corpus/README.md:46-47`（Etalab 开放许可），不在卡片上 |
 | —（卡上无） | — | `fetched_at` | **缺** | 法国法条卡片只有 `POOL_ASOF`，无取件时刻 |
 | —（卡上无） | — | `kind`/`jurisdiction` | 转换 | 由 adapter 按目录填 `provision` + `fr`，不写进卡 |
-| —（卡上无） | — | `span`/`face`/`how` | **缺** | 收据五元组当前只在法国判例闸产出（`factscribe_legal/fr_case_verify.py:302-304`），法条闸不产 |
+| —（卡上无） | — | `span`/`face`/`how` | **缺／转换** | 闸层不产（`factscribe_legal/fr_case_verify.py` 本分支**不定义**五元组）；**共用件层七条线都能产同构五元组**（`receipts.py:89` 的 `build_receipt` ＋ `lines.py` 的七线适配 `lines.py:22-38`、`:75`）⇒ 法国法条线取不到即填「—」 |
 
 `index.json` 顶层另有 `generator`（`corpus/fr/index.json:2`）→ **国别专属**。
 
@@ -196,10 +198,10 @@
 | `LICENCE` | 同上 `:16` | `source_licence` | 直映 | CC BY-SA 3.0 |
 | `ATTRIBUTION` | 同上 `:17` | — | 国别专属 | 署名 |
 | `FETCHED_AT` | 同上 `:18` | `fetched_at` | 直映 | ISO 8601 |
-| —（卡上无） | — | `status` | **缺** | 判例无「在效/失效」概念 ⇒ 统一三态对 `kind=case` **不适用**，填 `—`（时点表 §7.6） |
+| —（卡上无） | — | `status` | **缺** | 判例无「在效/失效」概念 ⇒ 统一三态对 `kind=case` **不适用**，填 `—`（时点表 §2.6） |
 | —（卡上无） | — | `effective_from`/`effective_to` | **缺** | 判例无生效区间 |
 | —（卡上无） | — | `asof` | 转换 | 判例无时点版本概念；可用 `fetch_reference_date`（`corpus/it-case/run-20261116-itcase-1956_1980/index.json:2`＝`2026-11-16`）当「取件日」，但**不是**版本基准日 |
-| —（卡上无） | — | `span`/`face`/`how` | 转换 | **唯一已产出五元组后三位的地方**：`factscribe_legal/fr_case_verify.py:213-217` 定义 `face`（`body`/`résumé`/`—`）、`how`（`contains`/`numnorm`/`—`），`span` 由 `_span_in_text` 给出原文坐标区间 |
+| —（卡上无） | — | `span`/`face`/`how` | 转换 | **共用件层产出**（闸层 `factscribe_legal/fr_case_verify.py` 本分支**不定义**五元组）：`face`＝`body`/`résumé`/`—` 由 `factscribe_legal/lines.py:254-262` 的 `_face_of` 给、`how`＝`contains`/`numnorm`/`—` 由 `receipts.py:76-85` 的 `classify_how` 给、`span`＝原文坐标区间由 `receipts.py:60-73` 的 `span_in_text` 给；法国判例线在 `lines.py:501-521` |
 
 `index.json` 的 `judgments` 每条另有 `anno`/`card_sha256`/`data_decisione`/
 `data_deposito`/`ecli`/`numero`/`presidente`/`relatore`/`slice_bytes`/`slice_file`/
@@ -212,16 +214,16 @@
 ## 7. 法国判例 `corpus/fr-case/run-*/`（按批次分 run，件内按 JURITEXT）
 
 卡片样本：`corpus/fr-case/run-20261116-inca/JURITEXT000006951547.fr-case.card.txt:1-24`；
-生成代码 `factscribe_legal/fr_case_reader.py:430-472`（`build_card`）。
+生成代码 `factscribe_legal/fr_case_reader.py:330-372`（`build_card`）。
 
 | 现有字段 | 证据 | 映射 | 结果 | 转换规则 |
 |---|---|---|---|---|
 | `CASE_ID` | `.../JURITEXT000006951547.fr-case.card.txt:2` | `local_id` | 直映 | `JURITEXT000006951547` |
 | `TITRE` | 同上 `:3` | — | 转换 | 判决标题，语义上不是「法件」；契约里建议对 case 留空 `instrument`，改用 `title` |
 | `DATE_DEC` | 同上 `:4`（`2006-12-15`） | — | 转换 | 判决日 → 建议 `decided_on`，不占 `effective_from` |
-| `JUDGE_DATE` | 同上 `:5` | — | 转换 | 与 `DATE_DEC` 同值（`fr_case_reader.py:448-449` 两行都取 `meta["date_dec"]`）；保留其一即可 |
+| `JUDGE_DATE` | 同上 `:5` | — | 转换 | 与 `DATE_DEC` 同值（`fr_case_reader.py:348-349` 两行都取 `meta["date_dec"]`）；保留其一即可 |
 | `JURIDICTION` | 同上 `:6` | — | 国别专属 | 法院名 |
-| `CASE_NO` | 同上 `:7`（本例为空） | — | 国别专属 | 案号；判例事实账靠它判「案号形 value」（`factscribe_legal/fr_case_verify.py:409-414`） |
+| `CASE_NO` | 同上 `:7`（本例为空） | — | 国别专属 | 案号；判例事实账靠它判「案号形 value」（`factscribe_legal/fr_case_verify.py:205-216`） |
 | `NUMEROS_AFFAIRES` | 同上 `:8`（本例为空） | — | 国别专属 | 全部案号（逗号分隔） |
 | `FORMATION` | 同上 `:9`（本例为空） | — | 国别专属 | 合议庭组成 |
 | `NATURE` | 同上 `:10`（`ARRET`） | — | 国别专属 | 裁判种类 |
@@ -241,7 +243,7 @@
 | —（卡上无） | — | `text_sha256` | **缺** | 卡上只有 XML/TXT 哈希，无「正文纯文本」哈希；`TEXT_CHARS` 只是字数 |
 | —（卡上无） | — | `status`/`effective_from`/`effective_to` | **缺** | 判例无效力概念 |
 | —（卡上无） | — | `asof` | **缺** | |
-| —（卡上无） | — | `span`/`face`/`how` | 转换 | 五元组后三位的唯一产地（见上节） |
+| —（卡上无） | — | `span`/`face`/`how` | 转换 | 同上：产出在**共用件层**（`receipts.py:89` 的 `build_receipt` ＋ `lines.py` 的七线适配），意大利判例线在 `lines.py:539-570` |
 
 ---
 
@@ -262,7 +264,7 @@
 | `firmatari_sindacali_adesione` | 同上第 5 列 | — | 国别专属 | 附议签署方 |
 | `firmatari_sindacali_tavolo_separato` | 同上第 6 列 | — | 国别专属 | 独立谈判桌签署方 |
 | `inizio_storia` | 同上第 7 列（`1979-06-25`） | `effective_from` | 直映 | 协议起始日 |
-| `scadenza_ultimo_accordo` | 同上第 8 列（`2029-12-31`） | `effective_to` | 直映 | 末次协议到期日（**不是**失效日，语义差别见时点表 §7.5） |
+| `scadenza_ultimo_accordo` | 同上第 8 列（`2029-12-31`） | `effective_to` | 直映 | 末次协议到期日（**不是**失效日，语义差别见时点表 §2.5） |
 | `datori_2025`/`dipendenti_m_2025`/`dipendenti_f_2025`/`dipendenti_2025` | 同上第 9–12 列 | — | 国别专属 | 2025 年人数统计 |
 | `source`（顶层） | `corpus-bulk-it/it-clusters.json:2` | `source_url` | 直映 | CNEL xlsx 链接 |
 | `xlsx_sha256` | 同上 `:3` | `official_ref.sha256` | 直映 | **清单源文件**哈希（545,236 字节，sha256 `408c0710…`） |
@@ -271,7 +273,7 @@
 | manifest 各行 `kind`（`inventory`/`anomaly`） | `it-ccnl-accordi-manifest.ndjson:1-3` | — | 国别专属 | 运行事件日志，非证据 |
 | — | — | `text_sha256` | **缺** | 本层只取清单与链接，**不取全文**（`corpus-bulk-it/ATTRIBUTION` 明写：「全文取件端点 scarica/accordi/<idAccordo> 已探明但**本层不调用**——只取列表与链接」）⇒ 无正文、无正文哈希 |
 | — | — | `provision_no` | **缺** | 协议内条款号未采集 ⇒ `—` |
-| — | — | `status` | 转换 | 由 `scadenza_ultimo_accordo` 与参考日比较得出（时点表 §7.5） |
+| — | — | `status` | 转换 | 由 `scadenza_ultimo_accordo` 与参考日比较得出（时点表 §2.5） |
 | — | — | `fetched_at` | 转换 | manifest 里 `ts`（`2026-11-17T09:50:41Z`）可当取件时刻 |
 | — | — | `kind` | 转换 | `agreement` |
 | — | — | `jurisdiction` | 转换 | `it`（唯一法域，但形状独立） |

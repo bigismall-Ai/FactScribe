@@ -49,7 +49,9 @@
    AKN 头部只有 `<act name="monovigente">`，全文件 grep 只命中 `datatype="xsd:date"`，
    **没有 vigenza / 生效起止**。⇒ 意法条做不出 `effective_from/to`。
 3. **判例无效力概念**——法国判例与意大利判例都没有「在效/已失效」，
-   现有代码也无任何 status 消费（实读 `fr_case_verify.py:330-331`、`it_case_verify.py:295-296`）。
+   现有代码也无任何 status 消费（实读 `factscribe_legal/fr_case_verify.py` **全文**——
+   其判据清单见 docstring `:9-20`，逐条判据里无 status 项；
+   `it_case_verify.py:295-296` 只认 `OFFICIAL_XML_SHA256`/`TEXT_SHA256`）。
    ⇒ 三态对 `kind=case` 不适用。
 
 ⇒ **「拉平」是真不可行**：缺口在官方数据本身，不在任何加工手段能补出来的范围内。
@@ -87,9 +89,11 @@
 不要试图在统一层写一个通用的「有效性公式」——那正是「拉平」的陷阱。
 
 **第四步：最后落 `span`/`face`/`how`。**
-这三位的**生产逻辑已经在法国判例闸里跑通了**
-（`factscribe_legal/fr_case_verify.py:213-217`，`face`=`body`/`résumé`/`—`，
-`how`=`contains`/`numnorm`/`—`，`span`=`"s-e"` 原文坐标区间），
+这三位的**生产逻辑在共用件层已经跑通了**
+（`factscribe_legal/receipts.py:60-73` 的 `span_in_text` 给 `"s-e"` 原文坐标区间、
+`:76-85` 的 `classify_how` 给 `contains`/`numnorm`、`receipts.py:89` 的 `build_receipt` 组装；
+`face`＝`body`/`résumé`/`—` 由 `factscribe_legal/lines.py:254-262` 的 `_face_of` 给，
+法国判例线在 `lines.py:501-521`），
 且**五元组口径已定**（`id｜sha16｜span｜face｜how`，缺省「—」）。
 ⇒ 这一步不是设计，是**引用仓里已有的共用生产逻辑**：`factscribe_legal/receipts.py` 的
 `build_receipt`（`receipts.py:89`；字段序 `id｜sha16｜span｜face｜how` 见 `receipts.py:37`，
@@ -128,7 +132,7 @@ instrument:      <string>                          # 法条所属法件 / 协议
 provision_no:    <string>                          # 条文号；取不到填 "—"
 effective_from:  <YYYY-MM-DD>                      # 生效起；取不到填 "—"
 effective_to:    <YYYY-MM-DD>                      # 生效止；取不到填 "—"
-status:          in_force | repealed | unknown | "—" # 三态；不适用填 "—"
+status:          in_force | repealed | unknown | "—" # 三态（枚举名固定）；不适用填 "—"
 text_sha256:     <hex64>                           # 正文哈希；取不到填 "—"
 official_ref:
   path:          <string>                          # 官方件相对路径
@@ -139,9 +143,9 @@ source_url:      <string>                          # 来源 URL
 source_licence:  <string>                          # 许可
 source_attribution: <string>                       # 署名（建议新增，承接各国 ATTRIBUTION）
 fetched_at:      <ISO-8601>                        # 取件时刻
-asof:            <YYYY-MM-DD>                      # 时点版本基准日
+asof:            <YYYY-MM-DD>                      # 时点版本基准日；取不到填 "—"
 decided_on:      <YYYY-MM-DD>                      # 判决日（仅 kind=case）
-status_source:   <string>                          # status 的判据出处（如 "fr:date_range"）
+status_source:   <string>                          # status 的判据出处（"国家:机制"，如 "cn:sxx"、"fr:date_range"）；取不到填 "—"
 span:            <string>                          # 收据五元组之一，缺省 "—"
 face:            body | résumé | "—"                # 收据五元组之一
 how:             contains | numnorm | "—"            # 收据五元组之一
@@ -201,7 +205,7 @@ asof:            2026-11-17
 1. `official_ref.sha256` 与现算官方件字节一致（哈希钉对账）——这是全套的地基，
    六国现有闸都已实现，只是各写一遍（`verify.py:151-155`、`cn_verify.py:77-80`、
    `es_verify.py:122-125`、`it_verify.py:114-117`、`it_case_verify.py:325-344`、
-   `fr_case_verify.py:337-344`）。
+   `fr_case_verify.py:152-173`）。
 2. 卡片自身哈希与事实账钉的一致（`verify.py:156-159` 等）。
 3. 必填字段非空：`kind`/`jurisdiction`/`local_id`/`official_ref.sha256`/
    `source_licence`（缺失即红，与现行 fail-closed 一致，
@@ -216,7 +220,11 @@ asof:            2026-11-17
 - 西班牙：条文切片与整件的从属校验（`es_verify.py:139-149` 的 `ES_ARTICLE_NOT_IN_SOURCE`）。
 - 意大利法条：同上的切片从属校验（`it_verify.py:141`）。
 - 意大利判例：ECLI/ANNO/NUMERO 三元组一致性（`it_case_verify.py:413-419`）。
-- 法国判例：引文契约（face/span/how）、拼接未标记（`fr_case_verify.py:229-268`）。
+- 法国判例：案号一致性（`fr_case_verify.py:205-216` 的 `FR_CASE_NO_MISMATCH`）、
+  裁判日一致性（`:220-233`）、卡片内嵌正文一致性（`:235-250`）；
+  引文契约（face/span/how）**闸层在本分支不产，由共用件层产**
+  （`receipts.py:89` 的 `build_receipt` ＋ `lines.py:254-262` 的 `_face_of`）。
+  ⚠️ 「拼接未标记」是主检出 P-166（`577c280`）的新增面，**本分支未合**，此处不作引用。
 - CCNL：簇码在 144 簇清单内的存在性。
 
 ---
@@ -289,12 +297,17 @@ asof:            2026-11-17
 4. **中国侧是法规级不是条文级**——卡上没有条文号、没有正文；
    条文号在目录树里（`cn_corpus.py:66-73`）。统一层若不显式标 `scope`，会误导检索。
 5. **判例的 status 不适用**——三态填「—」，别拿判决日冒充生效日。
-6. **五元组只在法国判例产出**——其余五闸不产 `span`/`face`/`how`
-   （实读：`fr_case_verify.py:302-304` 是唯一产地）。
-   ⇒ **已定**（2026-11-28 用户拍板）：统一契约的 `span`/`face`/`how` **直接与收据五元组对齐**——
-   引用仓里已有的共用生产逻辑（`receipts.py` 的 `build_receipt` ＋ `lines.py` 的七线适配），
-   取不到填「—」，**不另立一套定义**；其余闸走同一套共用件，不再各写一套。
-7. **SXX=2（修改）语义已定**——时点表 §2.2：落 `unknown`（「已修改」不足以证明今天还在适用）；
+6. **五元组：闸层不产，共用件层七条线都能产**——闸层里 `fr_case_verify.py` **不定义**
+   `span`/`face`/`how`；产出在共用件层：`receipts.py:89` 的 `build_receipt` ＋
+   `lines.py` 的七线适配（`lines.py:22-38` 的适配表、`:75` 的 `LINES` 表；
+   七处 `build_receipt` 调用 `lines.py:331/355/385/431/476/516/565`），
+   各线取不到的那几位填「—」（如中国线无正文 ⇒ `span`/`face` 缺省）。
+   ⇒ **已定**（2026-11-28 用户拍板）：统一契约的 `span`/`face`/`how` **直接与收据五元组对齐**，
+   引用共用件层、取不到填「—」，**不另立一套定义**；七条线都走同一套共用件。
+7. **SXX 的 status 判定已定**——时点表 §2.2：`3` ⇒ `in_force`；`1`（已废止）⇒ `repealed`；
+   `4`（尚未生效）⇒ `unknown`；`2`（已修改）⇒ `unknown`（「已修改」不足以证明今天还在适用）。
+   「未来才生效」与「判不出」在统一三态里**都落 `unknown`**——与法国侧 `date_debut > ref` 同构
+   （`provisions.py:100-115`）；且 `unknown` ≠ 在效 ⇒ **统一层不比现行闸宽松**。
    `_prefer` 的 `3>2>4>1` 排序**保持不动**（管的是挑哪条当代表，不是有效无效）。
 8. **西班牙 `estado_consolidacion` 不可当废止标志**——实读三法全是 `"Finalizado"`，
    而三法今天全部现行有效。**已定**：该字段不参与 status 判定，

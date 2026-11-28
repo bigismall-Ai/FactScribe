@@ -82,6 +82,14 @@
    事实级收据是**按事实**产出、统一契约是**按卡**产出，卡粒度的投影口径见
    `adapters/card_receipts.py`；各形状的「材料在哪」判据在各国 adapter 的
    `_span_face_how`。
+8. **第 3 步落的字段名（已定；以三份文档为准）**：
+   - `status` 三态枚举名**固定为** `in_force` / `repealed` / `unknown`——**不写 `not_in_force`**；
+     「不在效」按情形落 `repealed`（已废止）或 `unknown`（尚未生效／判不出）；
+   - `asof`＝时点版本基准日，ISO 日期（`YYYY-MM-DD`），取不到填「—」；
+   - `status_source`＝status 的判据出处，形如 `国家:机制`（`cn:sxx`、`fr:date_range`…），取不到填「—」；
+   - 缺省一律用共用件层的缺省标记「—」（`factscribe_legal/receipts.py:34` 的 `MISSING`）。
+   字段清单见 `integrations/factscribe-legal/docs/legal-card-contract-draft.md` §2.2 与
+   `integrations/factscribe-legal/docs/legal-card-contract-mapping.md` §2。
 """
 from . import (base, cn_provision, es_provision, fr_case,
                fr_provision, it_agreement, it_case, it_provision, status)

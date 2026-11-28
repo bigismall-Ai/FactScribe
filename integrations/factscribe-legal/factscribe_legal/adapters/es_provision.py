@@ -29,12 +29,15 @@ status 改从「**官方是否仍提供现行合并文本**」判定（时点表
   * `fecha_vigencia`（生效日）> 参考日 ⇒ 尚未生效 ⇒ `unknown`；
   * 官方整件取不到 / 标志读不出 ⇒ 判不出 ⇒ `unknown`（不猜）。
 
-  * 三个标志的**取值路径有两条**（**判据一字不改**，只是多一条兜底）：
-    ① 官方整件 `official/act.xml` 的 `<metadatos>` 段（官方字节，权威，优先）；
-    ② 官方整件**不在本地**时（仓外件／只带索引分发），读**采集侧**写进
-    run 的 `index.json` 的同名字段——`tools/fetch_corpus.py` 的 `_es_meta`
-    现在抽这三个标志（另加可选的 `fecha_derogacion` / `fecha_anulacion`）。
-    取值出处写进 `status_source`（`es:boe_…` ／ `es:index_…`），反查得动。
+  * **三态闭集固定**（已定口径）：`in_force` / `repealed` / `unknown`，
+    取不到落 `unknown`，**不写** `not_in_force`。⚠️ `unknown` **不等于在效**：
+    判不出「官方是否仍提供现行合并文本」时落 `unknown` 是**合规口径**，
+    不许拿 `fecha_vigencia` 顶成 `in_force` ⇒ **三个标志没齐就落
+    `unknown`**（缺标志 ＝ 判不出，不是"没发现问题"）。
+  * **官方件优先（逐字段）**：官方整件给了的值一律用它；官方件**没给**的
+    字段，才用**采集侧**写进 run 的 `index.json` 的同名字段补（兜底路径，
+    与官方件优先一致）。取值出处写进 `status_source`：
+    `es:boe_…` ／ `es:index_…` ／ `es:boe+index_…`（两边混用时都标）。
 
   * `effective_from` ＝ `fecha_vigencia`（官方 `<fecha_vigencia>`，
     实读 `official/act.xml:20`＝`20161002`；取不到退回 run 的
@@ -128,7 +131,7 @@ def adapt(source, index=None, reference_date=None):
     # 不在本地时退回采集侧写进 run 的 `index.json` 的同名字段
     # （采集侧 `tools/fetch_corpus.py` 的 `_es_meta` 现在抽这三个标志）。
     # 判据本身不变（任一为 S ⇒ repealed），只是多一条**取值路径**。
-    flags, carrier = _effect_flags(meta, index)
+    flags, origin = _effect_flags(meta, index)
 
     # 生效日：官方整件优先，退回 run 的 index.json 顶层同名字段
     fecha_vigencia = iso_date(meta.get("fecha_vigencia")) or \
@@ -139,7 +142,7 @@ def adapt(source, index=None, reference_date=None):
         or str(index.get("fetch_reference_date") or "").strip()
 
     status, status_source = _judge(meta, fecha_vigencia, ref,
-                                     flags=flags, carrier=carrier)
+                                     flags=flags, origin=origin)
 
     asof = iso_date(fields.get("REFERENCE_DATE")) \
         or iso_date(fields.get("FETCH_DATE")) \
@@ -182,56 +185,79 @@ def _slice_reader(raw):
 
 
 def _effect_flags(meta, index):
-    """三个效力标志的取值与出处。返回 (flags, carrier)。
+    """三个效力标志的取值与出处。返回 (flags, origin)。
 
-    `flags` ＝ {标志: 大写值}；`carrier` ＝ "boe"（官方整件带的）/
-    "index"（采集侧写进 `index.json` 的）/"（两边都没有）。
+    `flags` ＝ {标志: 大写值}；`origin` ＝ {标志: "boe"（官方整件带的）/
+    "index"（采集侧写进 `index.json` 的）}。
 
-    **官方整件优先**：官方字节是权威；官方整件不在本地（仓外件／只带
-    索引分发）时，用采集侧 `index.json` 里的同名字段兜底——判据同值同义，
-    不另立判据。
+    **官方整件优先（逐字段）**：官方件给了的值一律用它；官方件**没给**的
+    字段，才用采集侧写进 `index.json` 的同名字段补上（兜底路径）。
+    判据同值同义，不另立判据。
     """
-    flags, carrier = {}, ""
+    flags, origin = {}, {}
     for tag in EFFECT_FLAGS:
         value = str((meta or {}).get(tag) or "").strip().upper()
         if value:
             flags[tag] = value
-            carrier = "boe"
-    if not carrier:
-        for tag in EFFECT_FLAGS:
-            value = str((index or {}).get(tag) or "").strip().upper()
-            if value:
-                flags[tag] = value
-                carrier = "index"
-    return flags, carrier
+            origin[tag] = "boe"
+    for tag in EFFECT_FLAGS:
+        if tag in flags:
+            continue
+        value = str((index or {}).get(tag) or "").strip().upper()
+        if value:
+            flags[tag] = value
+            origin[tag] = "index"
+    return flags, origin
 
 
-def _judge(meta, fecha_vigencia, ref, flags=None, carrier=""):
+def _flags_carrier(flags, origin):
+    """三个标志整体来自哪条路径：boe / index / boe+index（混用）/ ""（没有）。"""
+    carriers = {origin.get(tag, "boe") for tag in flags}
+    if not carriers:
+        return ""
+    if carriers == {"boe"}:
+        return "boe"
+    if carriers == {"index"}:
+        return "index"
+    return "boe+index"
+
+
+def _judge(meta, fecha_vigencia, ref, flags=None, origin=None,
+              carrier=""):
     """判 status 三态。返回 (status, status_source)。
 
     判据：官方整件是否仍提供现行合并文本（BOE 的件级效力标志）
     ＋ 生效日与参考日的先后。
 
-    `flags`/`carrier`：三个效力标志的取值与出处（见 `_effect_flags`）。
+    `flags`/`origin`：三个效力标志的取值与出处（见 `_effect_flags`）。
     不传时按 `meta` 里的官方整件取值算（旧调用方式不变）。
     """
     if flags is None:
-        flags, carrier = _effect_flags(meta, {})
-    if not meta and not flags:
-        # 官方整件取不到、索引里也没有标志 ⇒ 判不出「官方是否仍提供
-        # 现行合并文本」⇒ unknown
-        return STATUS_UNKNOWN, "es:boe_consolidated"
+        flags, origin = _effect_flags(meta, {})
+    else:
+        origin = origin or {}
+    # 已知任一标志为 S ⇒ 已废止/已撤销/效力耗尽 ⇒ repealed
+    # （这是**证据**，哪怕其余标志缺着也照样判）
     for tag in EFFECT_FLAGS:
         if str(flags.get(tag) or "").strip().upper() == "S":
-            return STATUS_REPEALED, "es:%s_%s=S" % (carrier or "boe", tag)
+            return STATUS_REPEALED, "es:%s_%s=S" % (origin.get(tag, "boe"), tag)
+    if len(flags) < len(EFFECT_FLAGS):
+        # 三个标志没齐 ⇒ 判不出「官方是否仍提供现行合并文本」⇒ unknown
+        # ⚠️ unknown **不等于在效**：缺标志不许拿 fecha_vigencia 顶成 in_force
+        return STATUS_UNKNOWN, "es:boe_consolidated"
     if not fecha_vigencia:
         return STATUS_UNKNOWN, "es:fecha_vigencia"
     if ref and fecha_vigencia > ref:
         # 尚未生效（与法国 date_debut>ref、中国 sxx=4 同构）⇒ unknown
         return STATUS_UNKNOWN, "es:fecha_vigencia@%s" % ref
+    carrier = carrier or _flags_carrier(flags, origin)
     if carrier == "index":
         # 标志来自采集侧索引（官方整件不在本地）⇒ 出处标出来
         return STATUS_IN_FORCE, ("es:index_flags@%s" % ref) if ref else "es:index_flags"
+    if carrier == "boe+index":
+        # 官方件只给了一部分标志，其余由索引补 ⇒ 出处两边都标
+        return STATUS_IN_FORCE, (("es:boe+index_flags@%s" % ref) if ref
+                                 else "es:boe+index_flags")
     return STATUS_IN_FORCE, ("es:fecha_vigencia@%s" % ref) if ref else "es:fecha_vigencia"
 
 

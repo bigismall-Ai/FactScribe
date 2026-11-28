@@ -351,5 +351,130 @@ class TestBackfilledIndexes(unittest.TestCase):
                              hashlib.sha256(raw).hexdigest())
 
 
+class TestSpainStatusTriState(unittest.TestCase):
+    """已定口径的回归锁（三条）：
+
+    1. status 三态闭集固定 `in_force` / `repealed` / `unknown`，
+       **不写** `not_in_force`；
+    2. `unknown` **不等于在效**——判不出「官方是否仍提供现行合并文本」时
+       落 `unknown`，不许拿 `fecha_vigencia` 顶成 `in_force`；
+    3. 官方件优先（**逐字段**），采集侧索引兜底路径与之一致；
+       `status_source` 取值按既有口径（`<域>:<判据>`，兜底路径另标出处）。
+    """
+
+    TRI_STATE = ("in_force", "repealed", "unknown")
+    BASE_SOURCES = {"es:boe_consolidated", "es:fecha_vigencia",
+                    "es:index_flags", "es:boe+index_flags"}
+    FLAG_SOURCES = {"es:%s_%s=S" % (carrier, tag)
+                    for carrier in ("boe", "index") for tag in EFFECT_FLAGS}
+    REF_SUFFIXABLE = ("es:fecha_vigencia", "es:index_flags",
+                      "es:boe+index_flags")
+
+    def _card(self, tmp, official_flags=None, index_flags=None,
+              fecha="20161002"):
+        """最小西班牙 run：卡 ＋ 可选官方整件（只写给定的标志）＋ 索引。"""
+        run_dir = os.path.join(tmp, "run-es-test")
+        os.makedirs(os.path.join(run_dir, "official"), exist_ok=True)
+        card_path = os.path.join(run_dir, "a1.es.card.txt")
+        with open(card_path, "w", encoding="utf-8") as fh:
+            fh.write(chr(10).join([
+                "ACT_ID: BOE-A-2015-10565",
+                "BLOCK_ID: a1",
+                "FETCH_DATE: %s" % REF_DATE,
+                "REFERENCE_DATE: %s" % REF_DATE,
+                "SOURCE_FILE: official/act.xml",
+                "",
+            ]))
+        if official_flags is not None:
+            parts = ["<data><metadatos>"]
+            if fecha:
+                parts.append("<fecha_vigencia>%s</fecha_vigencia>" % fecha)
+            for tag, value in official_flags.items():
+                parts.append("<%s>%s</%s>" % (tag, value, tag))
+            parts.append("</metadatos></data>")
+            with open(os.path.join(run_dir, "official", "act.xml"), "w",
+                      encoding="utf-8") as fh:
+                fh.write(chr(10).join(parts))
+        index = {"act_id": "BOE-A-2015-10565",
+                 "fetch_reference_date": REF_DATE}
+        if fecha:
+            index["fecha_vigencia"] = fecha
+        index.update(index_flags or {})
+        return card_path, index
+
+    def _adapt(self, **kwargs):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        card, index = self._card(tmp, **kwargs)
+        return es_provision.adapt(card, index=index)
+
+    def test_status_is_always_in_tri_state(self):
+        """任何场景都只能落三态（没有 not_in_force）。"""
+        cases = [
+            dict(official_flags={t: "N" for t in EFFECT_FLAGS}),
+            dict(official_flags={"estatus_derogacion": "S"}),
+            dict(index_flags={t: "N" for t in EFFECT_FLAGS}),
+            dict(index_flags={"vigencia_agotada": "S"}),
+            dict(),
+            dict(official_flags={"estatus_derogacion": "N"}),
+            dict(fecha="20300101",
+                 official_flags={t: "N" for t in EFFECT_FLAGS}),
+        ]
+        for case in cases:
+            out = self._adapt(**case)
+            self.assertIn(out["status"], self.TRI_STATE,
+                          "status 跑出了三态闭集：%s" % out["status"])
+            self.assertNotEqual(out["status"], "not_in_force")
+
+    def test_partial_flags_is_unknown_not_in_force(self):
+        """三个标志没齐 ⇒ 判不出 ⇒ unknown（**不是** in_force）。"""
+        out = self._adapt(official_flags={"estatus_derogacion": "N"})
+        self.assertEqual(out["status"], "unknown")
+        self.assertNotEqual(out["status"], "in_force")
+
+    def test_known_flag_s_wins_even_if_set_is_partial(self):
+        """已知有一个标志是 S ⇒ repealed（这是证据，不是"没发现问题"）。"""
+        out = self._adapt(official_flags={"vigencia_agotada": "S"})
+        self.assertEqual(out["status"], "repealed")
+        self.assertIn("boe_vigencia_agotada", out["status_source"])
+
+    def test_official_value_wins_field_by_field(self):
+        """官方件给的值一律用它：官方 N 压过索引 S。"""
+        out = self._adapt(official_flags={t: "N" for t in EFFECT_FLAGS},
+                          index_flags={"estatus_derogacion": "S"})
+        self.assertEqual(out["status"], "in_force")
+        out = self._adapt(official_flags={"estatus_derogacion": "S"},
+                          index_flags={t: "N" for t in EFFECT_FLAGS})
+        self.assertEqual(out["status"], "repealed")
+
+    def test_index_fills_fields_official_did_not_give(self):
+        """官方件只给一部分 ⇒ 缺的字段由索引补（兜底），出处两边都标。"""
+        out = self._adapt(official_flags={"estatus_derogacion": "N"},
+                          index_flags={t: "N" for t in EFFECT_FLAGS})
+        self.assertEqual(out["status"], "in_force")
+        self.assertTrue(out["status_source"].startswith("es:boe+index_flags"),
+                        out["status_source"])
+
+    def test_status_source_is_in_closed_set(self):
+        """status_source 取值按既有口径（不在闭集里就是跑偏了）。"""
+        cases = [
+            dict(official_flags={t: "N" for t in EFFECT_FLAGS}),
+            dict(official_flags={"estatus_derogacion": "S"}),
+            dict(index_flags={t: "N" for t in EFFECT_FLAGS}),
+            dict(index_flags={"estatus_anulacion": "S"}),
+            dict(),
+            dict(official_flags={"estatus_derogacion": "N"},
+                 index_flags={t: "N" for t in EFFECT_FLAGS}),
+            dict(fecha="20300101",
+                 official_flags={t: "N" for t in EFFECT_FLAGS}),
+        ]
+        allowed = self.BASE_SOURCES | self.FLAG_SOURCES
+        for case in cases:
+            src = self._adapt(**case)["status_source"]
+            hit = src in allowed or any(
+                src.startswith(s + "@") for s in self.REF_SUFFIXABLE)
+            self.assertTrue(hit, "status_source 跑出了闭集：%s" % src)
+
+
 if __name__ == "__main__":
     unittest.main()
